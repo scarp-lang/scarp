@@ -79,6 +79,14 @@ try {
     foreach ($directory in @('examples', 'docs')) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $directory) -Destination $packageRoot -Recurse
     }
+    if ($version -eq '0.0.5-alpha.2') {
+        $releaseMetadataPath = Join-Path $projectRoot '.github/release-metadata.json'
+        $releaseMetadata = Get-Content -LiteralPath $releaseMetadataPath -Raw | ConvertFrom-Json
+        if ($releaseMetadata.schema_version -cne 1 -or $releaseMetadata.version -cne $version -or $releaseMetadata.documentation_repository -cne 'https://github.com/scarp-lang/scarp-docs') {
+            throw 'Release metadata must match the package version and official documentation repository'
+        }
+        Copy-Item -LiteralPath $releaseMetadataPath -Destination (Join-Path $packageRoot 'RELEASE-METADATA.json')
+    }
     $buildInfo = "version=$version`ntarget=$Target`ncommit=$revision`nworking_tree=$treeState`ncompiler=$compiler`n"
     [System.IO.File]::WriteAllText((Join-Path $packageRoot 'BUILD-INFO.txt'), $buildInfo, [System.Text.UTF8Encoding]::new($false))
 

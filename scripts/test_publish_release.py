@@ -19,6 +19,31 @@ COMMIT = "a" * 40
 
 
 class PublicationGates(unittest.TestCase):
+    def test_release_metadata_requires_exact_schema_version_and_official_repository(self):
+        valid = dict(schema_version=1, version="0.0.5-alpha.2", documentation_repository="https://github.com/scarp-lang/scarp-docs")
+        self.assertEqual(publisher.verifier.validate_release_metadata(json.dumps(valid), valid["version"]), valid)
+        for changed in ({}, [], dict(valid, schema_version=True), dict(valid, schema_version=2), dict(valid, version="0.0.5-alpha.1"), dict(valid, documentation_repository="https://example.invalid"), dict(valid, extra="unreviewed")):
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                publisher.verifier.validate_release_metadata(json.dumps(changed), valid["version"])
+
+    def test_legacy_release_body_still_comes_from_its_versioned_source_file(self):
+        with patch.object(publisher.verifier.subprocess, "check_output", return_value="legacy body\n") as read:
+            self.assertEqual(publisher.verifier.release_notes_at("source", COMMIT, "0.0.5-alpha.1"), "legacy body\n")
+        self.assertEqual(read.call_args.args[0][-1], COMMIT + ":docs/releases/v0.0.5-alpha.1.md")
+
+    def test_alpha2_missing_metadata_cannot_fall_back_to_a_release_note_file(self):
+        with patch.object(publisher.verifier.subprocess, "check_output", side_effect=publisher.subprocess.CalledProcessError(128, "git")) as read:
+            with self.assertRaises(publisher.subprocess.CalledProcessError):
+                publisher.verifier.release_notes_at("source", COMMIT, "0.0.5-alpha.2")
+        self.assertEqual(read.call_count, 1)
+        self.assertEqual(read.call_args.args[0][-1], COMMIT + ":.github/release-metadata.json")
+
+    def test_draft_body_must_match_reviewed_source_before_publication(self):
+        publisher.check_release_notes(dict(body="first\r\nsecond\n"), "first\nsecond\n")
+        for body in (None, "changed", 42):
+            with self.subTest(body=body), self.assertRaisesRegex(ValueError, "draft release notes differ"):
+                publisher.check_release_notes(dict(body=body), "reviewed body\n")
+
     def test_new_requests_require_the_exact_approved_source(self):
         for value in (None, "main", "v0.0.4-alpha.4", "a" * 39, "A" * 40, 1):
             with self.subTest(value=value), self.assertRaisesRegex(ValueError, "approved full source_commit"):
@@ -284,19 +309,22 @@ class PublicationWindow(unittest.TestCase):
                 publisher.main()
             api_call.assert_not_called()
 
-    def drive_publication(self, clocks, move_after_draft=False, allow_publish=False, approved_commit=COMMIT):
+    def drive_publication(self, clocks, move_after_draft=False, allow_publish=False, approved_commit=COMMIT, version="0.0.4-alpha.2", tamper_draft_notes=False, bad_metadata=False):
         """Exercise real stage ordering; external CI/archive behavior has separate tests."""
         state = dict(created=False, mutations=[], gh_calls=[], files={}, public_downloads=[], source_reads=[])
         names = [f"archive-{i}.bin" for i in range(3)]
         manifest = "".join("a" * 64 + "  " + name + "\n" for name in names)
-        draft = dict(id=42, tag_name="v0.0.4-alpha.2", draft=True, prerelease=True)
+        draft = dict(id=42, tag_name="v" + version, draft=True, prerelease=True)
 
         def fake_git(args, **kwargs):
             if args[1] == "rev-parse":
                 return COMMIT + "\n"
             if args[-1].endswith(":Cargo.toml"):
                 state["source_reads"].append(args[-1])
-                return 'version = "0.0.4-alpha.2"\n'
+                return f'version = "{version}"\n'
+            if args[-1].endswith(":.github/release-metadata.json"):
+                state["source_reads"].append(args[-1])
+                return "{}" if bad_metadata else json.dumps(dict(schema_version=1, version=version, documentation_repository="https://github.com/scarp-lang/scarp-docs"))
             if ":docs/releases/" in args[-1]:
                 state["source_reads"].append(args[-1])
                 return "verified release notes\n"
@@ -324,7 +352,7 @@ class PublicationWindow(unittest.TestCase):
             if path.endswith("/git/refs"):
                 return {}
             if path.endswith("/releases/42"):
-                return draft
+                return dict(draft, body="tampered") if tamper_draft_notes else draft
             raise AssertionError(path)
 
         def fake_gh(*args):
@@ -335,6 +363,7 @@ class PublicationWindow(unittest.TestCase):
                 for name in [*names, *(name + ".sha256" for name in names)]:
                     (directory / name).write_bytes(name.encode())
             elif args[:2] == ("release", "create"):
+                draft["body"] = Path(args[args.index("--notes-file") + 1]).read_bytes().decode("utf-8")
                 state["files"] = {Path(path).name: Path(path).read_bytes() for path in args[-7:]}
                 draft["assets"] = [dict(id=i, name=name, browser_download_url="https://example.invalid/" + name)
                                    for i, name in enumerate(state["files"])]
@@ -352,7 +381,7 @@ class PublicationWindow(unittest.TestCase):
 
         selected = {path: dict(id=i + 1) for i, path in enumerate(publisher.WORKFLOWS)}
         with patch.object(Path, "exists", return_value=True), \
-             patch.object(Path, "read_text", return_value=json.dumps(dict(self.request(), source_commit=approved_commit))), \
+             patch.object(Path, "read_text", return_value=json.dumps(dict(self.request(), source_commit=approved_commit, version=version))), \
              patch.object(publisher, "utc_now", side_effect=clocks), \
              patch.object(publisher.subprocess, "check_output", side_effect=fake_git), \
              patch.object(publisher.subprocess, "run") as ancestry_check, \
@@ -377,6 +406,22 @@ class PublicationWindow(unittest.TestCase):
         self.assertEqual(state["workflow_sources"], [COMMIT, approved])
         self.assertEqual(state["tag_source"], approved)
         self.assertTrue(all(source.startswith(approved + ":") for source in state["source_reads"]))
+
+    def test_alpha2_publication_keeps_exact_source_and_all_asset_download_gates(self):
+        approved = "c" * 40
+        state = self.drive_publication([self.start, self.start, self.start], allow_publish=True, approved_commit=approved, version="0.0.5-alpha.2")
+        self.assertEqual(state["workflow_sources"], [COMMIT, approved])
+        self.assertEqual(state["tag_source"], approved)
+        self.assertEqual(set(state["source_reads"]), {approved + ":Cargo.toml", approved + ":.github/release-metadata.json"})
+        self.assertEqual(set(state["public_downloads"]), set(state["files"]))
+
+    def test_alpha2_invalid_metadata_prevents_draft_creation(self):
+        with self.assertRaisesRegex(ValueError, "invalid release metadata"):
+            self.drive_publication([self.start], version="0.0.5-alpha.2", bad_metadata=True)
+
+    def test_new_draft_body_tampering_prevents_publication(self):
+        with self.assertRaisesRegex(ValueError, "draft release notes differ"):
+            self.drive_publication([self.start, self.start], version="0.0.5-alpha.2", tamper_draft_notes=True)
 
     def test_expiry_during_artifact_verification_prevents_tag_creation(self):
         state = self.drive_publication([self.start, self.end])
