@@ -2,11 +2,40 @@
 
 import argparse
 import hashlib
+import json
 from pathlib import Path
 import re
 import subprocess
 import tarfile
 import zipfile
+
+EXTERNAL_DOCS_VERSION = "0.0.5-alpha.2"
+DOCUMENTATION_REPOSITORY = "https://github.com/scarp-lang/scarp-docs"
+METADATA_SOURCE = ".github/release-metadata.json"
+METADATA_MEMBER = "RELEASE-METADATA.json"
+
+
+def validate_release_metadata(data, version):
+    metadata = json.loads(data)
+    if (not isinstance(metadata, dict)
+            or set(metadata) != {"schema_version", "version", "documentation_repository"}
+            or type(metadata["schema_version"]) is not int or metadata["schema_version"] != 1
+            or metadata["version"] != version
+            or metadata["documentation_repository"] != DOCUMENTATION_REPOSITORY):
+        raise ValueError("invalid release metadata schema, version or documentation repository")
+    return metadata
+
+
+def release_notes_at(source_directory, commit, version):
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise ValueError("expected the full release commit")
+    path = METADATA_SOURCE if version == EXTERNAL_DOCS_VERSION else f"docs/releases/v{version}.md"
+    data = subprocess.check_output(["git", "-C", str(source_directory), "show", f"{commit}:{path}"], text=True, encoding="utf-8")
+    if version != EXTERNAL_DOCS_VERSION:
+        return data
+    metadata = validate_release_metadata(data, version)
+    return (f"Scarp v{version}\n\nSource commit: `{commit}`\n\n"
+            f"[Scarp documentation]({metadata['documentation_repository']})\n")
 
 
 def verify_source_members(read_member, root, source_files):
@@ -20,7 +49,7 @@ def verify_source_members(read_member, root, source_files):
 def source_files_at(source_directory, commit):
     result = subprocess.run(
         ["git", "-C", str(source_directory), "ls-tree", "-rz", commit, "--",
-         "LICENSE", "README.md", "CHANGELOG.md", "CONTRIBUTING.md", "docs", "examples"],
+         "LICENSE", "README.md", "CHANGELOG.md", "CONTRIBUTING.md", "docs", "examples", METADATA_SOURCE],
         check=True, stdout=subprocess.PIPE,
     )
     files = {}
@@ -30,7 +59,7 @@ def source_files_at(source_directory, commit):
             mode, kind, digest = metadata.split()
             if kind != "blob" or mode not in ("100644", "100755"):
                 raise ValueError(f"unsupported packaged source entry: {name}")
-            files[name] = digest
+            files[METADATA_MEMBER if name == METADATA_SOURCE else name] = digest
     if "README.md" not in files or "LICENSE" not in files:
         raise ValueError("release source tree is missing root documentation")
     return files
@@ -59,11 +88,14 @@ def verify(directory, version, commit, source_directory=None):
         checksum = f"{digest}  {name}\n"
         if archive.with_name(name + ".sha256").read_text().strip() != checksum.strip():
             raise ValueError(f"checksum mismatch: {name}")
+        metadata = None
         if extension == ".zip":
             with zipfile.ZipFile(archive) as package:
                 paths = set(package.namelist())
                 record = package.read(root + "/BUILD-INFO.txt")
                 verify_source_members(package.read, root, source_files)
+                if root + "/" + METADATA_MEMBER in paths:
+                    metadata = package.read(root + "/" + METADATA_MEMBER)
         else:
             with tarfile.open(archive, "r:gz") as package:
                 paths = set(package.getnames())
@@ -79,6 +111,12 @@ def verify(directory, version, commit, source_directory=None):
                         raise ValueError(f"packaged source is not a regular file: {name}")
                     return package.extractfile(member).read()
                 verify_source_members(read_member, root, source_files)
+                if root + "/" + METADATA_MEMBER in paths:
+                    metadata = read_member(root + "/" + METADATA_MEMBER)
+        if version == EXTERNAL_DOCS_VERSION:
+            if metadata is None:
+                raise ValueError(f"{name}: missing {METADATA_MEMBER}")
+            validate_release_metadata(metadata, version)
         fields = dict(line.split("=", 1) for line in record.decode("utf-8").splitlines())
         for key, expected in (
             ("version", version), ("target", target),
@@ -93,31 +131,31 @@ def verify(directory, version, commit, source_directory=None):
             "examples/loops.srp", "examples/loops.stdout",
             "examples/repeat.srp", "examples/repeat.stdout",
             "examples/control_escapes.srp", "examples/control_escapes.stdout",
-        ) if (version.startswith("0.0.3-") or version in ("0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1")) else ()
+        ) if (version.startswith("0.0.3-") or version in ("0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2")) else ()
         syntax_migration_files = (
             "examples/output.srp", "examples/output.stdout",
             "docs/output.md", "docs/syntax-migration.md",
-        ) if version in ("0.0.3-beta.2", "0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1") else ()
+        ) if version in ("0.0.3-beta.2", "0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2") else ()
         function_files = (
             "docs/functions.md", "examples/functions.srp", "examples/functions.stdout",
             "examples/function_contracts.srp", "examples/function_contracts.stdout",
             "examples/function_recursion.srp", "examples/function_recursion.stdout",
             "docs/budgets.md", "docs/reference/cli.md", "docs/embedding.md",
-        ) if version in ("0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1") else ()
+        ) if version in ("0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2") else ()
         float_files = (
             "docs/floats.md", "examples/float_refinement.srp", "examples/float_refinement.stdout",
             "examples/float_smoothing.srp", "examples/float_smoothing.stdout",
-        ) if version in ("0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1") else ()
+        ) if version in ("0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2") else ()
         vector_files = (
             "docs/vectors.md", "examples/vectors.srp", "examples/vectors.stdout",
             "examples/vector_probabilities.srp", "examples/vector_probabilities.stdout",
             "examples/coefficient_fit.srp", "examples/coefficient_fit.stdout",
-        ) if version in ("0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1") else ()
+        ) if version in ("0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2") else ()
         alpha3_files = (
             "examples/scaled_norm.srp", "examples/scaled_norm.stdout",
             "examples/terminal_recursion.srp", "examples/terminal_recursion.stdout",
             "examples/vector_allocation.srp", "examples/vector_allocation.stdout",
-        ) if version in ("0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1") else ()
+        ) if version in ("0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2") else ()
         alpha4_files = (
             "docs/tiles.md", "docs/memory-lifetimes.md",
             "docs/architecture.md", "docs/testing.md",
@@ -126,18 +164,27 @@ def verify(directory, version, commit, source_directory=None):
                 "matrix_probabilities", "matrix_targets", "matrix_forward", "tile_windows",
                 "vector_windows", "classification_training", "logit_loss", "log_space", "score_selection",
             ) for extension in ("srp", "stdout")),
-        ) if version in ("0.0.4-alpha.4", "0.0.5-alpha.1") else ()
+        ) if version in ("0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2") else ()
         module_files = (
             "docs/modules.md", "docs/tutorials/modules.md", "docs/proposals/0029-source-modules.md",
             "examples/module_demo.srp", "examples/module_demo.stdout",
             "examples/modules/linear.srp", "examples/modules/settings.srp",
-        ) if version == "0.0.5-alpha.1" else ()
+        ) if version in ("0.0.5-alpha.1", "0.0.5-alpha.2") else ()
+        alpha2_files = (
+            *(f"examples/{example}.{extension}" for example in (
+                "module_inspection", "constant_expressions", "typed_declarations",
+                "scalar_conversions", "unicode_text", "inspection_json",
+                "integer_collections", "bit_fields", "numerical_kernels", "collection_module",
+            ) for extension in ("srp", "stdout")),
+            "examples/inspection_json.modules.json", "examples/modules/integer_series.srp",
+        ) if version == EXTERNAL_DOCS_VERSION else ()
+        release_files = (METADATA_MEMBER,) if version == EXTERNAL_DOCS_VERSION else (f"docs/releases/v{version}.md",)
         for member in (
             executable, "LICENSE", "README.md", "CHANGELOG.md", "CONTRIBUTING.md",
-            f"docs/releases/v{version}.md", "examples/bindings.srp",
+            *release_files, "examples/bindings.srp",
             "examples/mutable.srp", "examples/scopes.srp", "examples/decisions.srp",
             *iteration_examples, *syntax_migration_files, *function_files, *float_files, *vector_files,
-            *alpha3_files, *alpha4_files, *module_files,
+            *alpha3_files, *alpha4_files, *module_files, *alpha2_files,
         ):
             if root + "/" + member not in paths:
                 raise ValueError(f"{name}: missing {member}")

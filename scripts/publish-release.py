@@ -88,6 +88,12 @@ def check_release(release, files, *, draft):
             raise ValueError(f"uploaded asset differs: {asset['name']}")
 
 
+def check_release_notes(release, expected):
+    body = release.get("body")
+    if not isinstance(body, str) or body.replace("\r\n", "\n").strip() != expected.strip():
+        raise ValueError("draft release notes differ from the tagged source")
+
+
 def release_from_list(releases, tag):
     matches = [release for release in releases if release.get("tag_name") == tag]
     if len(matches) > 1:
@@ -215,9 +221,9 @@ def main():
     cargo = subprocess.check_output(["git", "show", f"{commit}:Cargo.toml"], text=True)
     if f'version = "{version}"' not in cargo:
         raise ValueError("release source version differs from the explicit request")
-    notes_text = subprocess.check_output(["git", "show", f"{commit}:docs/releases/{tag}.md"], text=True)
-    if existing is not None and existing["body"].replace("\r\n", "\n").strip() != notes_text.strip():
-        raise ValueError("draft release notes differ from the tagged source")
+    notes_text = verifier.release_notes_at(Path.cwd(), commit, version)
+    if existing is not None:
+        check_release_notes(existing, notes_text)
     if api(f"{endpoint}/branches/main")["commit"]["sha"] != head:
         print("Main has advanced; only its current checked publication code can run.")
         return
@@ -271,6 +277,7 @@ def main():
             if existing is None:
                 raise ValueError("created draft is absent from authenticated release collection")
         draft = api(f"{endpoint}/releases/{existing['id']}")
+        check_release_notes(draft, notes_text)
         check_release(draft, files, draft=True)
         downloaded = root / "draft-downloads"
         downloaded.mkdir()
