@@ -112,7 +112,7 @@ fn launch_uses_declared_entry_and_preserves_compiler_diagnostics_and_limits() {
     let launch = with_path(&["launch", "--diagnostic-format=json"], &project);
     let exec = with_path(
         &["exec", "--diagnostic-format=json"],
-        &project.join("src/other.srp"),
+        &fs::canonicalize(project.join("src/other.srp")).unwrap(),
     );
     assert_eq!(launch.status.code(), Some(1), "{launch:?}");
     assert_eq!(launch.stdout, exec.stdout);
