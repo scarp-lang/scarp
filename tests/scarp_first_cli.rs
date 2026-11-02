@@ -231,3 +231,47 @@ fn scarp_first_source_commands_preserve_json_diagnostics() {
     assert!(String::from_utf8_lossy(&bad.stderr).contains("schema_version"));
     let _ = fs::remove_dir_all(dir);
 }
+
+#[test]
+fn diagnose_reports_real_compiler_host_and_capabilities_without_mutation() {
+    let text = scarp(&["diagnose"]);
+    assert!(text.status.success(), "{text:?}");
+    assert!(text.stderr.is_empty());
+    let report = String::from_utf8(text.stdout).unwrap();
+    assert!(report.contains(env!("CARGO_PKG_VERSION")), "{report}");
+    assert!(report.contains(std::env::consts::OS), "{report}");
+    assert!(report.contains(std::env::consts::ARCH), "{report}");
+    assert!(report.contains("Native executable emission: unavailable"));
+
+    let json = scarp(&["diagnose", "--json"]);
+    assert!(json.status.success(), "{json:?}");
+    assert!(json.stderr.is_empty());
+    let report = String::from_utf8(json.stdout).unwrap();
+    assert!(report.starts_with("{\"schema_version\":1,"), "{report}");
+    assert!(report.contains(&format!("\"version\":\"{}\"", env!("CARGO_PKG_VERSION"))));
+    assert!(report.contains(&format!("\"host_os\":\"{}\"", std::env::consts::OS)));
+    assert!(report.contains(&format!("\"host_arch\":\"{}\"", std::env::consts::ARCH)));
+    assert!(report.contains("\"native_executable\":false"));
+    assert!(report.contains("\"package_manager\":false"));
+
+    for args in [
+        vec!["diagnose", "--help"],
+        vec!["diagnose", "-h"],
+        vec!["guide", "diagnose"],
+    ] {
+        let output = scarp(&args);
+        assert!(output.status.success(), "{args:?}: {output:?}");
+        assert!(String::from_utf8_lossy(&output.stdout).contains("Usage: scarp diagnose"));
+        assert!(output.stderr.is_empty());
+    }
+    for args in [
+        vec!["diagnose", "--unknown"],
+        vec!["diagnose", "--json", "--json"],
+        vec!["diagnose", "some-project"],
+    ] {
+        let output = scarp(&args);
+        assert_eq!(output.status.code(), Some(2), "{args:?}: {output:?}");
+        assert!(output.stdout.is_empty());
+        assert!(!output.stderr.is_empty());
+    }
+}

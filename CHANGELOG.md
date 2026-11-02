@@ -2,6 +2,11 @@
 
 ## Unreleased - compiler development toward 0.0.5-alpha.2
 
+- Add a read-only `scarp diagnose [--json]` command that reports actual
+  compiler package version, host OS/architecture and available CLI capabilities
+  without network access or pretending external toolchains/registries exist.
+  Cover text, JSON, help and invalid arguments in integration tests.
+
 - Introduce Scarp-first `exec`, `verify`, `inspect tokens`, `inspect modules`,
   `guide`, and `version` CLI routes on a separate development branch. These
   reuse the actual interpreter, static module resolver, lexer, module inspection

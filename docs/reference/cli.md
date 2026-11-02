@@ -11,6 +11,7 @@ alone does not establish which development branch was built.
 | --- | --- |
 | `scarp`, `scarp guide` | Print current supported command guidance |
 | `scarp guide exec` | Show contextual execution help |
+| `scarp diagnose [--json]` | Show actual running compiler version, host OS/architecture and supported capability inventory without network access |
 | `scarp guide inspect tokens` | Show lexer inspection help |
 | `scarp guide inspect modules` | Show checked-module inspection help |
 | `scarp version` | Print the same actual package version as `--version` |
