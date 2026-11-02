@@ -54,6 +54,7 @@ compiler binary, these commands use `scarp` directly (not the Rust build tool):
 scarp guide
 scarp version
 scarp exec examples/hello.srp
+scarp verify examples/hello.srp
 scarp inspect tokens examples/hello.srp
 scarp inspect modules --json examples/module_inspection.srp
 ```
@@ -61,8 +62,9 @@ scarp inspect modules --json examples/module_inspection.srp
 See the [CLI reference](docs/reference/cli.md) for supported options, exact
 behavior and migration details. The old `run`, `check`, `tokens` and `modules`
 paths remain temporarily compatible; `check` evaluates selected program paths
-and should **not** be described as static-only verification. `compile`,
-`verify`, `create` and `launch` do not exist yet. No native Scarp binary
+and should **not** be described as static-only verification. Static-only `verify` uses compiler parsing and resolution without executing runtime
+statements or contracts; it does not replace the old evaluating `check`.
+`compile`, `create` and `launch` do not exist yet. No native Scarp binary
 backend or project-manifest workflow is implied by the new names. Previously
 published binaries do not contain these new command paths.
 
