@@ -144,6 +144,7 @@ diagnostic_catalogue! {
     NumericConversion => ("E0044", "Numeric conversion would lose precision or exceed range. to_float requires exact representability; to_integer requires an integral binary64 value in [-2^63,2^63). The positive i64 boundary rounds upward and is rejected."),
     TextIndex => ("E0045", "Text scalar index outside bounds. Use a nonnegative index below text_len(text). Indices count Unicode scalar values, not UTF-8 bytes or grapheme clusters."),
     InvalidShift => ("E0046", "Invalid integer shift count. Supply an integer from 0 through 63. Left shift operates on a fixed 64-bit bit pattern, >> extends the sign and >>> fills with zero. Counts are checked rather than masked."),
+    TypeComplexity => ("E0047", "Semantic type registry limit exceeded or invalid type limits. Reduce signature/type complexity or adjust TypeLimits in an embedding host. These compiler limits are independent of runtime execution and allocation budgets."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

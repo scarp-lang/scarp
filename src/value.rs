@@ -439,11 +439,4 @@ impl fmt::Display for Value {
     }
 }
 
-pub(crate) fn type_mismatch(span: Span, expected: ValueType, found: ValueType) -> Diagnostic {
-    Diagnostic::new(
-        DiagnosticKind::TypeMismatch,
-        span,
-        format!("expected {expected}, found {found}"),
-    )
-    .with_help("keep primitive types consistent; numeric operands must share a numeric kind, logic requires booleans")
-}
+pub(crate) use crate::types::type_mismatch;

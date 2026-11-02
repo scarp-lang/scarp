@@ -11,7 +11,7 @@ mod kernels;
 mod scalar_text;
 mod tiles;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Builtin {
     Variance,
     StdDev,
@@ -73,6 +73,20 @@ pub enum Builtin {
 }
 
 impl Builtin {
+    pub fn intern_signature(
+        self,
+        types: &mut crate::types::TypeRegistryBuilder,
+    ) -> Result<crate::types::TypeId, crate::types::TypeRegistryError> {
+        types.intern(crate::types::TypeKind::Function {
+            parameters: self
+                .parameter_types()
+                .iter()
+                .map(|kind| kind.id())
+                .collect(),
+            result: self.result_type().id(),
+            effect: crate::types::FunctionEffect::Pure,
+        })
+    }
     pub fn from_name(name: &str) -> Option<Self> {
         Some(match name {
             "variance" => Self::Variance,
@@ -487,13 +501,7 @@ pub(crate) fn evaluate_with_spans(
         ));
     }
     for (i, (value, &expected)) in args.iter().zip(types).enumerate() {
-        if value.kind() != expected {
-            return Err(crate::value::type_mismatch(
-                argument_span(i),
-                expected,
-                value.kind(),
-            ));
-        }
+        crate::types::require_exact(value.kind(), expected, argument_span(i))?;
     }
     if matches!(
         function,

@@ -1,6 +1,7 @@
 //! Correctness-checked frontend/metadata workloads; timings are not runtime speedups.
 use scarp::{
     modules::{self, MemorySourceLoader, ModuleLimits},
+    types::{FunctionEffect, PrimitiveType, TypeKind, TypeLimits, TypeRegistryBuilder},
     ExecutionOptions,
 };
 use std::{hint::black_box, time::Instant};
@@ -80,5 +81,40 @@ fn main() {
         json.clear();
         program.write_inspection_json(black_box(&mut json)).unwrap();
         black_box(json.len());
+    });
+    let typed = scarp::compile(&source).unwrap();
+    let node_count: usize = typed
+        .typed_expressions()
+        .map(|expression| expression.nodes().count())
+        .sum();
+    assert!(node_count > typed.binding_count());
+    measure("typed_plan_nodes_512", source.len(), iterations, || {
+        let count: usize = typed
+            .typed_expressions()
+            .map(|expression| {
+                expression
+                    .nodes()
+                    .map(|node| {
+                        assert!(typed.type_registry().get(node.kind).is_some());
+                        1usize
+                    })
+                    .sum::<usize>()
+            })
+            .sum();
+        assert_eq!(black_box(count), node_count);
+    });
+    measure("canonical_signatures_4096", 4096, iterations, || {
+        let mut registry = TypeRegistryBuilder::new(TypeLimits::default()).unwrap();
+        let signature = || TypeKind::Function {
+            parameters: vec![PrimitiveType::Integer.id(), PrimitiveType::Float.id()].into(),
+            result: PrimitiveType::Float.id(),
+            effect: FunctionEffect::Pure,
+        };
+        let first = registry.intern(signature()).unwrap();
+        for _ in 1..4096 {
+            assert_eq!(registry.intern(signature()).unwrap(), first);
+        }
+        assert_eq!(registry.len(), 9);
+        black_box(registry.finish());
     });
 }

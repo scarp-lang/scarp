@@ -40,6 +40,13 @@ pub fn compile(source: &str) -> Result<ResolvedProgram, Diagnostic> {
     resolver::resolve(parse(source)?)
 }
 
+pub fn compile_with_type_limits(
+    source: &str,
+    limits: types::TypeLimits,
+) -> Result<ResolvedProgram, Diagnostic> {
+    resolver::resolve_with_type_limits(parse(source)?, limits)
+}
+
 /// Validate syntax, names, and checked arithmetic without writing program output.
 /// The current language has no side effects other than printing.
 ///
