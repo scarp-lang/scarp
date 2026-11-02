@@ -9,7 +9,7 @@ import subprocess
 import tarfile
 import zipfile
 
-EXTERNAL_DOCS_VERSION = "0.0.5-alpha.2"
+EXTERNAL_DOCS_VERSIONS = {"0.0.5-alpha.2", "0.0.5-alpha.3"}
 DOCUMENTATION_REPOSITORY = "https://github.com/scarp-lang/scarp-docs"
 METADATA_SOURCE = ".github/release-metadata.json"
 METADATA_MEMBER = "RELEASE-METADATA.json"
@@ -29,9 +29,9 @@ def validate_release_metadata(data, version):
 def release_notes_at(source_directory, commit, version):
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("expected the full release commit")
-    path = METADATA_SOURCE if version == EXTERNAL_DOCS_VERSION else f"docs/releases/v{version}.md"
+    path = METADATA_SOURCE if version in EXTERNAL_DOCS_VERSIONS else f"docs/releases/v{version}.md"
     data = subprocess.check_output(["git", "-C", str(source_directory), "show", f"{commit}:{path}"], text=True, encoding="utf-8")
-    if version != EXTERNAL_DOCS_VERSION:
+    if version not in EXTERNAL_DOCS_VERSIONS:
         return data
     metadata = validate_release_metadata(data, version)
     return (f"Scarp v{version}\n\nSource commit: `{commit}`\n\n"
@@ -113,7 +113,7 @@ def verify(directory, version, commit, source_directory=None):
                 verify_source_members(read_member, root, source_files)
                 if root + "/" + METADATA_MEMBER in paths:
                     metadata = read_member(root + "/" + METADATA_MEMBER)
-        if version == EXTERNAL_DOCS_VERSION:
+        if version in EXTERNAL_DOCS_VERSIONS:
             if metadata is None:
                 raise ValueError(f"{name}: missing {METADATA_MEMBER}")
             validate_release_metadata(metadata, version)
@@ -131,31 +131,31 @@ def verify(directory, version, commit, source_directory=None):
             "examples/loops.srp", "examples/loops.stdout",
             "examples/repeat.srp", "examples/repeat.stdout",
             "examples/control_escapes.srp", "examples/control_escapes.stdout",
-        ) if (version.startswith("0.0.3-") or version in ("0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2")) else ()
+        ) if (version.startswith("0.0.3-") or version in ("0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3")) else ()
         syntax_migration_files = (
             "examples/output.srp", "examples/output.stdout",
             "docs/output.md", "docs/syntax-migration.md",
-        ) if version in ("0.0.3-beta.2", "0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2") else ()
+        ) if version in ("0.0.3-beta.2", "0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3") else ()
         function_files = (
             "docs/functions.md", "examples/functions.srp", "examples/functions.stdout",
             "examples/function_contracts.srp", "examples/function_contracts.stdout",
             "examples/function_recursion.srp", "examples/function_recursion.stdout",
             "docs/budgets.md", "docs/reference/cli.md", "docs/embedding.md",
-        ) if version in ("0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2") else ()
+        ) if version in ("0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3") else ()
         float_files = (
             "docs/floats.md", "examples/float_refinement.srp", "examples/float_refinement.stdout",
             "examples/float_smoothing.srp", "examples/float_smoothing.stdout",
-        ) if version in ("0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2") else ()
+        ) if version in ("0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3") else ()
         vector_files = (
             "docs/vectors.md", "examples/vectors.srp", "examples/vectors.stdout",
             "examples/vector_probabilities.srp", "examples/vector_probabilities.stdout",
             "examples/coefficient_fit.srp", "examples/coefficient_fit.stdout",
-        ) if version in ("0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2") else ()
+        ) if version in ("0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3") else ()
         alpha3_files = (
             "examples/scaled_norm.srp", "examples/scaled_norm.stdout",
             "examples/terminal_recursion.srp", "examples/terminal_recursion.stdout",
             "examples/vector_allocation.srp", "examples/vector_allocation.stdout",
-        ) if version in ("0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2") else ()
+        ) if version in ("0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3") else ()
         alpha4_files = (
             "docs/tiles.md", "docs/memory-lifetimes.md",
             "docs/architecture.md", "docs/testing.md",
@@ -164,12 +164,12 @@ def verify(directory, version, commit, source_directory=None):
                 "matrix_probabilities", "matrix_targets", "matrix_forward", "tile_windows",
                 "vector_windows", "classification_training", "logit_loss", "log_space", "score_selection",
             ) for extension in ("srp", "stdout")),
-        ) if version in ("0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2") else ()
+        ) if version in ("0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3") else ()
         module_files = (
             "docs/modules.md", "docs/tutorials/modules.md", "docs/proposals/0029-source-modules.md",
             "examples/module_demo.srp", "examples/module_demo.stdout",
             "examples/modules/linear.srp", "examples/modules/settings.srp",
-        ) if version in ("0.0.5-alpha.1", "0.0.5-alpha.2") else ()
+        ) if version in ("0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3") else ()
         alpha2_files = (
             *(f"examples/{example}.{extension}" for example in (
                 "module_inspection", "constant_expressions", "typed_declarations",
@@ -177,14 +177,19 @@ def verify(directory, version, commit, source_directory=None):
                 "integer_collections", "bit_fields", "numerical_kernels", "collection_module",
             ) for extension in ("srp", "stdout")),
             "examples/inspection_json.modules.json", "examples/modules/integer_series.srp",
-        ) if version == EXTERNAL_DOCS_VERSION else ()
-        release_files = (METADATA_MEMBER,) if version == EXTERNAL_DOCS_VERSION else (f"docs/releases/v{version}.md",)
+        ) if version in EXTERNAL_DOCS_VERSIONS else ()
+        type_tooling_files = (
+            "examples/interned_types.rs", "examples/text_construction.srp",
+            "examples/text_construction.stdout", "examples/diagnostics/type_error.srp",
+            "examples/diagnostics/type_error.diagnostic.json",
+        ) if version == "0.0.5-alpha.3" else ()
+        release_files = (METADATA_MEMBER,) if version in EXTERNAL_DOCS_VERSIONS else (f"docs/releases/v{version}.md",)
         for member in (
             executable, "LICENSE", "README.md", "CHANGELOG.md", "CONTRIBUTING.md",
             *release_files, "examples/bindings.srp",
             "examples/mutable.srp", "examples/scopes.srp", "examples/decisions.srp",
             *iteration_examples, *syntax_migration_files, *function_files, *float_files, *vector_files,
-            *alpha3_files, *alpha4_files, *module_files, *alpha2_files,
+            *alpha3_files, *alpha4_files, *module_files, *alpha2_files, *type_tooling_files,
         ):
             if root + "/" + member not in paths:
                 raise ValueError(f"{name}: missing {member}")

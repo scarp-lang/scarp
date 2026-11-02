@@ -52,21 +52,21 @@ class ReleaseAssets(unittest.TestCase):
                 "README.md", "CHANGELOG.md", "CONTRIBUTING.md",
                 f"docs/releases/v{version}.md", "examples/bindings.srp",
                 "examples/mutable.srp", "examples/scopes.srp", "examples/decisions.srp",
-            ) if name != omit and not (version == "0.0.5-alpha.2" and name.startswith("docs/releases/"))}
-            if (version.startswith("0.0.3-") or version in ("0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2")):
+            ) if name != omit and not (version in ("0.0.5-alpha.2", "0.0.5-alpha.3") and name.startswith("docs/releases/"))}
+            if (version.startswith("0.0.3-") or version in ("0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3")):
                 for name in ("loops", "repeat", "control_escapes"):
                     for extension in ("srp", "stdout"):
                         member = f"examples/{name}.{extension}"
                         if member != omit:
                             files[member] = b"fixture"
-            if version in ("0.0.3-beta.2", "0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2"):
+            if version in ("0.0.3-beta.2", "0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3"):
                 for member in (
                     "examples/output.srp", "examples/output.stdout",
                     "docs/output.md", "docs/syntax-migration.md",
                 ):
                     if member != omit:
                         files[member] = b"fixture"
-            if version in ("0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2"):
+            if version in ("0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3"):
                 for member in (
                     "docs/functions.md", "examples/functions.srp", "examples/functions.stdout",
                     "examples/function_contracts.srp", "examples/function_contracts.stdout",
@@ -75,14 +75,14 @@ class ReleaseAssets(unittest.TestCase):
                 ):
                     if member != omit:
                         files[member] = b"fixture"
-            if version in ("0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2"):
+            if version in ("0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3"):
                 for member in (
                     "docs/floats.md", "examples/float_refinement.srp", "examples/float_refinement.stdout",
                     "examples/float_smoothing.srp", "examples/float_smoothing.stdout",
                 ):
                     if member != omit:
                         files[member] = b"fixture"
-            if version in ("0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2"):
+            if version in ("0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3"):
                 for member in (
                     "docs/vectors.md", "examples/vectors.srp", "examples/vectors.stdout",
                     "examples/vector_probabilities.srp", "examples/vector_probabilities.stdout",
@@ -90,13 +90,13 @@ class ReleaseAssets(unittest.TestCase):
                 ):
                     if member != omit:
                         files[member] = b"fixture"
-            if version in ("0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2"):
+            if version in ("0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3"):
                 for name in ("scaled_norm", "terminal_recursion", "vector_allocation"):
                     for extension in ("srp", "stdout"):
                         member = f"examples/{name}.{extension}"
                         if member != omit:
                             files[member] = b"fixture"
-            if version in ("0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2"):
+            if version in ("0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3"):
                 for member in ("docs/tiles.md", "docs/memory-lifetimes.md", "docs/architecture.md", "docs/testing.md"):
                     if member != omit:
                         files[member] = b"fixture"
@@ -107,7 +107,7 @@ class ReleaseAssets(unittest.TestCase):
                         member = f"examples/{name}.{extension}"
                         if member != omit:
                             files[member] = b"fixture"
-            if version in ("0.0.5-alpha.1", "0.0.5-alpha.2"):
+            if version in ("0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3"):
                 for member in (
                     "docs/modules.md", "docs/tutorials/modules.md", "docs/proposals/0029-source-modules.md",
                     "examples/module_demo.srp", "examples/module_demo.stdout",
@@ -115,7 +115,7 @@ class ReleaseAssets(unittest.TestCase):
                 ):
                     if member != omit:
                         files[member] = b"fixture"
-            if version == "0.0.5-alpha.2":
+            if version in ("0.0.5-alpha.2", "0.0.5-alpha.3"):
                 for name in ("module_inspection", "constant_expressions", "typed_declarations", "scalar_conversions", "unicode_text", "inspection_json", "integer_collections", "bit_fields", "numerical_kernels", "collection_module"):
                     for extension in ("srp", "stdout"):
                         member = f"examples/{name}.{extension}"
@@ -126,6 +126,10 @@ class ReleaseAssets(unittest.TestCase):
                         files[member] = b"fixture"
                 if omit != "RELEASE-METADATA.json":
                     files["RELEASE-METADATA.json"] = json.dumps(dict(schema_version=1, version=version, documentation_repository="https://github.com/scarp-lang/scarp-docs")).encode()
+            if version == "0.0.5-alpha.3":
+                for member in ("examples/interned_types.rs", "examples/text_construction.srp", "examples/text_construction.stdout", "examples/diagnostics/type_error.srp", "examples/diagnostics/type_error.diagnostic.json"):
+                    if member != omit:
+                        files[member] = b"fixture"
             files.update(extra_files or {})
             files["BUILD-INFO.txt"] = (
                 f"version={record_version or version}\ntarget={target}\ncommit={commit}\n"
@@ -164,6 +168,22 @@ class ReleaseAssets(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "missing " + member):
                     verifier.verify(self.directory, version, COMMIT)
 
+    def test_alpha3_requires_new_examples_metadata_and_inherited_content(self):
+        version = "0.0.5-alpha.3"
+        self.build(version=version)
+        self.assertEqual(len(verifier.verify(self.directory, version, COMMIT).splitlines()), 3)
+        for member in ("RELEASE-METADATA.json", "examples/interned_types.rs", "examples/text_construction.srp", "examples/text_construction.stdout", "examples/diagnostics/type_error.srp", "examples/diagnostics/type_error.diagnostic.json", "examples/integer_collections.srp", "examples/inspection_json.modules.json", "examples/repeat.srp", "docs/reference/cli.md"):
+            with self.subTest(member=member):
+                self.build(version=version, omit=member)
+                with self.assertRaisesRegex(ValueError, "missing " + member):
+                    verifier.verify(self.directory, version, COMMIT)
+
+    def test_alpha3_rejects_alpha2_metadata_even_with_valid_archive_hashes(self):
+        metadata = json.dumps(dict(schema_version=1, version="0.0.5-alpha.2", documentation_repository="https://github.com/scarp-lang/scarp-docs")).encode()
+        self.build(version="0.0.5-alpha.3", extra_files={"RELEASE-METADATA.json": metadata})
+        with self.assertRaisesRegex(ValueError, "invalid release metadata"):
+            verifier.verify(self.directory, "0.0.5-alpha.3", COMMIT)
+
     def test_alpha2_damaged_metadata_is_rejected_even_with_valid_archive_hashes(self):
         for data in (b"{}", b"[]", b"invalid-json", b'{"schema_version":1,"version":"0.0.5-alpha.1","documentation_repository":"https://github.com/scarp-lang/scarp-docs"}'):
             with self.subTest(data=data):
@@ -171,9 +191,9 @@ class ReleaseAssets(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     verifier.verify(self.directory, "0.0.5-alpha.2", COMMIT)
 
-    def alpha2_source_fixture(self):
+    def alpha2_source_fixture(self, version="0.0.5-alpha.2"):
         source, _, files = self.source_fixture()
-        data = json.dumps(dict(schema_version=1, version="0.0.5-alpha.2", documentation_repository="https://github.com/scarp-lang/scarp-docs")).encode()
+        data = json.dumps(dict(schema_version=1, version=version, documentation_repository="https://github.com/scarp-lang/scarp-docs")).encode()
         path = source / ".github/release-metadata.json"
         path.parent.mkdir()
         path.write_bytes(data)
@@ -199,6 +219,28 @@ class ReleaseAssets(unittest.TestCase):
         self.assertEqual(verifier.release_notes_at(source, commit, "0.0.5-alpha.2"), expected)
         self.assertIn(commit, expected)
         self.assertIn("https://github.com/scarp-lang/scarp-docs", expected)
+
+    def test_alpha3_metadata_and_examples_match_the_approved_source(self):
+        source, commit, files = self.alpha2_source_fixture(version="0.0.5-alpha.3")
+        example = "examples/text_construction.srp"
+        files[example] = b'print("approved source");\n'
+        (source / example).parent.mkdir(parents=True, exist_ok=True)
+        (source / example).write_bytes(files[example])
+        subprocess.run(["git", "-C", str(source), "add", example], check=True)
+        subprocess.run(["git", "-C", str(source), "-c", "user.name=Release Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--quiet", "-m", "example"], check=True)
+        commit = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+        self.build(version="0.0.5-alpha.3", commit=commit, extra_files=files)
+        self.assertEqual(len(verifier.verify(self.directory, "0.0.5-alpha.3", commit, source).splitlines()), 3)
+        expected = verifier.release_notes_at(source, commit, "0.0.5-alpha.3")
+        (source / ".github/release-metadata.json").write_text("invalid checkout data", encoding="utf-8")
+        self.assertEqual(verifier.release_notes_at(source, commit, "0.0.5-alpha.3"), expected)
+        for member in ("RELEASE-METADATA.json", example):
+            with self.subTest(member=member):
+                changed = dict(files)
+                changed[member] += b"\n"
+                self.build(version="0.0.5-alpha.3", commit=commit, extra_files=changed)
+                with self.assertRaisesRegex(ValueError, "source differs.*" + member):
+                    verifier.verify(self.directory, "0.0.5-alpha.3", commit, source)
 
     def test_alpha4_requires_new_and_inherited_package_content(self):
         self.build(version="0.0.4-alpha.4")
