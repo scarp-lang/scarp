@@ -13,10 +13,8 @@ struct Workspace(PathBuf);
 impl Workspace {
     fn new() -> Self {
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "scarp-project-test-{}-{id}",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("scarp-project-test-{}-{id}", std::process::id()));
         fs::create_dir(&path).unwrap();
         Self(path)
     }
@@ -85,7 +83,10 @@ fn existing_destinations_are_never_overwritten() {
     let result = with_path(&["create"], &project);
     assert_eq!(result.status.code(), Some(1), "{result:?}");
     assert!(result.stdout.is_empty());
-    assert_eq!(fs::read(project.join("sentinel.txt")).unwrap(), b"do not touch");
+    assert_eq!(
+        fs::read(project.join("sentinel.txt")).unwrap(),
+        b"do not touch"
+    );
     assert!(!project.join("Scarp.project").exists());
     let missing_parent = with_path(&["create"], &project.join("nested").join("app"));
     assert_eq!(missing_parent.status.code(), Some(1), "{missing_parent:?}");
