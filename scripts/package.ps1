@@ -303,6 +303,23 @@ try {
             throw 'Packaged vector snapshots must obey the capture cap'
         }
     }
+    $integerSource = Join-Path $stagingRoot 'integer-collections.srp'
+    [System.IO.File]::WriteAllText($integerSource, 'bind a=[integer:1,2,3]; bind b=ints_window(a,1,2); print(ints_set(a,0,9),b,ints_sum(b));')
+    foreach ($verb in @('run','check')) {
+        $result = Invoke-ScarpProcess -Executable $executable -Arguments @($verb,'--max-vector-bytes','48',$integerSource)
+        if ($result.ExitCode -ne 0 -or $result.Stderr.Length -ne 0) { throw 'Packaged integer collection smoke failed' }
+        $expected = if ($verb -eq 'run') { "[integer: 9, 2, 3] [integer: 2, 3] 5`n" } else { '' }
+        if ([System.Text.Encoding]::UTF8.GetString($result.Stdout) -cne $expected) { throw 'Packaged integer collection output differs' }
+        $limited = Invoke-ScarpProcess -Executable $executable -Arguments @($verb,'--max-vector-bytes','47',$integerSource)
+        if ($limited.ExitCode -ne 1 -or $limited.Stdout.Length -ne 0 -or -not [System.Text.Encoding]::UTF8.GetString($limited.Stderr).StartsWith('error[E0036]')) { throw 'Packaged integer allocation cap failed' }
+    }
+    foreach ($case in @(@('ints_sum([integer:9223372036854775807,1])','E0007'), @('ints_window([integer:1],1,1)','E0033'), @('ints_from_vector([0.5])','E0044'))) {
+        [System.IO.File]::WriteAllText($integerSource, ('print("OUT"); eprint("ERR"); print(' + $case[0] + ');'))
+        foreach ($verb in @('run','check')) {
+            $failed = Invoke-ScarpProcess -Executable $executable -Arguments @($verb,$integerSource)
+            if ($failed.ExitCode -ne 1 -or $failed.Stdout.Length -ne 0 -or -not [System.Text.Encoding]::UTF8.GetString($failed.Stderr).StartsWith(('error[' + $case[1] + ']'))) { throw 'Packaged integer diagnostic or atomicity failed' }
+        }
+    }
     $tokens = & $executable tokens (Join-Path $extractedPackage 'examples/arithmetic.srp')
     if ($LASTEXITCODE -ne 0 -or -not ($tokens -match 'integer\(1\)')) {
         throw 'Packaged token inspection failed'
