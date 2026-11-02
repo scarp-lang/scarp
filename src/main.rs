@@ -290,7 +290,10 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             return diagnose(output, errors, true);
         }
         [command, ..] if command == "diagnose" => {
-            let _ = writeln!(errors, "error: invalid diagnose arguments\n\n{DIAGNOSE_HELP}");
+            let _ = writeln!(
+                errors,
+                "error: invalid diagnose arguments\n\n{DIAGNOSE_HELP}"
+            );
             return 2;
         }
         [command] if command == "version" => {
