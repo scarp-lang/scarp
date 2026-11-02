@@ -1165,3 +1165,132 @@ fn text_payload_cli_limit_has_exact_boundaries_and_failure_atomicity() {
         .status
         .success());
 }
+
+#[test]
+fn structured_errors_cover_file_commands_and_keep_successful_output_unchanged() {
+    let fixture = Fixture::new();
+    let bad = fixture.file("bad café.srp", "// 🌍\r\n@");
+    for mode in ["run", "check", "tokens", "modules"] {
+        let result = command()
+            .args([mode, "--diagnostic-format=json"])
+            .arg(&bad)
+            .output()
+            .unwrap();
+        assert_eq!(result.status.code(), Some(1));
+        assert!(result.stdout.is_empty());
+        let text = stderr(&result);
+        assert!(text.starts_with("{\"schema_version\":1,"), "{text}");
+        assert!(text.contains("\"code\":\"E0001\""));
+        assert!(text.contains("\"column_encoding\":\"unicode-scalar\""));
+    }
+    let good = fixture.file("good.srp", "print(42);");
+    for mode in ["run", "check", "tokens", "modules"] {
+        let plain = command().arg(mode).arg(&good).output().unwrap();
+        let structured = command()
+            .args([mode, "--diagnostic-format=json"])
+            .arg(&good)
+            .output()
+            .unwrap();
+        assert_eq!(plain.status.code(), structured.status.code());
+        assert_eq!(plain.stdout, structured.stdout);
+        assert_eq!(plain.stderr, structured.stderr);
+    }
+}
+#[test]
+fn structured_runtime_failures_keep_program_streams_atomic() {
+    let fixture = Fixture::new();
+    let file = fixture.file(
+        "runtime.srp",
+        "print(\"OUT\"); eprint(\"ERR\"); print(1/0);",
+    );
+    for mode in ["run", "check"] {
+        let result = command()
+            .args([mode, "--diagnostic-format=json"])
+            .arg(&file)
+            .output()
+            .unwrap();
+        assert_eq!(result.status.code(), Some(1));
+        assert!(result.stdout.is_empty());
+        let text = stderr(&result);
+        assert!(text.starts_with("{\"schema_version\":1,"), "{text}");
+        assert!(text.contains("\"code\":\"E0008\""));
+        assert!(!text.contains("OUT") && !text.contains("ERR"));
+    }
+}
+#[test]
+fn structured_usage_errors_validate_format_order_and_duplicate_flags() {
+    for args in [
+        vec!["run", "--diagnostic-format=json"],
+        vec![
+            "run",
+            "--diagnostic-format=json",
+            "--max-text-bytes",
+            "-1",
+            "missing.srp",
+        ],
+        vec![
+            "run",
+            "--max-steps",
+            "10",
+            "--diagnostic-format=json",
+            "--diagnostic-format=text",
+            "missing.srp",
+        ],
+        vec![
+            "modules",
+            "--diagnostic-format=json",
+            "--json",
+            "--json",
+            "missing.srp",
+        ],
+    ] {
+        let result = command().args(args).output().unwrap();
+        assert_eq!(result.status.code(), Some(2));
+        assert!(result.stdout.is_empty());
+        assert!(stderr(&result).contains("\"code\":null"));
+    }
+    for args in [
+        vec!["run", "--diagnostic-format=yaml", "missing.srp"],
+        vec!["run", "missing.srp", "--diagnostic-format=json"],
+        vec!["tokens", "--diagnostic-format=", "missing.srp"],
+    ] {
+        let result = command().args(args).output().unwrap();
+        assert_eq!(result.status.code(), Some(2));
+        assert!(stderr(&result).starts_with("error:"));
+    }
+}
+#[test]
+fn format_options_after_separator_are_filenames_and_explicit_text_is_compatible() {
+    let fixture = Fixture::new();
+    fixture.file("--diagnostic-format=json", "print(42);");
+    let result = command()
+        .args(["run", "--", "--diagnostic-format=json"])
+        .current_dir(&fixture.directory)
+        .output()
+        .unwrap();
+    assert!(result.status.success());
+    assert_eq!(result.stdout, b"42\n");
+    let bad = fixture.file("bad.srp", "print(1/0);");
+    let default = command().arg("run").arg(&bad).output().unwrap();
+    let text = command()
+        .args(["run", "--diagnostic-format=text"])
+        .arg(&bad)
+        .output()
+        .unwrap();
+    assert_eq!(default.stderr, text.stderr);
+    assert_eq!(default.status.code(), text.status.code());
+}
+#[test]
+fn missing_token_files_use_structured_io_errors_without_invented_locations() {
+    let fixture = Fixture::new();
+    let result = command()
+        .args(["tokens", "--diagnostic-format=json"])
+        .arg(fixture.directory.join("missing.srp"))
+        .output()
+        .unwrap();
+    assert_eq!(result.status.code(), Some(1));
+    assert!(result.stdout.is_empty());
+    let text = stderr(&result);
+    assert!(text.contains("\"code\":null"));
+    assert!(text.contains("\"primary\":null"));
+}
