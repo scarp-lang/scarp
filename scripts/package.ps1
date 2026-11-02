@@ -25,8 +25,8 @@ function Invoke-ScarpProcess {
         $readOut = $process.StandardOutput.BaseStream.CopyToAsync($stdout)
         $readErr = $process.StandardError.BaseStream.CopyToAsync($stderr)
         $process.WaitForExit()
-        $readOut.GetAwaiter().GetResult()
-        $readErr.GetAwaiter().GetResult()
+        [void]$readOut.GetAwaiter().GetResult()
+        [void]$readErr.GetAwaiter().GetResult()
         return @{ ExitCode = $process.ExitCode; Stdout = $stdout.ToArray(); Stderr = $stderr.ToArray() }
     }
     finally { $process.Dispose(); $stdout.Dispose(); $stderr.Dispose() }
