@@ -29,6 +29,12 @@ returns errors; the CLI renders them using the source and path it already owns.
 
 ## Modules and responsibilities
 
+The JSON inventory streams existing immutable metadata and computes local spans
+from known source starts, avoiding source-prefix rescans. A shared diagnostic
+catalogue generates variants, stable codes, all-kind lookup and explanations.
+CLI invocation metadata separates JSON format from execution options; explain
+is a source-free command. No new parser/evaluator or external JSON dependency is used.
+
 The existing typed built-in registry also dispatches exact conversions and
 Unicode text queries into `numeric::scalar_text`. This preserves public host
 paths and one arity/type/argument-span boundary. Scans spend conservative byte

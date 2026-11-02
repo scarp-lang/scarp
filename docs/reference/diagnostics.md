@@ -5,8 +5,10 @@ and help to repair it. Codes `E0001` through `E0009` exist in v0.0.1; the remain
 codes through `E0015` are available in v0.0.2. Beta.1 adds `E0016` through
 `E0019`; published beta.2 retains those assignments and adds contextual
 declaration/assignment repair help. E0020–E0029 cover functions, E0030–E0036
-cover numerical values/budgets, and the unpublished 0.0.5 candidate adds
-E0037–E0043 for modules. Existing assignments are unchanged.
+cover numerical values/budgets, and published 0.0.5-alpha.1 adds
+E0037–E0043 for modules. Unreleased scalar/text intrinsics add E0044/E0045.
+Existing assignments are unchanged. Unreleased `scarp explain E####` prints
+general repairs without loading source; see [developer tooling](../module-json.md).
 
 ## Codes and first repairs
 

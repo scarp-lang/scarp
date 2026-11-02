@@ -26,6 +26,9 @@ the implementation roadmap; historical native commands remain unavailable on mai
 Unreleased [scalar and text built-ins](docs/scalar-text.md) add exact numeric
 conversions and budgeted Unicode length, codepoint and search queries.
 
+[Developer inspection](docs/module-json.md) adds `modules --json`, a streaming
+metadata API, `explain E####` and correctness-checked compiler/JSON benchmarks.
+
 Use immutable `bind` and mutable `var` declarations, checked integers, finite floats, strings,
 booleans, conditionals, while/repeat loops, and explicit output streams.
 [Typed `funcra` functions](docs/functions.md) support named/default arguments,

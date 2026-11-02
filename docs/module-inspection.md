@@ -6,6 +6,9 @@ The package version intentionally remains 0.0.5-alpha.1 during this phase; build
 the current development checkout and identify its commit when sharing results.
 No alpha.2 release or complete alpha.2 roadmap is implied.
 
+Unreleased `--json` output and `write_inspection_json` expose the same immutable
+metadata with a versioned schema and local byte spans; see [JSON tooling](module-json.md).
+
 ```sh
 cargo build --locked --offline
 cargo run --locked --offline -- modules examples/module_inspection.srp

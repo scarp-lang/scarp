@@ -20,7 +20,8 @@ Usage:
   scarp run <file.srp>       Execute a Scarp program
   scarp check <file.srp>     Validate syntax, names, and arithmetic without printing
   scarp tokens <file.srp>    Inspect lexer tokens and source locations
-  scarp modules <file.srp>   Inspect checked modules without executing the program
+  scarp modules [--json] <file.srp> Inspect checked module metadata
+  scarp explain E####       Explain a diagnostic code without loading source
   scarp --help               Show this help
   scarp --version            Show the prototype version
 
@@ -73,7 +74,7 @@ No execution-limit options are accepted. Use scarp check to evaluate source.
 Import declarations are tokenized without loading their target files.
 ";
 
-const MODULES_HELP: &str = "Usage: scarp modules [--] <file.srp>
+const MODULES_HELP: &str = "Usage: scarp modules [--json] [--] <file.srp>
 
 Load and statically check the module graph, then list files, imports, dependencies
 and public/private declarations with typed function signatures and source locations.
@@ -81,7 +82,14 @@ No runtime statements, defaults or contracts execute. Scalar module constants ar
 evaluated during compilation with separate work limits. No runtime-budget options.
 Uses the same trusted source root and default module-loading limits as run/check.
 Filenames are escaped; dependency labels use the loader's canonical paths.
+--json emits schema-version-1 JSON with file-local UTF-8 byte spans.
 Example: scarp modules examples/module_inspection.srp
+";
+
+const EXPLAIN_HELP: &str = "Usage: scarp explain E####
+
+Explain an exact diagnostic code and its repairs without opening source files.
+Example: scarp explain E0044
 ";
 
 fn main() -> ExitCode {
@@ -100,6 +108,37 @@ fn main() -> ExitCode {
 }
 
 fn dispatch(args: Vec<OsString>, output: &mut impl Write, errors: &mut impl Write) -> u8 {
+    if args.first().is_some_and(|command| command == "explain") {
+        return match args.as_slice() {
+            [_, flag] if flag == "--help" || flag == "-h" => {
+                write_output(output.write_all(EXPLAIN_HELP.as_bytes()), errors)
+            }
+            [_, code] => match code
+                .to_str()
+                .and_then(scarp::diagnostics::DiagnosticKind::from_code)
+            {
+                Some(kind) => write_output(
+                    writeln!(output, "{}: {}", kind.code(), kind.explanation()),
+                    errors,
+                ),
+                None => {
+                    let _ = writeln!(
+                        errors,
+                        "error: unknown diagnostic code {:?}\n\n{EXPLAIN_HELP}",
+                        code.to_string_lossy()
+                    );
+                    2
+                }
+            },
+            _ => {
+                let _ = writeln!(
+                    errors,
+                    "error: expected one diagnostic code\n\n{EXPLAIN_HELP}"
+                );
+                2
+            }
+        };
+    }
     match args.as_slice() {
         [flag] if flag == "--help" || flag == "-h" => {
             return write_output(output.write_all(HELP.as_bytes()), errors);
@@ -121,7 +160,12 @@ fn dispatch(args: Vec<OsString>, output: &mut impl Write, errors: &mut impl Writ
         }
         _ => {}
     }
-    let (command, filename, options) = match invocation(&args) {
+    let Invocation {
+        command,
+        filename,
+        options,
+        json,
+    } = match invocation(&args) {
         Ok(invocation) => invocation,
         Err(message) => {
             let _ = writeln!(errors, "error: {message}\n\n{HELP}");
@@ -146,7 +190,14 @@ fn dispatch(args: Vec<OsString>, output: &mut impl Write, errors: &mut impl Writ
             }
         };
         return if command == "modules" {
-            write_output(program.write_inspection(output), errors)
+            write_output(
+                if json {
+                    program.write_inspection_json(output)
+                } else {
+                    program.write_inspection(output)
+                },
+                errors,
+            )
         } else if command == "check" {
             match program.check(options) {
                 Ok(()) => 0,
@@ -214,17 +265,33 @@ fn file_command(command: &OsStr) -> bool {
     )
 }
 
-fn invocation(args: &[OsString]) -> Result<(&OsStr, &OsStr, ExecutionOptions), &'static str> {
+struct Invocation<'a> {
+    command: &'a OsStr,
+    filename: &'a OsStr,
+    options: ExecutionOptions,
+    json: bool,
+}
+
+fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
     let command = args.first().ok_or("expected a command and a file path")?;
     let mut options = ExecutionOptions::default();
     let mut index = 1;
     let mut seen = Vec::new();
     let mut separator = false;
+    let mut json = false;
     while let Some(argument) = args.get(index) {
         if argument == "--" {
             separator = true;
             index += 1;
             break;
+        }
+        if command == "modules" && argument == "--json" {
+            if json {
+                return Err("--json cannot be repeated");
+            }
+            json = true;
+            index += 1;
+            continue;
         }
         let flag = match argument.to_str() {
             Some(
@@ -278,7 +345,12 @@ fn invocation(args: &[OsString]) -> Result<(&OsStr, &OsStr, ExecutionOptions), &
     if index + 1 != args.len() || (!separator && filename.to_string_lossy().starts_with('-')) {
         return Err("expected a command and a file path");
     }
-    Ok((command.as_os_str(), filename.as_os_str(), options))
+    Ok(Invocation {
+        command: command.as_os_str(),
+        filename: filename.as_os_str(),
+        options,
+        json,
+    })
 }
 
 fn report_diagnostic(error: &Diagnostic, path: &Path, source: &str, errors: &mut impl Write) -> u8 {
