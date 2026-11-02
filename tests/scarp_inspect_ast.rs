@@ -32,13 +32,17 @@ fn inspect_ast_outputs_the_actual_parser_tree_without_executing() {
     let output = with_file(&["inspect", "ast"], &path);
     assert!(output.status.success(), "{output:?}");
     assert!(output.stderr.is_empty());
-    assert_eq!(String::from_utf8(output.stdout).unwrap(), format!("{parsed:#?}\n"));
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        format!("{parsed:#?}\n")
+    );
 }
 
 #[test]
 fn inspect_ast_reads_only_entry_source_and_does_not_run_program() {
     let id = NEXT.fetch_add(1, Ordering::Relaxed);
-    let folder = std::env::temp_dir().join(format!("scarp-inspect-ast-{}-{id}", std::process::id()));
+    let folder =
+        std::env::temp_dir().join(format!("scarp-inspect-ast-{}-{id}", std::process::id()));
     fs::create_dir(&folder).unwrap();
     let file = folder.join("AST नमस्ते.srp");
     // Missing import would make verify fail; runtime arithmetic would fail
@@ -51,7 +55,10 @@ fn inspect_ast_reads_only_entry_source_and_does_not_run_program() {
     assert!(output.stderr.is_empty());
     let result = String::from_utf8(output.stdout).unwrap();
     assert!(result.contains("Import"), "{result}");
-    assert!(result.contains("Println") || result.contains("Output"), "{result}");
+    assert!(
+        result.contains("Println") || result.contains("Output"),
+        "{result}"
+    );
     assert_eq!(verified.status.code(), Some(1), "{verified:?}");
 }
 
@@ -86,7 +93,8 @@ fn inspect_ast_rejects_unavailable_success_json_and_top_level_alias() {
 #[test]
 fn inspect_ast_preserves_structured_parser_diagnostics() {
     let id = NEXT.fetch_add(1, Ordering::Relaxed);
-    let folder = std::env::temp_dir().join(format!("scarp-inspect-error-{}-{id}", std::process::id()));
+    let folder =
+        std::env::temp_dir().join(format!("scarp-inspect-error-{}-{id}", std::process::id()));
     fs::create_dir(&folder).unwrap();
     let file = folder.join("invalid space.srp");
     fs::write(&file, "print(1 + );").unwrap();
@@ -97,7 +105,10 @@ fn inspect_ast_preserves_structured_parser_diagnostics() {
     assert!(output.stdout.is_empty());
     let diagnostic = String::from_utf8(output.stderr).unwrap();
     assert!(diagnostic.contains("\"schema_version\":1"), "{diagnostic}");
-    assert!(diagnostic.contains("\"severity\":\"error\""), "{diagnostic}");
+    assert!(
+        diagnostic.contains("\"severity\":\"error\""),
+        "{diagnostic}"
+    );
     assert_eq!(text_error.status.code(), Some(1), "{text_error:?}");
     assert!(text_error.stdout.is_empty());
     assert!(!text_error.stderr.is_empty());
@@ -106,7 +117,10 @@ fn inspect_ast_preserves_structured_parser_diagnostics() {
 #[test]
 fn inspect_ast_accepts_explicit_separator_for_dash_leading_filename() {
     let id = NEXT.fetch_add(1, Ordering::Relaxed);
-    let folder = std::env::temp_dir().join(format!("scarp-inspect-separator-{}-{id}", std::process::id()));
+    let folder = std::env::temp_dir().join(format!(
+        "scarp-inspect-separator-{}-{id}",
+        std::process::id()
+    ));
     fs::create_dir(&folder).unwrap();
     fs::write(folder.join("-source.srp"), "print(12);").unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_scarp"))
@@ -116,6 +130,9 @@ fn inspect_ast_accepts_explicit_separator_for_dash_leading_filename() {
         .unwrap();
     let _ = fs::remove_dir_all(folder);
     assert!(output.status.success(), "{output:?}");
-    assert!(String::from_utf8_lossy(&output.stdout).contains("Program"), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("Program"),
+        "{output:?}"
+    );
     assert!(output.stderr.is_empty());
 }
