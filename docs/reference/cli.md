@@ -1,8 +1,10 @@
 # Command-line reference
 
-## Scarp-first CLI (unreleased branch development)
+## Scarp-first CLI (unreleased mainline development)
 
-These command paths are added on the Scarp-first CLI development branch. They
+The core Scarp-first CLI commands were merged into `main` in PR #87,
+and offline `diagnose` followed in PR #88. The AST inspector described
+below is introduced by its own development PR. These commands
 are not part of the previously published 0.0.5-alpha.1 binary. Check the
 installed executable's `scarp version` or `scarp --version`; a release version
 alone does not establish which development branch was built.
@@ -22,13 +24,14 @@ alone does not establish which development branch was built.
 | `scarp inspect modules [--json] FILE` | Inspect statically checked modules; JSON retains schema version 1 |
 | `scarp explain E####` | Explain an existing compiler diagnostic |
 
-For a checked-out binary built from this branch, examples include:
+For a compiler built from the corresponding development branch, examples include:
 
 ```sh
 scarp guide
 scarp exec examples/hello.srp
 scarp verify examples/hello.srp
 scarp inspect tokens examples/hello.srp
+scarp inspect ast examples/hello.srp
 scarp inspect modules --json examples/module_inspection.srp
 scarp guide inspect modules
 ```
@@ -36,7 +39,7 @@ scarp guide inspect modules
 `exec` accepts exactly one source filename, with an optional `--` before a
 dash-leading filename. **It does not forward program arguments**; project-mode
 execution and the future `launch` command also remain unimplemented. The
-`inspect` command accepts only `tokens` and `modules` at this milestone;
+`inspect` command accepts `tokens`, `ast`, and `modules` in this branch;
 `--json` is supported only for modules. Missing/unsupported topics and options
 return exit 2.
 
