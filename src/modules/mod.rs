@@ -23,6 +23,7 @@ use std::{collections::HashMap, fmt, io, path::Path, sync::Arc};
 
 mod constants;
 mod inspection;
+mod json;
 pub use constants::{ConstantDependency, ConstantLimits};
 mod spelling;
 use spelling::spelling_hint;

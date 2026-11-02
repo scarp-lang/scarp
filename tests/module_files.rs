@@ -12,6 +12,21 @@ use std::{
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[test]
+fn json_cli_preserves_unicode_dash_paths_and_local_byte_spans() {
+    let fixture = Fixture::new();
+    fixture.file("-値.srp", "// café 🌍\r\npub bind answer: integer=6*7;");
+    let result = Command::new(env!("CARGO_BIN_EXE_scarp"))
+        .current_dir(&fixture.directory)
+        .args(["modules", "--json", "--", "-値.srp"])
+        .output()
+        .unwrap();
+    assert!(result.status.success() && result.stderr.is_empty());
+    let text = String::from_utf8(result.stdout).unwrap();
+    assert!(text.contains("\"path\":\"-値.srp\""));
+    assert!(text.contains("\"type\":\"integer\""));
+}
+
+#[test]
 fn constant_diagnostic_fixtures_match_embedding_and_all_compiling_cli_modes() {
     use scarp::modules::MemorySourceLoader;
     let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/constants");

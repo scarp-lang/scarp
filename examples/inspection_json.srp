@@ -1,0 +1,6 @@
+pub bind base: integer = 6;
+pub bind answer: integer = base * 7;
+pure funcra echo(value: integer = answer) -> integer {
+    return value;
+}
+print(echo());

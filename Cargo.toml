@@ -24,5 +24,9 @@ harness = false
 name = "numerics"
 harness = false
 
+[[bench]]
+name = "compiler"
+harness = false
+
 [lints.rust]
 unsafe_code = "forbid"
