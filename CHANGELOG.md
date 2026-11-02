@@ -2,6 +2,13 @@
 
 ## Unreleased - compiler development toward 0.0.5-alpha.2
 
+- Add `scarp inspect ast FILE` using the real lexer/parser for an entry-file
+  development syntax tree without executing or loading imports. Retain
+  schema-v1 JSON *diagnostics* for malformed source, but do not promise
+  a stable AST JSON format or create an unintended top-level command alias.
+- Test AST parity against the embedding parser, parse errors, missing imports,
+  unsupported flags, Unicode paths, and dash-leading filenames.
+
 - Add a read-only `scarp diagnose [--json]` command that reports actual
   compiler package version, host OS/architecture and available CLI capabilities
   without network access or pretending external toolchains/registries exist.

@@ -1,5 +1,11 @@
 # Version and API compatibility
 
+The new `scarp inspect ast FILE` is a parser-only frontend development
+inspection, distinct from `verify` or `inspect modules`. Its printed Rust
+Debug layout is intentionally unstable and must not be parsed as a machine
+interface. It does not introduce a top-level `ast` command; JSON diagnostic
+errors keep the existing stable schema while successful AST JSON is unavailable.
+
 ## Scarp-first CLI migration (unreleased development branch)
 
 Unreleased development adds `scarp diagnose [--json]`, a read-only

@@ -129,9 +129,7 @@ fn inspect_subcommands_preserve_backends_and_json() {
 fn unknown_guides_subcommands_and_unsupported_features_fail() {
     for args in [
         vec!["guide", "compile"],
-        vec!["guide", "inspect", "ast"],
         vec!["guide", "inspect", "tokens", "unexpected"],
-        vec!["inspect", "ast", "hello.srp"],
         vec!["inspect", "tokens", "--json", "hello.srp"],
         vec!["version", "--bogus"],
         vec!["compile", "hello.srp"],
