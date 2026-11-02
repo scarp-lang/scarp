@@ -2,11 +2,14 @@
 
 ## Scarp-first CLI migration (unreleased development branch)
 
-The new preferred command paths are `scarp exec FILE`, `scarp inspect
+The new preferred command paths are `scarp exec FILE`, `scarp verify FILE`, `scarp inspect
 tokens FILE`, `scarp inspect modules [--json] FILE`, `scarp guide` and
 `scarp version`. The existing `scarp explain E####` is unchanged. These
 paths use existing internal backends, preserve real diagnostics and status
 behavior, and do not introduce project generation or code artifact compilation.
+`verify` statically resolves syntax, imports, symbols and types without running
+ordinary program statements. It does not check runtime-only arithmetic or
+contracts; `--strict` and `--json` are not yet available.
 
 During migration, `run`, `check`, `tokens` and `modules` remain supported
 unchanged so existing scripts, documentation, CI and editor extensions continue
