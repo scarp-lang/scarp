@@ -533,7 +533,7 @@ impl Parser<'_> {
                     error.0.kind = DiagnosticKind::UnexpectedToken;
                     error.0.message = error.0.message.replace("parameter", "binding");
                 }
-                error.with_help("binding types are integer, float, vector, tile, boolean or string; an initializer is required")
+                error.with_help("binding types are integer, float, vector, integers, tile, boolean or string; an initializer is required")
             })?;
             Some(crate::ast::TypeAnnotation { kind, span })
         } else {
@@ -645,7 +645,9 @@ impl Parser<'_> {
                     if result { "result" } else { "parameter" }
                 ),
             )
-            .with_help("use integer, float, vector, tile, boolean, string, or unit for a result")),
+            .with_help(
+                "use integer, float, vector, integers, tile, boolean, string, or unit for a result",
+            )),
         }
     }
 
@@ -1061,6 +1063,16 @@ impl Parser<'_> {
     ) -> Result<usize, ParseError> {
         let opening = self.punctuation(TokenKind::LeftBracket, "'['")?;
         self.expression_depth(depth, opening)?;
+        // This prefix extends previously invalid syntax; [integer] still reads
+        // a normal binding named integer and does not change float vectors.
+        let integers = self.keyword("integer")
+            && self
+                .tokens
+                .get(self.cursor + 1)
+                .is_some_and(|token| token.kind == TokenKind::Colon);
+        if integers {
+            self.cursor += 2;
+        }
         let mut elements = Vec::new();
         while !self.at(&TokenKind::RightBracket) {
             let element = self.logical_or(nodes, depth + 1)?;
@@ -1080,7 +1092,11 @@ impl Parser<'_> {
         let end = self.punctuation(TokenKind::RightBracket, "']'")?.end;
         Ok(push(
             nodes,
-            ExpressionKind::Vector { elements },
+            if integers {
+                ExpressionKind::Integers { elements }
+            } else {
+                ExpressionKind::Vector { elements }
+            },
             Span::new(opening.start, end),
         ))
     }

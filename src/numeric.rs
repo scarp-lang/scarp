@@ -6,11 +6,20 @@ use crate::{
     value::{finite_number, FiniteFloat, NumericVector, Value, ValueType, MAX_VECTOR_LENGTH},
 };
 
+mod integers;
 mod scalar_text;
 mod tiles;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Builtin {
+    IntsLength,
+    IntsSum,
+    IntsWindow,
+    IntsJoin,
+    IntsSet,
+    IntsRange,
+    IntsToVector,
+    IntsFromVector,
     ToFloat,
     ToInteger,
     TextLength,
@@ -60,6 +69,14 @@ pub enum Builtin {
 impl Builtin {
     pub fn from_name(name: &str) -> Option<Self> {
         Some(match name {
+            "ints_len" => Self::IntsLength,
+            "ints_sum" => Self::IntsSum,
+            "ints_window" => Self::IntsWindow,
+            "ints_join" => Self::IntsJoin,
+            "ints_set" => Self::IntsSet,
+            "ints_range" => Self::IntsRange,
+            "ints_to_vector" => Self::IntsToVector,
+            "ints_from_vector" => Self::IntsFromVector,
             "to_float" => Self::ToFloat,
             "to_integer" => Self::ToInteger,
             "text_len" => Self::TextLength,
@@ -109,8 +126,13 @@ impl Builtin {
     }
 
     pub fn parameter_types(self) -> &'static [ValueType] {
-        use ValueType::{Float, Integer, String, Tile, Vector};
+        use ValueType::{Float, Integer, Integers, String, Tile, Vector};
         match self {
+            Self::IntsLength | Self::IntsSum | Self::IntsToVector => &[Integers],
+            Self::IntsWindow | Self::IntsSet => &[Integers, Integer, Integer],
+            Self::IntsJoin => &[Integers, Integers],
+            Self::IntsRange => &[Integer, Integer, Integer],
+            Self::IntsFromVector => &[Vector],
             Self::ToFloat => &[Integer],
             Self::ToInteger => &[Float],
             Self::TextLength | Self::TextBytes => &[String],
@@ -149,6 +171,12 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
+            Self::IntsLength | Self::IntsSum => ValueType::Integer,
+            Self::IntsWindow
+            | Self::IntsJoin
+            | Self::IntsSet
+            | Self::IntsRange
+            | Self::IntsFromVector => ValueType::Integers,
             Self::ToInteger
             | Self::TextLength
             | Self::TextBytes
@@ -263,18 +291,25 @@ fn domain(span: Span, message: &str) -> Diagnostic {
     Diagnostic::new(DiagnosticKind::NumericDomain, span, message)
 }
 
-pub(crate) fn buffer(
+pub(crate) fn buffer<T>(
     count: usize,
     budget: &mut Budget,
     span: Span,
-) -> Result<Vec<FiniteFloat>, Diagnostic> {
+) -> Result<Vec<T>, Diagnostic> {
     if count > MAX_VECTOR_LENGTH {
         return Err(length_error(span));
     }
     // Charge the exact logical element payload before any allocation occurs.
     // A failed reservation ends execution; as with work steps, no refund is
     // necessary and no partially prepared output becomes visible.
-    budget.charge_vector_allocation(count * std::mem::size_of::<FiniteFloat>(), span)?;
+    let bytes = count.checked_mul(std::mem::size_of::<T>()).ok_or_else(|| {
+        Diagnostic::new(
+            DiagnosticKind::VectorAllocation,
+            span,
+            "collection payload size overflow",
+        )
+    })?;
+    budget.charge_vector_allocation(bytes, span)?;
     let mut values = Vec::new();
     values.try_reserve_exact(count).map_err(|_| {
         Diagnostic::new(
@@ -446,6 +481,19 @@ pub(crate) fn evaluate_with_spans(
                 value.kind(),
             ));
         }
+    }
+    if matches!(
+        function,
+        Builtin::IntsLength
+            | Builtin::IntsSum
+            | Builtin::IntsWindow
+            | Builtin::IntsJoin
+            | Builtin::IntsSet
+            | Builtin::IntsRange
+            | Builtin::IntsToVector
+            | Builtin::IntsFromVector
+    ) {
+        return integers::evaluate(function, args, budget, span, argument_span);
     }
     if function.is_scalar_text() {
         return scalar_text::evaluate(function, args, budget, span, argument_span);
@@ -743,6 +791,14 @@ pub(crate) fn evaluate_with_spans(
             vector(values, span)
         }
         Builtin::Length
+        | Builtin::IntsLength
+        | Builtin::IntsSum
+        | Builtin::IntsWindow
+        | Builtin::IntsJoin
+        | Builtin::IntsSet
+        | Builtin::IntsRange
+        | Builtin::IntsToVector
+        | Builtin::IntsFromVector
         | Builtin::ToFloat
         | Builtin::ToInteger
         | Builtin::TextLength

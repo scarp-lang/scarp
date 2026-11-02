@@ -905,6 +905,16 @@ fn resolve_expression(
     for node in syntax.nodes() {
         let mut call = None;
         let (kind, slot) = match &node.kind {
+            ExpressionKind::Integers { elements } => {
+                for &element in elements {
+                    require_type(
+                        types[element],
+                        ValueType::Integer,
+                        syntax.nodes()[element].span,
+                    )?;
+                }
+                (ValueType::Integers, None)
+            }
             ExpressionKind::Vector { elements } => {
                 for &element in elements {
                     require_type(
@@ -920,13 +930,26 @@ fn resolve_expression(
                 index,
                 operator_span,
             } => {
-                require_type(types[*vector], ValueType::Vector, *operator_span)?;
+                if !matches!(types[*vector], ValueType::Vector | ValueType::Integers) {
+                    return Err(crate::value::type_mismatch(
+                        *operator_span,
+                        ValueType::Vector,
+                        types[*vector],
+                    ));
+                }
                 require_type(
                     types[*index],
                     ValueType::Integer,
                     syntax.nodes()[*index].span,
                 )?;
-                (ValueType::Float, None)
+                (
+                    if types[*vector] == ValueType::Integers {
+                        ValueType::Integer
+                    } else {
+                        ValueType::Float
+                    },
+                    None,
+                )
             }
             ExpressionKind::UserCall {
                 name,

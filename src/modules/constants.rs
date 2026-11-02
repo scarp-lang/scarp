@@ -115,16 +115,32 @@ impl Work {
                 }
                 self.nodes -= 1;
                 match &node.kind {
-                    ExpressionKind::UserCall { function_span, .. } => return Err(
-                        Diagnostic::new(Kind::ModuleSyntax, *function_span, "calls are not allowed in module constant expressions")
-                            .with_related(declaration.span, "constant initialized here")
-                            .with_help("use scalar operators and earlier constants; call functions at runtime")),
-                    ExpressionKind::Vector { .. } | ExpressionKind::Index { .. } => return Err(
-                        Diagnostic::new(Kind::ModuleSyntax, node.span, "module constant expressions require scalar values")
-                            .with_related(declaration.span, "constant initialized here")
-                            .with_help("construct or index vectors and tiles inside a function or entry script")),
+                    ExpressionKind::UserCall { function_span, .. } => {
+                        return Err(Diagnostic::new(
+                            Kind::ModuleSyntax,
+                            *function_span,
+                            "calls are not allowed in module constant expressions",
+                        )
+                        .with_related(declaration.span, "constant initialized here")
+                        .with_help(
+                            "use scalar operators and earlier constants; call functions at runtime",
+                        ))
+                    }
+                    ExpressionKind::Vector { .. }
+                    | ExpressionKind::Integers { .. }
+                    | ExpressionKind::Index { .. } => return Err(Diagnostic::new(
+                        Kind::ModuleSyntax,
+                        node.span,
+                        "module constant expressions require scalar values",
+                    )
+                    .with_related(declaration.span, "constant initialized here")
+                    .with_help(
+                        "construct or index vectors and tiles inside a function or entry script",
+                    )),
                     ExpressionKind::Name(name) => {
-                        if let Some(&target) = names.get(name.as_str()) { uses.push((target, node.span)); }
+                        if let Some(&target) = names.get(name.as_str()) {
+                            uses.push((target, node.span));
+                        }
                     }
                     ExpressionKind::Integer(_)
                     | ExpressionKind::Float(_)

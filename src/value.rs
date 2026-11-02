@@ -11,6 +11,7 @@ pub enum ValueType {
     Integer,
     Float,
     Vector,
+    Integers,
     Tile,
     Boolean,
     String,
@@ -23,6 +24,7 @@ impl fmt::Display for ValueType {
             Self::Integer => "integer",
             Self::Float => "float",
             Self::Vector => "vector",
+            Self::Integers => "integers",
             Self::Tile => "tile",
             Self::Boolean => "boolean",
             Self::String => "string",
@@ -37,6 +39,7 @@ impl ValueType {
             "integer" => Self::Integer,
             "float" => Self::Float,
             "vector" => Self::Vector,
+            "integers" => Self::Integers,
             "tile" => Self::Tile,
             "boolean" => Self::Boolean,
             "string" => Self::String,
@@ -161,6 +164,69 @@ impl fmt::Display for NumericVector {
             if index > 0 {
                 f.write_str(", ")?;
             }
+            value.fmt(f)?;
+        }
+        f.write_str("]")
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct IntegerVector {
+    storage: Arc<Vec<i64>>,
+    offset: usize,
+    length: usize,
+}
+impl PartialEq for IntegerVector {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+impl Eq for IntegerVector {}
+impl IntegerVector {
+    pub fn new(values: &[i64]) -> Option<Self> {
+        if values.len() > MAX_VECTOR_LENGTH {
+            return None;
+        }
+        let mut owned = Vec::new();
+        owned.try_reserve_exact(values.len()).ok()?;
+        owned.extend_from_slice(values);
+        Self::from_values(owned)
+    }
+    pub fn from_values(values: Vec<i64>) -> Option<Self> {
+        if values.len() > MAX_VECTOR_LENGTH {
+            return None;
+        }
+        Some(Self {
+            length: values.len(),
+            offset: 0,
+            storage: Arc::new(values),
+        })
+    }
+    pub fn window(&self, start: usize, length: usize) -> Option<Self> {
+        if start.checked_add(length)? > self.length {
+            return None;
+        }
+        Some(Self {
+            storage: Arc::clone(&self.storage),
+            offset: self.offset.checked_add(start)?,
+            length,
+        })
+    }
+    pub fn as_slice(&self) -> &[i64] {
+        &self.storage[self.offset..self.offset + self.length]
+    }
+    pub fn len(&self) -> usize {
+        self.length
+    }
+    pub fn is_empty(&self) -> bool {
+        self.length == 0
+    }
+}
+impl fmt::Display for IntegerVector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("[integer:")?;
+        for (index, value) in self.as_slice().iter().enumerate() {
+            f.write_str(if index == 0 { " " } else { ", " })?;
             value.fmt(f)?;
         }
         f.write_str("]")
@@ -294,6 +360,7 @@ pub enum Value {
     Integer(i64),
     Float(FiniteFloat),
     Vector(NumericVector),
+    Integers(IntegerVector),
     Tile(NumericTile),
     Boolean(bool),
     String(Arc<str>),
@@ -306,6 +373,7 @@ impl Value {
             Self::Integer(_) => ValueType::Integer,
             Self::Float(_) => ValueType::Float,
             Self::Vector(_) => ValueType::Vector,
+            Self::Integers(_) => ValueType::Integers,
             Self::Tile(_) => ValueType::Tile,
             Self::Boolean(_) => ValueType::Boolean,
             Self::String(_) => ValueType::String,
@@ -338,6 +406,16 @@ impl Value {
             Self::Tile(value) => Some(value),
             _ => None,
         }
+    }
+    pub fn as_integers(&self) -> Option<&IntegerVector> {
+        match self {
+            Self::Integers(value) => Some(value),
+            _ => None,
+        }
+    }
+    pub(crate) fn require_integers(&self, span: Span) -> Result<&IntegerVector, Diagnostic> {
+        self.as_integers()
+            .ok_or_else(|| type_mismatch(span, ValueType::Integers, self.kind()))
     }
 
     pub(crate) fn require_tile(&self, span: Span) -> Result<&NumericTile, Diagnostic> {
@@ -399,6 +477,7 @@ impl fmt::Display for Value {
             Self::Integer(value) => value.fmt(f),
             Self::Float(value) => value.fmt(f),
             Self::Vector(value) => value.fmt(f),
+            Self::Integers(value) => value.fmt(f),
             Self::Tile(value) => value.fmt(f),
             Self::Boolean(value) => value.fmt(f),
             Self::String(value) => f.write_str(value),

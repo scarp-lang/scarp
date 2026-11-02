@@ -1,0 +1,6 @@
+error[E0033]: integer collection index or window is outside its visible range
+ --> window.srp:2:42
+  |
+2 | bind data = ints_window([integer: 1, 2], 1, 2);
+  |                                          ^
+ = help: use nonnegative indices and a window fully contained within ints_len(values)

@@ -202,6 +202,9 @@ pub struct ExpressionNode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExpressionKind {
+    Integers {
+        elements: Vec<usize>,
+    },
     Vector {
         elements: Vec<usize>,
     },

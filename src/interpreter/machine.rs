@@ -307,6 +307,12 @@ pub(super) fn prepare(
                                         frame.output.as_ref().unwrap().span,
                                     )?;
                                 }
+                                if let Some(array) = value.as_integers() {
+                                    budget.charge(
+                                        array.len() as u64,
+                                        frame.output.as_ref().unwrap().span,
+                                    )?;
+                                }
                                 let output = frame.output.as_mut().unwrap();
                                 let value = PrintValue::Value(value);
                                 charge_capture(&value, &mut captured, options, output.span)?;
@@ -605,6 +611,7 @@ fn charge_capture(
         PrintValue::String(text) => text.len(),
         PrintValue::Value(Value::String(text)) => text.len(),
         PrintValue::Value(Value::Vector(vector)) => vector.len().saturating_mul(8),
+        PrintValue::Value(Value::Integers(vector)) => vector.len().saturating_mul(8),
         PrintValue::Value(Value::Tile(tile)) => tile.len().saturating_mul(8).saturating_add(16),
         _ => 8,
     };

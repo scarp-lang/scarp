@@ -34,7 +34,7 @@ pub(crate) struct Workspace {
 }
 
 enum Task {
-    Vector(usize, Span),
+    Vector(usize, bool, Span),
     Index(Span),
     Builtin(Builtin, usize, Span),
     UserCall(usize, usize, Span),
@@ -97,7 +97,7 @@ impl Workspace {
             let span = match &task {
                 Task::Visit(index) => expression.syntax.nodes()[*index].span,
                 Task::UserCall(_, _, span)
-                | Task::Vector(_, span)
+                | Task::Vector(_, _, span)
                 | Task::Index(span)
                 | Task::Builtin(_, _, span)
                 | Task::Negate(span)
@@ -122,8 +122,13 @@ impl Workspace {
                                 tasks.push(Task::Visit(argument.expression));
                             }
                         }
-                        ExpressionKind::Vector { elements } => {
-                            tasks.push(Task::Vector(elements.len(), node.span));
+                        ExpressionKind::Vector { elements }
+                        | ExpressionKind::Integers { elements } => {
+                            tasks.push(Task::Vector(
+                                elements.len(),
+                                matches!(&node.kind, ExpressionKind::Integers { .. }),
+                                node.span,
+                            ));
                             for &element in elements.iter().rev() {
                                 tasks.push(Task::Visit(element));
                             }
@@ -186,9 +191,21 @@ impl Workspace {
                         }
                     }
                 }
-                Task::Vector(count, span) => {
+                Task::Vector(count, integers, span) => {
                     budget.charge(count as u64, span)?;
                     let start = values.len() - count;
+                    if integers {
+                        let mut elements = numeric::buffer(count, budget, span)?;
+                        for value in &values[start..] {
+                            elements.push(value.require_integer(span)?);
+                        }
+                        values.truncate(start);
+                        values.push(Value::Integers(
+                            crate::value::IntegerVector::from_values(elements)
+                                .expect("bounded collection"),
+                        ));
+                        continue;
+                    }
                     let mut elements = numeric::buffer(count, budget, span)?;
                     for value in &values[start..] {
                         elements.push(finite_number(value.require_float(span)?, span)?);
@@ -199,6 +216,23 @@ impl Workspace {
                 Task::Index(span) => {
                     let index = values.pop().unwrap().require_integer(span)?;
                     let value = values.pop().unwrap();
+                    if let Some(array) = value.as_integers() {
+                        let element = usize::try_from(index)
+                            .ok()
+                            .and_then(|index| array.as_slice().get(index))
+                            .ok_or_else(|| {
+                                Diagnostic::new(
+                                    DiagnosticKind::VectorIndex,
+                                    span,
+                                    format!(
+                                        "index {index} is outside integer collection length {}",
+                                        array.len()
+                                    ),
+                                )
+                            })?;
+                        values.push(Value::Integer(*element));
+                        continue;
+                    }
                     let vector = value.require_vector(span)?;
                     let element = usize::try_from(index)
                         .ok()
@@ -265,6 +299,9 @@ impl Workspace {
                         budget.charge(a.len().max(b.len()) as u64, span)?;
                     }
                     if let (Some(a), Some(b)) = (left.as_tile(), right.as_tile()) {
+                        budget.charge(a.len().max(b.len()) as u64, span)?;
+                    }
+                    if let (Some(a), Some(b)) = (left.as_integers(), right.as_integers()) {
                         budget.charge(a.len().max(b.len()) as u64, span)?;
                     }
                     values.push(apply_binary(operator, &left, &right, span)?);

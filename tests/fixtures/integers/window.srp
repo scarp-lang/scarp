@@ -1,0 +1,2 @@
+print("hidden");
+bind data = ints_window([integer: 1, 2], 1, 2);
