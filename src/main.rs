@@ -542,9 +542,7 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
             .and_then(|arg| arg.strip_prefix("--diagnostic-format="))
         {
             if !file_command(command) {
-                return Err(
-                    "diagnostic format is available only for source-file commands",
-                );
+                return Err("diagnostic format is available only for source-file commands");
             }
             if seen_format {
                 return Err("diagnostic format cannot be repeated");
