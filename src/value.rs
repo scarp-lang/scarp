@@ -4,53 +4,7 @@ use std::{fmt, sync::Arc};
 
 use crate::diagnostics::{Diagnostic, DiagnosticKind, Span};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ValueType {
-    /// Function result only.
-    Unit,
-    Integer,
-    Float,
-    Vector,
-    Integers,
-    Tile,
-    Boolean,
-    String,
-}
-
-impl fmt::Display for ValueType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Self::Unit => "unit",
-            Self::Integer => "integer",
-            Self::Float => "float",
-            Self::Vector => "vector",
-            Self::Integers => "integers",
-            Self::Tile => "tile",
-            Self::Boolean => "boolean",
-            Self::String => "string",
-        })
-    }
-}
-
-impl ValueType {
-    pub(crate) fn from_name(name: &str) -> Option<Self> {
-        Some(match name {
-            "unit" => Self::Unit,
-            "integer" => Self::Integer,
-            "float" => Self::Float,
-            "vector" => Self::Vector,
-            "integers" => Self::Integers,
-            "tile" => Self::Tile,
-            "boolean" => Self::Boolean,
-            "string" => Self::String,
-            _ => return None,
-        })
-    }
-
-    pub(crate) fn is_numeric(self) -> bool {
-        matches!(self, Self::Integer | Self::Float)
-    }
-}
+pub use crate::types::PrimitiveType as ValueType;
 
 /// A finite IEEE-754 binary64 scalar. Private storage excludes NaN and infinity.
 /// Equality is numeric: signed zeros compare equal; `get().to_bits()` and

@@ -20,6 +20,7 @@ pub mod modules;
 pub mod numeric;
 pub mod parser;
 pub mod resolver;
+pub mod types;
 pub mod value;
 
 use std::{fmt, io};
