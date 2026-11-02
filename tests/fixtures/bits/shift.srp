@@ -1,0 +1,3 @@
+print("hidden");
+var flags = 1;
+flags >>>= 64;

@@ -147,6 +147,7 @@ impl Work {
                     | ExpressionKind::Boolean(_)
                     | ExpressionKind::String(_)
                     | ExpressionKind::Negate { .. }
+                    | ExpressionKind::BitNot { .. }
                     | ExpressionKind::Not { .. }
                     | ExpressionKind::Logical { .. }
                     | ExpressionKind::Binary { .. }

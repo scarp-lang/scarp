@@ -320,6 +320,20 @@ try {
             if ($failed.ExitCode -ne 1 -or $failed.Stdout.Length -ne 0 -or -not [System.Text.Encoding]::UTF8.GetString($failed.Stderr).StartsWith(('error[' + $case[1] + ']'))) { throw 'Packaged integer diagnostic or atomicity failed' }
         }
     }
+    $bitsSource = Join-Path $stagingRoot 'bits.srp'
+    [System.IO.File]::WriteAllText($bitsSource, 'var flags=0xF0; flags|=0b11; print(flags&15,1<<63,-8>>1,-1>>>1);')
+    foreach ($verb in @('run','check')) {
+        $bits = Invoke-ScarpProcess -Executable $executable -Arguments @($verb,$bitsSource)
+        $expected = if ($verb -eq 'run') { "3 -9223372036854775808 -4 9223372036854775807`n" } else { '' }
+        if ($bits.ExitCode -ne 0 -or $bits.Stderr.Length -ne 0 -or [System.Text.Encoding]::UTF8.GetString($bits.Stdout) -cne $expected) { throw 'Packaged integer bit operations failed' }
+    }
+    foreach ($case in @(@('1<<64','E0046'), @('0b102','E0006'), @('1.0&2.0','E0015'), @('-9223372036854775808%-1','E0007'), @('1%0','E0008'))) {
+        [System.IO.File]::WriteAllText($bitsSource, ('print("OUT"); eprint("ERR"); print(' + $case[0] + ');'))
+        foreach ($verb in @('run','check')) {
+            $failed = Invoke-ScarpProcess -Executable $executable -Arguments @($verb,$bitsSource)
+            if ($failed.ExitCode -ne 1 -or $failed.Stdout.Length -ne 0 -or -not [System.Text.Encoding]::UTF8.GetString($failed.Stderr).StartsWith(('error[' + $case[1] + ']'))) { throw 'Packaged integer bit diagnostic or atomicity failed' }
+        }
+    }
     $tokens = & $executable tokens (Join-Path $extractedPackage 'examples/arithmetic.srp')
     if ($LASTEXITCODE -ne 0 -or -not ($tokens -match 'integer\(1\)')) {
         throw 'Packaged token inspection failed'

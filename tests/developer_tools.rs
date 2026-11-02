@@ -20,14 +20,14 @@ fn json(program: &modules::ModuleProgram) -> Vec<u8> {
 #[test]
 fn every_diagnostic_code_has_a_unique_stable_lookup_and_explanation() {
     let mut codes = std::collections::HashSet::new();
-    assert_eq!(Kind::ALL.len(), 45);
+    assert_eq!(Kind::ALL.len(), 46);
     for (index, &kind) in Kind::ALL.iter().enumerate() {
         assert_eq!(kind.code(), format!("E{:04}", index + 1));
         assert!(codes.insert(kind.code()));
         assert_eq!(Kind::from_code(kind.code()), Some(kind));
         assert!(!kind.explanation().is_empty());
     }
-    for invalid in ["E0000", "E0046", "E9999", "e0007", "E00007", "7", ""] {
+    for invalid in ["E0000", "E0047", "E9999", "e0007", "E00007", "7", ""] {
         assert_eq!(Kind::from_code(invalid), None);
     }
     const OVERFLOW: &str = Kind::ArithmeticOverflow.code();
@@ -257,6 +257,14 @@ fn module_json_flag_emits_a_checked_inventory() {
 
 #[test]
 fn explain_codes_needs_no_source_file() {
+    let shift = Command::new(env!("CARGO_BIN_EXE_scarp"))
+        .args(["explain", "E0046"])
+        .output()
+        .unwrap();
+    assert!(shift.status.success() && shift.stderr.is_empty());
+    assert!(String::from_utf8(shift.stdout)
+        .unwrap()
+        .contains("0 through 63"));
     let output = Command::new(env!("CARGO_BIN_EXE_scarp"))
         .args(["explain", "E0007"])
         .output()

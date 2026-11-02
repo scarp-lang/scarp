@@ -34,6 +34,7 @@ pub(crate) struct Workspace {
 }
 
 enum Task {
+    BitNot(Span),
     Vector(usize, bool, Span),
     Index(Span),
     Builtin(Builtin, usize, Span),
@@ -98,6 +99,7 @@ impl Workspace {
                 Task::Visit(index) => expression.syntax.nodes()[*index].span,
                 Task::UserCall(_, _, span)
                 | Task::Vector(_, _, span)
+                | Task::BitNot(span)
                 | Task::Index(span)
                 | Task::Builtin(_, _, span)
                 | Task::Negate(span)
@@ -155,6 +157,13 @@ impl Workspace {
                         }
                         ExpressionKind::Group { expression } => {
                             tasks.push(Task::Visit(*expression))
+                        }
+                        ExpressionKind::BitNot {
+                            operand,
+                            operator_span,
+                        } => {
+                            tasks.push(Task::BitNot(*operator_span));
+                            tasks.push(Task::Visit(*operand));
                         }
                         ExpressionKind::Negate {
                             operand,
@@ -272,6 +281,10 @@ impl Workspace {
                         span,
                     });
                 }
+                Task::BitNot(span) => {
+                    let value = values.pop().unwrap().require_integer(span)?;
+                    values.push(Value::Integer(!value));
+                }
                 Task::Negate(span) => {
                     let value = values.pop().unwrap();
                     values.push(match value {
@@ -365,18 +378,33 @@ pub(crate) fn apply_binary(
             BinaryOperator::LessEqual => Ok(Value::Boolean(left <= right)),
             BinaryOperator::Greater => Ok(Value::Boolean(left > right)),
             BinaryOperator::GreaterEqual => Ok(Value::Boolean(left >= right)),
-            BinaryOperator::Equal | BinaryOperator::NotEqual => {
-                unreachable!("equality handled above")
-            }
+            _ => Err(type_mismatch(span, ValueType::Integer, ValueType::Float)),
         };
     }
     let left = left.require_integer(span)?;
     let right = right.require_integer(span)?;
     let result = match operator {
+        BinaryOperator::BitAnd => return Ok(Value::Integer(left & right)),
+        BinaryOperator::BitOr => return Ok(Value::Integer(left | right)),
+        BinaryOperator::BitXor => return Ok(Value::Integer(left ^ right)),
+        BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight | BinaryOperator::UnsignedRight => {
+            if !(0..64).contains(&right) {
+                return Err(Diagnostic::new(
+                    DiagnosticKind::InvalidShift,
+                    span,
+                    "shift count must be between 0 and 63",
+                ).with_help("supply an integer count from 0 through 63; shifts use a fixed 64-bit bit pattern"));
+            }
+            return Ok(Value::Integer(match operator {
+                BinaryOperator::ShiftLeft => left.wrapping_shl(right as u32),
+                BinaryOperator::ShiftRight => left >> right,
+                _ => ((left as u64) >> right) as i64,
+            }));
+        }
         BinaryOperator::Add => left.checked_add(right),
         BinaryOperator::Subtract => left.checked_sub(right),
         BinaryOperator::Multiply => left.checked_mul(right),
-        BinaryOperator::Divide => {
+        BinaryOperator::Divide | BinaryOperator::Remainder => {
             if right == 0 {
                 return Err(Diagnostic::new(
                     DiagnosticKind::DivisionByZero,
@@ -385,7 +413,11 @@ pub(crate) fn apply_binary(
                 )
                 .with_help("the divisor must evaluate to a nonzero integer"));
             }
-            left.checked_div(right)
+            if operator == BinaryOperator::Divide {
+                left.checked_div(right)
+            } else {
+                left.checked_rem(right)
+            }
         }
         BinaryOperator::Less => return Ok(Value::Boolean(left < right)),
         BinaryOperator::LessEqual => return Ok(Value::Boolean(left <= right)),

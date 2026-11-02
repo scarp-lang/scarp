@@ -1,0 +1,6 @@
+error[E0006]: radix integer literal requires valid digits and a signed 64-bit magnitude
+ --> radix.srp:2:7
+  |
+2 | print(0b102);
+  |       ^^^^^
+ = help: use a value from -9223372036854775808 to 9223372036854775807
