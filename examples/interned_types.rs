@@ -21,5 +21,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         snapshot.len(),
         snapshot.depth(signature).unwrap()
     );
+    let program = scarp::compile(
+        "pure funcra twice(n: integer)->integer{return n*2;} bind answer=twice(21); print(answer);",
+    )?;
+    assert_eq!(program.type_registry().len(), 9);
+    assert_eq!(program.typed_expressions().count(), 3);
+    for expression in program.typed_expressions() {
+        assert!(expression
+            .nodes()
+            .all(|node| program.type_registry().get(node.kind).is_some()));
+    }
+    let mut output = Vec::new();
+    scarp::interpreter::execute(&program, &mut output)?;
+    assert_eq!(output, b"42\n");
+    println!(
+        "compiled types: {}, expressions: {}",
+        program.type_registry().len(),
+        program.typed_expressions().count()
+    );
     Ok(())
 }
