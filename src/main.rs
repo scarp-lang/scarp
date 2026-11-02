@@ -246,7 +246,11 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             return match page {
                 Some(page) => write_output(output.write_all(page.as_bytes()), errors),
                 None => {
-                    let _ = writeln!(errors, "error: unknown inspect topic {:?}\n\n{INSPECT_HELP}", topic.to_string_lossy());
+                    let _ = writeln!(
+                        errors,
+                        "error: unknown inspect topic {:?}\n\n{INSPECT_HELP}",
+                        topic.to_string_lossy()
+                    );
                     2
                 }
             };
