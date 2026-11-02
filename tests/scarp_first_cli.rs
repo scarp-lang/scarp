@@ -194,10 +194,22 @@ fn scarp_first_source_commands_preserve_json_diagnostics() {
     fs::write(&path, "print(unknown_symbol);").unwrap();
 
     for (new_args, legacy_args) in [
-        (vec!["exec", "--diagnostic-format=json"], vec!["run", "--diagnostic-format=json"]),
-        (vec!["verify", "--diagnostic-format=json"], vec!["modules", "--diagnostic-format=json"]),
-        (vec!["inspect", "tokens", "--diagnostic-format=json"], vec!["tokens", "--diagnostic-format=json"]),
-        (vec!["inspect", "modules", "--diagnostic-format=json"], vec!["modules", "--diagnostic-format=json"]),
+        (
+            vec!["exec", "--diagnostic-format=json"],
+            vec!["run", "--diagnostic-format=json"],
+        ),
+        (
+            vec!["verify", "--diagnostic-format=json"],
+            vec!["modules", "--diagnostic-format=json"],
+        ),
+        (
+            vec!["inspect", "tokens", "--diagnostic-format=json"],
+            vec!["tokens", "--diagnostic-format=json"],
+        ),
+        (
+            vec!["inspect", "modules", "--diagnostic-format=json"],
+            vec!["modules", "--diagnostic-format=json"],
+        ),
     ] {
         let current = file_output(&new_args, &path);
         let previous = file_output(&legacy_args, &path);
@@ -210,7 +222,10 @@ fn scarp_first_source_commands_preserve_json_diagnostics() {
         assert_eq!(current.stdout, previous.stdout, "{new_args:?}");
         assert_eq!(current.stderr, previous.stderr, "{new_args:?}");
     }
-    let bad = file_output(&["inspect", "modules", "--diagnostic-format=json", "--json"], &path);
+    let bad = file_output(
+        &["inspect", "modules", "--diagnostic-format=json", "--json"],
+        &path,
+    );
     assert_eq!(bad.status.code(), Some(1), "{bad:?}");
     assert!(bad.stdout.is_empty());
     assert!(String::from_utf8_lossy(&bad.stderr).contains("schema_version"));
