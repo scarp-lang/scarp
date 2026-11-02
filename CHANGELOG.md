@@ -2,6 +2,15 @@
 
 ## Unreleased - compiler development toward 0.0.5-alpha.2
 
+- Introduce Scarp-first `exec`, `inspect tokens`, `inspect modules`,
+  `guide`, and `version` CLI routes on a separate development branch. These
+  reuse the actual interpreter, lexer, module inspection and version backends.
+- Preserve old `run/check/tokens/modules` behavior temporarily while documenting
+  a future reviewed migration; `check` is not renamed to static-only `verify`.
+  No new compiler artifact backend, project workflow, or release is implied.
+- Add CLI integration coverage for contextual help, versions, backend equivalence,
+  JSON stability, invalid arguments, and Unicode/spaced filenames.
+
 - Add streaming schema-v1 module JSON inspection, preserving ordering, source-local
   byte spans, original signatures and constant references without runtime execution.
 - Add source-free diagnostic explanations backed by one code catalogue, plus a
