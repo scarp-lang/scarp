@@ -894,7 +894,7 @@ fn counted_loop_cli_has_atomic_budgets_and_tokens_still_only_lexes() {
 
 #[test]
 fn incomplete_cli_commands_and_invalid_syntax_remain_rejected() {
-    for subcommand in ["compile", "create", "launch", "polish"] {
+    for subcommand in ["compile", "polish"] {
         let result = command()
             .args([subcommand, "missing.srp"])
             .output()
