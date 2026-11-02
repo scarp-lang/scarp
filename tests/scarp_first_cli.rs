@@ -41,6 +41,7 @@ fn scarp_first_help_and_guides_are_real_and_contextual() {
     }
     for (args, expected) in [
         (vec!["guide", "exec"], "Usage: scarp exec"),
+        (vec!["guide", "verify"], "Usage: scarp verify"),
         (vec!["guide", "inspect"], "scarp inspect modules"),
         (
             vec!["guide", "inspect", "tokens"],
@@ -59,6 +60,7 @@ fn scarp_first_help_and_guides_are_real_and_contextual() {
             "scarp inspect modules",
         ),
         (vec!["exec", "--help"], "Usage: scarp exec"),
+        (vec!["verify", "--help"], "Usage: scarp verify"),
         (vec!["version", "--help"], "Usage: scarp version"),
     ] {
         let result = scarp(&args);
@@ -124,7 +126,8 @@ fn unknown_guides_subcommands_and_unsupported_features_fail() {
         vec!["inspect", "tokens", "--json", "hello.srp"],
         vec!["version", "--bogus"],
         vec!["compile", "hello.srp"],
-        vec!["verify", "hello.srp"],
+        vec!["verify", "--strict", "hello.srp"],
+        vec!["verify", "--max-steps", "1", "hello.srp"],
         vec!["exec", "--unknown-option", "hello.srp"],
     ] {
         let result = scarp(&args);
@@ -145,4 +148,30 @@ fn exec_handles_unicode_and_spaced_source_paths() {
     let _ = fs::remove_dir_all(dir);
     assert!(result.status.success(), "{result:?}");
     assert_eq!(result.stdout, b"Scarp\n");
+}
+
+#[test]
+fn verify_compiles_without_running_program_statements() {
+    let id = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("scarp-static-{}-{id}", std::process::id()));
+    fs::create_dir(&dir).unwrap();
+    let source = dir.join("static only.srp");
+    // The expression is type-correct but fails if it is actually evaluated.
+    fs::write(&source, "print(1 / 0);").unwrap();
+
+    let verified = file_output(&["verify"], &source);
+    let evaluated = file_output(&["check"], &source);
+    assert!(verified.status.success(), "{verified:?}");
+    assert!(verified.stdout.is_empty());
+    assert!(verified.stderr.is_empty());
+    assert_eq!(evaluated.status.code(), Some(1), "{evaluated:?}");
+    assert!(evaluated.stdout.is_empty());
+
+    // Static errors still fail with a meaningful source diagnostic.
+    fs::write(&source, "print(unknown_identifier);").unwrap();
+    let invalid = file_output(&["verify"], &source);
+    let _ = fs::remove_dir_all(dir);
+    assert_eq!(invalid.status.code(), Some(1), "{invalid:?}");
+    assert!(invalid.stdout.is_empty());
+    assert!(!invalid.stderr.is_empty());
 }
