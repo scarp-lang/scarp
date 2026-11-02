@@ -58,8 +58,13 @@ scarp exec examples/hello.srp
 scarp verify examples/hello.srp
 scarp verify --diagnostic-format=json examples/hello.srp
 scarp inspect tokens examples/hello.srp
+scarp inspect ast examples/hello.srp
 scarp inspect modules --json examples/module_inspection.srp
 ```
+
+The `inspect ast` route prints the parser's development syntax tree
+without execution, import loading or type checking. Its readable debug layout
+is not a stable machine-readable schema.
 
 These routes preserve the current compiler's schema-version-1
 `--diagnostic-format=json` errors without executing unsupported features.
