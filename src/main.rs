@@ -17,20 +17,72 @@ use scarp::{
 const HELP: &str = "Scarp — Build Beyond Boundaries.
 
 Usage:
-  scarp run <file.srp>       Execute a Scarp program
-  scarp check <file.srp>     Validate syntax, names, and arithmetic without printing
-  scarp tokens <file.srp>    Inspect lexer tokens and source locations
-  scarp modules [--json] <file.srp> Inspect checked module metadata
-  scarp explain E####       Explain a diagnostic code without loading source
-  scarp --help               Show this help
-  scarp --version            Show the prototype version
+  scarp <command> [options]
 
-Use -- before a filename that begins with a dash.
-run/check options before the path: --max-steps, --max-prints, --max-call-depth,
---max-calls, --max-live-slots, --max-capture-bytes, --max-vector-bytes (counts).
-Defaults: 1000000 execution steps, 100000 selected output statements.
-Iteration: while condition { ... }, repeat count as index { ... }.
-Use scarp run --help or scarp check --help for budget examples.
+Commands:
+  exec <file.srp>                  Execute a Scarp program
+  inspect tokens <file.srp>        Inspect lexer tokens and source locations
+  inspect modules [--json] <file.srp>  Inspect statically checked module metadata
+  explain E####                   Explain a real diagnostic code
+  guide [command]                 Show contextual CLI guidance
+  version                         Show the prototype version
+
+Options:
+  -h, --help                      Show this help
+  -V, --version                   Show the prototype version
+
+Examples:
+  scarp exec examples/hello.srp
+  scarp inspect tokens examples/hello.srp
+  scarp inspect modules --json examples/module_inspection.srp
+  scarp guide exec
+
+The original run, check, tokens and modules commands remain available during
+migration. The old check command evaluates selected paths; it is not static-only
+verification. Compilation to native executables and project scaffolding are
+not supported yet.
+";
+
+const INSPECT_HELP: &str = "Usage:
+  scarp inspect tokens [--] <file.srp>
+  scarp inspect modules [--json] [--] <file.srp>
+
+Read-only token or module inspection. The tokens command only lexes the entry
+file. Modules performs static loading and linking, including scalar constants;
+it does not execute runtime statements. --json is available for modules only.
+";
+
+const INSPECT_TOKENS_HELP: &str = "Usage: scarp inspect tokens [--] <file.srp>
+
+List lexer tokens and UTF-8 source locations without parsing or executing code.
+Runtime execution-limit options and --json are not accepted.
+";
+
+const INSPECT_MODULES_HELP: &str = "Usage: scarp inspect modules [--json] [--] <file.srp>
+
+Statically check the source module graph and list real imports, dependencies,
+declarations and typed signatures without executing runtime statements.
+--json emits the existing schema-version-1 inspection format.
+";
+
+const EXEC_HELP: &str = "Usage: scarp exec [budget options] [--] <file.srp>
+
+Execute a checked Scarp source file with the existing interpreter.
+Execution-limit options: --max-steps, --max-prints, --max-call-depth, --max-calls,
+--max-live-slots, --max-capture-bytes, --max-vector-bytes. Options precede the
+source path. -- before a filename permits filenames beginning with a dash.
+Program-argument forwarding and project entrypoint execution are not supported.
+";
+
+const GUIDE_HELP: &str = "Usage: scarp guide [command [subcommand]]
+
+Show help for a supported Scarp command. For example: scarp guide exec,
+scarp guide inspect tokens, scarp guide inspect modules.
+";
+
+const VERSION_HELP: &str = "Usage: scarp version
+
+Print the actual compiler package version.
 ";
 
 const RUN_HELP: &str = "Usage: scarp run [budget options] [--] <file.srp>
@@ -107,7 +159,102 @@ fn main() -> ExitCode {
     ExitCode::from(status)
 }
 
-fn dispatch(args: Vec<OsString>, output: &mut impl Write, errors: &mut impl Write) -> u8 {
+fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl Write) -> u8 {
+    if args.is_empty() {
+        return write_output(output.write_all(HELP.as_bytes()), errors);
+    }
+    // Canonical CLI routes reuse the existing Scarp library/lexer backends.
+    // Existing entry points stay functional during an explicit migration window.
+    match args.as_slice() {
+        [command] if command == "guide" => {
+            return write_output(output.write_all(HELP.as_bytes()), errors);
+        }
+        [command, flag] if command == "guide" && (flag == "--help" || flag == "-h") => {
+            return write_output(output.write_all(GUIDE_HELP.as_bytes()), errors);
+        }
+        [command, target] if command == "guide" => {
+            let page = match target.to_str() {
+                Some("exec") => Some(EXEC_HELP),
+                Some("inspect") => Some(INSPECT_HELP),
+                Some("explain") => Some(EXPLAIN_HELP),
+                Some("guide") => Some(GUIDE_HELP),
+                Some("version") => Some(VERSION_HELP),
+                _ => None,
+            };
+            return match page {
+                Some(page) => write_output(output.write_all(page.as_bytes()), errors),
+                None => {
+                    let _ = writeln!(errors, "error: unknown guide topic {:?}\n\n{GUIDE_HELP}", target.to_string_lossy());
+                    2
+                }
+            };
+        }
+        [command, group, topic] if command == "guide" && group == "inspect" => {
+            let page = match topic.to_str() {
+                Some("tokens") => Some(INSPECT_TOKENS_HELP),
+                Some("modules") => Some(INSPECT_MODULES_HELP),
+                _ => None,
+            };
+            return match page {
+                Some(page) => write_output(output.write_all(page.as_bytes()), errors),
+                None => {
+                    let _ = writeln!(errors, "error: unknown inspect topic {:?}\n\n{INSPECT_HELP}", topic.to_string_lossy());
+                    2
+                }
+            };
+        }
+        [command, ..] if command == "guide" => {
+            let _ = writeln!(errors, "error: invalid guide arguments\n\n{GUIDE_HELP}");
+            return 2;
+        }
+        [command] if command == "version" => {
+            return write_output(writeln!(output, "scarp {}", env!("CARGO_PKG_VERSION")), errors);
+        }
+        [command, flag] if command == "version" && (flag == "--help" || flag == "-h") => {
+            return write_output(output.write_all(VERSION_HELP.as_bytes()), errors);
+        }
+        [command, ..] if command == "version" => {
+            let _ = writeln!(errors, "error: unexpected version arguments\n\n{VERSION_HELP}");
+            return 2;
+        }
+        [command] if command == "inspect" => {
+            return write_output(output.write_all(INSPECT_HELP.as_bytes()), errors);
+        }
+        [command, flag] if command == "inspect" && (flag == "--help" || flag == "-h") => {
+            return write_output(output.write_all(INSPECT_HELP.as_bytes()), errors);
+        }
+        [command, topic, flag] if command == "inspect" && (flag == "--help" || flag == "-h") => {
+            let page = match topic.to_str() {
+                Some("tokens") => Some(INSPECT_TOKENS_HELP),
+                Some("modules") => Some(INSPECT_MODULES_HELP),
+                _ => None,
+            };
+            return match page {
+                Some(page) => write_output(output.write_all(page.as_bytes()), errors),
+                None => {
+                    let _ = writeln!(errors, "error: unknown inspect topic {:?}\n\n{INSPECT_HELP}", topic.to_string_lossy());
+                    2
+                }
+            };
+        }
+        [command, flag] if command == "exec" && (flag == "--help" || flag == "-h") => {
+            return write_output(output.write_all(EXEC_HELP.as_bytes()), errors);
+        }
+        _ => {}
+    }
+    if args.first().is_some_and(|command| command == "inspect") {
+        match args.get(1).and_then(|topic| topic.to_str()) {
+            Some("tokens" | "modules") => {
+                args.remove(0);
+            }
+            _ => {
+                let _ = writeln!(errors, "error: expected inspect tokens or inspect modules\n\n{INSPECT_HELP}");
+                return 2;
+            }
+        }
+    } else if args.first().is_some_and(|command| command == "exec") {
+        args[0] = OsString::from("run");
+    }
     if args.first().is_some_and(|command| command == "explain") {
         return match args.as_slice() {
             [_, flag] if flag == "--help" || flag == "-h" => {
