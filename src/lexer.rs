@@ -16,6 +16,21 @@ pub enum TokenKind {
     Minus,
     Star,
     Slash,
+    Percent,
+    BitAnd,
+    BitOr,
+    BitXor,
+    BitNot,
+    ShiftLeft,
+    ShiftRight,
+    UnsignedRight,
+    PercentEqual,
+    AndEqual,
+    OrEqual,
+    XorEqual,
+    LeftEqual,
+    RightEqual,
+    UnsignedEqual,
     Equal,
     EqualEqual,
     NotEqual,
@@ -52,6 +67,21 @@ impl fmt::Display for TokenKind {
             Self::Minus => f.write_str("-"),
             Self::Star => f.write_str("*"),
             Self::Slash => f.write_str("/"),
+            Self::Percent => f.write_str("%"),
+            Self::BitAnd => f.write_str("&"),
+            Self::BitOr => f.write_str("|"),
+            Self::BitXor => f.write_str("^"),
+            Self::BitNot => f.write_str("~"),
+            Self::ShiftLeft => f.write_str("<<"),
+            Self::ShiftRight => f.write_str(">>"),
+            Self::UnsignedRight => f.write_str(">>>"),
+            Self::PercentEqual => f.write_str("%="),
+            Self::AndEqual => f.write_str("&="),
+            Self::OrEqual => f.write_str("|="),
+            Self::XorEqual => f.write_str("^="),
+            Self::LeftEqual => f.write_str("<<="),
+            Self::RightEqual => f.write_str(">>="),
+            Self::UnsignedEqual => f.write_str(">>>="),
             Self::Equal => f.write_str("="),
             Self::EqualEqual => f.write_str("=="),
             Self::NotEqual => f.write_str("!="),
@@ -122,6 +152,54 @@ impl Lexer<'_> {
                 continue;
             }
             let kind = match character {
+                '<' | '>'
+                    if self.source[self.cursor..].starts_with(if character == '<' {
+                        "<<"
+                    } else {
+                        ">>"
+                    }) =>
+                {
+                    self.bump();
+                    self.bump();
+                    let unsigned = character == '>' && self.peek() == Some('>');
+                    if unsigned {
+                        self.bump();
+                    }
+                    let assign = self.peek() == Some('=');
+                    if assign {
+                        self.bump();
+                    }
+                    match (character, unsigned, assign) {
+                        ('<', _, false) => TokenKind::ShiftLeft,
+                        ('<', _, true) => TokenKind::LeftEqual,
+                        ('>', true, false) => TokenKind::UnsignedRight,
+                        ('>', true, true) => TokenKind::UnsignedEqual,
+                        ('>', false, false) => TokenKind::ShiftRight,
+                        _ => TokenKind::RightEqual,
+                    }
+                }
+                '~' => {
+                    self.bump();
+                    TokenKind::BitNot
+                }
+                '%' | '&' | '|' | '^' => {
+                    self.bump();
+                    let assign = self.peek() == Some('=');
+                    if assign {
+                        self.bump();
+                    }
+                    match (character, assign) {
+                        ('%', false) => TokenKind::Percent,
+                        ('%', true) => TokenKind::PercentEqual,
+                        ('&', false) => TokenKind::BitAnd,
+                        ('&', true) => TokenKind::AndEqual,
+                        ('|', false) => TokenKind::BitOr,
+                        ('|', true) => TokenKind::OrEqual,
+                        ('^', false) => TokenKind::BitXor,
+                        _ => TokenKind::XorEqual,
+                    }
+                }
+
                 ':' => {
                     self.bump();
                     TokenKind::Colon
@@ -253,6 +331,22 @@ impl Lexer<'_> {
     }
 
     fn number(&mut self, start: usize) -> Result<TokenKind, Diagnostic> {
+        if ["0x", "0X", "0b", "0B"]
+            .iter()
+            .any(|prefix| self.source[start..].starts_with(prefix))
+        {
+            self.bump();
+            self.bump();
+            while self
+                .peek()
+                .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+            {
+                self.bump();
+            }
+            return Ok(TokenKind::Integer(
+                self.source[start..self.cursor].to_string(),
+            ));
+        }
         while self.peek().is_some_and(|ch| ch.is_ascii_digit()) {
             self.bump();
         }

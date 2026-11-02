@@ -103,7 +103,7 @@ diagnostic_catalogue! {
     InvalidEscape => ("E0003", "Invalid string escape. Supported escapes are backslash, double quote, n, t and r after a backslash; write Unicode characters directly in UTF-8."),
     UnexpectedToken => ("E0004", "Unexpected syntax or invalid binding type. Check punctuation, required initializers, braces and primitive type names at the highlighted token."),
     UnknownStatement => ("E0005", "Unknown statement form. Use bind/var, supported output forms and documented control flow; migrate old let declarations to bind or var."),
-    InvalidInteger => ("E0006", "Integer literal outside the signed 64-bit range. Use decimal values from -9223372036854775808 through 9223372036854775807; the minimum magnitude requires direct unary minus."),
+    InvalidInteger => ("E0006", "Invalid integer literal or magnitude outside signed 64-bit range. Use decimal, 0x hexadecimal or 0b binary digits from -9223372036854775808 through 9223372036854775807; the minimum magnitude requires direct unary minus. Radix literals do not support separators or fractional parts."),
     ArithmeticOverflow => ("E0007", "Integer arithmetic overflow. Every evaluated intermediate result must fit signed 64-bit, including negation and minimum-integer division by -1. Reduce the operands; a later operation cannot undo an overflow."),
     DivisionByZero => ("E0008", "Division by zero. Supply a nonzero divisor; either sign of floating zero is invalid. Only selected runtime or constant branches are evaluated."),
     ExpressionNesting => ("E0009", "Expression nesting limit exceeded. Reduce nested groups, unary forms or calls; long flat operator sequences are handled iteratively."),
@@ -143,6 +143,7 @@ diagnostic_catalogue! {
     ModulePath => ("E0043", "Invalid portable module path. Use a relative slash-separated .srp path inside the trusted root; absolute/platform-specific or escaping paths are rejected."),
     NumericConversion => ("E0044", "Numeric conversion would lose precision or exceed range. to_float requires exact representability; to_integer requires an integral binary64 value in [-2^63,2^63). The positive i64 boundary rounds upward and is rejected."),
     TextIndex => ("E0045", "Text scalar index outside bounds. Use a nonnegative index below text_len(text). Indices count Unicode scalar values, not UTF-8 bytes or grapheme clusters."),
+    InvalidShift => ("E0046", "Invalid integer shift count. Supply an integer from 0 through 63. Left shift operates on a fixed 64-bit bit pattern, >> extends the sign and >>> fills with zero. Counts are checked rather than masked."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,0 +1,6 @@
+error[E0046]: shift count must be between 0 and 63
+ --> shift.srp:3:7
+  |
+3 | flags >>>= 64;
+  |       ^^^^
+ = help: supply an integer count from 0 through 63; shifts use a fixed 64-bit bit pattern
