@@ -1,5 +1,28 @@
 # Version and API compatibility
 
+## Scarp-first CLI migration (unreleased development branch)
+
+The new preferred command paths are `scarp exec FILE`, `scarp verify FILE`, `scarp inspect
+tokens FILE`, `scarp inspect modules [--json] FILE`, `scarp guide` and
+`scarp version`. The existing `scarp explain E####` is unchanged. These
+paths use existing internal backends, preserve real diagnostics and status
+behavior, and do not introduce project generation or code artifact compilation.
+`verify` statically resolves syntax, imports, symbols and types without running
+ordinary program statements. It does not check runtime-only arithmetic or
+contracts; `--strict` and success-`--json` are not yet available.
+All new source commands honor the current `--diagnostic-format=json|text`
+schema-1 error format. `--json` for module metadata is distinct from error
+diagnostics and remains an `inspect modules`-only option.
+
+During migration, `run`, `check`, `tokens` and `modules` remain supported
+unchanged so existing scripts, documentation, CI and editor extensions continue
+to work. These are **legacy entry points**, not new aliases copied from other
+ecosystems. A separate maintainer-reviewed release plan is required before
+removing them. In particular, historical `check` evaluates selected paths and
+cannot be silently changed to the static-only meaning proposed for `verify`.
+Program-argument forwarding is not implemented by the current interpreter CLI.
+The new paths are not present in published 0.0.5-alpha.1 packages.
+
 Unreleased [scalar/text intrinsics](scalar-text.md) add Builtin variants and
 NumericConversion/TextIndex diagnostic variants (E0044/E0045). Exhaustive host
 matches need new arms. Existing names, codes, ValueType and execution layouts stay
