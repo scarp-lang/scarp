@@ -13,15 +13,17 @@ fn valid_name(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 96
         && value.trim() == value
-        && !value.chars().any(|ch| {
-            ch.is_control() || matches!(ch, ':' | '/' | '\\')
-        })
+        && !value
+            .chars()
+            .any(|ch| ch.is_control() || matches!(ch, ':' | '/' | '\\'))
 }
 
 fn valid_entry(value: &str) -> bool {
     value.len() <= 512
         && value.ends_with(".srp")
-        && !value.chars().any(|ch| ch.is_control() || matches!(ch, '\\' | ':'))
+        && !value
+            .chars()
+            .any(|ch| ch.is_control() || matches!(ch, '\\' | ':'))
         && value
             .split('/')
             .all(|part| !part.is_empty() && part != "." && part != "..")
@@ -36,11 +38,18 @@ pub fn create(directory: &Path) -> Result<(), String> {
         .and_then(|name| name.to_str())
         .ok_or("project directory must have a UTF-8 name")?;
     if !valid_name(name) {
-        return Err("project name must be 1..96 UTF-8 bytes without control characters or path separators".into());
+        return Err(
+            "project name must be 1..96 UTF-8 bytes without control characters or path separators"
+                .into(),
+        );
     }
 
-    fs::create_dir(directory)
-        .map_err(|error| format!("could not create project directory '{}': {error}", directory.display()))?;
+    fs::create_dir(directory).map_err(|error| {
+        format!(
+            "could not create project directory '{}': {error}",
+            directory.display()
+        )
+    })?;
     let src = directory.join("src");
     let entry = src.join("main.srp");
     let manifest = directory.join(MANIFEST);
@@ -121,8 +130,7 @@ pub fn entry_file(directory: &Path) -> Result<PathBuf, String> {
     if bytes.len() as u64 > MAX_MANIFEST_BYTES {
         return Err("project manifest exceeds 4096 bytes".into());
     }
-    let content = std::str::from_utf8(&bytes)
-        .map_err(|_| "project manifest must be UTF-8")?;
+    let content = std::str::from_utf8(&bytes).map_err(|_| "project manifest must be UTF-8")?;
     let mut lines = content.lines();
     if lines.next() != Some("scarp-project: 1") {
         return Err("expected 'scarp-project: 1' as the first manifest line".into());
