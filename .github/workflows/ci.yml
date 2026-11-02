@@ -43,9 +43,11 @@ jobs:
         run: |
           cargo bench --locked --offline --bench runtime -- --quick
           cargo bench --locked --offline --bench numerics -- --quick
+          cargo bench --locked --offline --bench compiler -- --quick
       - name: Verify release and branch-maintenance tools
         if: runner.os == 'Linux'
         run: |
+          python3 scripts/test_inspection_json.py target/debug/scarp
           python3 -m unittest discover -s scripts -p 'test_*release*.py'
           python3 -m unittest discover -s scripts -p 'test_prune_branches.py'
       - name: Validate PowerShell check script
@@ -76,3 +78,4 @@ jobs:
         run: |
           cargo bench --locked --offline --bench runtime -- --quick
           cargo bench --locked --offline --bench numerics -- --quick
+          cargo bench --locked --offline --bench compiler -- --quick

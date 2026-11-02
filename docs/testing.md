@@ -1,5 +1,11 @@
 # Test and validate changes
 
+Developer tooling checks include `--test developer_tools --test module_files` and
+`python scripts/test_inspection_json.py target/debug/scarp` (use scarp.exe on
+Windows). Rust tests lock exact JSON and catalogue invariants; Python independently
+parses JSON and verifies real file-local span contents. Native packages parse every
+entry inventory with PowerShell. Run the compiler benchmark smoke workload too.
+
 For unreleased constant compilation, run `--test constant_expressions --test module_files`.
 Coverage includes scalar/runtime parity, declaration order/cycles, imports,
 types/defaults/returns, Unicode/CRLF, exact node/task/string limits, long iterative

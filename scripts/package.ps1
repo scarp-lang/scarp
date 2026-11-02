@@ -123,6 +123,16 @@ try {
         if ($inventory.ExitCode -ne 0 -or $inventory.Stderr.Length -ne 0 -or -not [System.Text.Encoding]::UTF8.GetString($inventory.Stdout).StartsWith('modules: ')) {
             throw "Packaged $example static module inspection failed"
         }
+        $json = Invoke-ScarpProcess -Executable $executable -Arguments @('modules', '--json', $source)
+        if ($json.ExitCode -ne 0 -or $json.Stderr.Length -ne 0) { throw "Packaged $example JSON inspection failed" }
+        $metadata = [System.Text.Encoding]::UTF8.GetString($json.Stdout) | ConvertFrom-Json -AsHashtable
+        if ($metadata.schema_version -ne 1 -or $metadata.entry -ne 0 -or $metadata.modules.Count -lt 1) {
+            throw "Packaged $example JSON schema failed"
+        }
+    }
+    $explanation = Invoke-ScarpProcess -Executable $executable -Arguments @('explain', 'E0044')
+    if ($explanation.ExitCode -ne 0 -or $explanation.Stderr.Length -ne 0 -or -not [System.Text.Encoding]::UTF8.GetString($explanation.Stdout).StartsWith('E0044: ')) {
+        throw 'Packaged diagnostic explanation failed'
     }
     $moduleEntry = Join-Path $stagingRoot 'module-main.srp'
     $moduleLibrary = Join-Path $stagingRoot 'module-library.srp'

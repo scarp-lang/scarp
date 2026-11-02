@@ -1,5 +1,11 @@
 # Command-line reference
 
+Unreleased `scarp modules --json [--] <path>` emits schema-version-1 metadata with
+file-local UTF-8 byte spans. `scarp explain E####` prints a code explanation without
+source I/O. See [JSON inspection and explanations](../module-json.md) for schema,
+ordering, flags, writer errors and status rules. Both commands are implemented;
+build/compile/fmt/test/bench/doc/doctor remain unavailable CLI commands.
+
 Unreleased development adds `scarp modules [--] <path>` and per-command help.
 It loads, links and statically checks files, then reports imports, dependencies
 and typed public/private declarations. It never executes runtime statements,

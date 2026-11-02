@@ -2,6 +2,11 @@
 
 ## Unreleased - compiler development toward 0.0.5-alpha.2
 
+- Add streaming schema-v1 module JSON inspection, preserving ordering, source-local
+  byte spans, original signatures and constant references without runtime execution.
+- Add source-free diagnostic explanations backed by one code catalogue, plus a
+  correctness-checked compiler/module/JSON benchmark and independent JSON validation.
+
 - Add lossless to_float/to_integer and seven pure Unicode text queries, sharing
   strict built-in typing, argument locations and deterministic execution budgets.
   Preserve scalar-vs-byte/grapheme distinctions and reject invalid indices/rounding.

@@ -1,5 +1,22 @@
 # Measure performance before changing execution
 
+## Compiler and tooling workloads (unreleased)
+
+Run `cargo bench --locked --offline --bench compiler -- --quick` for smoke mode,
+or omit --quick for 25 iterations per sample. The harness emits three CSV samples
+per workload; quick mode uses three iterations per sample. Annotated bindings
+validate a 512-binding sum (130816), and a four-file constant diamond validates
+515 reference edges and output 1537 before timing. Timed compilation includes
+parsing/resolution and result destruction; module compilation also includes the
+in-memory loader and constant evaluator. No filesystem I/O is measured.
+
+The JSON case formats an already compiled graph into a reused Vec, isolating
+metadata writing with warmed capacity. input_bytes means source payload for
+compiler cases and emitted bytes for JSON. mean_us is elapsed microseconds per
+iteration. These exploratory measurements are not CPU instruction counts, memory
+profiles, interpreter/native speedup claims or a statistically controlled comparison.
+Record toolchain, host and raw samples when assessing a later optimization.
+
 ## Alpha.4 terminal-call storage experiment — 1 November 2026
 
 Baseline code: `6d9a39a8d1f2b2a3a14947be3ad6ebf59c0b9828`.
