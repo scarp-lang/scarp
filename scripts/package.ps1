@@ -79,7 +79,7 @@ try {
     foreach ($directory in @('examples', 'docs')) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $directory) -Destination $packageRoot -Recurse
     }
-    if ($version -eq '0.0.5-alpha.2') {
+    if ($version -in @('0.0.5-alpha.2', '0.0.5-alpha.3')) {
         $releaseMetadataPath = Join-Path $projectRoot '.github/release-metadata.json'
         $releaseMetadata = Get-Content -LiteralPath $releaseMetadataPath -Raw | ConvertFrom-Json
         if ($releaseMetadata.schema_version -cne 1 -or $releaseMetadata.version -cne $version -or $releaseMetadata.documentation_repository -cne 'https://github.com/scarp-lang/scarp-docs') {
@@ -116,6 +116,26 @@ try {
     if ($LASTEXITCODE -ne 0 -or $actualVersion -ne "scarp $version") {
         throw 'Packaged version check failed'
     }
+    $canonicalVersion = Invoke-ScarpProcess -Executable $executable -Arguments @('version')
+    if ($canonicalVersion.ExitCode -ne 0 -or $canonicalVersion.Stderr.Length -ne 0 -or [System.Text.Encoding]::UTF8.GetString($canonicalVersion.Stdout) -cne "scarp $version`n") { throw 'Packaged canonical version failed' }
+    $diagnoseResult = Invoke-ScarpProcess -Executable $executable -Arguments @('diagnose', '--json')
+    $hostReport = [System.Text.Encoding]::UTF8.GetString($diagnoseResult.Stdout) | ConvertFrom-Json -ErrorAction Stop
+    $expectedHost = @{
+        'x86_64-pc-windows-msvc' = @('windows', 'x86_64')
+        'x86_64-unknown-linux-gnu' = @('linux', 'x86_64')
+        'aarch64-apple-darwin' = @('macos', 'aarch64')
+    }[$Target]
+    if ($diagnoseResult.ExitCode -ne 0 -or $diagnoseResult.Stderr.Length -ne 0 -or $hostReport.schema_version -ne 1 -or $hostReport.version -cne $version -or $hostReport.host_os -cne $expectedHost[0] -or $hostReport.host_arch -cne $expectedHost[1] -or $hostReport.execution -cne 'interpreter' -or $hostReport.native_executable -ne $false -or $hostReport.package_manager -ne $false -or $hostReport.static_verify -ne $true -or $hostReport.module_inspection -ne $true) { throw 'Packaged diagnose differs from native host capabilities' }
+    $canonicalRun = Invoke-ScarpProcess -Executable $executable -Arguments @('exec', (Join-Path $extractedPackage 'examples/hello.srp'))
+    $legacyRun = Invoke-ScarpProcess -Executable $executable -Arguments @('run', (Join-Path $extractedPackage 'examples/hello.srp'))
+    if ($canonicalRun.ExitCode -ne 0 -or $canonicalRun.Stderr.Length -ne 0 -or [System.Convert]::ToBase64String($canonicalRun.Stdout) -cne [System.Convert]::ToBase64String($legacyRun.Stdout)) { throw 'Packaged exec differs from run' }
+    $staticSource = Join-Path $stagingRoot 'static-verification.srp'
+    [System.IO.File]::WriteAllText($staticSource, 'print(1/0);')
+    $staticCheck = Invoke-ScarpProcess -Executable $executable -Arguments @('verify', '--diagnostic-format=json', $staticSource)
+    if ($staticCheck.ExitCode -ne 0 -or $staticCheck.Stdout.Length -ne 0 -or $staticCheck.Stderr.Length -ne 0) { throw 'Packaged verify must remain static and silent' }
+    $canonicalInspect = Invoke-ScarpProcess -Executable $executable -Arguments @('inspect', 'modules', '--json', '--diagnostic-format=json', (Join-Path $extractedPackage 'examples/hello.srp'))
+    $inventory = [System.Text.Encoding]::UTF8.GetString($canonicalInspect.Stdout) | ConvertFrom-Json -ErrorAction Stop
+    if ($canonicalInspect.ExitCode -ne 0 -or $canonicalInspect.Stderr.Length -ne 0 -or $inventory.schema_version -ne 1) { throw 'Packaged canonical module inspection failed' }
     $exampleSources = @(Get-ChildItem -LiteralPath (Join-Path $extractedPackage 'examples') -Filter '*.srp' -File | Sort-Object Name)
     if ($exampleSources.Count -eq 0) { throw 'Packaged example corpus is empty' }
     foreach ($exampleFile in $exampleSources) {

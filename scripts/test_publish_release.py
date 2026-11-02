@@ -415,6 +415,20 @@ class PublicationWindow(unittest.TestCase):
         self.assertEqual(set(state["source_reads"]), {approved + ":Cargo.toml", approved + ":.github/release-metadata.json"})
         self.assertEqual(set(state["public_downloads"]), set(state["files"]))
 
+    def test_alpha3_publication_preserves_exact_source_and_all_download_gates(self):
+        approved = "c" * 40
+        state = self.drive_publication([self.start, self.start, self.start], allow_publish=True, approved_commit=approved, version="0.0.5-alpha.3")
+        self.assertEqual(state["workflow_sources"], [COMMIT, approved])
+        self.assertEqual(state["tag_source"], approved)
+        self.assertEqual(set(state["source_reads"]), {approved + ":Cargo.toml", approved + ":.github/release-metadata.json"})
+        self.assertEqual(set(state["public_downloads"]), set(state["files"]))
+
+    def test_alpha3_invalid_metadata_or_changed_draft_body_prevents_publication(self):
+        with self.assertRaisesRegex(ValueError, "invalid release metadata"):
+            self.drive_publication([self.start], version="0.0.5-alpha.3", bad_metadata=True)
+        with self.assertRaisesRegex(ValueError, "draft release notes differ"):
+            self.drive_publication([self.start, self.start], version="0.0.5-alpha.3", tamper_draft_notes=True)
+
     def test_alpha2_invalid_metadata_prevents_draft_creation(self):
         with self.assertRaisesRegex(ValueError, "invalid release metadata"):
             self.drive_publication([self.start], version="0.0.5-alpha.2", bad_metadata=True)
