@@ -337,6 +337,9 @@ try {
         $limited = Invoke-ScarpProcess -Executable $executable -Arguments @($verb,'--max-text-bytes','23',$textSource)
         if ($limited.ExitCode -ne 1 -or $limited.Stdout.Length -ne 0 -or -not [System.Text.Encoding]::UTF8.GetString($limited.Stderr).StartsWith('error[E0048]')) { throw 'Packaged text allocation cap failed' }
     }
+    $structured = Invoke-ScarpProcess -Executable $executable -Arguments @('check','--diagnostic-format=json','--max-text-bytes','23',$textSource)
+    $diagnostic = [System.Text.Encoding]::UTF8.GetString($structured.Stderr) | ConvertFrom-Json -ErrorAction Stop
+    if ($structured.ExitCode -ne 1 -or $structured.Stdout.Length -ne 0 -or $diagnostic.schema_version -ne 1 -or $diagnostic.code -cne 'E0048' -or $diagnostic.column_encoding -cne 'unicode-scalar' -or $diagnostic.primary.span.Count -ne 2) { throw 'Packaged structured text diagnostic failed' }
     $bitsSource = Join-Path $stagingRoot 'bits.srp'
     [System.IO.File]::WriteAllText($bitsSource, 'var flags=0xF0; flags|=0b11; print(flags&15,1<<63,-8>>1,-1>>>1);')
     foreach ($verb in @('run','check')) {

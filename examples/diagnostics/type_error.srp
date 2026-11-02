@@ -1,0 +1,2 @@
+// This sample intentionally reports E0015.
+bind count: integer = "two";

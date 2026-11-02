@@ -48,6 +48,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           python3 scripts/test_inspection_json.py target/debug/scarp
+          python3 scripts/test_diagnostic_json.py target/debug/scarp
           python3 -m unittest discover -s scripts -p 'test_*release*.py'
           python3 -m unittest discover -s scripts -p 'test_prune_branches.py'
       - name: Validate PowerShell check script

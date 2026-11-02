@@ -2,6 +2,9 @@
 
 use std::fmt;
 
+mod json;
+pub use json::write_json_message;
+
 /// A half-open byte range in the original UTF-8 source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Span {

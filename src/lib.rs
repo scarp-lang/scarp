@@ -14,6 +14,7 @@ pub mod ast;
 pub mod diagnostics;
 pub mod evaluator;
 pub mod interpreter;
+mod json;
 pub mod lexer;
 pub mod limits;
 pub mod modules;
