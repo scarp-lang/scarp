@@ -609,6 +609,7 @@ fn default_file_count_and_depth_boundaries_are_enforced_iteratively() {
             max_live_slots: 0,
             max_capture_bytes: 0,
             max_vector_bytes: 0,
+            max_text_bytes: 0,
         })
         .unwrap();
     assert_eq!(

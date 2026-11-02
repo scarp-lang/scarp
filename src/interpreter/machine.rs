@@ -132,8 +132,9 @@ pub(super) fn prepare(
         output: None,
         result: Value::Unit,
     }];
-    let mut budget =
-        Budget::new(options.limits.max_steps).with_vector_bytes(options.max_vector_bytes);
+    let mut budget = Budget::new(options.limits.max_steps)
+        .with_vector_bytes(options.max_vector_bytes)
+        .with_text_bytes(options.max_text_bytes);
     let mut events = Vec::new();
     let mut calls = 0_u64;
     let mut prints = 0;

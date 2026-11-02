@@ -142,9 +142,10 @@ diagnostic_catalogue! {
     ModuleSymbol => ("E0042", "Unknown alias/member, wrong symbol kind or later constant reference. Check spelling, public declarations and declaration order; functions must be called and constants read as values."),
     ModulePath => ("E0043", "Invalid portable module path. Use a relative slash-separated .srp path inside the trusted root; absolute/platform-specific or escaping paths are rejected."),
     NumericConversion => ("E0044", "Numeric conversion would lose precision or exceed range. to_float requires exact representability; to_integer requires an integral binary64 value in [-2^63,2^63). The positive i64 boundary rounds upward and is rejected."),
-    TextIndex => ("E0045", "Text scalar index outside bounds. Use a nonnegative index below text_len(text). Indices count Unicode scalar values, not UTF-8 bytes or grapheme clusters."),
+    TextIndex => ("E0045", "Text scalar index or slice outside bounds. Use nonnegative indices/counts; single indices must be below text_len(text), while slice start + count may equal it. Indices count Unicode scalar values, not UTF-8 bytes or grapheme clusters."),
     InvalidShift => ("E0046", "Invalid integer shift count. Supply an integer from 0 through 63. Left shift operates on a fixed 64-bit bit pattern, >> extends the sign and >>> fills with zero. Counts are checked rather than masked."),
     TypeComplexity => ("E0047", "Semantic type registry limit exceeded or invalid type limits. Reduce signature/type complexity or adjust TypeLimits in an embedding host. These compiler limits are independent of runtime execution and allocation budgets."),
+    TextConstruction => ("E0048", "Invalid or excessive text construction. Repetition counts must be nonnegative, each materialized string is limited to 1048576 UTF-8 bytes, and cumulative new payload is limited by --max-text-bytes / ExecutionOptions.max_text_bytes. Sharing strings does not recharge; retirement does not refund allocation. This is a logical payload cap, not a physical process-memory limit."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

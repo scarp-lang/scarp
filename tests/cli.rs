@@ -416,6 +416,7 @@ fn function_budget_option_errors_are_rejected_before_reading_source() {
         "--max-live-slots",
         "--max-capture-bytes",
         "--max-vector-bytes",
+        "--max-text-bytes",
     ] {
         for mode in ["run", "check"] {
             for invalid in [
@@ -475,6 +476,7 @@ fn help_lists_all_function_budget_flags_and_defaults() {
             "--max-live-slots 1000000",
             "--max-capture-bytes 16777216",
             "--max-vector-bytes 8388608",
+            "--max-text-bytes 8388608",
         ] {
             assert!(help.contains(entry), "{entry}: {help}");
         }
@@ -1122,4 +1124,44 @@ fn handles_non_unicode_native_paths_according_to_the_filesystem() {
         }
         Err(error) => panic!("could not create native-path fixture: {error}"),
     }
+}
+
+#[test]
+fn text_payload_cli_limit_has_exact_boundaries_and_failure_atomicity() {
+    let fixture = Fixture::new();
+    let file = fixture.file(
+        "bounded text.srp",
+        "bind s=text_repeat(\"é\",2); print(s); eprint(s);",
+    );
+    for mode in ["run", "check"] {
+        let result = command()
+            .args([mode, "--max-text-bytes", "6"])
+            .arg(&file)
+            .output()
+            .unwrap();
+        assert!(result.status.success(), "{}", stderr(&result));
+        if mode == "run" {
+            assert_eq!(result.stdout, "éé\n".as_bytes());
+            assert_eq!(result.stderr, "éé\n".as_bytes());
+        } else {
+            assert!(result.stdout.is_empty() && result.stderr.is_empty());
+        }
+        let result = command()
+            .args([mode, "--max-text-bytes", "5"])
+            .arg(&file)
+            .output()
+            .unwrap();
+        assert_eq!(result.status.code(), Some(1));
+        assert!(result.stdout.is_empty());
+        assert!(stderr(&result).starts_with("error[E0048]"));
+        assert!(!stderr(&result).contains("\néé\n"));
+    }
+    let empty = fixture.file("empty.srp", "");
+    assert!(command()
+        .args(["run", "--max-text-bytes", "0"])
+        .arg(empty)
+        .output()
+        .unwrap()
+        .status
+        .success());
 }

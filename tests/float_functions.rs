@@ -177,6 +177,7 @@ fn all_six_resource_boundaries_apply_to_float_default_calls() {
         max_live_slots: 2,
         max_capture_bytes: 72,
         max_vector_bytes: ExecutionOptions::default().max_vector_bytes,
+        max_text_bytes: ExecutionOptions::default().max_text_bytes,
     };
     scarp::check_with_options(source, options).unwrap();
     for (options, kind) in [

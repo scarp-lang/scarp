@@ -1,0 +1,5 @@
+bind greeting: string = text_concat("Hello, ", "🌍");
+bind planet = text_slice(greeting, 7, 1);
+print(greeting);
+print(text_repeat(planet, 3));
+print(text_len(greeting), text_bytes(greeting));

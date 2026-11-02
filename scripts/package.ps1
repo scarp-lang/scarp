@@ -328,6 +328,15 @@ try {
             if ($failed.ExitCode -ne 1 -or $failed.Stdout.Length -ne 0 -or -not [System.Text.Encoding]::UTF8.GetString($failed.Stderr).StartsWith(('error[' + $case[1] + ']'))) { throw 'Packaged integer diagnostic or atomicity failed' }
         }
     }
+    $textSource = Join-Path $stagingRoot 'bounded-text.srp'
+    [System.IO.File]::WriteAllText($textSource, 'bind s=text_concat("é","🌍"); print(text_repeat(text_slice(s,1,1),2));')
+    foreach ($verb in @('run','check')) {
+        $result = Invoke-ScarpProcess -Executable $executable -Arguments @($verb,'--max-text-bytes','24',$textSource)
+        $expected = if ($verb -eq 'run') { "🌍🌍`n" } else { '' }
+        if ($result.ExitCode -ne 0 -or $result.Stderr.Length -ne 0 -or [System.Text.Encoding]::UTF8.GetString($result.Stdout) -cne $expected) { throw 'Packaged Unicode text construction failed' }
+        $limited = Invoke-ScarpProcess -Executable $executable -Arguments @($verb,'--max-text-bytes','23',$textSource)
+        if ($limited.ExitCode -ne 1 -or $limited.Stdout.Length -ne 0 -or -not [System.Text.Encoding]::UTF8.GetString($limited.Stderr).StartsWith('error[E0048]')) { throw 'Packaged text allocation cap failed' }
+    }
     $bitsSource = Join-Path $stagingRoot 'bits.srp'
     [System.IO.File]::WriteAllText($bitsSource, 'var flags=0xF0; flags|=0b11; print(flags&15,1<<63,-8>>1,-1>>>1);')
     foreach ($verb in @('run','check')) {

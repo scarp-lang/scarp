@@ -147,7 +147,10 @@ impl Workspace {
                         ExpressionKind::Integer(value) => values.push(Value::Integer(*value)),
                         ExpressionKind::Float(value) => values.push(Value::Float(*value)),
                         ExpressionKind::Boolean(value) => values.push(Value::Boolean(*value)),
-                        ExpressionKind::String(value) => values.push(Value::from(value.as_str())),
+                        ExpressionKind::String(value) => {
+                            budget.charge_text_allocation(value.len(), node.span)?;
+                            values.push(Value::from(value.as_str()));
+                        }
                         ExpressionKind::Name(name) => {
                             let value = expression.slots[index]
                                 .and_then(|slot| environment.get(slot))

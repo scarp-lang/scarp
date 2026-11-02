@@ -6,6 +6,8 @@ use crate::diagnostics::{Diagnostic, DiagnosticKind, Span};
 
 pub use crate::types::PrimitiveType as ValueType;
 
+pub const MAX_TEXT_BYTES: usize = 1024 * 1024;
+
 /// A finite IEEE-754 binary64 scalar. Private storage excludes NaN and infinity.
 /// Equality is numeric: signed zeros compare equal; `get().to_bits()` and
 /// display retain their sign. This type deliberately does not implement Hash.
