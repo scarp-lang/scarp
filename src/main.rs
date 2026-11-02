@@ -1,3 +1,5 @@
+mod project;
+
 use std::{
     env,
     ffi::{OsStr, OsString},
@@ -23,6 +25,8 @@ Commands:
   exec <file.srp>                  Execute a Scarp program
   verify <file.srp>                Perform static compiler validation
   inspect tokens <file.srp>        Inspect lexer tokens and source locations
+  create <directory>               Create a new runnable Scarp project
+  launch <directory>               Execute a Scarp project entrypoint
   inspect ast <file.srp>           Show the parsed syntax tree (development)
   inspect modules [--json] <file.srp>  Inspect statically checked module metadata
   explain E####                   Explain a real diagnostic code
@@ -36,6 +40,8 @@ Options:
 
 Examples:
   scarp exec examples/hello.srp
+  scarp create demo
+  scarp launch demo
   scarp verify examples/hello.srp
   scarp inspect tokens examples/hello.srp
   scarp inspect ast examples/hello.srp
@@ -45,7 +51,7 @@ Examples:
 
 The original run, check, tokens and modules commands remain available during
 migration. The old check command evaluates selected paths; it is not static-only
-verification. Native executable generation and project scaffolding are not supported yet.
+verification. Native executable generation and package management are not supported yet.
 ";
 
 const VERIFY_HELP: &str = "Usage: scarp verify [--] <file.srp>
@@ -104,6 +110,21 @@ source path. -- before a filename permits filenames beginning with a dash.
 Program-argument forwarding and project entrypoint execution are not supported.
 ";
 
+const CREATE_HELP: &str = "Usage: scarp create [--] <new-directory>
+
+Create one new Scarp project with Scarp.project and src/main.srp.
+Reject existing directories (even empty ones); never overwrite existing files.
+No network access, package installation, or native build occurs.
+";
+
+const LAUNCH_HELP: &str = "Usage: scarp launch [--diagnostic-format=json|text] [budget options] [--] <project-directory>
+
+Load Scarp.project from an explicit project directory, validate its entrypoint
+and execute the .srp file through the existing interpreter. The entrypoint
+must stay inside the project. Runtime budgets and diagnostic formats are
+identical to scarp exec. No implicit ancestor search or artifact generation.
+";
+
 const GUIDE_HELP: &str = "Usage: scarp guide [command [subcommand]]
 
 Show help for a supported Scarp command. For example: scarp guide exec,
@@ -127,7 +148,7 @@ fn diagnose(output: &mut impl Write, errors: &mut impl Write, json: bool) -> u8 
         write_output(
             writeln!(
                 output,
-                r#"{{"schema_version":1,"version":"{}","host_os":"{}","host_arch":"{}","execution":"interpreter","static_verify":true,"module_inspection":true,"native_executable":false,"package_manager":false}}"#,
+                r#"{{"schema_version":1,"version":"{}","host_os":"{}","host_arch":"{}","execution":"interpreter","static_verify":true,"module_inspection":true,"project_workflow":true,"native_executable":false,"package_manager":false}}"#,
                 version, os, arch
             ),
             errors,
@@ -136,7 +157,7 @@ fn diagnose(output: &mut impl Write, errors: &mut impl Write, json: bool) -> u8 
         write_output(
             writeln!(
                 output,
-                "Scarp compiler: {version}\nHost: {os}/{arch}\nExecution: interpreter\nStatic verification: available\nModule inspection: available\nNative executable emission: unavailable\nPackage management: unavailable"
+                "Scarp compiler: {version}\nHost: {os}/{arch}\nExecution: interpreter\nStatic verification: available\nModule inspection: available\nProject create/launch: available\nNative executable emission: unavailable\nPackage management: unavailable"
             ),
             errors,
         )
@@ -243,6 +264,12 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
     // Canonical CLI routes reuse the existing Scarp library/lexer backends.
     // Existing entry points stay functional during an explicit migration window.
     match args.as_slice() {
+        [command, flag] if command == "create" && (flag == "--help" || flag == "-h") => {
+            return write_output(output.write_all(CREATE_HELP.as_bytes()), errors);
+        }
+        [command, flag] if command == "launch" && (flag == "--help" || flag == "-h") => {
+            return write_output(output.write_all(LAUNCH_HELP.as_bytes()), errors);
+        }
         [command] if command == "guide" => {
             return write_output(output.write_all(HELP.as_bytes()), errors);
         }
@@ -258,6 +285,8 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                 Some("guide") => Some(GUIDE_HELP),
                 Some("version") => Some(VERSION_HELP),
                 Some("diagnose") => Some(DIAGNOSE_HELP),
+                Some("create") => Some(CREATE_HELP),
+                Some("launch") => Some(LAUNCH_HELP),
                 _ => None,
             };
             return match page {
@@ -359,6 +388,59 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             return write_output(output.write_all(EXEC_HELP.as_bytes()), errors);
         }
         _ => {}
+    }
+    if args.first().is_some_and(|command| command == "create") {
+        let destination = match args.as_slice() {
+            [_, path] if !path.to_string_lossy().starts_with('-') => Some(path),
+            [_, separator, path] if separator == "--" => Some(path),
+            _ => None,
+        };
+        let Some(destination) = destination else {
+            let _ = writeln!(errors, "error: expected a new project directory\n\n{CREATE_HELP}");
+            return 2;
+        };
+        let destination = Path::new(destination);
+        return match project::create(destination) {
+            Ok(()) => write_output(
+                writeln!(output, "Created Scarp project: {}", destination.display()),
+                errors,
+            ),
+            Err(message) => {
+                let _ = writeln!(errors, "error: {message}");
+                1
+            }
+        };
+    }
+    if args.first().is_some_and(|command| command == "launch") {
+        let mut forwarded = args.clone();
+        forwarded[0] = OsString::from("run");
+        let format_hint = diagnostic_format_hint(&forwarded);
+        let root = match invocation(&forwarded) {
+            Ok(invocation) => Path::new(invocation.filename).to_path_buf(),
+            Err(message) => {
+                if format_hint {
+                    let _ = scarp::diagnostics::write_json_message(message, Some(LAUNCH_HELP), errors);
+                } else {
+                    let _ = writeln!(errors, "error: {message}\n\n{LAUNCH_HELP}");
+                }
+                return 2;
+            }
+        };
+        let entry = match project::entry_file(&root) {
+            Ok(entry) => entry,
+            Err(message) => {
+                if format_hint {
+                    let _ = scarp::diagnostics::write_json_message(&message, None, errors);
+                } else {
+                    let _ = writeln!(errors, "error: {message}");
+                }
+                return 1;
+            }
+        };
+        // Pass the exact existing option prefix to the real interpreter.
+        // This keeps all runtime budgets, diagnostics and output semantics.
+        *forwarded.last_mut().expect("validated invocation has an entry") = entry.into_os_string();
+        return dispatch(forwarded, output, errors);
     }
     let inspect_ast = args.first().is_some_and(|command| command == "inspect")
         && args.get(1).is_some_and(|topic| topic == "ast");
