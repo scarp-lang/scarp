@@ -23,6 +23,7 @@ Commands:
   exec <file.srp>                  Execute a Scarp program
   verify <file.srp>                Perform static compiler validation
   inspect tokens <file.srp>        Inspect lexer tokens and source locations
+  inspect ast <file.srp>           Show the parsed syntax tree (development)
   inspect modules [--json] <file.srp>  Inspect statically checked module metadata
   explain E####                   Explain a real diagnostic code
   guide [command]                 Show contextual CLI guidance
@@ -37,6 +38,7 @@ Examples:
   scarp exec examples/hello.srp
   scarp verify examples/hello.srp
   scarp inspect tokens examples/hello.srp
+  scarp inspect ast examples/hello.srp
   scarp inspect modules --json examples/module_inspection.srp
   scarp guide exec
   scarp diagnose --json
@@ -58,11 +60,13 @@ Runtime arithmetic, contracts, dynamic paths and budgets are not evaluated.
 
 const INSPECT_HELP: &str = "Usage:
   scarp inspect tokens [--] <file.srp>
+  scarp inspect ast [--] <file.srp>
   scarp inspect modules [--json] [--] <file.srp>
 
-Read-only token or module inspection. The tokens command only lexes the entry
-file. Modules performs static loading and linking, including scalar constants;
-it does not execute runtime statements. --json is available for modules only.
+Read-only frontend or module inspection. Tokens only lexes the entry file; AST
+parses it without loading imports, resolving names or executing code. Modules
+performs static loading and linking, including scalar constants.
+--json is available only for modules.
 ";
 
 const INSPECT_TOKENS_HELP: &str = "Usage: scarp inspect tokens [--] <file.srp>
@@ -70,6 +74,15 @@ const INSPECT_TOKENS_HELP: &str = "Usage: scarp inspect tokens [--] <file.srp>
 List lexer tokens and UTF-8 source locations without parsing or executing code.
 Runtime execution-limit options and --json are not accepted.
 --diagnostic-format=json is available for lexer errors.
+";
+
+const INSPECT_AST_HELP: &str = "Usage: scarp inspect ast [--diagnostic-format=json|text] [--] <file.srp>
+
+Parse one source file and print its actual syntax tree in development debug
+format. This does not resolve imported modules, type-check or execute code.
+The debug layout is not a stable machine-readable interface. --json is
+unsupported for successful AST output; --diagnostic-format=json serializes
+only source/parser errors with the existing diagnostic schema.
 ";
 
 const INSPECT_MODULES_HELP: &str = "Usage: scarp inspect modules [--json] [--] <file.srp>
@@ -261,6 +274,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         [command, group, topic] if command == "guide" && group == "inspect" => {
             let page = match topic.to_str() {
                 Some("tokens") => Some(INSPECT_TOKENS_HELP),
+                Some("ast") => Some(INSPECT_AST_HELP),
                 Some("modules") => Some(INSPECT_MODULES_HELP),
                 _ => None,
             };
@@ -321,6 +335,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         [command, topic, flag] if command == "inspect" && (flag == "--help" || flag == "-h") => {
             let page = match topic.to_str() {
                 Some("tokens") => Some(INSPECT_TOKENS_HELP),
+                Some("ast") => Some(INSPECT_AST_HELP),
                 Some("modules") => Some(INSPECT_MODULES_HELP),
                 _ => None,
             };
@@ -344,15 +359,22 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         }
         _ => {}
     }
+    let inspect_ast = args.first().is_some_and(|command| command == "inspect")
+        && args.get(1).is_some_and(|topic| topic == "ast");
     if args.first().is_some_and(|command| command == "inspect") {
         match args.get(1).and_then(|topic| topic.to_str()) {
-            Some("tokens" | "modules") => {
+            Some("tokens" | "ast" | "modules") => {
                 args.remove(0);
+                if inspect_ast {
+                    // Route through the existing file option parser without
+                    // adding an unintended top-level 'ast' alias.
+                    args[0] = OsString::from("tokens");
+                }
             }
             _ => {
                 let _ = writeln!(
                     errors,
-                    "error: expected inspect tokens or inspect modules\n\n{INSPECT_HELP}"
+                    "error: expected inspect tokens, inspect ast or inspect modules\n\n{INSPECT_HELP}"
                 );
                 return 2;
             }
@@ -490,7 +512,18 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             return 1;
         }
     };
-    if command == "tokens" {
+    if command == "tokens" && inspect_ast {
+        // Parse-only frontend inspection: does not load imports, resolve names,
+        // execute code, or create artifacts. Debug output is not a stable API.
+        match scarp::parse(&source) {
+            Ok(program) => write_formatted_output(
+                writeln!(output, "{program:#?}"),
+                errors,
+                json_diagnostics,
+            ),
+            Err(error) => report_diagnostic(&error, path, &source, errors, json_diagnostics),
+        }
+    } else if command == "tokens" {
         match lexer::lex(&source) {
             Ok(tokens) => {
                 let mut locations = LocationTracker::new(&source);
