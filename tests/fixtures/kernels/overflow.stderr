@@ -1,0 +1,6 @@
+error[E0031]: numeric operation produced a non-finite result
+ --> overflow.srp:2:7
+  |
+2 | print(variance([1e308, -1e308]));
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+ = help: keep every intermediate result finite

@@ -1,0 +1,3 @@
+import "modules/integer_series.srp" as series;
+bind values = series.sequence(2, start: -1);
+print(values, series.spread(values), series.low_bits & 0x3);

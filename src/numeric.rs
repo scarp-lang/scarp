@@ -7,11 +7,17 @@ use crate::{
 };
 
 mod integers;
+mod kernels;
 mod scalar_text;
 mod tiles;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Builtin {
+    Variance,
+    StdDev,
+    Sigmoid,
+    Relu,
+    Tanh,
     IntsLength,
     IntsSum,
     IntsWindow,
@@ -69,6 +75,11 @@ pub enum Builtin {
 impl Builtin {
     pub fn from_name(name: &str) -> Option<Self> {
         Some(match name {
+            "variance" => Self::Variance,
+            "stddev" => Self::StdDev,
+            "sigmoid" => Self::Sigmoid,
+            "relu" => Self::Relu,
+            "tanh" => Self::Tanh,
             "ints_len" => Self::IntsLength,
             "ints_sum" => Self::IntsSum,
             "ints_window" => Self::IntsWindow,
@@ -128,6 +139,7 @@ impl Builtin {
     pub fn parameter_types(self) -> &'static [ValueType] {
         use ValueType::{Float, Integer, Integers, String, Tile, Vector};
         match self {
+            Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
             Self::IntsLength | Self::IntsSum | Self::IntsToVector => &[Integers],
             Self::IntsWindow | Self::IntsSet => &[Integers, Integer, Integer],
             Self::IntsJoin => &[Integers, Integers],
@@ -171,6 +183,7 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
+            Self::Variance | Self::StdDev => ValueType::Float,
             Self::IntsLength | Self::IntsSum => ValueType::Integer,
             Self::IntsWindow
             | Self::IntsJoin
@@ -498,6 +511,12 @@ pub(crate) fn evaluate_with_spans(
     if function.is_scalar_text() {
         return scalar_text::evaluate(function, args, budget, span, argument_span);
     }
+    if matches!(
+        function,
+        Builtin::Variance | Builtin::StdDev | Builtin::Sigmoid | Builtin::Relu | Builtin::Tanh
+    ) {
+        return kernels::evaluate(function, args, budget, span, argument_span);
+    }
     if function.is_tile() {
         return tiles::evaluate(function, args, budget, span, argument_span);
     }
@@ -791,6 +810,11 @@ pub(crate) fn evaluate_with_spans(
             vector(values, span)
         }
         Builtin::Length
+        | Builtin::Variance
+        | Builtin::StdDev
+        | Builtin::Sigmoid
+        | Builtin::Relu
+        | Builtin::Tanh
         | Builtin::IntsLength
         | Builtin::IntsSum
         | Builtin::IntsWindow
