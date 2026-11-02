@@ -26,6 +26,7 @@ Commands:
   inspect modules [--json] <file.srp>  Inspect statically checked module metadata
   explain E####                   Explain a real diagnostic code
   guide [command]                 Show contextual CLI guidance
+  diagnose [--json]               Report actual compiler/host capabilities
   version                         Show the prototype version
 
 Options:
@@ -38,6 +39,7 @@ Examples:
   scarp inspect tokens examples/hello.srp
   scarp inspect modules --json examples/module_inspection.srp
   scarp guide exec
+  scarp diagnose --json
 
 The original run, check, tokens and modules commands remain available during
 migration. The old check command evaluates selected paths; it is not static-only
@@ -93,6 +95,39 @@ const GUIDE_HELP: &str = "Usage: scarp guide [command [subcommand]]
 Show help for a supported Scarp command. For example: scarp guide exec,
 scarp guide inspect tokens, scarp guide inspect modules.
 ";
+
+const DIAGNOSE_HELP: &str = "Usage: scarp diagnose [--json]
+
+Report the version of this running Scarp compiler, the actual host operating
+system and architecture, and known available compiler/CLI capabilities.
+--json emits one schema-version-1 JSON object. This command performs no
+network requests and does not test external package registries or targets.
+It does not claim unsupported native compilation or package tools are installed.
+";
+
+fn diagnose(output: &mut impl Write, errors: &mut impl Write, json: bool) -> u8 {
+    let version = env!("CARGO_PKG_VERSION");
+    let os = env::consts::OS;
+    let arch = env::consts::ARCH;
+    if json {
+        write_output(
+            writeln!(
+                output,
+                r#"{{"schema_version":1,"version":"{}","host_os":"{}","host_arch":"{}","execution":"interpreter","static_verify":true,"module_inspection":true,"native_executable":false,"package_manager":false}}"#,
+                version, os, arch
+            ),
+            errors,
+        )
+    } else {
+        write_output(
+            writeln!(
+                output,
+                "Scarp compiler: {version}\nHost: {os}/{arch}\nExecution: interpreter\nStatic verification: available\nModule inspection: available\nNative executable emission: unavailable\nPackage management: unavailable"
+            ),
+            errors,
+        )
+    }
+}
 
 const VERSION_HELP: &str = "Usage: scarp version
 
@@ -208,6 +243,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                 Some("explain") => Some(EXPLAIN_HELP),
                 Some("guide") => Some(GUIDE_HELP),
                 Some("version") => Some(VERSION_HELP),
+                Some("diagnose") => Some(DIAGNOSE_HELP),
                 _ => None,
             };
             return match page {
@@ -242,6 +278,22 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         }
         [command, ..] if command == "guide" => {
             let _ = writeln!(errors, "error: invalid guide arguments\n\n{GUIDE_HELP}");
+            return 2;
+        }
+        [command] if command == "diagnose" => {
+            return diagnose(output, errors, false);
+        }
+        [command, flag] if command == "diagnose" && (flag == "--help" || flag == "-h") => {
+            return write_output(output.write_all(DIAGNOSE_HELP.as_bytes()), errors);
+        }
+        [command, flag] if command == "diagnose" && flag == "--json" => {
+            return diagnose(output, errors, true);
+        }
+        [command, ..] if command == "diagnose" => {
+            let _ = writeln!(
+                errors,
+                "error: invalid diagnose arguments\n\n{DIAGNOSE_HELP}"
+            );
             return 2;
         }
         [command] if command == "version" => {

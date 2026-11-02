@@ -2,6 +2,12 @@
 
 ## Scarp-first CLI migration (unreleased development branch)
 
+Unreleased development adds `scarp diagnose [--json]`, a read-only
+environment report of this running compiler's package version, host OS and
+architecture, and explicit implemented/unimplemented tool capabilities.
+It does not contact external registries or infer the availability of native
+code generation from the presence of the Rust compiler.
+
 The new preferred command paths are `scarp exec FILE`, `scarp verify FILE`, `scarp inspect
 tokens FILE`, `scarp inspect modules [--json] FILE`, `scarp guide` and
 `scarp version`. The existing `scarp explain E####` is unchanged. These

@@ -53,6 +53,7 @@ compiler binary, these commands use `scarp` directly (not the Rust build tool):
 ```sh
 scarp guide
 scarp version
+scarp diagnose --json
 scarp exec examples/hello.srp
 scarp verify examples/hello.srp
 scarp verify --diagnostic-format=json examples/hello.srp
