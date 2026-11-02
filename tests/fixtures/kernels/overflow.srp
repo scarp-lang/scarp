@@ -1,0 +1,2 @@
+print("hidden");
+print(variance([1e308, -1e308]));

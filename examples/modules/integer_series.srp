@@ -1,0 +1,14 @@
+pub bind low_bits = 0b1111;
+
+pub pure funcra sequence(count: integer, start: integer = 0) -> integers
+needs count >= 0;
+ensures ints_len(result) == count;
+{
+    return ints_range(start, count, 1);
+}
+
+pub pure funcra spread(values: integers) -> float
+needs ints_len(values) > 0;
+{
+    return stddev(ints_to_vector(values));
+}

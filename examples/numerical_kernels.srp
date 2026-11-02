@@ -1,0 +1,5 @@
+bind samples = ints_to_vector(ints_range(-2, 5, 1));
+print(variance(samples), stddev([3.0, 3.0]));
+print(relu(samples));
+print(sigmoid([-1000.0, 0.0, 1000.0]));
+print(tanh([-1000.0, 0.0, 1000.0]));

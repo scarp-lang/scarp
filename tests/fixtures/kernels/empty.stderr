@@ -1,0 +1,5 @@
+error[E0034]: population variance and standard deviation require a nonempty vector
+ --> empty.srp:2:16
+  |
+2 | print(variance([]));
+  |                ^^

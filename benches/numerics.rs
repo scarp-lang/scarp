@@ -11,6 +11,8 @@ enum Native {
     Dot(usize),
     Calls,
     Allocation,
+    Statistics(usize),
+    Activations(usize),
 }
 
 fn call(kernel: Builtin, args: &[Value]) -> Value {
@@ -25,6 +27,28 @@ fn fill(value: f64, count: usize) -> Value {
 
 fn native(workload: Native) -> Value {
     match workload {
+        Native::Statistics(count) => {
+            let values = call(
+                Builtin::Stitch,
+                &[fill(0.0, count / 2), fill(2.0, count / 2)],
+            );
+            float(
+                call(Builtin::Variance, std::slice::from_ref(&values))
+                    .as_float()
+                    .unwrap()
+                    + call(Builtin::StdDev, &[values]).as_float().unwrap(),
+            )
+        }
+        Native::Activations(count) => call(
+            Builtin::Sum,
+            &[call(
+                Builtin::Sigmoid,
+                &[call(
+                    Builtin::Tanh,
+                    &[call(Builtin::Relu, &[fill(-1.0, count)])],
+                )],
+            )],
+        ),
         Native::Dot(count) => call(Builtin::Dot, &[fill(1.0, count), fill(2.0, count)]),
         Native::Calls => {
             let values = fill(1.0, 1024);
@@ -91,6 +115,24 @@ fn main() {
     );
     let mut cases = Vec::new();
     for count in [16, 32_768] {
+        cases.push((
+            format!("population_statistics_{count}"),
+            format!(
+                "bind v=stitch(fill(0.0,{}),fill(2.0,{})); print(variance(v)+stddev(v));",
+                count / 2,
+                count / 2
+            ),
+            2.0,
+            Native::Statistics(count),
+            count,
+        ));
+        cases.push((
+            format!("activation_pipeline_{count}"),
+            format!("print(sum(sigmoid(tanh(relu(fill(-1.0,{count}))))));"),
+            count as f64 / 2.0,
+            Native::Activations(count),
+            count,
+        ));
         let inputs = format!("bind a=fill(1.0,{count}); bind b=fill(2.0,{count});");
         cases.push((
             format!("indexed_dot_{count}"),

@@ -334,6 +334,20 @@ try {
             if ($failed.ExitCode -ne 1 -or $failed.Stdout.Length -ne 0 -or -not [System.Text.Encoding]::UTF8.GetString($failed.Stderr).StartsWith(('error[' + $case[1] + ']'))) { throw 'Packaged integer bit diagnostic or atomicity failed' }
         }
     }
+    $kernelSource = Join-Path $stagingRoot 'kernels.srp'
+    [System.IO.File]::WriteAllText($kernelSource, 'bind v=[1.0,3.0]; print(variance(v),stddev(v),sigmoid([-1000.0,0.0,1000.0]),relu([-1.0,0.0,1.0]),tanh([0.0]));')
+    foreach ($verb in @('run','check')) {
+        $kernel = Invoke-ScarpProcess -Executable $executable -Arguments @($verb,$kernelSource)
+        $expected = if ($verb -eq 'run') { "1.0 1.0 [0.0, 0.5, 1.0] [0.0, 0.0, 1.0] [0.0]`n" } else { '' }
+        if ($kernel.ExitCode -ne 0 -or $kernel.Stderr.Length -ne 0 -or [System.Text.Encoding]::UTF8.GetString($kernel.Stdout) -cne $expected) { throw 'Packaged population statistics or activations failed' }
+    }
+    foreach ($case in @(@('variance([])','E0034'), @('variance([1e308,-1e308])','E0031'), @('sigmoid([integer:1])','E0015'))) {
+        [System.IO.File]::WriteAllText($kernelSource, ('print("OUT"); eprint("ERR"); print(' + $case[0] + ');'))
+        foreach ($verb in @('run','check')) {
+            $failed = Invoke-ScarpProcess -Executable $executable -Arguments @($verb,$kernelSource)
+            if ($failed.ExitCode -ne 1 -or $failed.Stdout.Length -ne 0 -or -not [System.Text.Encoding]::UTF8.GetString($failed.Stderr).StartsWith(('error[' + $case[1] + ']'))) { throw 'Packaged statistics diagnostic or atomicity failed' }
+        }
+    }
     $tokens = & $executable tokens (Join-Path $extractedPackage 'examples/arithmetic.srp')
     if ($LASTEXITCODE -ne 0 -or -not ($tokens -match 'integer\(1\)')) {
         throw 'Packaged token inspection failed'
