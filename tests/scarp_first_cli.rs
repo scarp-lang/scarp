@@ -30,12 +30,7 @@ fn file_output(args: &[&str], path: &std::path::Path) -> Output {
 
 #[test]
 fn scarp_first_help_and_guides_are_real_and_contextual() {
-    for args in [
-        vec![],
-        vec!["guide"],
-        vec!["--help"],
-        vec!["-h"],
-    ] {
+    for args in [vec![], vec!["guide"], vec!["--help"], vec!["-h"]] {
         let result = scarp(&args);
         assert!(result.status.success(), "{args:?}: {result:?}");
         assert!(result.stderr.is_empty());
@@ -59,7 +54,10 @@ fn scarp_first_help_and_guides_are_real_and_contextual() {
         (vec!["guide", "version"], "Usage: scarp version"),
         (vec!["inspect", "--help"], "scarp inspect modules"),
         (vec!["inspect", "tokens", "--help"], "scarp inspect tokens"),
-        (vec!["inspect", "modules", "--help"], "scarp inspect modules"),
+        (
+            vec!["inspect", "modules", "--help"],
+            "scarp inspect modules",
+        ),
         (vec!["exec", "--help"], "Usage: scarp exec"),
         (vec!["version", "--help"], "Usage: scarp version"),
     ] {
@@ -102,7 +100,10 @@ fn inspect_subcommands_preserve_backends_and_json() {
     for (canonical, legacy) in [
         (vec!["inspect", "tokens"], vec!["tokens"]),
         (vec!["inspect", "modules"], vec!["modules"]),
-        (vec!["inspect", "modules", "--json"], vec!["modules", "--json"]),
+        (
+            vec!["inspect", "modules", "--json"],
+            vec!["modules", "--json"],
+        ),
     ] {
         let new_result = file_output(&canonical, &path);
         let old_result = file_output(&legacy, &path);
@@ -136,10 +137,7 @@ fn unknown_guides_subcommands_and_unsupported_features_fail() {
 #[test]
 fn exec_handles_unicode_and_spaced_source_paths() {
     let id = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!(
-        "scarp-cli-identity-{}-{id}",
-        std::process::id()
-    ));
+    let dir = std::env::temp_dir().join(format!("scarp-cli-identity-{}-{id}", std::process::id()));
     fs::create_dir(&dir).unwrap();
     let path = dir.join("नमस्ते file.srp");
     fs::write(&path, "print(\"Scarp\");").unwrap();
