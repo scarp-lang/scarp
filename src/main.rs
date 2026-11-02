@@ -117,7 +117,8 @@ Reject existing directories (even empty ones); never overwrite existing files.
 No network access, package installation, or native build occurs.
 ";
 
-const LAUNCH_HELP: &str = "Usage: scarp launch [--diagnostic-format=json|text] [budget options] [--] <project-directory>
+const LAUNCH_HELP: &str =
+    "Usage: scarp launch [--diagnostic-format=json|text] [budget options] [--] <project-directory>
 
 Load Scarp.project from an explicit project directory, validate its entrypoint
 and execute the .srp file through the existing interpreter. The entrypoint
@@ -396,7 +397,10 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             _ => None,
         };
         let Some(destination) = destination else {
-            let _ = writeln!(errors, "error: expected a new project directory\n\n{CREATE_HELP}");
+            let _ = writeln!(
+                errors,
+                "error: expected a new project directory\n\n{CREATE_HELP}"
+            );
             return 2;
         };
         let destination = Path::new(destination);
@@ -419,7 +423,8 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             Ok(invocation) => Path::new(invocation.filename).to_path_buf(),
             Err(message) => {
                 if format_hint {
-                    let _ = scarp::diagnostics::write_json_message(message, Some(LAUNCH_HELP), errors);
+                    let _ =
+                        scarp::diagnostics::write_json_message(message, Some(LAUNCH_HELP), errors);
                 } else {
                     let _ = writeln!(errors, "error: {message}\n\n{LAUNCH_HELP}");
                 }
@@ -439,7 +444,9 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         };
         // Pass the exact existing option prefix to the real interpreter.
         // This keeps all runtime budgets, diagnostics and output semantics.
-        *forwarded.last_mut().expect("validated invocation has an entry") = entry.into_os_string();
+        *forwarded
+            .last_mut()
+            .expect("validated invocation has an entry") = entry.into_os_string();
         return dispatch(forwarded, output, errors);
     }
     let inspect_ast = args.first().is_some_and(|command| command == "inspect")
