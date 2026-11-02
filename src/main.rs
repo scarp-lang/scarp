@@ -27,7 +27,7 @@ Usage:
 
 Use -- before a filename that begins with a dash.
 run/check options before the path: --max-steps, --max-prints, --max-call-depth,
---max-calls, --max-live-slots, --max-capture-bytes, --max-vector-bytes (counts).
+--max-calls, --max-live-slots, --max-capture-bytes, --max-vector-bytes, --max-text-bytes (counts).
 Defaults: 1000000 execution steps, 100000 selected output statements.
 Iteration: while condition { ... }, repeat count as index { ... }.
 Use scarp run --help or scarp check --help for budget examples.
@@ -43,6 +43,8 @@ Function defaults: --max-call-depth 256, --max-calls 100000,
 --max-live-slots 1000000, --max-capture-bytes 16777216,
 --max-vector-bytes 8388608 (cumulative numerical element payload).
 Vector and tile buffers share this cumulative quota; retirement does not refund it.
+--max-text-bytes 8388608 limits cumulative new UTF-8 payload (1048576 bytes per string).
+String sharing and direct literal output do not allocate text payload; retirement gives no refund.
 Snapshot bytes are a logical storage cap, not an exact process-memory limit.
 Counts are unsigned decimal digits, zero is valid, and each option may occur once.
 Example: scarp run --max-steps 2000000 --max-prints 10 examples/repeat.srp
@@ -60,7 +62,9 @@ Function defaults: --max-call-depth 256, --max-calls 100000,
 --max-live-slots 1000000, --max-capture-bytes 16777216,
 --max-vector-bytes 8388608 (cumulative numerical element payload).
 Vector and tile buffers share this cumulative quota; retirement does not refund it.
-All seven options take unsigned decimal counts, allow zero, and may occur once.
+--max-text-bytes 8388608 limits cumulative new UTF-8 payload (1048576 bytes per string).
+String sharing and direct literal output do not allocate text payload; retirement gives no refund.
+All eight options take unsigned decimal counts, allow zero, and may occur once.
 Snapshot bytes are a logical storage cap, including when check discards output.
 Example: scarp check --max-steps 2000000 examples/repeat.srp
 Use tokens for lexing without executing a program. No execution-limit flags on tokens.
@@ -301,7 +305,8 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
                 | "--max-calls"
                 | "--max-live-slots"
                 | "--max-capture-bytes"
-                | "--max-vector-bytes"),
+                | "--max-vector-bytes"
+                | "--max-text-bytes"),
             ) => flag,
             _ => break,
         };
@@ -332,6 +337,7 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
                     "--max-live-slots" => options.max_live_slots = value,
                     "--max-capture-bytes" => options.max_capture_bytes = value,
                     "--max-vector-bytes" => options.max_vector_bytes = value,
+                    "--max-text-bytes" => options.max_text_bytes = value,
                     _ => unreachable!(),
                 }
             }

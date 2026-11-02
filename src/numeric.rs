@@ -9,6 +9,7 @@ use crate::{
 mod integers;
 mod kernels;
 mod scalar_text;
+mod text;
 mod tiles;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -28,6 +29,9 @@ pub enum Builtin {
     IntsFromVector,
     ToFloat,
     ToInteger,
+    TextConcat,
+    TextSlice,
+    TextRepeat,
     TextLength,
     TextBytes,
     TextCodepoint,
@@ -104,6 +108,9 @@ impl Builtin {
             "ints_from_vector" => Self::IntsFromVector,
             "to_float" => Self::ToFloat,
             "to_integer" => Self::ToInteger,
+            "text_concat" => Self::TextConcat,
+            "text_slice" => Self::TextSlice,
+            "text_repeat" => Self::TextRepeat,
             "text_len" => Self::TextLength,
             "text_bytes" => Self::TextBytes,
             "text_codepoint" => Self::TextCodepoint,
@@ -162,7 +169,9 @@ impl Builtin {
             Self::ToFloat => &[Integer],
             Self::ToInteger => &[Float],
             Self::TextLength | Self::TextBytes => &[String],
-            Self::TextCodepoint => &[String, Integer],
+            Self::TextCodepoint | Self::TextRepeat => &[String, Integer],
+            Self::TextSlice => &[String, Integer, Integer],
+            Self::TextConcat => &[String, String],
             Self::TextFind | Self::TextContains | Self::TextStartsWith | Self::TextEndsWith => {
                 &[String, String]
             }
@@ -210,6 +219,7 @@ impl Builtin {
             | Self::TextCodepoint
             | Self::TextFind => ValueType::Integer,
             Self::ToFloat => ValueType::Float,
+            Self::TextConcat | Self::TextSlice | Self::TextRepeat => ValueType::String,
             Self::TextContains | Self::TextStartsWith | Self::TextEndsWith => ValueType::Boolean,
             Self::Length | Self::ArgMax | Self::ArgMin | Self::Height | Self::Width => {
                 ValueType::Integer
@@ -476,6 +486,20 @@ fn checked_target(index: i64, count: usize, span: Span) -> Result<usize, Diagnos
         })
 }
 
+pub fn evaluate_with_text_limit(
+    function: Builtin,
+    arguments: &[Value],
+    max_steps: u64,
+    max_text_bytes: usize,
+) -> Result<Value, Diagnostic> {
+    evaluate_with_budget(
+        function,
+        arguments,
+        &mut Budget::new(max_steps).with_text_bytes(max_text_bytes),
+        Span::default(),
+    )
+}
+
 pub(crate) fn evaluate_with_budget(
     function: Builtin,
     args: &[Value],
@@ -515,6 +539,12 @@ pub(crate) fn evaluate_with_spans(
             | Builtin::IntsFromVector
     ) {
         return integers::evaluate(function, args, budget, span, argument_span);
+    }
+    if matches!(
+        function,
+        Builtin::TextConcat | Builtin::TextSlice | Builtin::TextRepeat
+    ) {
+        return text::evaluate(function, args, budget, span, argument_span);
     }
     if function.is_scalar_text() {
         return scalar_text::evaluate(function, args, budget, span, argument_span);
@@ -833,6 +863,9 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::IntsFromVector
         | Builtin::ToFloat
         | Builtin::ToInteger
+        | Builtin::TextConcat
+        | Builtin::TextSlice
+        | Builtin::TextRepeat
         | Builtin::TextLength
         | Builtin::TextBytes
         | Builtin::TextCodepoint

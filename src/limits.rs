@@ -36,6 +36,8 @@ pub struct ExecutionOptions {
     /// Cumulative newly reserved vector/tile element payload, in bytes.
     /// Sharing an existing immutable vector or tile does not charge again.
     pub max_vector_bytes: usize,
+    /// Cumulative newly materialized UTF-8 string payload; sharing does not recharge.
+    pub max_text_bytes: usize,
 }
 
 impl Default for ExecutionOptions {
@@ -47,6 +49,7 @@ impl Default for ExecutionOptions {
             max_live_slots: 1_000_000,
             max_capture_bytes: 16 * 1024 * 1024,
             max_vector_bytes: 8 * 1024 * 1024,
+            max_text_bytes: 8 * 1024 * 1024,
         }
     }
 }
@@ -65,6 +68,8 @@ pub(crate) struct Budget {
     limit: u64,
     vector_remaining: usize,
     vector_limit: usize,
+    text_remaining: usize,
+    text_limit: usize,
 }
 
 impl Budget {
@@ -74,6 +79,8 @@ impl Budget {
             limit: steps,
             vector_remaining: usize::MAX,
             vector_limit: usize::MAX,
+            text_remaining: usize::MAX,
+            text_limit: usize::MAX,
         }
     }
 
@@ -101,6 +108,32 @@ impl Budget {
         Ok(())
     }
 
+    pub fn with_text_bytes(mut self, bytes: usize) -> Self {
+        self.text_remaining = bytes;
+        self.text_limit = bytes;
+        self
+    }
+
+    pub fn charge_text_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
+        if bytes > crate::value::MAX_TEXT_BYTES {
+            return Err(text_construction(
+                span,
+                "string result exceeds the 1048576-byte per-value limit",
+            ));
+        }
+        if bytes > self.text_remaining {
+            return Err(text_construction(
+                span,
+                format!(
+                    "cumulative text allocation limit of {} bytes exceeded",
+                    self.text_limit
+                ),
+            ));
+        }
+        self.text_remaining -= bytes;
+        Ok(())
+    }
+
     pub fn charge(&mut self, amount: u64, span: Span) -> Result<(), Diagnostic> {
         if self.remaining < amount {
             return Err(Diagnostic::new(
@@ -113,4 +146,9 @@ impl Budget {
         self.remaining -= amount;
         Ok(())
     }
+}
+
+pub(crate) fn text_construction(span: Span, message: impl Into<String>) -> Diagnostic {
+    Diagnostic::new(DiagnosticKind::TextConstruction, span, message)
+        .with_help("use nonnegative repetition counts and smaller strings; raise --max-text-bytes / ExecutionOptions.max_text_bytes for the cumulative payload quota")
 }
