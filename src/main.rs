@@ -76,7 +76,8 @@ Runtime execution-limit options and --json are not accepted.
 --diagnostic-format=json is available for lexer errors.
 ";
 
-const INSPECT_AST_HELP: &str = "Usage: scarp inspect ast [--diagnostic-format=json|text] [--] <file.srp>
+const INSPECT_AST_HELP: &str =
+    "Usage: scarp inspect ast [--diagnostic-format=json|text] [--] <file.srp>
 
 Parse one source file and print its actual syntax tree in development debug
 format. This does not resolve imported modules, type-check or execute code.
@@ -516,11 +517,9 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         // Parse-only frontend inspection: does not load imports, resolve names,
         // execute code, or create artifacts. Debug output is not a stable API.
         match scarp::parse(&source) {
-            Ok(program) => write_formatted_output(
-                writeln!(output, "{program:#?}"),
-                errors,
-                json_diagnostics,
-            ),
+            Ok(program) => {
+                write_formatted_output(writeln!(output, "{program:#?}"), errors, json_diagnostics)
+            }
             Err(error) => report_diagnostic(&error, path, &source, errors, json_diagnostics),
         }
     } else if command == "tokens" {
