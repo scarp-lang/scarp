@@ -44,6 +44,28 @@ print("Hello from Scarp!");
 Hello from Scarp!
 ```
 
+## Scarp-first CLI (development branch)
+
+This development branch introduces a distinct public command vocabulary while
+preserving pre-stable scripts during migration. After building/installing the
+compiler binary, these commands use `scarp` directly (not the Rust build tool):
+
+```sh
+scarp guide
+scarp version
+scarp exec examples/hello.srp
+scarp inspect tokens examples/hello.srp
+scarp inspect modules --json examples/module_inspection.srp
+```
+
+See the [CLI reference](docs/reference/cli.md) for supported options, exact
+behavior and migration details. The old `run`, `check`, `tokens` and `modules`
+paths remain temporarily compatible; `check` evaluates selected program paths
+and should **not** be described as static-only verification. `compile`,
+`verify`, `create` and `launch` do not exist yet. No native Scarp binary
+backend or project-manifest workflow is implied by the new names. Previously
+published binaries do not contain these new command paths.
+
 The [documentation hub](docs/README.md) provides setup, tutorials, command and
 diagnostic references, Rust embedding, testing, troubleshooting, and compatibility
 guides. Start there for a reading path matched to your task.
