@@ -184,7 +184,11 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             return match page {
                 Some(page) => write_output(output.write_all(page.as_bytes()), errors),
                 None => {
-                    let _ = writeln!(errors, "error: unknown guide topic {:?}\n\n{GUIDE_HELP}", target.to_string_lossy());
+                    let _ = writeln!(
+                        errors,
+                        "error: unknown guide topic {:?}\n\n{GUIDE_HELP}",
+                        target.to_string_lossy()
+                    );
                     2
                 }
             };
@@ -198,7 +202,11 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             return match page {
                 Some(page) => write_output(output.write_all(page.as_bytes()), errors),
                 None => {
-                    let _ = writeln!(errors, "error: unknown inspect topic {:?}\n\n{INSPECT_HELP}", topic.to_string_lossy());
+                    let _ = writeln!(
+                        errors,
+                        "error: unknown inspect topic {:?}\n\n{INSPECT_HELP}",
+                        topic.to_string_lossy()
+                    );
                     2
                 }
             };
@@ -208,13 +216,19 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             return 2;
         }
         [command] if command == "version" => {
-            return write_output(writeln!(output, "scarp {}", env!("CARGO_PKG_VERSION")), errors);
+            return write_output(
+                writeln!(output, "scarp {}", env!("CARGO_PKG_VERSION")),
+                errors,
+            );
         }
         [command, flag] if command == "version" && (flag == "--help" || flag == "-h") => {
             return write_output(output.write_all(VERSION_HELP.as_bytes()), errors);
         }
         [command, ..] if command == "version" => {
-            let _ = writeln!(errors, "error: unexpected version arguments\n\n{VERSION_HELP}");
+            let _ = writeln!(
+                errors,
+                "error: unexpected version arguments\n\n{VERSION_HELP}"
+            );
             return 2;
         }
         [command] if command == "inspect" => {
@@ -248,7 +262,10 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                 args.remove(0);
             }
             _ => {
-                let _ = writeln!(errors, "error: expected inspect tokens or inspect modules\n\n{INSPECT_HELP}");
+                let _ = writeln!(
+                    errors,
+                    "error: expected inspect tokens or inspect modules\n\n{INSPECT_HELP}"
+                );
                 return 2;
             }
         }
