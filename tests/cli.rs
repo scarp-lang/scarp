@@ -644,7 +644,7 @@ fn help_and_version_succeed_without_reading_a_file() {
         let text = String::from_utf8(output.stdout).unwrap();
         if flag == "--help" || flag == "-h" {
             assert!(text.contains("Usage:"));
-            assert!(text.contains("scarp tokens"));
+            assert!(text.contains("scarp inspect tokens"));
         } else {
             assert_eq!(text, format!("scarp {}\n", env!("CARGO_PKG_VERSION")));
         }
@@ -654,7 +654,8 @@ fn help_and_version_succeed_without_reading_a_file() {
 #[test]
 fn rejects_invalid_command_lines_with_usage_exit_code() {
     for args in [
-        vec![],
+        vec!["verify"],
+        vec!["inspect", "tokens"],
         vec!["run"],
         vec!["tokens"],
         vec!["check"],
@@ -890,15 +891,15 @@ fn counted_loop_cli_has_atomic_budgets_and_tokens_still_only_lexes() {
 }
 
 #[test]
-fn current_main_keeps_unintegrated_commands_and_syntax_out() {
-    for subcommand in ["exec", "verify", "inspect", "compile"] {
+fn incomplete_cli_commands_and_invalid_syntax_remain_rejected() {
+    for subcommand in ["compile", "create", "launch", "polish"] {
         let result = command()
             .args([subcommand, "missing.srp"])
             .output()
             .unwrap();
         assert_eq!(result.status.code(), Some(2));
     }
-    for source in ["println(1.2.3);", "println([1,2]);"] {
+    for source in ["println(1.2.3);", "print(unknown_identifier);"] {
         assert!(scarp::compile(source).is_err(), "{source}");
     }
 }
