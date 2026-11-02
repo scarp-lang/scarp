@@ -1,0 +1,9 @@
+bind values: integers = ints_range(1, 5, 1);
+bind window = ints_window(values, 1, 3);
+bind changed = ints_set(values, 0, 9);
+var total: integer = 0;
+repeat ints_len(window) as index {
+    total += window[index];
+}
+print(values, changed, window, total);
+print(ints_to_vector(window), ints_join([integer: 6], [integer: 7]));

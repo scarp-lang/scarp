@@ -3,4 +3,4 @@ error[E0004]: invalid binding type "number"
   |
 1 | bind invalid: number = 42;
   |               ^^^^^^
- = help: binding types are integer, float, vector, tile, boolean or string; an initializer is required
+ = help: binding types are integer, float, vector, integers, tile, boolean or string; an initializer is required

@@ -23,6 +23,27 @@ fn bytes(value: usize) -> u64 {
     u64::try_from(value).unwrap_or(u64::MAX)
 }
 
+pub(super) fn exact_float(value: i64, span: Span) -> Result<FiniteFloat, Diagnostic> {
+    let number = value as f64;
+    // A saturating i64 round trip would incorrectly accept i64::MAX.
+    if number as i128 != i128::from(value) {
+        return Err(conversion(
+            span,
+            "integer cannot be represented exactly as a float",
+        ));
+    }
+    finite_number(number, span)
+}
+pub(super) fn exact_integer(value: f64, span: Span) -> Result<i64, Diagnostic> {
+    if value.fract() != 0.0 || value < i64::MIN as f64 || value >= -(i64::MIN as f64) {
+        return Err(conversion(
+            span,
+            "float must be integral and within the signed 64-bit integer range",
+        ));
+    }
+    Ok(value as i64)
+}
+
 pub(super) fn evaluate(
     function: Builtin,
     args: &[Value],
@@ -33,27 +54,12 @@ pub(super) fn evaluate(
     if function == Builtin::ToFloat {
         budget.charge(1, span)?;
         let value = args[0].require_integer(argument_span(0))?;
-        let number = value as f64;
-        // i64 casts saturate at the positive boundary and would falsely accept
-        // i64::MAX. i128 represents every rounded i64-to-binary64 result exactly.
-        if number as i128 != i128::from(value) {
-            return Err(conversion(
-                argument_span(0),
-                "integer cannot be represented exactly as a float",
-            ));
-        }
-        return Ok(Value::Float(finite_number(number, argument_span(0))?));
+        return exact_float(value, argument_span(0)).map(Value::Float);
     }
     if function == Builtin::ToInteger {
         budget.charge(1, span)?;
         let value = args[0].require_float(argument_span(0))?;
-        if value.fract() != 0.0 || value < i64::MIN as f64 || value >= -(i64::MIN as f64) {
-            return Err(conversion(
-                argument_span(0),
-                "float must be integral and within the signed 64-bit integer range",
-            ));
-        }
-        return Ok(Value::Integer(value as i64));
+        return exact_integer(value, argument_span(0)).map(Value::Integer);
     }
     let text = args[0].as_str().expect("checked string argument");
     match function {

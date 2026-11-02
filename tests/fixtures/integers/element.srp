@@ -1,0 +1,2 @@
+print("hidden");
+bind data: integers = [integer: 1, 2.0];

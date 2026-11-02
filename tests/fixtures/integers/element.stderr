@@ -1,0 +1,6 @@
+error[E0015]: expected integer, found float
+ --> element.srp:2:36
+  |
+2 | bind data: integers = [integer: 1, 2.0];
+  |                                    ^^^
+ = help: keep primitive types consistent; numeric operands must share a numeric kind, logic requires booleans
