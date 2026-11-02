@@ -118,6 +118,14 @@ try {
     }
     $canonicalVersion = Invoke-ScarpProcess -Executable $executable -Arguments @('version')
     if ($canonicalVersion.ExitCode -ne 0 -or $canonicalVersion.Stderr.Length -ne 0 -or [System.Text.Encoding]::UTF8.GetString($canonicalVersion.Stdout) -cne "scarp $version`n") { throw 'Packaged canonical version failed' }
+    $diagnoseResult = Invoke-ScarpProcess -Executable $executable -Arguments @('diagnose', '--json')
+    $hostReport = [System.Text.Encoding]::UTF8.GetString($diagnoseResult.Stdout) | ConvertFrom-Json -ErrorAction Stop
+    $expectedHost = @{
+        'x86_64-pc-windows-msvc' = @('windows', 'x86_64')
+        'x86_64-unknown-linux-gnu' = @('linux', 'x86_64')
+        'aarch64-apple-darwin' = @('macos', 'aarch64')
+    }[$Target]
+    if ($diagnoseResult.ExitCode -ne 0 -or $diagnoseResult.Stderr.Length -ne 0 -or $hostReport.schema_version -ne 1 -or $hostReport.version -cne $version -or $hostReport.host_os -cne $expectedHost[0] -or $hostReport.host_arch -cne $expectedHost[1] -or $hostReport.execution -cne 'interpreter' -or $hostReport.native_executable -ne $false -or $hostReport.package_manager -ne $false -or $hostReport.static_verify -ne $true -or $hostReport.module_inspection -ne $true) { throw 'Packaged diagnose differs from native host capabilities' }
     $canonicalRun = Invoke-ScarpProcess -Executable $executable -Arguments @('exec', (Join-Path $extractedPackage 'examples/hello.srp'))
     $legacyRun = Invoke-ScarpProcess -Executable $executable -Arguments @('run', (Join-Path $extractedPackage 'examples/hello.srp'))
     if ($canonicalRun.ExitCode -ne 0 -or $canonicalRun.Stderr.Length -ne 0 -or [System.Convert]::ToBase64String($canonicalRun.Stdout) -cne [System.Convert]::ToBase64String($legacyRun.Stdout)) { throw 'Packaged exec differs from run' }
