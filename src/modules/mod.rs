@@ -558,7 +558,14 @@ pub fn resolve_with_constant_limits(
     graph: ModuleGraph,
     limits: ConstantLimits,
 ) -> Result<ModuleProgram, ModuleDiagnostic> {
-    linker::resolve(graph, limits)
+    resolve_with_compiler_limits(graph, limits, crate::types::TypeLimits::default())
+}
+pub fn resolve_with_compiler_limits(
+    graph: ModuleGraph,
+    constants: ConstantLimits,
+    types: crate::types::TypeLimits,
+) -> Result<ModuleProgram, ModuleDiagnostic> {
+    linker::resolve(graph, constants, types)
 }
 pub fn compile_with_loader(
     entry: &str,

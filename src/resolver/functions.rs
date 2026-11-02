@@ -106,6 +106,7 @@ pub(super) fn resolve_function(
     Ok(ResolvedFunction {
         statements: resolver.statements,
         slots: resolver.slot_types.len(),
+        slot_types: resolver.slot_types.iter().map(|kind| kind.id()).collect(),
         defaults,
         contracts,
         result_slot,

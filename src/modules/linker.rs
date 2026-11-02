@@ -472,6 +472,7 @@ impl Rewriter<'_> {
 pub(super) fn resolve(
     mut graph: ModuleGraph,
     constants: ConstantLimits,
+    types: crate::types::TypeLimits,
 ) -> Result<ModuleProgram, ModuleDiagnostic> {
     let result = (|| -> Result<_, Diagnostic> {
         let mut remaining = graph.limits.max_expansion_bytes;
@@ -511,7 +512,7 @@ pub(super) fn resolve(
             });
         }
         Ok((
-            crate::resolver::resolve(Program { statements })?,
+            crate::resolver::resolve_with_type_limits(Program { statements }, types)?,
             info,
             dependencies,
         ))

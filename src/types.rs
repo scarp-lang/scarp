@@ -69,9 +69,20 @@ impl fmt::Display for PrimitiveType {
 
 // Primitive identities are universal. Composite handles include a private arena
 // identity, so equal local indices from unrelated registries cannot alias.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TypeId(u64);
+impl fmt::Debug for TypeId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("TypeId").field(&self.index()).finish()
+    }
+}
 impl TypeId {
+    pub(crate) fn is_numeric(self) -> bool {
+        matches!(
+            self.primitive(),
+            Some(PrimitiveType::Integer | PrimitiveType::Float)
+        )
+    }
     pub fn index(self) -> usize {
         (self.0 & u64::from(u32::MAX)) as usize
     }
@@ -81,6 +92,37 @@ impl TypeId {
     fn arena(self) -> u32 {
         (self.0 >> 32) as u32
     }
+}
+impl fmt::Display for TypeId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(kind) = self.primitive() {
+            kind.fmt(f)
+        } else {
+            write!(f, "type#{}", self.index())
+        }
+    }
+}
+
+pub(crate) fn require_exact(
+    found: impl Into<TypeId>,
+    expected: impl Into<TypeId>,
+    span: crate::diagnostics::Span,
+) -> Result<(), crate::diagnostics::Diagnostic> {
+    let (found, expected) = (found.into(), expected.into());
+    if found == expected {
+        Ok(())
+    } else {
+        Err(type_mismatch(span, expected, found))
+    }
+}
+pub(crate) fn type_mismatch(
+    span: crate::diagnostics::Span,
+    expected: impl Into<TypeId>,
+    found: impl Into<TypeId>,
+) -> crate::diagnostics::Diagnostic {
+    let (expected, found) = (expected.into(), found.into());
+    crate::diagnostics::Diagnostic::new(crate::diagnostics::DiagnosticKind::TypeMismatch,span,format!("expected {expected}, found {found}"))
+        .with_help("keep primitive types consistent; numeric operands must share a numeric kind, logic requires booleans")
 }
 impl From<PrimitiveType> for TypeId {
     fn from(value: PrimitiveType) -> Self {
@@ -237,9 +279,14 @@ struct Storage {
     entries: Vec<Entry>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TypeRegistry {
     storage: Arc<Storage>,
+}
+impl fmt::Debug for TypeRegistry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_map().entries(self.iter()).finish()
+    }
 }
 impl Default for TypeRegistry {
     fn default() -> Self {

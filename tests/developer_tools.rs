@@ -20,14 +20,14 @@ fn json(program: &modules::ModuleProgram) -> Vec<u8> {
 #[test]
 fn every_diagnostic_code_has_a_unique_stable_lookup_and_explanation() {
     let mut codes = std::collections::HashSet::new();
-    assert_eq!(Kind::ALL.len(), 46);
+    assert_eq!(Kind::ALL.len(), 47);
     for (index, &kind) in Kind::ALL.iter().enumerate() {
         assert_eq!(kind.code(), format!("E{:04}", index + 1));
         assert!(codes.insert(kind.code()));
         assert_eq!(Kind::from_code(kind.code()), Some(kind));
         assert!(!kind.explanation().is_empty());
     }
-    for invalid in ["E0000", "E0047", "E9999", "e0007", "E00007", "7", ""] {
+    for invalid in ["E0000", "E0048", "E9999", "e0007", "E00007", "7", ""] {
         assert_eq!(Kind::from_code(invalid), None);
     }
     const OVERFLOW: &str = Kind::ArithmeticOverflow.code();
