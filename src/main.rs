@@ -21,6 +21,7 @@ Usage:
 
 Commands:
   exec <file.srp>                  Execute a Scarp program
+  verify <file.srp>                Perform static compiler validation
   inspect tokens <file.srp>        Inspect lexer tokens and source locations
   inspect modules [--json] <file.srp>  Inspect statically checked module metadata
   explain E####                   Explain a real diagnostic code
@@ -33,14 +34,23 @@ Options:
 
 Examples:
   scarp exec examples/hello.srp
+  scarp verify examples/hello.srp
   scarp inspect tokens examples/hello.srp
   scarp inspect modules --json examples/module_inspection.srp
   scarp guide exec
 
 The original run, check, tokens and modules commands remain available during
 migration. The old check command evaluates selected paths; it is not static-only
-verification. Compilation to native executables and project scaffolding are
-not supported yet.
+verification. Native executable generation and project scaffolding are not supported yet.
+";
+
+const VERIFY_HELP: &str = "Usage: scarp verify [--] <file.srp>
+
+Perform real lexical, parsing, name, import, constant and type validation
+supported by the current compiler without executing runtime statements.
+A successful verification is silent and does not generate output artifacts.
+Runtime arithmetic, contracts, dynamic paths and budgets are not evaluated.
+There is no --strict or --json mode yet.
 ";
 
 const INSPECT_HELP: &str = "Usage:
@@ -176,6 +186,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             let page = match target.to_str() {
                 Some("exec") => Some(EXEC_HELP),
                 Some("inspect") => Some(INSPECT_HELP),
+                Some("verify") => Some(VERIFY_HELP),
                 Some("explain") => Some(EXPLAIN_HELP),
                 Some("guide") => Some(GUIDE_HELP),
                 Some("version") => Some(VERSION_HELP),
@@ -255,6 +266,9 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                 }
             };
         }
+        [command, flag] if command == "verify" && (flag == "--help" || flag == "-h") => {
+            return write_output(output.write_all(VERIFY_HELP.as_bytes()), errors);
+        }
         [command, flag] if command == "exec" && (flag == "--help" || flag == "-h") => {
             return write_output(output.write_all(EXEC_HELP.as_bytes()), errors);
         }
@@ -314,6 +328,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         [command, flag] if file_command(command) && (flag == "--help" || flag == "-h") => {
             let help = match command.to_str() {
                 Some("run") => RUN_HELP,
+                Some("verify") => VERIFY_HELP,
                 Some("check") => CHECK_HELP,
                 Some("modules") => MODULES_HELP,
                 _ => TOKENS_HELP,
@@ -366,6 +381,10 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                 },
                 errors,
             )
+        } else if command == "verify" {
+            // Compilation resolves syntax, imports, names and types but does
+            // not evaluate ordinary runtime statements or produce artifacts.
+            0
         } else if command == "check" {
             match program.check(options) {
                 Ok(()) => 0,
@@ -429,7 +448,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
 fn file_command(command: &OsStr) -> bool {
     matches!(
         command.to_str(),
-        Some("run" | "tokens" | "check" | "modules")
+        Some("run" | "verify" | "tokens" | "check" | "modules")
     )
 }
 
