@@ -255,6 +255,34 @@ class ReleaseAssets(unittest.TestCase):
         self.assertIn(commit, expected)
         self.assertIn("https://github.com/scarp-lang/scarp-docs", expected)
 
+    def test_alpha4_release_notes_read_exact_source_commit(self):
+        source, _, _ = self.alpha2_source_fixture(version="0.0.5-alpha.4")
+        notes_path = source / "docs/releases/v0.0.5-alpha.4.md"
+        notes_path.parent.mkdir(parents=True, exist_ok=True)
+        notes_path.write_text("# Scarp v0.0.5-alpha.4\n\nApproved project workflow.\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "-C", str(source), "add", "docs/releases/v0.0.5-alpha.4.md"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(source), "-c", "user.name=Release Fixture",
+             "-c", "user.email=fixture@example.invalid", "commit",
+             "--quiet", "-m", "approved alpha4 notes"],
+            check=True,
+        )
+        commit = subprocess.check_output(
+            ["git", "-C", str(source), "rev-parse", "HEAD"], text=True,
+        ).strip()
+        expected = verifier.release_notes_at(source, commit, "0.0.5-alpha.4")
+        self.assertIn("Approved project workflow.", expected)
+        self.assertIn(commit, expected)
+        self.assertIn("https://github.com/scarp-lang/scarp-docs", expected)
+        # Changing the current checkout must never modify approved notes.
+        notes_path.write_text("# malicious newer checkout\n", encoding="utf-8")
+        self.assertEqual(
+            verifier.release_notes_at(source, commit, "0.0.5-alpha.4"), expected
+        )
+
     def test_alpha3_metadata_and_examples_match_the_approved_source(self):
         source, commit, files = self.alpha2_source_fixture(version="0.0.5-alpha.3")
         example = "examples/text_construction.srp"
