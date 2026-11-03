@@ -27,7 +27,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
             "README.md": (f"**{version}**", f"latest published prerelease is\n[{version}]"),
             "docs/README.md": (f"**{version} prerelease**", f"latest published prerelease is\n[{version}]"),
             "docs/compatibility.md": (f"published in {version}", f"latest published prerelease is\n[{version}]"),
-            "docs/reference/cli.md": (f"(v{version})",),
+            "docs/reference/cli.md": (f"v{version}",),
             "docs/development/feature-matrix.md": (f"Cargo declares {version}",),
             "CHANGELOG.md": (f"## {version} — prerelease",),
         }
