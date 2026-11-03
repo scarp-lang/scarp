@@ -65,6 +65,10 @@ fn create_verify_and_launch_use_a_real_compiler_entrypoint() {
     let verify = with_path(&["verify"], &entry);
     assert!(verify.status.success(), "{verify:?}");
     assert!(verify.stdout.is_empty());
+    let project_verify = with_path(&["verify"], &project);
+    assert!(project_verify.status.success(), "{project_verify:?}");
+    assert!(project_verify.stdout.is_empty());
+    assert!(project_verify.stderr.is_empty());
     let run = with_path(&["launch"], &project);
     assert!(run.status.success(), "{run:?}");
     assert_eq!(run.stdout, b"Hello from Scarp!\n");
@@ -72,6 +76,70 @@ fn create_verify_and_launch_use_a_real_compiler_entrypoint() {
     let exec = with_path(&["exec"], &entry);
     assert_eq!(run.stdout, exec.stdout);
     assert_eq!(run.stderr, exec.stderr);
+}
+
+
+#[test]
+fn verify_project_directory_is_static_and_uses_declared_entry() {
+    let workspace = Workspace::new();
+    let project = workspace.child("verified project नमस्ते");
+    assert!(with_path(&["create"], &project).status.success());
+    let entry = project.join("src/other.srp");
+    fs::write(&entry, "print(1 / 0);").unwrap();
+    fs::write(
+        project.join("Scarp.project"),
+        "scarp-project: 1\nname: verified project नमस्ते\nentry: src/other.srp\n",
+    )
+    .unwrap();
+
+    let verified = with_path(&["verify"], &project);
+    assert!(verified.status.success(), "{verified:?}");
+    assert!(verified.stdout.is_empty());
+    assert!(verified.stderr.is_empty());
+
+    // This code is type-correct but fails during execution; verify must not run it.
+    let launched = with_path(&["launch"], &project);
+    assert_eq!(launched.status.code(), Some(1), "{launched:?}");
+    assert!(launched.stdout.is_empty());
+
+    // A declared-entry error must match the existing source-file verifier.
+    fs::write(&entry, "print(unknown_symbol);").unwrap();
+    let canonical = fs::canonicalize(&entry).unwrap();
+    let project_json = with_path(&["verify", "--diagnostic-format=json"], &project);
+    let source_json = with_path(&["verify", "--diagnostic-format=json"], &canonical);
+    assert_eq!(project_json.status.code(), Some(1), "{project_json:?}");
+    assert_eq!(project_json.stdout, source_json.stdout);
+    assert_eq!(project_json.stderr, source_json.stderr);
+    assert!(project_json.stdout.is_empty());
+    assert!(
+        String::from_utf8_lossy(&project_json.stderr).contains("\"schema_version\":1"),
+        "{project_json:?}"
+    );
+}
+
+#[test]
+fn verify_project_directory_rejects_invalid_manifests_with_json_errors() {
+    let workspace = Workspace::new();
+    let project = workspace.child("guarded");
+    assert!(with_path(&["create"], &project).status.success());
+    for manifest in [
+        "scarp-project: 2\nname: guarded\nentry: src/main.srp\n",
+        "scarp-project: 1\nname: guarded\nentry: ../outside.srp\n",
+        "scarp-project: 1\nname: guarded\nentry: src/main.srp\nunknown: value\n",
+    ] {
+        fs::write(project.join("Scarp.project"), manifest).unwrap();
+        let verified = with_path(&["verify", "--diagnostic-format=json"], &project);
+        assert_eq!(verified.status.code(), Some(1), "{verified:?}");
+        assert!(verified.stdout.is_empty());
+        assert!(
+            String::from_utf8_lossy(&verified.stderr).contains("\"schema_version\":1"),
+            "{verified:?}"
+        );
+    }
+    fs::remove_file(project.join("Scarp.project")).unwrap();
+    let missing = with_path(&["verify"], &project);
+    assert_eq!(missing.status.code(), Some(1), "{missing:?}");
+    assert!(missing.stdout.is_empty());
 }
 
 #[test]
@@ -200,6 +268,14 @@ fn explicit_separator_allows_dash_leading_project_directory() {
         .unwrap();
     assert!(launch.status.success(), "{launch:?}");
     assert_eq!(launch.stdout, b"Hello from Scarp!\n");
+    let verified = Command::new(env!("CARGO_BIN_EXE_scarp"))
+        .args(["verify", "--", "-project"])
+        .current_dir(&workspace.0)
+        .output()
+        .unwrap();
+    assert!(verified.status.success(), "{verified:?}");
+    assert!(verified.stdout.is_empty());
+    assert!(verified.stderr.is_empty());
 }
 
 #[cfg(unix)]
@@ -217,4 +293,8 @@ fn symlinked_entry_outside_project_is_rejected() {
     assert_eq!(output.status.code(), Some(1), "{output:?}");
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("outside"));
+    let verified = with_path(&["verify", "--diagnostic-format=json"], &project);
+    assert_eq!(verified.status.code(), Some(1), "{verified:?}");
+    assert!(verified.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&verified.stderr).contains("outside"));
 }
