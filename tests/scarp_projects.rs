@@ -78,7 +78,6 @@ fn create_verify_and_launch_use_a_real_compiler_entrypoint() {
     assert_eq!(run.stderr, exec.stderr);
 }
 
-
 #[test]
 fn verify_project_directory_is_static_and_uses_declared_entry() {
     let workspace = Workspace::new();
