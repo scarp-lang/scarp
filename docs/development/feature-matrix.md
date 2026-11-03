@@ -2,7 +2,8 @@
 
 Audit date: 2026-11-02. This inventory is the source of truth for this development
 cycle; update a row when its tested implementation lands. No roadmap row implies
-a release or an available CLI command. Cargo remains 0.0.5-alpha.1.
+a release or an available CLI command. Cargo declares 0.0.5-alpha.3; the
+published prerelease is v0.0.5-alpha.3. Future feature rows remain proposals.
 
 Initial main: `1d3b69a79bb0f656b4da3517560ce59e1e41f3bc`. Inspected development:
 `05b4c40f63567267f5d9662ba8108d403d682f88` (148 main-only and 31 development-only

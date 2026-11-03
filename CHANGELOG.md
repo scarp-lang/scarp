@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased - compiler development toward 0.0.5-alpha.2
+## Unreleased
+
+- Documentation: reconcile the already-published 0.0.5-alpha.3 release status
+  across current guides and add an offline release-document consistency check.
+  No compiler behavior, existing tag or release asset changes.
+
+## 0.0.5-alpha.3 — prerelease, 2026-11-02
 
 - Add `scarp inspect ast FILE` using the real lexer/parser for an entry-file
   development syntax tree without executing or loading imports. Retain
@@ -25,6 +31,8 @@
   No new compiler artifact backend, project workflow, or release is implied.
 - Add CLI integration coverage for contextual help, versions, backend equivalence,
   JSON stability, invalid arguments, and Unicode/spaced filenames.
+
+## 0.0.5-alpha.2 — prerelease, 2026-11-02
 
 - Add streaming schema-v1 module JSON inspection, preserving ordering, source-local
   byte spans, original signatures and constant references without runtime execution.

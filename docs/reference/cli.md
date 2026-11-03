@@ -1,13 +1,12 @@
 # Command-line reference
 
-## Scarp-first CLI (unreleased mainline development)
+## Scarp-first CLI (v0.0.5-alpha.3)
 
-The core Scarp-first CLI commands were merged into `main` in PR #87,
-and offline `diagnose` followed in PR #88. The AST inspector described
-below is introduced by its own development PR. These commands
-are not part of the previously published 0.0.5-alpha.1 binary. Check the
-installed executable's `scarp version` or `scarp --version`; a release version
-alone does not establish which development branch was built.
+The Scarp-first CLI commands and offline `diagnose` were integrated before
+the published 0.0.5-alpha.3 prerelease; `inspect ast` also ships in alpha.3.
+Alpha.1 and alpha.2 binaries use the older command vocabulary. Check the
+installed executable's `scarp version` or `scarp --version` and the exact tag
+or commit if you built a development checkout.
 
 | Scarp-first command | Actual behavior |
 | --- | --- |
@@ -24,7 +23,7 @@ alone does not establish which development branch was built.
 | `scarp inspect modules [--json] FILE` | Inspect statically checked modules; JSON retains schema version 1 |
 | `scarp explain E####` | Explain an existing compiler diagnostic |
 
-For a compiler built from the corresponding development branch, examples include:
+For the published v0.0.5-alpha.3 compiler, examples include:
 
 ```sh
 scarp guide
@@ -84,20 +83,21 @@ top-level `scarp ast` alias.
 
 ## Historical and existing CLI contracts
 
-Unreleased `scarp modules --json [--] <path>` emits schema-version-1 metadata with
+Since alpha.2, `scarp modules --json [--] <path>` emits schema-version-1 metadata with
 file-local UTF-8 byte spans. `scarp explain E####` prints a code explanation without
 source I/O. See [JSON inspection and explanations](../module-json.md) for schema,
 ordering, flags, writer errors and status rules. Both commands are implemented;
 build/compile/fmt/test/bench/doc/doctor remain unavailable CLI commands.
 
-Unreleased development adds `scarp modules [--] <path>` and per-command help.
+The alpha.2 module-inspection milestone added `scarp modules [--] <path>` and per-command help.
 It loads, links and statically checks files, then reports imports, dependencies
 and typed public/private declarations. It never executes runtime statements,
 defaults or contracts, and rejects runtime-budget flags. Restricted scalar module
 constants evaluate during compilation with separate work limits. Loading limits still
 apply. Failure writes a diagnostic with no partial inventory; successful
 inventory goes to stdout. See [module inspection](../module-inspection.md).
-The package version remains 0.0.5-alpha.1; released alpha.1 has no modules command.
+Released alpha.1 has no modules command; alpha.3 additionally provides
+`scarp inspect modules`.
 
 The 0.0.5-alpha.1 prerelease keeps these commands, options and exit codes. Tile and
 matrix calls work through `run` and `check`; `tokens` only lexes their source.

@@ -6,9 +6,9 @@ Debug layout is intentionally unstable and must not be parsed as a machine
 interface. It does not introduce a top-level `ast` command; JSON diagnostic
 errors keep the existing stable schema while successful AST JSON is unavailable.
 
-## Scarp-first CLI migration (unreleased development branch)
+## Scarp-first CLI migration (published in 0.0.5-alpha.3)
 
-Unreleased development adds `scarp diagnose [--json]`, a read-only
+The alpha.3 prerelease includes `scarp diagnose [--json]`, a read-only
 environment report of this running compiler's package version, host OS and
 architecture, and explicit implemented/unimplemented tool capabilities.
 It does not contact external registries or infer the availability of native
@@ -33,28 +33,29 @@ ecosystems. A separate maintainer-reviewed release plan is required before
 removing them. In particular, historical `check` evaluates selected paths and
 cannot be silently changed to the static-only meaning proposed for `verify`.
 Program-argument forwarding is not implemented by the current interpreter CLI.
-The new paths are not present in published 0.0.5-alpha.1 packages.
+These Scarp-first paths shipped in alpha.3, not in the earlier alpha.1 or
+alpha.2 binaries. Check the actual executable version before choosing a command.
 
-Unreleased [scalar/text intrinsics](scalar-text.md) add Builtin variants and
+The [scalar/text intrinsics](scalar-text.md) add Builtin variants and
 NumericConversion/TextIndex diagnostic variants (E0044/E0045). Exhaustive host
 matches need new arms. Existing names, codes, ValueType and execution layouts stay
 unchanged. Conversion names occupy built-in call position; local funcra declarations
 still take precedence, and ordinary binding names retain their value meaning.
 
-Unreleased typed declarations preserve valid existing source. The public AST gains
+Current typed declarations preserve valid existing source. The public AST gains
 `Statement::Declaration.annotation: Option<TypeAnnotation>` with kind/type-token
 span. Hosts constructing declaration literals must add `annotation: None`; hosts
 destructuring all fields must add the field or `..`. This documented AST schema
 extension does not change compile entry points, ValueType variants or runtime options.
 
-Unreleased [constant expressions](constant-expressions.md) extend module scalar
+[Constant expressions](constant-expressions.md) extend module scalar
 initializers. Ordinary bindings and literal constants remain compatible. Existing
 ModuleLimits and compile signatures are unchanged; ConstantLimits is additive.
 Primary error codes/spans stay intact; type errors can include new related notes.
 
-Unreleased work toward alpha.2 adds the `modules` CLI command and additive
-module inspection APIs while keeping Cargo at 0.0.5-alpha.1. Published alpha.1
-has neither. Existing ModuleInfo/SymbolInfo/SymbolKind fields, Span/Diagnostic
+The alpha.2 prerelease introduced the historical `modules` CLI command and
+additive module inspection APIs. Alpha.1 has neither; alpha.3 also offers
+`scarp inspect modules`. Existing ModuleInfo/SymbolInfo/SymbolKind fields, Span/Diagnostic
 layouts, run/check/tokens behavior, source limits and runtime budgets remain
 unchanged. Invalid import lists now fail before child-loader callbacks, and
 module cycle/typo guidance is more precise. See [inspection](module-inspection.md)
@@ -66,9 +67,11 @@ Use this guide before copying an example into a different Scarp executable or
 updating a Rust embedding host. It compares the published v0.0.1, v0.0.2,
 v0.0.3-beta.1, beta.2, and beta.3 snapshots. Beta.3 uses the syntax described below;
 separate feature branches can differ from both main and downloaded binaries.
-The latest published prerelease is [0.0.5-alpha.1](releases/v0.0.5-alpha.1-validation.md).
+The latest published prerelease is
+[0.0.5-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.3).
 The current source retains its implemented module/language contract.
-[Preparation notes](releases/v0.0.5-alpha.1.md) are the immutable candidate snapshot.
+[Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) remain a historical
+snapshot, not an alpha.3 status report.
 
 | Capability added after beta.3 | alpha.1 | alpha.2 | alpha.3 | alpha.4 | 0.0.5-alpha.1 |
 | --- | --- | --- | --- | --- | --- |
