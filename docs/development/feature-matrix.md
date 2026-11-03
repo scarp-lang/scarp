@@ -2,7 +2,8 @@
 
 Audit date: 2026-11-02. This inventory is the source of truth for this development
 cycle; update a row when its tested implementation lands. No roadmap row implies
-a release or an available CLI command. Cargo remains 0.0.5-alpha.1.
+a release or an available CLI command. Cargo declares 0.0.5-alpha.3; the
+published prerelease is v0.0.5-alpha.3. Future feature rows remain proposals.
 
 Initial main: `1d3b69a79bb0f656b4da3517560ce59e1e41f3bc`. Inspected development:
 `05b4c40f63567267f5d9662ba8108d403d682f88` (148 main-only and 31 development-only
@@ -72,7 +73,7 @@ requires separate architecture and multiple implementation phases.
 | CLI run/check/tokens/modules/explain | Implemented, including module JSON | Additional commands require complete contracts | Metadata/code catalogue | P0 | M | Help/usage/native paths/status/output failures | CLI reference |
 | fmt/test/bench/doc/doctor | Not CLI commands | Complete contracts/tool discovery before advertising | Parser/trivia or runner/host capabilities | P2 | L | Idempotence/discovery/status/side effects | CLI proposals |
 | LSP/IDE/debugger | Missing | JSON consumers, reference index, protocol and stepping | Stable diagnostics/source/reference metadata | P1 | XL | Protocol, edits/cancellation, UTF-16 mapping | IDE design |
-| Package/build tooling | Cargo builds Scarp; source modules only | Scarp package manifest, dependency trust/lockfiles | Module/package identity design | P2 | XL | Reproducibility, traversal, offline cache | Package design |
+| Package/build tooling | Cargo builds Scarp; development main has bounded `Scarp.project` and interpreter-backed `create`/`launch` but no native build or registry | Dependency trust and lockfiles | Module/package identity design | P2 | XL | Reproducibility, traversal, offline cache | Package design |
 | Interoperability/FFI | Rust host APIs only | Safe value/ABI and ownership boundaries | Stable IR/types/capabilities | P3 | XL | Lifetime/ABI/error/host permission tests | FFI design |
 | Concurrency/async | Programs reusable across host threads | Language scheduling, synchronization, cancellation | Effects, values and runtime model | P3 | XL | Races/replay/deadlocks and quotas | Concurrency design |
 | Performance/benchmarks | Runtime/numerics/compiler/module/JSON harnesses | Measured memory statistics and controlled optimization studies | Stable workload/reference recording | P1 | M | Repeated measurements, correctness oracles | Benchmark methodology |

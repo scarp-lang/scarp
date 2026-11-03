@@ -3,12 +3,13 @@
 Development declarations use `bind` and `var`; see the [migration guide](syntax-migration.md). Published tags retain their original syntax.
 
 Choose a guide by the task you want to complete. Current tutorials target the
-**0.0.5-alpha.1 prerelease**, adding [source modules](modules.md)
-to the finite floats, numerical vectors/tiles, typed functions, contracts, loops
-and output streams already implemented. The latest published prerelease is
-[0.0.5-alpha.1](releases/v0.0.5-alpha.1-validation.md), with verified native
-packages and imports. [Preparation notes](releases/v0.0.5-alpha.1.md) preserve the
-original candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)
+**0.0.5-alpha.3 prerelease**, which includes [source modules](modules.md),
+numerical vectors/tiles, typed functions, contracts, loops and the Scarp-first CLI.
+The latest published prerelease is
+[0.0.5-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.3),
+with native archives and checksums for Windows x64, Linux x64 and macOS Apple
+Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
+earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)
 records the verified maintainer transfer to scarp-lang/scarp. Historical release
 notes describe fixed snapshots. Tensors, native
 backends, a package manager and website deployment remain separate.
@@ -16,13 +17,13 @@ backends, a package manager and website deployment remain separate.
 ## Guides and what each adds
 
 The [feature-completeness matrix](development/feature-matrix.md) distinguishes
-implemented features, historical experiments and future dependencies. Unreleased
-declarations also accept explicit primitive annotations; see [variables](variables.md).
+implemented features, historical experiments and future dependencies. Current
+declarations accept explicit primitive annotations; see [variables](variables.md).
 
-The current checkout additionally contains unreleased
-[module inspection](module-inspection.md) and [constant expressions](constant-expressions.md)
-toward alpha.2. Its package version is
-intentionally unchanged; the published alpha.1 snapshot has no `modules` command.
+The published alpha.3 compiler includes
+[module inspection](module-inspection.md) and [constant expressions](constant-expressions.md).
+The older alpha.1 snapshot does not include these capabilities; check the
+[CLI reference](reference/cli.md) for the names supported by each release.
 
 | Document | Use it to |
 | --- | --- |
@@ -47,6 +48,7 @@ intentionally unchanged; the published alpha.1 snapshot has no `modules` command
 | [Iteration](iteration.md) | Choose while/repeat, understand count snapshots, immutable indices, and nested control |
 | [Execution budgets](budgets.md) | Set work/print limits, interpret failures, and embed bounded execution |
 | [Command-line reference](reference/cli.md) | Look up commands, version availability, paths, streams, and exit codes |
+| [Scarp projects](project-workflow.md) | Use `create`/`launch` on post-alpha.3 development main only |
 | [Diagnostic reference](reference/diagnostics.md) | Interpret all error codes and repair common failures |
 | [Values and operators](reference/values.md) | Check precedence, numeric boundaries, assignment rules, and string limits |
 | [Rust embedding](embedding.md) | Select a library stage, capture output, reuse compiled programs, and render errors |

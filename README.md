@@ -2,17 +2,17 @@
 
 **Build Beyond Boundaries.**
 
-Scarp is an experimental programming language implemented in Rust. This checkout
-is currently versioned as **0.0.5-alpha.3** in Cargo metadata, with source
-modules and newer development CLI functionality. It has finite binary64
-values, a lexer, parser, name resolver, interpreter and command-line interface.
-Syntax and library APIs may change.
+Scarp is an experimental programming language implemented in Rust. The current
+checkout builds the **0.0.5-alpha.3** prerelease (published 2 November 2026).
+It provides a lexer, parser, typed resolver, interpreter, source modules, finite
+binary64 numerics and a Scarp-first command-line interface. Syntax and library
+APIs may change; this is not a stable release. Development `main` additionally
+implements `create`/`launch` after alpha.3; these are not published yet.
 
-Unreleased development toward alpha.2 adds
-[static module inspection](docs/module-inspection.md):
-`cargo run -- modules examples/module_inspection.srp` lists imports, dependencies
-and typed public/private declarations without executing the program. The package
-version remains 0.0.5-alpha.1; published alpha.1 binaries lack this new command.
+[Static module inspection](docs/module-inspection.md) lists imports, dependencies
+and typed public/private declarations without executing runtime statements.
+Alpha.2 added the historical `modules` command; alpha.3 also supports
+`scarp inspect modules`. See the CLI reference for version-specific spellings.
 
 The checkout also adds [compile-time scalar constant expressions](docs/constant-expressions.md)
 with checked arithmetic/logic, earlier/imported constant references and separate
@@ -23,7 +23,7 @@ Optional [declaration annotations](docs/variables.md) accept forms such as
 The [feature matrix](docs/development/feature-matrix.md) records current gaps and
 the implementation roadmap; historical native commands remain unavailable on main.
 
-Unreleased [scalar and text built-ins](docs/scalar-text.md) add exact numeric
+[Scalar and text built-ins](docs/scalar-text.md) provide exact numeric
 conversions and budgeted Unicode length, codepoint and search queries.
 
 [Developer inspection](docs/module-json.md) adds `modules --json`, a streaming
@@ -44,16 +44,17 @@ print("Hello from Scarp!");
 Hello from Scarp!
 ```
 
-## Scarp-first CLI (mainline development)
+## Scarp-first CLI (v0.0.5-alpha.3 plus development main)
 
-The Scarp-first mainline uses distinct command vocabulary while
-preserving pre-stable scripts during migration. After building/installing the
+The alpha.3 prerelease includes the Scarp-first command vocabulary; development
+`main` also supports `create` and `launch`. Older commands remain compatible. After building/installing the
 compiler binary, these commands use `scarp` directly (not the Rust build tool):
 
 ```sh
 scarp guide
 scarp version
 scarp diagnose --json
+# The following two commands require post-alpha.3 development main:
 scarp create hello-world
 scarp launch hello-world
 scarp exec examples/hello.srp
@@ -68,10 +69,9 @@ The `inspect ast` route prints the parser's development syntax tree
 without execution, import loading or type checking. Its readable debug layout
 is not a stable machine-readable schema.
 
-The explicit offline [project workflow](docs/project-workflow.md) generates
-a real `Scarp.project` manifest plus runnable entrypoint, and `launch`
-executes only that selected project's declared `.srp` file. No native binary
-or package manager is implied.
+The [project workflow](docs/project-workflow.md) creates a bounded `Scarp.project`
+manifest and a runnable starter, then launches via the real interpreter.
+It does not generate a native binary.
 
 These routes preserve the current compiler's schema-version-1
 `--diagnostic-format=json` errors without executing unsupported features.
@@ -80,9 +80,9 @@ behavior and migration details. The old `run`, `check`, `tokens` and `modules`
 paths remain temporarily compatible; `check` evaluates selected program paths
 and should **not** be described as static-only verification. Static-only `verify` uses compiler parsing and resolution without executing runtime
 statements or contracts; it does not replace the old evaluating `check`.
-`compile`, `create` and `launch` do not exist yet. No native Scarp binary
-backend or project-manifest workflow is implied by the new names. Previously
-published binaries do not contain these new command paths.
+`compile` and native executable generation remain unsupported. `create` and
+`launch` are available in development `main`, but not in published alpha.3
+packages. Alpha.1 and alpha.2 lack the Scarp-first command names.
 
 The [documentation hub](docs/README.md) provides setup, tutorials, command and
 diagnostic references, Rust embedding, testing, troubleshooting, and compatibility
@@ -118,13 +118,13 @@ one-hot targets and explicit loss gradients. See [vectors](docs/vectors.md),
 [error repairs](docs/reference/numerical-errors.md).
 
 The latest published prerelease is
-[0.0.5-alpha.1](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.1),
-published from `afe8b5380c9d6c4774162e51c6c9bc8b90901671` with verified Windows
-x64, Linux x64 and macOS ARM64 packages. Read the
-[publication and verification record](docs/releases/v0.0.5-alpha.1-validation.md)
-for source, CI, checksums and public-download evidence. The
-[release preparation notes](docs/releases/v0.0.5-alpha.1.md) preserve the approved
-source snapshot; see [release engineering](docs/releasing.md) for future releases.
+[0.0.5-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.3),
+published 2 November 2026 from source commit
+`7715c28df09c7703b39e14fddb963275b25df476`. The release provides Windows
+x64, Linux x64 and macOS Apple Silicon archives with SHA-256 checksums.
+[Alpha.1's verification record](docs/releases/v0.0.5-alpha.1-validation.md)
+is preserved as historical evidence for that earlier release, not alpha.3.
+See [release engineering](docs/releasing.md) for current publication gates.
 
 The maintainer transferred this repository to **scarp-lang/scarp**. The
 [migration record](docs/migrations/scarp-lang-Scarp.md) documents identity,
@@ -134,8 +134,9 @@ history, release/download verification and updated clone instructions.
 
 Binary archives and checksums are available through
 [GitHub Releases](https://github.com/scarp-lang/scarp/releases). See the
-[0.0.5-alpha.1 verification record](docs/releases/v0.0.5-alpha.1-validation.md) for platform support, verification, and
-running an extracted package. The [changelog](CHANGELOG.md) records this version.
+[latest alpha.3 release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.3)
+for its supported archives, checksums and source commit. The
+[changelog](CHANGELOG.md) records recent language and tooling changes.
 
 To build from source:
 

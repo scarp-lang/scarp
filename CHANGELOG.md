@@ -1,18 +1,17 @@
 # Changelog
 
-## Unreleased CLI development (after 0.0.5-alpha.3)
+## Unreleased
 
-- Implement Scarp-native `scarp create DIRECTORY` and `scarp launch DIRECTORY`
-  with a real, bounded, strictly validated `Scarp.project` manifest and an
-  interpreter-backed starter program. Refuse existing destinations; resolve
-  entrypoints to contained files; preserve runtime execution budgets and
-  schema-v1 JSON diagnostic errors.
-- Add cross-platform project integration tests covering create → verify →
-  launch, Unicode paths, no-overwrite guarantees, malicious manifest fields,
-  path traversal, symlink escapes, runtime errors and zero-budget execution.
-- No native code generation, registry access, or stable package workflow.
+- Add interpreter-backed `scarp create DIRECTORY` and `scarp launch DIRECTORY`
+  with a bounded, strictly validated `Scarp.project` manifest and starter code.
+- Test create → verify → launch on supported platforms, including Unicode,
+  no-overwrite behavior, malicious manifests, symlink escapes and runtime budgets.
+  No native build, package registry or stable manifest semantics are implied.
+- Documentation: reconcile the already-published 0.0.5-alpha.3 release status
+  across current guides and add an offline release-document consistency check.
+  No compiler behavior, existing tag or release asset changes.
 
-## Unreleased - compiler development toward 0.0.5-alpha.2
+## 0.0.5-alpha.3 — prerelease, 2026-11-02
 
 - Add `scarp inspect ast FILE` using the real lexer/parser for an entry-file
   development syntax tree without executing or loading imports. Retain
@@ -34,9 +33,11 @@
   from current compiler main without changing the JSON output format.
 - Preserve old `run/check/tokens/modules` behavior temporarily while documenting
   a future reviewed migration; `check` is not renamed to static-only `verify`.
-  No new compiler artifact backend, project workflow, or release is implied.
+  No native compiler backend or project workflow is implied by these commands.
 - Add CLI integration coverage for contextual help, versions, backend equivalence,
   JSON stability, invalid arguments, and Unicode/spaced filenames.
+
+## 0.0.5-alpha.2 — prerelease, 2026-11-02
 
 - Add streaming schema-v1 module JSON inspection, preserving ordering, source-local
   byte spans, original signatures and constant references without runtime execution.
@@ -47,7 +48,7 @@
   strict built-in typing, argument locations and deterministic execution budgets.
   Preserve scalar-vs-byte/grapheme distinctions and reject invalid indices/rounding.
 - Add boundary/reference-model/host/CLI tests, exact E0044/E0045 fixtures and two
-  runnable examples; no string-result allocation, external effects or version change.
+  runnable examples; no string-result allocation or ambient external effects.
 
 - Integrate verified module inspection and constant expressions in dependency order.
 - Add optional primitive declaration annotations with exact inferred-type matching,
@@ -62,7 +63,7 @@
   metadata without changing existing ModuleLimits or compile signatures.
 - Reuse the existing expression type checker and checked evaluator; improve operand,
   argument and return-type notes, and add API/CLI/golden/boundary regressions and a
-  runnable three-file constant example. No releases, tags or version changes.
+  runnable three-file constant example.
 
 - Add `scarp modules` for statically checked source inventories without executing
   statements, defaults or contracts. Show import sites, dependencies, visibility
@@ -73,8 +74,8 @@
   namespace scans, locate the first exceeding import and report actual cycle
   edges. Offer bounded deterministic spelling repairs for public names.
 - Add API/CLI/diagnostic/boundary regressions, a runnable example and reviewed
-  inventory, documentation and native inspection smoke checks. Keep the package
-  version, dependencies and all published release/tag/asset contents unchanged.
+  inventory, documentation and native inspection smoke checks. Existing older
+  release tags and asset contents remain immutable.
 
 ## 0.0.5-alpha.1 — prerelease, 2026-11-01
 
