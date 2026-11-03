@@ -2,9 +2,11 @@
 
 Development declarations use `bind` and `var`; see the [migration guide](syntax-migration.md). Published tags retain their original syntax.
 
-Choose a guide by the task you want to complete. Current tutorials target the
-**0.0.5-alpha.3 prerelease**, which includes [source modules](modules.md),
-numerical vectors/tiles, typed functions, contracts, loops and the Scarp-first CLI.
+Choose a guide by the task you want to complete. Current tutorials are
+updated for the **0.0.5-alpha.4 release candidate (unpublished)**, retaining
+[source modules](modules.md), numerical vectors/tiles, typed functions,
+contracts, loops and the Scarp-first CLI. The latest public version remains
+the previously published alpha.3 prerelease.
 The latest published prerelease is
 [0.0.5-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.3),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
@@ -22,8 +24,10 @@ declarations accept explicit primitive annotations; see [variables](variables.md
 
 The published alpha.3 compiler includes
 [module inspection](module-inspection.md) and [constant expressions](constant-expressions.md).
-The older alpha.1 snapshot does not include these capabilities; check the
-[CLI reference](reference/cli.md) for the names supported by each release.
+The older alpha.1 snapshot does not include these capabilities. The alpha.4
+candidate adds project creation, launching and static directory verification;
+see the [project guide](project-workflow.md), [candidate release notes](releases/v0.0.5-alpha.4.md)
+and [CLI reference](reference/cli.md) for version-specific availability.
 
 | Document | Use it to |
 | --- | --- |
