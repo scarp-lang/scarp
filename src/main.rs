@@ -23,7 +23,7 @@ Usage:
 
 Commands:
   exec <file.srp>                  Execute a Scarp program
-  verify <file.srp>                Perform static compiler validation
+  verify <file.srp|directory>      Perform static source or project validation
   inspect tokens <file.srp>        Inspect lexer tokens and source locations
   create <directory>               Create a new runnable Scarp project
   launch <directory>               Execute a Scarp project entrypoint
@@ -54,13 +54,16 @@ migration. The old check command evaluates selected paths; it is not static-only
 verification. Native executable generation and package management are not supported yet.
 ";
 
-const VERIFY_HELP: &str = "Usage: scarp verify [--] <file.srp>
+const VERIFY_HELP: &str =
+    "Usage: scarp verify [--diagnostic-format=json|text] [--] <file.srp|project-directory>
 
-Perform real lexical, parsing, name, import, constant and type validation
-supported by the current compiler without executing runtime statements.
-A successful verification is silent and does not generate output artifacts.
+Statically validate the selected source file or an explicit Scarp project
+directory. Project mode validates Scarp.project and resolves its contained
+entrypoint using the same safety checks as launch.
+The real compiler loads imports, resolves names/types and checks constants
+without executing runtime statements or writing artifacts.
 Runtime arithmetic, contracts, dynamic paths and budgets are not evaluated.
---diagnostic-format=json is supported for compiler errors; --strict is not.
+--diagnostic-format=json is supported for errors; --strict is not.
 
 ";
 
@@ -552,6 +555,25 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         return 2;
     }
     let path = Path::new(filename);
+    // Only static verification accepts an explicit project directory. Reuse
+    // launch's bounded manifest/contained entrypoint checks and the existing
+    // nonexecuting source-graph compiler path below.
+    let project_entry = if command == "verify" && path.is_dir() {
+        match project::entry_file(path) {
+            Ok(entry) => Some(entry),
+            Err(message) => {
+                if json_diagnostics {
+                    let _ = scarp::diagnostics::write_json_message(&message, None, errors);
+                } else {
+                    let _ = writeln!(errors, "error: {message}");
+                }
+                return 1;
+            }
+        }
+    } else {
+        None
+    };
+    let path = project_entry.as_deref().unwrap_or(path);
     if command != "tokens" {
         let program = match modules::compile_file(path, ModuleLimits::default()) {
             Ok(program) => program,

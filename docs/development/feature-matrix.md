@@ -27,10 +27,10 @@ requires separate architecture and multiple implementation phases.
 | Immutable/mutable bindings | Implemented bind/var and optional annotations | Deferred initialization remains intentionally absent | Parser, typed resolver | P0 | S | Inferred/annotated parity, mismatch, shadowing | Variables/tutorial |
 | Initialization analysis | Initializers mandatory; resolve before insertion | Deferred/conditional initialization not designed | CFG/data-flow first | P2 | L | Self-use, branch joins, loops | Initialization contract |
 | Lexical shadowing | Implemented | Rich pattern bindings | Resolver scopes | P2 | M | Shadowing initializer, duplicates, captures | Scope rules |
-| Assignments | =, +=, -=, *=, /= | Additional operators after bitwise design review | Operator/type contract | P2 | M | Type preservation, overflow, atomic output | Operators |
+| Assignments | =, +=, -=, *=, /=, %=, &=, |=, ^=, <<=, >>=, >>>= | General composite-value mutation requires design | Typed resolver and evaluator | P2 | M | Type preservation, overflow, shift bounds, atomic output | Operators |
 | Integer and finite-float math | Checked i64/binary64 and exact explicit conversions | Additional scalar math after domain design | Built-in registry and evaluator | P0 | S | Bounds, signed zero, loss of precision | Numeric reference |
 | Scalar constants | Implemented by #71; annotations checked before evaluation | Approved constant intrinsics only after separate design | Shared expression typing/evaluation | P0 | M | Order/cycles, import visibility, task/node bounds | Constant guide |
-| Bitwise/radix/remainder | Historical PR #19 only | Port reviewed semantics to current AST/codes | Reconcile old branch and diagnostics | P1 | M | All counts, overflow, precedence, parity | New current proposal |
+| Bitwise/radix/remainder | Implemented in main and published alpha.3; tests/bit_operations.rs covers full-width operations | No missing signed-i64 operator in this subset | Current lexer, parser, resolver and evaluator | P0 | M | All shift counts, overflow, precedence, module parity | Values/operators |
 | Strings | UTF-8 literals/equality, shared storage and seven bounded scalar queries | Construction, slicing, normalization with allocation policy | Typed pure built-ins and work charging | P0 | M | Combining marks, emoji, empty input, limits | Text indexing contract |
 | Characters and bytes | Missing | Distinct types, decoding and conversion rules | Type representation and allocation limits | P2 | L | Encoding/invalid sequences, host parity | Type proposal |
 | Tuples/fixed arrays | Missing | Types, literals, destructuring, indexing | Composite type representation | P1 | L | Nested types, length/index/type errors | Grammar/types |
@@ -57,7 +57,7 @@ requires separate architecture and multiple implementation phases.
 | Module initialization | Intentionally absent | Effectful initialization requires separate design | Capability/effect and cycle policy | P3 | XL | Failure/ordering/deduplication | Initialization design |
 | Typed execution plan | Implemented lowered slot/operation plan | Explicit stable IR and CFG views | Resolver plan invariants | P1 | L | IR/source mapping and control edges | IR architecture |
 | Optimizations | Constant modules, slot retirement, terminal self transfer | General folding, DCE and CFG passes | IR/effect/budget-equivalence contract | P1 | L | Differential output/errors/budgets | Optimization semantics |
-| Native backend | Historical PR #20 only | Rebase scalar subset on current functions/modules/IR | Bitwise branch review, current safety budgets | P1 | XL | Differential interpreter/C, all rejected forms | Experimental subset |
+| Native backend | Historical PR #20 only; unavailable on main | Rebase scalar subset on current functions/modules/IR | Current type rules, source graph and safety budgets | P1 | XL | Differential interpreter/C, all rejected forms | Experimental subset |
 | Native build/compile CLI | Historical PR #22 only; unavailable on main | Current backend integration and toolchain boundary | Backend, platform compiler/error handling | P2 | L | Artifact overwrite, subprocess/path/ABI | Build contract |
 | Math/linear algebra library | 35 vector/tile kernels and two exact scalar conversions | Broader scalar math catalogue after domain design | Pure intrinsic dispatch | P0 | M | Numeric domains, finiteness, exact budgets | Built-in reference |
 | General text/algorithms | Unicode length/codepoint/search/prefix/suffix implemented | General collection sorting/search | Allocation/work policy, collection types | P0 | M | Unicode semantics, deterministic search, limits | Standard library |
@@ -70,7 +70,7 @@ requires separate architecture and multiple implementation phases.
 | GPU/backend abstraction | Missing | Explicit devices, transfer and backend contracts | General tensors and stable IR | P3 | XL | CPU differential, deterministic error rules | No GPU-support claim |
 | Scope/frame retirement | Implemented, shared immutable numerical storage | Profiling and measured live-memory reporting | Runtime instrumentation contract | P1 | M | Nested scopes, exits, recursion and aliases | Memory trade-offs |
 | Allocation budgets | Work/output/calls/slots/vector payload bounded | Unified measured statistics and string construction budget | Distinguish cumulative/live/process memory | P1 | L | Exact boundary and no-partial-output tests | Budgets/profiling |
-| CLI run/check/tokens/modules/explain | Implemented, including module JSON | Additional commands require complete contracts | Metadata/code catalogue | P0 | M | Help/usage/native paths/status/output failures | CLI reference |
+| CLI exec/verify/inspect/create/launch | Implemented; development main additionally verifies explicit Scarp.project directories | Additional commands require complete contracts | Source graph, manifest and diagnostics | P0 | M | Help/usage/native paths/status/output failures | CLI reference |
 | fmt/test/bench/doc/doctor | Not CLI commands | Complete contracts/tool discovery before advertising | Parser/trivia or runner/host capabilities | P2 | L | Idempotence/discovery/status/side effects | CLI proposals |
 | LSP/IDE/debugger | Missing | JSON consumers, reference index, protocol and stepping | Stable diagnostics/source/reference metadata | P1 | XL | Protocol, edits/cancellation, UTF-16 mapping | IDE design |
 | Package/build tooling | Cargo builds Scarp; development main has bounded `Scarp.project` and interpreter-backed `create`/`launch` but no native build or registry | Dependency trust and lockfiles | Module/package identity design | P2 | XL | Reproducibility, traversal, offline cache | Package design |
@@ -84,13 +84,15 @@ requires separate architecture and multiple implementation phases.
 ## Historical branch findings
 
 Open PRs #16–#18 contain old loops/floats/vectors now independently implemented on
-main. #19 adds radix/bit/remainder operations that are still missing. #20 adds a
-freestanding C11 scalar backend; #22 wraps it in build/compile commands. They use
+main. #19 contains older radix/bit/remainder code now independently implemented
+and tested on current main (and shipped in alpha.3). #20 adds a freestanding
+C11 scalar backend; #22 wraps it in build/compile commands. They use
 old AST/type/operator/diagnostic conventions, reject newer types/functions/modules,
 and need a deliberate port plus differential tests, not a wholesale merge. #23–#27
 contain historical CLI/bind/output/function stacks already superseded on main.
-Development also has project-manifest/CLI experiments. No historical branches were
-deleted, and no claim of native, project, tensor or GPU support is made.
+Current main has a tested interpreter-backed project workflow and static
+project-directory verification, not a native compiler, registry, general
+tensor runtime or GPU backend. Historical branches were not wholesale merged.
 
 ## This cycle's complete vertical slices
 

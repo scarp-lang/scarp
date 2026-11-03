@@ -57,6 +57,7 @@ scarp diagnose --json
 # The following two commands require post-alpha.3 development main:
 scarp create hello-world
 scarp launch hello-world
+scarp verify hello-world
 scarp exec examples/hello.srp
 scarp verify examples/hello.srp
 scarp verify --diagnostic-format=json examples/hello.srp
@@ -70,8 +71,10 @@ without execution, import loading or type checking. Its readable debug layout
 is not a stable machine-readable schema.
 
 The [project workflow](docs/project-workflow.md) creates a bounded `Scarp.project`
-manifest and a runnable starter, then launches via the real interpreter.
-It does not generate a native binary.
+manifest and a runnable starter, verifies a project directory without running
+statements, then launches via the real interpreter. This is available on
+development `main`, not in published alpha.3 packages, and does not
+generate a native binary.
 
 These routes preserve the current compiler's schema-version-1
 `--diagnostic-format=json` errors without executing unsupported features.

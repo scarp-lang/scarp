@@ -21,6 +21,7 @@ commit as well as the executable's `scarp version` or `scarp --version`.
 | `scarp version` | Print the same actual package version as `--version` |
 | `scarp exec [budgets] FILE` | Execute using the existing interpreter with the same diagnostics and budgets as the historical `run` command |
 | `scarp verify FILE` | Statically resolve source/imports, names and types without executing runtime statements |
+| `scarp verify DIRECTORY` | Development main only: validate `Scarp.project` and check its entrypoint statically |
 | `scarp inspect tokens FILE` | List lexer tokens and real source locations |
 | `scarp inspect ast FILE` | Parse just the entry source and display its actual frontend syntax tree without execution |
 | `scarp inspect modules [--json] FILE` | Inspect statically checked modules; JSON retains schema version 1 |
@@ -32,6 +33,7 @@ For the post-alpha.3 development main compiler, examples include:
 scarp guide
 scarp create hello-world
 scarp launch hello-world
+scarp verify hello-world
 scarp exec examples/hello.srp
 scarp verify examples/hello.srp
 scarp inspect tokens examples/hello.srp
@@ -57,6 +59,11 @@ The legacy `check` command evaluates selected runtime paths silently and is
 
 The static-only `verify` uses the real parser and module resolver, evaluates
 only compile-time scalar module constants, and produces no runtime artifacts.
+On development `main`, an explicit directory argument additionally resolves
+the bounded `Scarp.project` manifest through the same path validation as
+`launch`. A source-file argument retains its existing behavior. Invalid
+manifests return status 1 and honor `--diagnostic-format=json` without
+partial output.
 It does **not** evaluate runtime arithmetic, program statements or contracts.
 There is no `--strict` or success-`--json` support for `verify` yet.
 The new source commands accept `--diagnostic-format=json|text` for compiler

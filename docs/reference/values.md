@@ -16,7 +16,7 @@ compilation; ordinary script bindings retain runtime behavior.
 
 | Kind | Examples | Rules |
 | --- | --- | --- |
-| Integer | `0`, `42`, `-7` | Signed 64-bit values; decimal ASCII digits |
+| Integer | `0`, `42`, `-7`, `0xFF`, `0b1010` | Signed 64-bit values; decimal, hexadecimal and binary literals |
 | Float (alpha) | `0.5`, `1e3`, `-0.0` | Finite binary64; no integer coercion |
 | Vector (since alpha.2) | `[1.0, -0.0]`, `[]` | Immutable finite floats, at most 65,536 elements |
 | Tile (alpha.4 candidate) | `tile([1.0, 2.0], 1, 2)` | Immutable row-major finite floats with explicit shape |
@@ -40,9 +40,13 @@ mandatory; they do not change primitive value or operator rules.
 | --- | --- | --- |
 | Grouping | `(expression)` | Evaluate the grouped expression |
 | Indexing | `expression[index]` | Zero-based checked vector access before unary minus |
-| Unary minus | `-primary` | Integer checked negation or float sign change |
-| Multiplication/division | `*`, `/` | Left-associative same-type numeric arithmetic |
+| Unary minus/bit complement | `-primary`, `~primary` | Numeric negation; `~` is integer-only |
+| Multiplication/division/remainder | `*`, `/`, `%` | Left-associative; `%` requires integers |
 | Addition/subtraction | `+`, `-` | Left-associative same-type numeric arithmetic |
+| Integer shifts | `<<`, `>>`, `>>>` | Left-associative; shift count from 0 to 63 |
+| Bitwise AND | `&` | Signed 64-bit bit patterns |
+| Bitwise XOR | `^` | Signed 64-bit bit patterns |
+| Bitwise OR | `|` | Signed 64-bit bit patterns |
 | Comparison | `==`, `!=`, `<`, `<=`, `>`, `>=` | One comparison; ordering requires matching numeric kinds |
 | Boolean negation | `not` | Negate a boolean, including a complete comparison |
 | Boolean conjunction | `and` | Skip the right boolean if the left is false |
@@ -74,8 +78,9 @@ and evaluates to `3`.
 ## Integer boundaries
 
 The range is `-9223372036854775808` through `9223372036854775807`. Leading zeros
-are accepted as decimal; there are no base prefixes, digit separators, exponents,
-or decimal fractions.
+are accepted as decimal; `0x`/`0X` and `0b`/`0B` introduce hexadecimal
+and binary integers. Digit separators are unsupported. Floats have separate
+decimal and scientific notation rules.
 
 The minimum value needs a special literal rule. Its magnitude
 `9223372036854775808` is accepted only directly after unary minus, ignoring trivia.
@@ -119,6 +124,9 @@ already exist and be declared with `var`.
 | `-=` | Subtract a same-kind numeric value from the previous value |
 | `*=` | Multiply by a same-kind numeric value |
 | `/=` | Divide by a same-kind nonzero numeric value |
+| `%=` | Integer remainder, error on zero divisor |
+| `&=`, `|=`, `^=` | Integer-only bitwise updates |
+| `<<=`, `>>=`, `>>>=` | Integer shifts, count from 0 through 63 |
 
 The right-hand expression sees the previous environment. For example,
 `var x = 2; x += x + 1;` leaves `x` equal to `5`.

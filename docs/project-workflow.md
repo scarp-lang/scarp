@@ -5,6 +5,7 @@ interpreter**, not a native compiler or package manager.
 
 ```sh
 scarp create hello-world
+scarp verify hello-world
 scarp launch hello-world
 scarp guide launch
 ```
@@ -53,12 +54,21 @@ invocations have status 2. `--` allows a dash-leading directory argument.
 ```sh
 scarp launch --max-steps 500000 hello-world
 scarp launch --diagnostic-format=json hello-world
+scarp verify hello-world
+scarp verify --diagnostic-format=json hello-world
 scarp verify hello-world/src/main.srp
 ```
+
+The `verify PROJECT_DIRECTORY` command reuses these manifest/entrypoint checks
+and invokes the real static compiler, including imports and compile-time
+constants, without running statements or writing files. It is silent on success.
+Unlike `launch`, `verify` does not accept execution-budget flags. File-based
+`verify FILE.srp` remains unchanged. Manifest failures return status 1 and
+support `--diagnostic-format=json`.
 
 This format is an intentionally small **development manifest v1**, not a
 general project/package specification. It does not yet support dependencies,
 a package lock, source paths outside the project, a project build, native
-artifacts, multi-entrypoint selection, workspace discovery, or project-level
-verification/inspection aliases. Use `verify` on the declared `.srp` file.
-The manifest format is not a commitment to its final stable spelling.
+artifacts, multi-entrypoint selection, workspace discovery or project-level
+inspection aliases. The manifest's stable spelling is not guaranteed.
+Project-directory verification is not available in published alpha.3 packages.
