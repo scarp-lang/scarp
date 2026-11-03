@@ -2,8 +2,9 @@
 
 Audit date: 2026-11-02. This inventory is the source of truth for this development
 cycle; update a row when its tested implementation lands. No roadmap row implies
-a release or an available CLI command. Cargo declares 0.0.5-alpha.3; the
-published prerelease is v0.0.5-alpha.3. Future feature rows remain proposals.
+a release or an available CLI command. Cargo declares 0.0.5-alpha.4 for an
+**unpublished release candidate**; the latest public prerelease remains
+v0.0.5-alpha.3. Future feature rows remain proposals.
 
 Initial main: `1d3b69a79bb0f656b4da3517560ce59e1e41f3bc`. Inspected development:
 `05b4c40f63567267f5d9662ba8108d403d682f88` (148 main-only and 31 development-only
@@ -13,8 +14,9 @@ later numerical, module and safety work. It must not be merged wholesale.
 PR #70 (inspection) and #71 (constants) were independently checked against their
 seven successful CI jobs, then integrated in that order. Retargeting #71 to main
 preserved its verified source tree. Integration commits are `4ec11a3` and `93ae364`.
-Automatic prerelease publication is disabled for this cycle; normal CI remains on.
-No release request, version change, tag, registry or published-artifact mutation.
+A guarded prerelease publisher exists, but cannot publish without an explicit
+reviewed request pinned to a passing source commit. This candidate changes
+Cargo/lockfile/metadata only; no tag, registry or published-asset mutation.
 
 Priorities: P0 current foundation; P1 next enabling work; P2 later; P3 long term.
 Complexity: S local; M several compiler layers; L substantial design/runtime; XL
