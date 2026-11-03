@@ -1,10 +1,10 @@
 # Feature completeness and development roadmap
 
-Audit date: 2026-11-02. This inventory is the source of truth for this development
-cycle; update a row when its tested implementation lands. No roadmap row implies
-a release or an available CLI command. Cargo declares 0.0.5-alpha.4 for an
-**unpublished release candidate**; the latest public prerelease remains
-v0.0.5-alpha.3. Future feature rows remain proposals.
+Audit date: 2026-11-03. This inventory describes the tested development
+baseline; update a row when an implementation lands. No roadmap row implies
+a release or an available CLI command. Cargo declares 0.0.5-alpha.4,
+which was published as a prerelease on 3 November 2026; the latest published
+prerelease is v0.0.5-alpha.4. Future feature rows remain proposals.
 
 Initial main: `1d3b69a79bb0f656b4da3517560ce59e1e41f3bc`. Inspected development:
 `05b4c40f63567267f5d9662ba8108d403d682f88` (148 main-only and 31 development-only
@@ -14,9 +14,11 @@ later numerical, module and safety work. It must not be merged wholesale.
 PR #70 (inspection) and #71 (constants) were independently checked against their
 seven successful CI jobs, then integrated in that order. Retargeting #71 to main
 preserved its verified source tree. Integration commits are `4ec11a3` and `93ae364`.
-A guarded prerelease publisher exists, but cannot publish without an explicit
-reviewed request pinned to a passing source commit. This candidate changes
-Cargo/lockfile/metadata only; no tag, registry or published-asset mutation.
+The guarded prerelease publisher requires an explicit reviewed request pinned
+to a verified source commit. Alpha.4 was published from source
+`79141329176f5dce51457e90a6652902f6432135` with seven verified assets;
+see the [publication record](../releases/v0.0.5-alpha.4-validation.md).
+The completed request is retired separately; no package registry publication occurred.
 
 Priorities: P0 current foundation; P1 next enabling work; P2 later; P3 long term.
 Complexity: S local; M several compiler layers; L substantial design/runtime; XL
@@ -72,10 +74,10 @@ requires separate architecture and multiple implementation phases.
 | GPU/backend abstraction | Missing | Explicit devices, transfer and backend contracts | General tensors and stable IR | P3 | XL | CPU differential, deterministic error rules | No GPU-support claim |
 | Scope/frame retirement | Implemented, shared immutable numerical storage | Profiling and measured live-memory reporting | Runtime instrumentation contract | P1 | M | Nested scopes, exits, recursion and aliases | Memory trade-offs |
 | Allocation budgets | Work/output/calls/slots/vector payload bounded | Unified measured statistics and string construction budget | Distinguish cumulative/live/process memory | P1 | L | Exact boundary and no-partial-output tests | Budgets/profiling |
-| CLI exec/verify/inspect/create/launch | Implemented; development main additionally verifies explicit Scarp.project directories | Additional commands require complete contracts | Source graph, manifest and diagnostics | P0 | M | Help/usage/native paths/status/output failures | CLI reference |
+| CLI exec/verify/inspect/create/launch | Implemented and published in alpha.4, including static Scarp.project verification | Additional commands require complete contracts | Source graph, manifest and diagnostics | P0 | M | Help/usage/native paths/status/output failures | CLI reference |
 | fmt/test/bench/doc/doctor | Not CLI commands | Complete contracts/tool discovery before advertising | Parser/trivia or runner/host capabilities | P2 | L | Idempotence/discovery/status/side effects | CLI proposals |
 | LSP/IDE/debugger | Missing | JSON consumers, reference index, protocol and stepping | Stable diagnostics/source/reference metadata | P1 | XL | Protocol, edits/cancellation, UTF-16 mapping | IDE design |
-| Package/build tooling | Cargo builds Scarp; development main has bounded `Scarp.project` and interpreter-backed `create`/`launch` but no native build or registry | Dependency trust and lockfiles | Module/package identity design | P2 | XL | Reproducibility, traversal, offline cache | Package design |
+| Package/build tooling | Cargo builds Scarp; published alpha.4 has bounded `Scarp.project` and interpreter-backed `create`/`launch` but no native build or registry | Dependency trust and lockfiles | Module/package identity design | P2 | XL | Reproducibility, traversal, offline cache | Package design |
 | Interoperability/FFI | Rust host APIs only | Safe value/ABI and ownership boundaries | Stable IR/types/capabilities | P3 | XL | Lifetime/ABI/error/host permission tests | FFI design |
 | Concurrency/async | Programs reusable across host threads | Language scheduling, synchronization, cancellation | Effects, values and runtime model | P3 | XL | Races/replay/deadlocks and quotas | Concurrency design |
 | Performance/benchmarks | Runtime/numerics/compiler/module/JSON harnesses | Measured memory statistics and controlled optimization studies | Stable workload/reference recording | P1 | M | Repeated measurements, correctness oracles | Benchmark methodology |

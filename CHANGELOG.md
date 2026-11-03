@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-No additional changes beyond the alpha.4 release candidate are recorded yet.
+No language or runtime changes beyond the published alpha.4 prerelease are recorded yet.
 
-## 0.0.5-alpha.4 — prerelease candidate (unpublished)
+## 0.0.5-alpha.4 — prerelease, 2026-11-03
 
 - Extend static-only `scarp verify` to accept an explicit project directory,
   reusing the bounded `Scarp.project` manifest validation from `launch`
@@ -20,6 +20,11 @@ No additional changes beyond the alpha.4 release candidate are recorded yet.
 - Documentation: reconcile the already-published 0.0.5-alpha.3 release status
   across current guides and add an offline release-document consistency check.
   No compiler behavior, existing tag or release asset changes.
+- Published as a prerelease from exact source
+  `79141329176f5dce51457e90a6652902f6432135`, with Windows x64,
+  Linux x64 and Apple Silicon macOS archives, three sidecar hashes and a
+  combined `SHA256SUMS`. All seven public downloads passed verification.
+  See the [alpha.4 publication record](docs/releases/v0.0.5-alpha.4-validation.md).
 
 ## 0.0.5-alpha.3 — prerelease, 2026-11-02
 

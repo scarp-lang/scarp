@@ -9,21 +9,22 @@ publication; changing a package version alone does not authorize a release.
 ## Build inputs and packages
 
 The package version comes from `Cargo.toml`; use a three-part version. The
-latest published prerelease is `0.0.5-alpha.3`, from source commit
-`7715c28df09c7703b39e14fddb963275b25df476`. Its completed publication
-request has been retired. The
-[alpha.3 release page](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.3)
-identifies the public packages. The next candidate, **0.0.5-alpha.4**, is
-being prepared without a release request or public tag. A Cargo version
-change is not publication evidence.
+latest published prerelease is `0.0.5-alpha.4`, from source commit
+`79141329176f5dce51457e90a6652902f6432135`. Its completed publication
+request is retired in a separate follow-up maintenance PR. The
+[alpha.4 release page](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.4)
+identifies the seven public assets, and the
+[publication record](releases/v0.0.5-alpha.4-validation.md) identifies the
+verified source, package and publication workflows. A Cargo version change
+alone is never publication evidence.
 Earlier published tags/assets must remain unchanged. For a future
 release, choose an unused version, update Cargo/lockfile/docs consistently, and
 use its exact tag and archive names throughout the process. An unpublished
 development identifier is not evidence that a public release exists.
 `v0.0.0.1` is not a three-part version.
 
-Alpha.1, alpha.2 and alpha.3 are published; their fulfilled requests were
-retired. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve
+Alpha.1, alpha.2, alpha.3 and alpha.4 are published; their fulfilled
+requests are retired. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve
 the original candidate contract. Every new release needs fresh exact-version
 and full source-commit approval after all gates. The verifier requires nested module libraries/guides
 as well as inherited alpha.4 contents. The [migration record](migrations/scarp-lang-Scarp.md)
