@@ -1,0 +1,164 @@
+//! Minimal, offline, explicit Scarp project manifest and scaffolding.
+use std::{
+    fs::{self, File, OpenOptions},
+    io::{Read, Write},
+    path::{Path, PathBuf},
+};
+
+pub const MANIFEST: &str = "Scarp.project";
+const MAX_MANIFEST_BYTES: u64 = 4096;
+const STARTER: &[u8] = b"print(\"Hello from Scarp!\");\n";
+
+fn valid_name(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 96
+        && value.trim() == value
+        && !value
+            .chars()
+            .any(|ch| ch.is_control() || matches!(ch, ':' | '/' | '\\'))
+}
+
+fn valid_entry(value: &str) -> bool {
+    value.len() <= 512
+        && value.ends_with(".srp")
+        && !value
+            .chars()
+            .any(|ch| ch.is_control() || matches!(ch, '\\' | ':'))
+        && value
+            .split('/')
+            .all(|part| !part.is_empty() && part != "." && part != "..")
+        && !Path::new(value).is_absolute()
+}
+
+/// Create only a previously nonexistent directory; never adopt/overwrite
+/// an existing directory, even an empty one.
+pub fn create(directory: &Path) -> Result<(), String> {
+    let name = directory
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or("project directory must have a UTF-8 name")?;
+    if !valid_name(name) {
+        return Err(
+            "project name must be 1..96 UTF-8 bytes without control characters or path separators"
+                .into(),
+        );
+    }
+
+    fs::create_dir(directory).map_err(|error| {
+        format!(
+            "could not create project directory '{}': {error}",
+            directory.display()
+        )
+    })?;
+    let src = directory.join("src");
+    let entry = src.join("main.srp");
+    let manifest = directory.join(MANIFEST);
+    let mut created_src = false;
+    let mut created_entry = false;
+    let mut created_manifest = false;
+
+    let result = (|| -> Result<(), String> {
+        fs::create_dir(&src)
+            .map_err(|error| format!("could not create source directory: {error}"))?;
+        created_src = true;
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&entry)
+            .map_err(|error| format!("could not create Scarp source: {error}"))?;
+        created_entry = true;
+        file.write_all(STARTER)
+            .map_err(|error| format!("could not write Scarp source: {error}"))?;
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&manifest)
+            .map_err(|error| format!("could not create project manifest: {error}"))?;
+        created_manifest = true;
+        file.write_all(format!("scarp-project: 1\nname: {name}\nentry: src/main.srp\n").as_bytes())
+            .map_err(|error| format!("could not write project manifest: {error}"))?;
+        Ok(())
+    })();
+
+    if result.is_err() {
+        // Remove only files we created. rmdir is nonrecursive, so concurrent
+        // foreign content is never recursively deleted during cleanup.
+        if created_manifest {
+            let _ = fs::remove_file(&manifest);
+        }
+        if created_entry {
+            let _ = fs::remove_file(&entry);
+        }
+        if created_src {
+            let _ = fs::remove_dir(&src);
+        }
+        let _ = fs::remove_dir(directory);
+    }
+    result
+}
+
+/// Resolve a user-selected project root to one existing, contained .srp file.
+/// No ancestor search, symlink escape, source execution, or registry access.
+pub fn entry_file(directory: &Path) -> Result<PathBuf, String> {
+    let root = fs::canonicalize(directory)
+        .map_err(|error| format!("could not open project '{}': {error}", directory.display()))?;
+    if !root.is_dir() {
+        return Err("project path must be a directory".into());
+    }
+    let manifest_path = root.join(MANIFEST);
+    let link_meta = fs::symlink_metadata(&manifest_path)
+        .map_err(|error| format!("could not open {MANIFEST}: {error}"))?;
+    if link_meta.file_type().is_symlink() || !link_meta.file_type().is_file() {
+        return Err("project manifest must be an ordinary file, not a symlink".into());
+    }
+    let file = File::open(&manifest_path)
+        .map_err(|error| format!("could not read {MANIFEST}: {error}"))?;
+    if file
+        .metadata()
+        .map_err(|error| format!("could not stat {MANIFEST}: {error}"))?
+        .len()
+        > MAX_MANIFEST_BYTES
+    {
+        return Err("project manifest exceeds 4096 bytes".into());
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_MANIFEST_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("could not read {MANIFEST}: {error}"))?;
+    if bytes.len() as u64 > MAX_MANIFEST_BYTES {
+        return Err("project manifest exceeds 4096 bytes".into());
+    }
+    let content = std::str::from_utf8(&bytes).map_err(|_| "project manifest must be UTF-8")?;
+    let mut lines = content.lines();
+    if lines.next() != Some("scarp-project: 1") {
+        return Err("expected 'scarp-project: 1' as the first manifest line".into());
+    }
+    let name = lines
+        .next()
+        .and_then(|line| line.strip_prefix("name: "))
+        .ok_or("expected 'name: NAME' as the second manifest line")?;
+    if !valid_name(name) {
+        return Err("invalid project name in manifest".into());
+    }
+    let entry = lines
+        .next()
+        .and_then(|line| line.strip_prefix("entry: "))
+        .ok_or("expected 'entry: SOURCE.srp' as the third manifest line")?;
+    if lines.next().is_some() {
+        return Err("unknown or duplicate project manifest fields".into());
+    }
+    if !valid_entry(entry) {
+        return Err("entry must be a contained, relative .srp path without traversal".into());
+    }
+    let target = fs::canonicalize(root.join(entry))
+        .map_err(|error| format!("could not open project entry '{entry}': {error}"))?;
+    if !target.starts_with(&root) {
+        return Err("project entry resolves outside the project directory".into());
+    }
+    if !target.is_file() {
+        return Err("project entry must be an existing .srp file".into());
+    }
+    Ok(target)
+}

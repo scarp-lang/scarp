@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add interpreter-backed `scarp create DIRECTORY` and `scarp launch DIRECTORY`
+  with a bounded, strictly validated `Scarp.project` manifest and starter code.
+- Test create → verify → launch on supported platforms, including Unicode,
+  no-overwrite behavior, malicious manifests, symlink escapes and runtime budgets.
+  No native build, package registry or stable manifest semantics are implied.
 - Documentation: reconcile the already-published 0.0.5-alpha.3 release status
   across current guides and add an offline release-document consistency check.
   No compiler behavior, existing tag or release asset changes.

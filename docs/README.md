@@ -48,6 +48,7 @@ The older alpha.1 snapshot does not include these capabilities; check the
 | [Iteration](iteration.md) | Choose while/repeat, understand count snapshots, immutable indices, and nested control |
 | [Execution budgets](budgets.md) | Set work/print limits, interpret failures, and embed bounded execution |
 | [Command-line reference](reference/cli.md) | Look up commands, version availability, paths, streams, and exit codes |
+| [Scarp projects](project-workflow.md) | Use `create`/`launch` on post-alpha.3 development main only |
 | [Diagnostic reference](reference/diagnostics.md) | Interpret all error codes and repair common failures |
 | [Values and operators](reference/values.md) | Check precedence, numeric boundaries, assignment rules, and string limits |
 | [Rust embedding](embedding.md) | Select a library stage, capture output, reuse compiled programs, and render errors |

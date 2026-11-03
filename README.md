@@ -6,7 +6,8 @@ Scarp is an experimental programming language implemented in Rust. The current
 checkout builds the **0.0.5-alpha.3** prerelease (published 2 November 2026).
 It provides a lexer, parser, typed resolver, interpreter, source modules, finite
 binary64 numerics and a Scarp-first command-line interface. Syntax and library
-APIs may change; this is not a stable release.
+APIs may change; this is not a stable release. Development `main` additionally
+implements `create`/`launch` after alpha.3; these are not published yet.
 
 [Static module inspection](docs/module-inspection.md) lists imports, dependencies
 and typed public/private declarations without executing runtime statements.
@@ -43,16 +44,19 @@ print("Hello from Scarp!");
 Hello from Scarp!
 ```
 
-## Scarp-first CLI (v0.0.5-alpha.3)
+## Scarp-first CLI (v0.0.5-alpha.3 plus development main)
 
-The alpha.3 prerelease includes the Scarp-first command vocabulary while
-preserving older commands during migration. After building/installing the
+The alpha.3 prerelease includes the Scarp-first command vocabulary; development
+`main` also supports `create` and `launch`. Older commands remain compatible. After building/installing the
 compiler binary, these commands use `scarp` directly (not the Rust build tool):
 
 ```sh
 scarp guide
 scarp version
 scarp diagnose --json
+# The following two commands require post-alpha.3 development main:
+scarp create hello-world
+scarp launch hello-world
 scarp exec examples/hello.srp
 scarp verify examples/hello.srp
 scarp verify --diagnostic-format=json examples/hello.srp
@@ -65,6 +69,10 @@ The `inspect ast` route prints the parser's development syntax tree
 without execution, import loading or type checking. Its readable debug layout
 is not a stable machine-readable schema.
 
+The [project workflow](docs/project-workflow.md) creates a bounded `Scarp.project`
+manifest and a runnable starter, then launches via the real interpreter.
+It does not generate a native binary.
+
 These routes preserve the current compiler's schema-version-1
 `--diagnostic-format=json` errors without executing unsupported features.
 See the [CLI reference](docs/reference/cli.md) for supported options, exact
@@ -72,9 +80,9 @@ behavior and migration details. The old `run`, `check`, `tokens` and `modules`
 paths remain temporarily compatible; `check` evaluates selected program paths
 and should **not** be described as static-only verification. Static-only `verify` uses compiler parsing and resolution without executing runtime
 statements or contracts; it does not replace the old evaluating `check`.
-`compile`, `create` and `launch` are not implemented by the alpha.3 CLI.
-No native executable backend or project workflow is implied by `exec`/`verify`.
-Older alpha.1 and alpha.2 binaries do not contain Scarp-first command paths.
+`compile` and native executable generation remain unsupported. `create` and
+`launch` are available in development `main`, but not in published alpha.3
+packages. Alpha.1 and alpha.2 lack the Scarp-first command names.
 
 The [documentation hub](docs/README.md) provides setup, tutorials, command and
 diagnostic references, Rust embedding, testing, troubleshooting, and compatibility

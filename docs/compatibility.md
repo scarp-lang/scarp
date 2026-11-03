@@ -1,5 +1,11 @@
 # Version and API compatibility
 
+Development main (after alpha.3) implements `scarp create DIRECTORY` and
+`scarp launch DIRECTORY` using a bounded `Scarp.project` manifest, with
+interpreter limits and structured errors. These commands are not in published
+alpha.3 packages and do not provide native compilation or a registry; see
+[Scarp projects](project-workflow.md).
+
 The new `scarp inspect ast FILE` is a parser-only frontend development
 inspection, distinct from `verify` or `inspect modules`. Its printed Rust
 Debug layout is intentionally unstable and must not be parsed as a machine
@@ -18,7 +24,8 @@ The new preferred command paths are `scarp exec FILE`, `scarp verify FILE`, `sca
 tokens FILE`, `scarp inspect modules [--json] FILE`, `scarp guide` and
 `scarp version`. The existing `scarp explain E####` is unchanged. These
 paths use existing internal backends, preserve real diagnostics and status
-behavior, and do not introduce project generation or code artifact compilation.
+behavior, and do not introduce native code artifact compilation.
+The independent development project workflow is described above.
 `verify` statically resolves syntax, imports, symbols and types without running
 ordinary program statements. It does not check runtime-only arithmetic or
 contracts; `--strict` and success-`--json` are not yet available.
