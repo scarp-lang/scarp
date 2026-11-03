@@ -3,12 +3,11 @@
 Development declarations use `bind` and `var`; see the [migration guide](syntax-migration.md). Published tags retain their original syntax.
 
 Choose a guide by the task you want to complete. Current tutorials are
-updated for the **0.0.5-alpha.4 release candidate (unpublished)**, retaining
+updated for the **0.0.5-alpha.4 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
-contracts, loops and the Scarp-first CLI. The latest public version remains
-the previously published alpha.3 prerelease.
+contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.5-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.3),
+[0.0.5-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.4),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)
@@ -22,12 +21,13 @@ The [feature-completeness matrix](development/feature-matrix.md) distinguishes
 implemented features, historical experiments and future dependencies. Current
 declarations accept explicit primitive annotations; see [variables](variables.md).
 
-The published alpha.3 compiler includes
+The published alpha.3 compiler introduced
 [module inspection](module-inspection.md) and [constant expressions](constant-expressions.md).
-The older alpha.1 snapshot does not include these capabilities. The alpha.4
-candidate adds project creation, launching and static directory verification;
-see the [project guide](project-workflow.md), [candidate release notes](releases/v0.0.5-alpha.4.md)
-and [CLI reference](reference/cli.md) for version-specific availability.
+The older alpha.1 snapshot lacks those capabilities. Published alpha.4 adds
+project creation, launching and static directory verification; see the
+[project guide](project-workflow.md), [release notes](releases/v0.0.5-alpha.4.md),
+[verification record](releases/v0.0.5-alpha.4-validation.md) and
+[CLI reference](reference/cli.md) for version-specific availability.
 
 | Document | Use it to |
 | --- | --- |
@@ -52,7 +52,7 @@ and [CLI reference](reference/cli.md) for version-specific availability.
 | [Iteration](iteration.md) | Choose while/repeat, understand count snapshots, immutable indices, and nested control |
 | [Execution budgets](budgets.md) | Set work/print limits, interpret failures, and embed bounded execution |
 | [Command-line reference](reference/cli.md) | Look up commands, version availability, paths, streams, and exit codes |
-| [Scarp projects](project-workflow.md) | Use `create`/`launch` on post-alpha.3 development main only |
+| [Scarp projects](project-workflow.md) | Use `create`/`launch`/`verify DIRECTORY` from published alpha.4 onward |
 | [Diagnostic reference](reference/diagnostics.md) | Interpret all error codes and repair common failures |
 | [Values and operators](reference/values.md) | Check precedence, numeric boundaries, assignment rules, and string limits |
 | [Rust embedding](embedding.md) | Select a library stage, capture output, reuse compiled programs, and render errors |
