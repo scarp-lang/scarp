@@ -3,8 +3,8 @@
 **Build Beyond Boundaries.**
 
 Scarp is an experimental programming language implemented in Rust. This checkout
-implements the **0.0.5-alpha.1 source-modules prerelease**, extending the
-0.0.4-alpha.4 numerical/runtime milestone. It has finite binary64
+is currently versioned as **0.0.5-alpha.3** in Cargo metadata, with source
+modules and newer development CLI functionality. It has finite binary64
 values, a lexer, parser, name resolver, interpreter and command-line interface.
 Syntax and library APIs may change.
 
@@ -44,9 +44,9 @@ print("Hello from Scarp!");
 Hello from Scarp!
 ```
 
-## Scarp-first CLI (development branch)
+## Scarp-first CLI (mainline development)
 
-This development branch introduces a distinct public command vocabulary while
+The Scarp-first mainline uses distinct command vocabulary while
 preserving pre-stable scripts during migration. After building/installing the
 compiler binary, these commands use `scarp` directly (not the Rust build tool):
 
@@ -54,6 +54,8 @@ compiler binary, these commands use `scarp` directly (not the Rust build tool):
 scarp guide
 scarp version
 scarp diagnose --json
+scarp create hello-world
+scarp launch hello-world
 scarp exec examples/hello.srp
 scarp verify examples/hello.srp
 scarp verify --diagnostic-format=json examples/hello.srp
@@ -65,6 +67,11 @@ scarp inspect modules --json examples/module_inspection.srp
 The `inspect ast` route prints the parser's development syntax tree
 without execution, import loading or type checking. Its readable debug layout
 is not a stable machine-readable schema.
+
+The explicit offline [project workflow](docs/project-workflow.md) generates
+a real `Scarp.project` manifest plus runnable entrypoint, and `launch`
+executes only that selected project's declared `.srp` file. No native binary
+or package manager is implied.
 
 These routes preserve the current compiler's schema-version-1
 `--diagnostic-format=json` errors without executing unsupported features.

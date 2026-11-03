@@ -1,5 +1,13 @@
 # Version and API compatibility
 
+The development project workflow adds `scarp create DIRECTORY` and
+`scarp launch DIRECTORY` using an explicit, versioned `Scarp.project`
+manifest. `launch` forwards all interpreter limits and JSON diagnostics to
+the real execution backend; no native compilation or registry semantics are
+provided. `create` never overwrites an existing directory.
+See [project workflow](project-workflow.md). The manifest v1 schema is
+experimental and not yet a stable cross-version interface.
+
 The new `scarp inspect ast FILE` is a parser-only frontend development
 inspection, distinct from `verify` or `inspect modules`. Its printed Rust
 Debug layout is intentionally unstable and must not be parsed as a machine
@@ -18,7 +26,9 @@ The new preferred command paths are `scarp exec FILE`, `scarp verify FILE`, `sca
 tokens FILE`, `scarp inspect modules [--json] FILE`, `scarp guide` and
 `scarp version`. The existing `scarp explain E####` is unchanged. These
 paths use existing internal backends, preserve real diagnostics and status
-behavior, and do not introduce project generation or code artifact compilation.
+behavior, and do not introduce **native code artifact compilation**.
+Project generation/execution is now implemented separately with an explicit
+manifest and ordinary Scarp interpreter.
 `verify` statically resolves syntax, imports, symbols and types without running
 ordinary program statements. It does not check runtime-only arithmetic or
 contracts; `--strict` and success-`--json` are not yet available.

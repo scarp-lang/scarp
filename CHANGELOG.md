@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased CLI development (after 0.0.5-alpha.3)
+
+- Implement Scarp-native `scarp create DIRECTORY` and `scarp launch DIRECTORY`
+  with a real, bounded, strictly validated `Scarp.project` manifest and an
+  interpreter-backed starter program. Refuse existing destinations; resolve
+  entrypoints to contained files; preserve runtime execution budgets and
+  schema-v1 JSON diagnostic errors.
+- Add cross-platform project integration tests covering create → verify →
+  launch, Unicode paths, no-overwrite guarantees, malicious manifest fields,
+  path traversal, symlink escapes, runtime errors and zero-budget execution.
+- No native code generation, registry access, or stable package workflow.
+
 ## Unreleased - compiler development toward 0.0.5-alpha.2
 
 - Add `scarp inspect ast FILE` using the real lexer/parser for an entry-file
