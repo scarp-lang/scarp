@@ -1,10 +1,14 @@
 # Version and API compatibility
 
-Development main (after alpha.3) implements `scarp create DIRECTORY` and
-`scarp launch DIRECTORY` using a bounded `Scarp.project` manifest, with
-interpreter limits and structured errors. These commands are not in published
-alpha.3 packages and do not provide native compilation or a registry; see
-[Scarp projects](project-workflow.md).
+**Current source:** `0.0.5-alpha.4` is an unpublished prerelease candidate.
+The latest published prerelease is
+[0.0.5-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.3).
+
+The alpha.4 candidate implements `scarp create DIRECTORY`,
+`scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a
+bounded `Scarp.project` manifest and the real compiler/interpreter. These
+commands are not in published alpha.3 packages and do not provide native
+compilation or a registry; see [Scarp projects](project-workflow.md).
 
 The new `scarp inspect ast FILE` is a parser-only frontend development
 inspection, distinct from `verify` or `inspect modules`. Its printed Rust
@@ -74,9 +78,8 @@ Use this guide before copying an example into a different Scarp executable or
 updating a Rust embedding host. It compares the published v0.0.1, v0.0.2,
 v0.0.3-beta.1, beta.2, and beta.3 snapshots. Beta.3 uses the syntax described below;
 separate feature branches can differ from both main and downloaded binaries.
-The latest published prerelease is
-[0.0.5-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.3).
-The current source retains its implemented module/language contract.
+The latest published prerelease remains alpha.3. The alpha.4 candidate
+retains its implemented module/language contract while extending projects.
 [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) remain a historical
 snapshot, not an alpha.3 status report.
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+No additional changes beyond the alpha.4 release candidate are recorded yet.
+
+## 0.0.5-alpha.4 — prerelease candidate (unpublished)
+
 - Extend static-only `scarp verify` to accept an explicit project directory,
   reusing the bounded `Scarp.project` manifest validation from `launch`
   without executing runtime statements or changing file-level verification.

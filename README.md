@@ -2,12 +2,13 @@
 
 **Build Beyond Boundaries.**
 
-Scarp is an experimental programming language implemented in Rust. The current
-checkout builds the **0.0.5-alpha.3** prerelease (published 2 November 2026).
-It provides a lexer, parser, typed resolver, interpreter, source modules, finite
-binary64 numerics and a Scarp-first command-line interface. Syntax and library
-APIs may change; this is not a stable release. Development `main` additionally
-implements `create`/`launch` after alpha.3; these are not published yet.
+Scarp is an experimental programming language implemented in Rust. This
+checkout stages **0.0.5-alpha.4** as a prerelease candidate, **not yet
+published**. The latest public prerelease remains 0.0.5-alpha.3 (published
+2 November 2026). The compiler provides a lexer, parser, typed resolver,
+interpreter, source modules, finite binary64 numerics and a Scarp-first CLI.
+This candidate adds a bounded project workflow with `create`, `launch` and
+project-directory `verify`. Syntax and APIs are not stable.
 
 [Static module inspection](docs/module-inspection.md) lists imports, dependencies
 and typed public/private declarations without executing runtime statements.
@@ -44,17 +45,19 @@ print("Hello from Scarp!");
 Hello from Scarp!
 ```
 
-## Scarp-first CLI (v0.0.5-alpha.3 plus development main)
+## Scarp-first CLI (v0.0.5-alpha.4 candidate)
 
-The alpha.3 prerelease includes the Scarp-first command vocabulary; development
-`main` also supports `create` and `launch`. Older commands remain compatible. After building/installing the
-compiler binary, these commands use `scarp` directly (not the Rust build tool):
+The published alpha.3 compiler provides `exec`, `verify FILE`, `inspect`,
+`guide`, and `diagnose`. The unpublished alpha.4 candidate additionally
+provides `create`, `launch` and `verify DIRECTORY`. Older commands remain
+temporarily compatible. After building the intended source, use `scarp`
+directly (not the Rust build tool):
 
 ```sh
 scarp guide
 scarp version
 scarp diagnose --json
-# The following two commands require post-alpha.3 development main:
+# Project commands require development main / the alpha.4 candidate:
 scarp create hello-world
 scarp launch hello-world
 scarp verify hello-world
@@ -72,9 +75,8 @@ is not a stable machine-readable schema.
 
 The [project workflow](docs/project-workflow.md) creates a bounded `Scarp.project`
 manifest and a runnable starter, verifies a project directory without running
-statements, then launches via the real interpreter. This is available on
-development `main`, not in published alpha.3 packages, and does not
-generate a native binary.
+statements, then launches via the real interpreter. This is available in the alpha.4 candidate, not in the published alpha.3
+packages, and does not generate a native executable.
 
 These routes preserve the current compiler's schema-version-1
 `--diagnostic-format=json` errors without executing unsupported features.
@@ -84,8 +86,8 @@ paths remain temporarily compatible; `check` evaluates selected program paths
 and should **not** be described as static-only verification. Static-only `verify` uses compiler parsing and resolution without executing runtime
 statements or contracts; it does not replace the old evaluating `check`.
 `compile` and native executable generation remain unsupported. `create` and
-`launch` are available in development `main`, but not in published alpha.3
-packages. Alpha.1 and alpha.2 lack the Scarp-first command names.
+`launch` are available in the alpha.4 candidate, but not in published
+alpha.3 packages. Alpha.1 and alpha.2 lack the Scarp-first command names.
 
 The [documentation hub](docs/README.md) provides setup, tutorials, command and
 diagnostic references, Rust embedding, testing, troubleshooting, and compatibility
@@ -127,7 +129,9 @@ published 2 November 2026 from source commit
 x64, Linux x64 and macOS Apple Silicon archives with SHA-256 checksums.
 [Alpha.1's verification record](docs/releases/v0.0.5-alpha.1-validation.md)
 is preserved as historical evidence for that earlier release, not alpha.3.
-See [release engineering](docs/releasing.md) for current publication gates.
+See the [alpha.4 candidate notes](docs/releases/v0.0.5-alpha.4.md),
+[release checklist](docs/releases/v0.0.5-alpha.4-preparation.md), and
+[release engineering](docs/releasing.md) for current publication gates.
 
 The maintainer transferred this repository to **scarp-lang/scarp**. The
 [migration record](docs/migrations/scarp-lang-Scarp.md) documents identity,

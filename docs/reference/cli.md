@@ -1,33 +1,33 @@
 # Command-line reference
 
-## Scarp-first CLI (v0.0.5-alpha.3 plus development main)
+## Scarp-first CLI (v0.0.5-alpha.4 candidate; alpha.3 published)
 
-The Scarp-first CLI commands and offline `diagnose` were integrated before
-the published 0.0.5-alpha.3 prerelease; `inspect ast` also ships in alpha.3.
-Alpha.1 and alpha.2 binaries use the older commands. `create` and `launch` were
-merged after alpha.3 and are **not available in published alpha.3 packages**.
-Main still declares Cargo version 0.0.5-alpha.3, so verify the exact source
-commit as well as the executable's `scarp version` or `scarp --version`.
+The Scarp-first commands and offline `diagnose` shipped in published alpha.3.
+Alpha.1/alpha.2 binaries retain the older vocabulary. `create`, `launch`, and
+`verify DIRECTORY` are included in **unpublished v0.0.5-alpha.4 candidate
+source**, not public alpha.3 packages. Cargo now declares 0.0.5-alpha.4; a
+version string or a passing CI run alone is not publication evidence. Confirm
+the exact source tag/commit and use `scarp version` or `scarp --version`.
 
 | Scarp-first command | Actual behavior |
 | --- | --- |
 | `scarp`, `scarp guide` | Print current supported command guidance |
 | `scarp guide exec` | Show contextual execution help |
-| `scarp create DIRECTORY` | Development main only: create a fresh offline project, refusing existing paths |
-| `scarp launch [budgets] DIRECTORY` | Development main only: run the contained manifest entrypoint via the interpreter |
+| `scarp create DIRECTORY` | Alpha.4 candidate: create a fresh offline project, refusing existing paths |
+| `scarp launch [budgets] DIRECTORY` | Alpha.4 candidate: run the contained manifest entrypoint via the interpreter |
 | `scarp diagnose [--json]` | Show actual running compiler version, host OS/architecture and supported capability inventory without network access |
 | `scarp guide inspect tokens` | Show lexer inspection help |
 | `scarp guide inspect modules` | Show checked-module inspection help |
 | `scarp version` | Print the same actual package version as `--version` |
 | `scarp exec [budgets] FILE` | Execute using the existing interpreter with the same diagnostics and budgets as the historical `run` command |
 | `scarp verify FILE` | Statically resolve source/imports, names and types without executing runtime statements |
-| `scarp verify DIRECTORY` | Development main only: validate `Scarp.project` and check its entrypoint statically |
+| `scarp verify DIRECTORY` | Alpha.4 candidate: validate `Scarp.project` and check its entrypoint statically |
 | `scarp inspect tokens FILE` | List lexer tokens and real source locations |
 | `scarp inspect ast FILE` | Parse just the entry source and display its actual frontend syntax tree without execution |
 | `scarp inspect modules [--json] FILE` | Inspect statically checked modules; JSON retains schema version 1 |
 | `scarp explain E####` | Explain an existing compiler diagnostic |
 
-For the post-alpha.3 development main compiler, examples include:
+For the alpha.4 candidate built from the corresponding source, examples include:
 
 ```sh
 scarp guide
@@ -59,7 +59,7 @@ The legacy `check` command evaluates selected runtime paths silently and is
 
 The static-only `verify` uses the real parser and module resolver, evaluates
 only compile-time scalar module constants, and produces no runtime artifacts.
-On development `main`, an explicit directory argument additionally resolves
+In the alpha.4 candidate, an explicit directory argument resolves
 the bounded `Scarp.project` manifest through the same path validation as
 `launch`. A source-file argument retains its existing behavior. Invalid
 manifests return status 1 and honor `--diagnostic-format=json` without
@@ -74,7 +74,7 @@ The nested `inspect` command forwards diagnostic flags to the same real
 lexer and module compiler without changing the error schema.
 
 `compile`, `polish`, and package or registry management are not available.
-Development `create` and `launch` use the real interpreter; see
+Alpha.4 candidate `create` and `launch` use the real interpreter; see
 [Scarp projects](../project-workflow.md). No native Scarp executable is generated;
 Rust's `cargo build` builds the compiler itself.
 

@@ -9,22 +9,23 @@ publication; changing a package version alone does not authorize a release.
 ## Build inputs and packages
 
 The package version comes from `Cargo.toml`; use a three-part version. The
-current published version is `0.0.5-alpha.1`, from approved source
-`afe8b5380c9d6c4774162e51c6c9bc8b90901671`. Its completed publication request
-has been retired. The
-[0.0.5-alpha.1 release page](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.1)
-and [verification record](releases/v0.0.5-alpha.1-validation.md) identify the
-published prerelease; a source version alone is not publication evidence.
+latest published prerelease is `0.0.5-alpha.3`, from source commit
+`7715c28df09c7703b39e14fddb963275b25df476`. Its completed publication
+request has been retired. The
+[alpha.3 release page](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.3)
+identifies the public packages. The next candidate, **0.0.5-alpha.4**, is
+being prepared without a release request or public tag. A Cargo version
+change is not publication evidence.
 Earlier published tags/assets must remain unchanged. For a future
 release, choose an unused version, update Cargo/lockfile/docs consistently, and
 use its exact tag and archive names throughout the process. An unpublished
 development identifier is not evidence that a public release exists.
 `v0.0.0.1` is not a three-part version.
 
-The source-module prerelease is published and its fulfilled request is
-retired. [Preparation notes](releases/v0.0.5-alpha.1.md) preserve the original
-candidate contract. Every future release needs fresh exact-version/source
-approval after all gates. The verifier requires nested module libraries/guides
+Alpha.1, alpha.2 and alpha.3 are published; their fulfilled requests were
+retired. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve
+the original candidate contract. Every new release needs fresh exact-version
+and full source-commit approval after all gates. The verifier requires nested module libraries/guides
 as well as inherited alpha.4 contents. The [migration record](migrations/scarp-lang-Scarp.md)
 records the completed maintainer transfer and rename without altering published
 tags, archives or their historical source metadata.

@@ -1,7 +1,9 @@
-# Scarp projects (development)
+# Scarp projects (v0.0.5-alpha.4 candidate)
 
-Scarp has an offline, explicit project workflow. It uses the **existing Scarp
-interpreter**, not a native compiler or package manager.
+The unpublished alpha.4 candidate has an offline, explicit project workflow.
+It uses the **real Scarp compiler and interpreter**, not a native code
+generator or package manager. These directory commands are not available in
+published alpha.3 packages.
 
 ```sh
 scarp create hello-world
