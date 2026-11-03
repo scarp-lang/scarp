@@ -54,7 +54,8 @@ migration. The old check command evaluates selected paths; it is not static-only
 verification. Native executable generation and package management are not supported yet.
 ";
 
-const VERIFY_HELP: &str = "Usage: scarp verify [--diagnostic-format=json|text] [--] <file.srp|project-directory>
+const VERIFY_HELP: &str =
+    "Usage: scarp verify [--diagnostic-format=json|text] [--] <file.srp|project-directory>
 
 Statically validate the selected source file or an explicit Scarp project
 directory. Project mode validates Scarp.project and resolves its contained
