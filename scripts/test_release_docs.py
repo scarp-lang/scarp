@@ -24,9 +24,9 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
     def test_current_release_anchors(self):
         version = package_version()
         needles = {
-            "README.md": (f"**{version}**", f"latest published prerelease is\\n[{version}]"),
-            "docs/README.md": (f"**{version} prerelease**", f"latest published prerelease is\\n[{version}]"),
-            "docs/compatibility.md": (f"published in {version}", f"latest published prerelease is\\n[{version}]"),
+            "README.md": (f"**{version}**", f"latest published prerelease is\n[{version}]"),
+            "docs/README.md": (f"**{version} prerelease**", f"latest published prerelease is\n[{version}]"),
+            "docs/compatibility.md": (f"published in {version}", f"latest published prerelease is\n[{version}]"),
             "docs/reference/cli.md": (f"(v{version})",),
             "docs/development/feature-matrix.md": (f"Cargo declares {version}",),
             "CHANGELOG.md": (f"## {version} — prerelease",),
@@ -42,7 +42,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         for filename in ("README.md", "docs/README.md", "docs/compatibility.md"):
             with self.subTest(file=filename):
                 text = (ROOT / filename).read_text(encoding="utf-8")
-                matches = re.findall(r"latest published prerelease is\\s*\\[([^]]+)\\]", text)
+                matches = re.findall(r"latest published prerelease is\s*\[([^]]+)\]", text)
                 self.assertEqual(matches, [version])
 
 
