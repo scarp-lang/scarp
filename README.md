@@ -72,9 +72,9 @@ behavior and migration details. The old `run`, `check`, `tokens` and `modules`
 paths remain temporarily compatible; `check` evaluates selected program paths
 and should **not** be described as static-only verification. Static-only `verify` uses compiler parsing and resolution without executing runtime
 statements or contracts; it does not replace the old evaluating `check`.
-`compile`, `create` and `launch` do not exist yet. No native Scarp binary
-backend or project-manifest workflow is implied by the new names. Previously
-older alpha.1 and alpha.2 binaries do not contain these Scarp-first command paths.
+`compile`, `create` and `launch` are not implemented by the alpha.3 CLI.
+No native executable backend or project workflow is implied by `exec`/`verify`.
+Older alpha.1 and alpha.2 binaries do not contain Scarp-first command paths.
 
 The [documentation hub](docs/README.md) provides setup, tutorials, command and
 diagnostic references, Rust embedding, testing, troubleshooting, and compatibility
