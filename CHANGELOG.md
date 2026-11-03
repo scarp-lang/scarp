@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Extend static-only `scarp verify` to accept an explicit project directory,
+  reusing the bounded `Scarp.project` manifest validation from `launch`
+  without executing runtime statements or changing file-level verification.
+- Add CLI regressions for runtime-only errors, malformed manifests, Unicode
+  and symlink escaping. Correct stale reference documentation: bitwise shifts,
+  remainder and binary/hexadecimal literals already ship in alpha.3.
 - Add interpreter-backed `scarp create DIRECTORY` and `scarp launch DIRECTORY`
   with a bounded, strictly validated `Scarp.project` manifest and starter code.
 - Test create → verify → launch on supported platforms, including Unicode,
