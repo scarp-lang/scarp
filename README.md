@@ -2,12 +2,9 @@
 
 **Build Beyond Boundaries.**
 
-Scarp is an experimental programming language implemented in Rust. This
-checkout stages **0.0.5-alpha.4** as a prerelease candidate, **not yet
-published**. The latest public prerelease remains 0.0.5-alpha.3 (published
-2 November 2026). The compiler provides a lexer, parser, typed resolver,
+Scarp is an experimental programming language implemented in Rust. The current **0.0.5-alpha.4** prerelease was published on 3 November 2026. Its exact source is tagged at `79141329176f5dce51457e90a6652902f6432135`. The compiler provides a lexer, parser, typed resolver,
 interpreter, source modules, finite binary64 numerics and a Scarp-first CLI.
-This candidate adds a bounded project workflow with `create`, `launch` and
+This release adds a bounded project workflow with `create`, `launch` and
 project-directory `verify`. Syntax and APIs are not stable.
 
 [Static module inspection](docs/module-inspection.md) lists imports, dependencies
@@ -45,19 +42,19 @@ print("Hello from Scarp!");
 Hello from Scarp!
 ```
 
-## Scarp-first CLI (v0.0.5-alpha.4 candidate)
+## Scarp-first CLI (v0.0.5-alpha.4 prerelease)
 
-The published alpha.3 compiler provides `exec`, `verify FILE`, `inspect`,
-`guide`, and `diagnose`. The unpublished alpha.4 candidate additionally
-provides `create`, `launch` and `verify DIRECTORY`. Older commands remain
-temporarily compatible. After building the intended source, use `scarp`
+The alpha.4 prerelease provides `exec`, `verify FILE`, `inspect`, `guide`,
+`diagnose`, and project commands `create`, `launch`, and `verify DIRECTORY`.
+Alpha.3 provides the Scarp-first file commands, but not the project commands.
+Older commands remain temporarily compatible. After building the intended source, use `scarp`
 directly (not the Rust build tool):
 
 ```sh
 scarp guide
 scarp version
 scarp diagnose --json
-# Project commands require development main / the alpha.4 candidate:
+# Project commands require v0.0.5-alpha.4 or later:
 scarp create hello-world
 scarp launch hello-world
 scarp verify hello-world
@@ -75,7 +72,7 @@ is not a stable machine-readable schema.
 
 The [project workflow](docs/project-workflow.md) creates a bounded `Scarp.project`
 manifest and a runnable starter, verifies a project directory without running
-statements, then launches via the real interpreter. This is available in the alpha.4 candidate, not in the published alpha.3
+statements, then launches via the real interpreter. This is available in the published alpha.4 packages, not in alpha.3
 packages, and does not generate a native executable.
 
 These routes preserve the current compiler's schema-version-1
@@ -86,7 +83,7 @@ paths remain temporarily compatible; `check` evaluates selected program paths
 and should **not** be described as static-only verification. Static-only `verify` uses compiler parsing and resolution without executing runtime
 statements or contracts; it does not replace the old evaluating `check`.
 `compile` and native executable generation remain unsupported. `create` and
-`launch` are available in the alpha.4 candidate, but not in published
+`launch` are available in published alpha.4 packages, but not in
 alpha.3 packages. Alpha.1 and alpha.2 lack the Scarp-first command names.
 
 The [documentation hub](docs/README.md) provides setup, tutorials, command and
@@ -123,15 +120,16 @@ one-hot targets and explicit loss gradients. See [vectors](docs/vectors.md),
 [error repairs](docs/reference/numerical-errors.md).
 
 The latest published prerelease is
-[0.0.5-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.3),
-published 2 November 2026 from source commit
-`7715c28df09c7703b39e14fddb963275b25df476`. The release provides Windows
+[0.0.5-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.4),
+published 3 November 2026 from source commit
+`79141329176f5dce51457e90a6652902f6432135`. The release provides Windows
 x64, Linux x64 and macOS Apple Silicon archives with SHA-256 checksums.
 [Alpha.1's verification record](docs/releases/v0.0.5-alpha.1-validation.md)
 is preserved as historical evidence for that earlier release, not alpha.3.
-See the [alpha.4 candidate notes](docs/releases/v0.0.5-alpha.4.md),
-[release checklist](docs/releases/v0.0.5-alpha.4-preparation.md), and
-[release engineering](docs/releasing.md) for current publication gates.
+See the [alpha.4 release notes](docs/releases/v0.0.5-alpha.4.md),
+[publication verification record](docs/releases/v0.0.5-alpha.4-validation.md),
+[historical candidate checklist](docs/releases/v0.0.5-alpha.4-preparation.md),
+and [release engineering](docs/releasing.md) for publication gates.
 
 The maintainer transferred this repository to **scarp-lang/scarp**. The
 [migration record](docs/migrations/scarp-lang-Scarp.md) documents identity,
@@ -141,7 +139,7 @@ history, release/download verification and updated clone instructions.
 
 Binary archives and checksums are available through
 [GitHub Releases](https://github.com/scarp-lang/scarp/releases). See the
-[latest alpha.3 release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.3)
+[latest alpha.4 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.4)
 for its supported archives, checksums and source commit. The
 [changelog](CHANGELOG.md) records recent language and tooling changes.
 
