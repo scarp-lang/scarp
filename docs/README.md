@@ -1,17 +1,18 @@
 # Scarp documentation
 
-**0.0.5-alpha.5 development candidate** is not yet published. The candidate
-adds project-directory module inspection and an opt-in scalar C11 backend;
-see [alpha.5 candidate notes](releases/v0.0.5-alpha.5.md) for limits.
+**0.0.5-alpha.5 prerelease** is published with project-directory module
+inspection and an opt-in experimental C11 scalar backend for Rust hosts;
+see [alpha.5 release notes](releases/v0.0.5-alpha.5.md) and the
+[publication record](releases/v0.0.5-alpha.5-validation.md) for limits and verification.
 
 Development declarations use `bind` and `var`; see the [migration guide](syntax-migration.md). Published tags retain their original syntax.
 
 Choose a guide by the task you want to complete. Current tutorials are
-updated for the **0.0.5-alpha.4 published prerelease**, retaining
+updated for the **0.0.5-alpha.5 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
 contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.5-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.4),
+[0.0.5-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.5),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)
@@ -31,7 +32,10 @@ The older alpha.1 snapshot lacks those capabilities. Published alpha.4 adds
 project creation, launching and static directory verification; see the
 [project guide](project-workflow.md), [release notes](releases/v0.0.5-alpha.4.md),
 [verification record](releases/v0.0.5-alpha.4-validation.md) and
-[CLI reference](reference/cli.md) for version-specific availability.
+[CLI reference](reference/cli.md) for version-specific availability. Published
+alpha.5 additionally includes project-aware module inspection and the
+experimental Rust-hosted C11 scalar emitter; see
+[alpha.5 notes](releases/v0.0.5-alpha.5.md).
 
 | Document | Use it to |
 | --- | --- |
@@ -115,7 +119,7 @@ The [v0.0.3-beta.1 notes](releases/v0.0.3-beta.1.md) describe the iteration rele
 the [v0.0.3-beta.2 notes](releases/v0.0.3-beta.2.md) cover declaration migration,
 and output streams. The [v0.0.3-beta.3 notes](releases/v0.0.3-beta.3.md) cover
 functions and CLI resource controls. Current downloads are recorded in the
-[alpha.4 publication record](releases/v0.0.4-alpha.4-validation.md). Use [compatibility](compatibility.md)
+[alpha.5 publication record](releases/v0.0.5-alpha.5-validation.md). Use [compatibility](compatibility.md)
 before running a current tutorial with an older installed executable.
 [Release preparation](releasing.md) describes the separate packaging and
 publication process. The root [changelog](../CHANGELOG.md) distinguishes released
