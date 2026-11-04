@@ -298,7 +298,10 @@ fn project_module_inspection_matches_contained_entry_without_running_code() {
     ] {
         let from_project = with_path(arguments, &project);
         let from_file = with_path(arguments, &entry);
-        assert!(from_project.status.success(), "{arguments:?}: {from_project:?}");
+        assert!(
+            from_project.status.success(),
+            "{arguments:?}: {from_project:?}"
+        );
         assert_eq!(from_project.status.code(), from_file.status.code());
         assert_eq!(from_project.stdout, from_file.stdout);
         assert_eq!(from_project.stderr, from_file.stderr);
@@ -366,7 +369,10 @@ fn symlinked_entry_outside_project_is_rejected() {
     assert!(verified.stdout.is_empty());
     assert!(String::from_utf8_lossy(&verified.stderr).contains("outside"));
 
-    let inspected = with_path(&["inspect", "modules", "--diagnostic-format=json"], &project);
+    let inspected = with_path(
+        &["inspect", "modules", "--diagnostic-format=json"],
+        &project,
+    );
     assert_eq!(inspected.status.code(), Some(1), "{inspected:?}");
     assert!(inspected.stdout.is_empty());
     assert!(String::from_utf8_lossy(&inspected.stderr).contains("outside"));
