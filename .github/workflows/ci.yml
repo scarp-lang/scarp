@@ -38,7 +38,21 @@ jobs:
           components: rustfmt, clippy
       - name: Validate source and examples
         shell: bash
+        env:
+          # Never treat a skipped native differential test as a passing gate.
+          SCARP_REQUIRE_C: "1"
         run: sh scripts/check.sh --offline
+      - name: Verify freestanding scalar objects
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          SCARP_CC: clang
+          SCARP_REQUIRE_C: "1"
+          SCARP_FREESTANDING: "1"
+        run: |
+          command -v clang
+          command -v llvm-nm
+          cargo test --locked --offline --test c_backend freestanding_scalar_object_has_no_undefined_symbols_when_requested -- --exact
       - name: Smoke-test benchmark workloads
         run: |
           cargo bench --locked --offline --bench runtime -- --quick
