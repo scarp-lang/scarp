@@ -47,8 +47,9 @@ caller-owned `struct scarp_workspace` and `struct scarp_host`.
 without writing. `scarp_run` makes a dry pass before replaying stdout
 to the supplied callback. No global streams or C compiler are used.
 Runtime errors preserve E-code numbers and UTF-8 byte spans, including
-E0046 for invalid shift counts. A failing callback returns the internal
-C sentinel 65535. Once output replay begins, a callback failure may
+E0046 for invalid shift counts. Empty string payloads never cause a
+zero-byte host callback; only nonempty output is forwarded to the host.
+A failing callback returns the internal C sentinel 65535. Once output replay begins, a callback failure may
 leave previously written bytes.
 
 This **experimental ABI** does not replicate every `ExecutionOptions` field:
@@ -61,9 +62,10 @@ ABI, native executable, GPU backend, or C-to-Scarp calls are implied.
 1. Differential tests compare stdout, error codes, source spans and work/
    print budgets between the interpreter and emitted C at `-O0` and `-O2`.
    Include repeated workspace use, callback failures and rejected forms.
-2. Require current compiler CI on Linux, macOS, Windows, minimum Rust 1.74,
-   and generated C compilation where a C11 compiler is available.
-   Freestanding x86-64 and AArch64 objects have an optional explicit gate.
+2. Require a working C11 compiler in stable CI on Linux, macOS and Windows,
+   rather than silently skipping C differential tests; retain minimum Rust 1.74.
+   On Linux, explicitly compile freestanding x86-64 and AArch64 ELF objects
+   and check that they contain no undefined symbols with `llvm-nm`.
 3. Only after independent review, propose CLI integration against the current
    compiler. Specify artifact publication, compiler discovery, output safety,
    cross-compilation and full option parity before advertising `scarp compile`.
