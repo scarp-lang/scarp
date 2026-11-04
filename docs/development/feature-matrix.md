@@ -1,10 +1,10 @@
 # Feature completeness and development roadmap
 
-Audit date: 2026-11-03. This inventory describes the tested development
+Audit date: 2026-11-04. This inventory describes the tested development
 baseline; update a row when an implementation lands. No roadmap row implies
-a release or an available CLI command. Cargo declares 0.0.5-alpha.4,
-which was published as a prerelease on 3 November 2026; the latest published
-prerelease is v0.0.5-alpha.4. Future feature rows remain proposals.
+a release or an available CLI command. Cargo declares 0.0.5-alpha.5 as an
+**unpublished development candidate**; the latest published prerelease
+remains v0.0.5-alpha.4 (3 November 2026). Future feature rows remain proposals.
 
 Initial main: `1d3b69a79bb0f656b4da3517560ce59e1e41f3bc`. Inspected development:
 `05b4c40f63567267f5d9662ba8108d403d682f88` (148 main-only and 31 development-only
@@ -61,7 +61,7 @@ requires separate architecture and multiple implementation phases.
 | Module initialization | Intentionally absent | Effectful initialization requires separate design | Capability/effect and cycle policy | P3 | XL | Failure/ordering/deduplication | Initialization design |
 | Typed execution plan | Implemented lowered slot/operation plan | Explicit stable IR and CFG views | Resolver plan invariants | P1 | L | IR/source mapping and control edges | IR architecture |
 | Optimizations | Constant modules, slot retirement, terminal self transfer | General folding, DCE and CFG passes | IR/effect/budget-equivalence contract | P1 | L | Differential output/errors/budgets | Optimization semantics |
-| Native backend | Experimental scalar C11 library emitter in PR #103 now includes counted-repeat lowering; unavailable in alpha.4 and no native CLI | Complete modern features, signed-off ABI, complete budget model | Current type rules, source graph and safety budgets | P1 | XL | Differential interpreter/C, all rejected forms | Experimental subset |
+| Native backend | Experimental scalar C11 library emitter integrated on main via PR #103; includes counted-repeat lowering, no native CLI and unavailable in published alpha.4 | Complete modern features, signed-off ABI, complete budget model | Current type rules, source graph and safety budgets | P1 | XL | Differential interpreter/C, all rejected forms | Experimental subset |
 | Native build/compile CLI | Historical PR #22 only; unavailable on main | Current backend integration and toolchain boundary | Backend, platform compiler/error handling | P2 | L | Artifact overwrite, subprocess/path/ABI | Build contract |
 | Math/linear algebra library | 35 vector/tile kernels and two exact scalar conversions | Broader scalar math catalogue after domain design | Pure intrinsic dispatch | P0 | M | Numeric domains, finiteness, exact budgets | Built-in reference |
 | General text/algorithms | Unicode length/codepoint/search/prefix/suffix implemented | General collection sorting/search | Allocation/work policy, collection types | P0 | M | Unicode semantics, deterministic search, limits | Standard library |
