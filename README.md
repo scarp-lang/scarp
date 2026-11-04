@@ -80,6 +80,12 @@ resolves an explicit `Scarp.project` and inspects its checked module graph with
 the same schema-v1 inventory as the contained entry file. It does not execute
 program statements. This is not available in published alpha.4 packages.
 
+**Separate experimental source-only native milestone:** The optional Rust library
+`scarp::c_backend::emit_c` can generate freestanding C11 source for a tightly
+restricted checked integer/Boolean subset. See [Proposal 0035](docs/proposals/0035-native-scalar-c11.md)
+for accepted syntax, validation, output contracts and deliberate exclusions.
+There is still **no** `scarp compile` command or new published native artifact.
+
 These routes preserve the current compiler's schema-version-1
 `--diagnostic-format=json` errors without executing unsupported features.
 See the [CLI reference](docs/reference/cli.md) for supported options, exact
