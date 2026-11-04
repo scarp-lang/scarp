@@ -32,7 +32,11 @@ fn compiler() -> Option<OsString> {
             "cc".into()
         }
     });
-    if Command::new(&cc).arg("--version").output().is_ok() {
+    if Command::new(&cc)
+        .arg("--version")
+        .output()
+        .is_ok_and(|result| result.status.success())
+    {
         Some(cc)
     } else {
         assert!(
@@ -261,6 +265,18 @@ fn emitted_scalar_c_matches_interpreter_outputs_errors_spans_and_work_budgets() 
         ("print(\"first\"); print(2);", ExecutionLimits { max_steps: 100, max_prints: 1 }),
         ("print(1+2*3);", ExecutionLimits { max_steps: 5, max_prints: 1 }),
         ("print(\"x\");", ExecutionLimits { max_steps: 1, max_prints: 1 }),
+        ("print(""); print("नमस्ते 🌍");", defaults),
+        ("print(1 == 1); print(2 != 3); print(true == false);", defaults),
+        ("var x = 1; { var x = 2; print(x); } print(x);", defaults),
+        ("var x = 0; while x < 5 { x += 1; if x % 2 == 0 { print(x); } }", defaults),
+        ("var x = 2; while x > 0 { x -= 1; continue; } print(x);", defaults),
+        ("if false { print(1 / 0); } else { print(42); }", defaults),
+        ("print(false and (9223372036854775807 + 1 > 0));", defaults),
+        ("print(true or (1 / 0 == 1));", defaults),
+        ("print(1 << 64);", defaults),
+        ("print(1 >> -1);", defaults),
+        ("print(1); print(2);", ExecutionLimits { max_steps: 100, max_prints: 0 }),
+        ("var x = 0; while x < 3 { x += 1; } print(x);", ExecutionLimits { max_steps: 3, max_prints: 1 }),
         ("", ExecutionLimits { max_steps: 0, max_prints: 0 }),
     ];
     for optimization in ["-O0", "-O2"] {
