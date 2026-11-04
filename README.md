@@ -75,6 +75,11 @@ manifest and a runnable starter, verifies a project directory without running
 statements, then launches via the real interpreter. This is available in the published alpha.4 packages, not in alpha.3
 packages, and does not generate a native executable.
 
+**Unreleased development-source addition:** `scarp inspect modules --json DIRECTORY`
+resolves an explicit `Scarp.project` and inspects its checked module graph with
+the same schema-v1 inventory as the contained entry file. It does not execute
+program statements. This is not available in published alpha.4 packages.
+
 These routes preserve the current compiler's schema-version-1
 `--diagnostic-format=json` errors without executing unsupported features.
 See the [CLI reference](docs/reference/cli.md) for supported options, exact

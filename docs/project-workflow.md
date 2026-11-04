@@ -68,9 +68,25 @@ Unlike `launch`, `verify` does not accept execution-budget flags. File-based
 `verify FILE.srp` remains unchanged. Manifest failures return status 1 and
 support `--diagnostic-format=json`.
 
+**Unreleased development-source extension (not in the published alpha.4 packages):**
+
+```sh
+scarp inspect modules --json hello-world
+```
+
+`inspect modules PROJECT_DIRECTORY` (optionally with `--json`) resolves the
+same explicit `Scarp.project` entrypoint and compiles its full module graph
+without running statements. It produces the same text or schema-version-1 JSON
+inventory as inspecting the canonical entry file directly. Manifest errors
+return status 1 with no partial inventory; `--diagnostic-format=json` uses the
+existing structured error format. This also applies to the historical
+`modules PROJECT_DIRECTORY` spelling; prefer `inspect modules` for new tools.
+No ancestor search, runtime-budget options, native build, or new manifest
+fields are introduced.
+
 This format is an intentionally small **development manifest v1**, not a
 general project/package specification. It does not yet support dependencies,
 a package lock, source paths outside the project, a project build, native
-artifacts, multi-entrypoint selection, workspace discovery or project-level
-inspection aliases. The manifest's stable spelling is not guaranteed.
+artifacts, multi-entrypoint selection, workspace discovery or other project-level
+inspection commands. The manifest's stable spelling is not guaranteed.
 Project-directory verification is not available in published alpha.3 packages.

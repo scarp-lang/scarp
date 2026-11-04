@@ -28,7 +28,7 @@ Commands:
   create <directory>               Create a new runnable Scarp project
   launch <directory>               Execute a Scarp project entrypoint
   inspect ast <file.srp>           Show the parsed syntax tree (development)
-  inspect modules [--json] <file.srp>  Inspect statically checked module metadata
+  inspect modules [--json] <file.srp|directory>  Inspect statically checked modules
   explain E####                   Explain a real diagnostic code
   guide [command]                 Show contextual CLI guidance
   diagnose [--json]               Report actual compiler/host capabilities
@@ -70,7 +70,7 @@ Runtime arithmetic, contracts, dynamic paths and budgets are not evaluated.
 const INSPECT_HELP: &str = "Usage:
   scarp inspect tokens [--] <file.srp>
   scarp inspect ast [--] <file.srp>
-  scarp inspect modules [--json] [--] <file.srp>
+  scarp inspect modules [--json] [--] <file.srp|project-directory>
 
 Read-only frontend or module inspection. Tokens only lexes the entry file; AST
 parses it without loading imports, resolving names or executing code. Modules
@@ -95,10 +95,12 @@ unsupported for successful AST output; --diagnostic-format=json serializes
 only source/parser errors with the existing diagnostic schema.
 ";
 
-const INSPECT_MODULES_HELP: &str = "Usage: scarp inspect modules [--json] [--] <file.srp>
+const INSPECT_MODULES_HELP: &str =
+    "Usage: scarp inspect modules [--json] [--] <file.srp|project-directory>
 
 Statically check the source module graph and list real imports, dependencies,
 declarations and typed signatures without executing runtime statements.
+An explicit project directory resolves Scarp.project to its contained entrypoint.
 --json emits existing schema-version-1 module metadata; --diagnostic-format=json
 selects JSON stderr only for actual errors.
 ";
@@ -555,10 +557,10 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         return 2;
     }
     let path = Path::new(filename);
-    // Only static verification accepts an explicit project directory. Reuse
-    // launch's bounded manifest/contained entrypoint checks and the existing
-    // nonexecuting source-graph compiler path below.
-    let project_entry = if command == "verify" && path.is_dir() {
+    // Static verification and module inspection accept an explicit project
+    // directory. Both reuse launch's bounded manifest/contained entrypoint
+    // checks and the existing nonexecuting source-graph compiler path.
+    let project_entry = if matches!(command.to_str(), Some("verify" | "modules")) && path.is_dir() {
         match project::entry_file(path) {
             Ok(entry) => Some(entry),
             Err(message) => {

@@ -277,6 +277,78 @@ fn explicit_separator_allows_dash_leading_project_directory() {
     assert!(verified.stderr.is_empty());
 }
 
+#[test]
+fn project_module_inspection_matches_contained_entry_without_running_code() {
+    let workspace = Workspace::new();
+    let project = workspace.child("inspection नमस्ते");
+    assert!(with_path(&["create"], &project).status.success());
+    let entry = project.join("src/main.srp");
+    fs::write(
+        &entry,
+        "import \"library.srp\" as library;\nprint(library.answer / 0);\n",
+    )
+    .unwrap();
+    fs::write(project.join("src/library.srp"), "pub bind answer = 42;\n").unwrap();
+    let entry = fs::canonicalize(entry).unwrap();
+
+    for arguments in [
+        &["inspect", "modules"][..],
+        &["inspect", "modules", "--json"][..],
+        &["modules", "--json"][..],
+    ] {
+        let from_project = with_path(arguments, &project);
+        let from_file = with_path(arguments, &entry);
+        assert!(
+            from_project.status.success(),
+            "{arguments:?}: {from_project:?}"
+        );
+        assert_eq!(from_project.status.code(), from_file.status.code());
+        assert_eq!(from_project.stdout, from_file.stdout);
+        assert_eq!(from_project.stderr, from_file.stderr);
+        assert!(from_project.stderr.is_empty());
+        let inventory = String::from_utf8_lossy(&from_project.stdout);
+        assert!(inventory.contains("library.srp"), "{inventory}");
+        if arguments.contains(&"--json") {
+            assert!(inventory.contains("\"schema_version\":1"), "{inventory}");
+        }
+    }
+
+    // The compiler can inspect this program, but executing the division fails.
+    let launched = with_path(&["launch"], &project);
+    assert_eq!(launched.status.code(), Some(1), "{launched:?}");
+    assert!(launched.stdout.is_empty());
+}
+
+#[test]
+fn project_module_inspection_rejects_invalid_manifests_before_output() {
+    let workspace = Workspace::new();
+    let project = workspace.child("inspect-guard");
+    assert!(with_path(&["create"], &project).status.success());
+    let manifest = project.join("Scarp.project");
+    for contents in [
+        "scarp-project: 2\nname: inspect-guard\nentry: src/main.srp\n",
+        "scarp-project: 1\nname: inspect-guard\nentry: ../escape.srp\n",
+        "scarp-project: 1\nname: inspect-guard\nentry: src/main.srp\nunknown: value\n",
+    ] {
+        fs::write(&manifest, contents).unwrap();
+        let inspected = with_path(
+            &["inspect", "modules", "--json", "--diagnostic-format=json"],
+            &project,
+        );
+        assert_eq!(inspected.status.code(), Some(1), "{inspected:?}");
+        assert!(inspected.stdout.is_empty(), "{inspected:?}");
+        assert!(
+            String::from_utf8_lossy(&inspected.stderr).contains("\"schema_version\":1"),
+            "{inspected:?}"
+        );
+    }
+
+    fs::remove_file(manifest).unwrap();
+    let missing = with_path(&["inspect", "modules"], &project);
+    assert_eq!(missing.status.code(), Some(1), "{missing:?}");
+    assert!(missing.stdout.is_empty());
+}
+
 #[cfg(unix)]
 #[test]
 fn symlinked_entry_outside_project_is_rejected() {
@@ -296,4 +368,12 @@ fn symlinked_entry_outside_project_is_rejected() {
     assert_eq!(verified.status.code(), Some(1), "{verified:?}");
     assert!(verified.stdout.is_empty());
     assert!(String::from_utf8_lossy(&verified.stderr).contains("outside"));
+
+    let inspected = with_path(
+        &["inspect", "modules", "--diagnostic-format=json"],
+        &project,
+    );
+    assert_eq!(inspected.status.code(), Some(1), "{inspected:?}");
+    assert!(inspected.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&inspected.stderr).contains("outside"));
 }

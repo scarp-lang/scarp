@@ -72,6 +72,15 @@ selects error output only. `exec` retains program stdout/stderr behavior.
 The nested `inspect` command forwards diagnostic flags to the same real
 lexer and module compiler without changing the error schema.
 
+**Unreleased development-source extension (not in v0.0.5-alpha.4 packages):**
+`scarp inspect modules [--json] PROJECT_DIRECTORY` also accepts an explicit
+project directory, resolving its `Scarp.project` to
+the same contained entrypoint used by `launch` and `verify`. Source and project
+inventories are identical when they resolve to the same canonical entry file.
+This is static inspection: it does not execute program statements or produce
+native artifacts. Invalid manifests return status 1 with no partial output;
+`--diagnostic-format=json` applies to these errors as well.
+
 `compile`, `polish`, and package or registry management are not available.
 Alpha.4 `create` and `launch` use the real interpreter; see
 [Scarp projects](../project-workflow.md). No native Scarp executable is generated;
