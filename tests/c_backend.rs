@@ -310,6 +310,56 @@ fn native_validation_precedes_io_and_scalar_retirement_does_not_consume_work() {
 }
 
 #[test]
+fn empty_string_output_never_calls_host_with_zero_bytes() {
+    let Some(cc) = compiler() else { return };
+    let directory = Directory::new();
+    fs::write(
+        directory.0.join("program.c"),
+        c_backend::emit_c(r#"print(""); print("x");"#).unwrap(),
+    )
+    .unwrap();
+    let host = r#"
+#include "program.c"
+#include <stdio.h>
+static int calls = 0;
+static size_t total_bytes = 0;
+static int write_bytes(void *ctx, const uint8_t *ptr, size_t count) {
+    (void)ctx; (void)ptr;
+    if (count == 0) return 1;
+    ++calls;
+    total_bytes += count;
+    return 0;
+}
+int main(void) {
+    struct scarp_workspace workspace;
+    struct scarp_host host = {0, write_bytes};
+    unsigned result = scarp_run(&workspace, &host, UINT64_C(10000), 20);
+    printf("%u:%d:%zu\n", result, calls, total_bytes);
+    return 0;
+}
+"#;
+    fs::write(directory.0.join("host.c"), host).unwrap();
+    let executable = directory
+        .0
+        .join(if cfg!(windows) { "host.exe" } else { "host" });
+    let built = Command::new(cc)
+        .current_dir(&directory.0)
+        .args(["-std=c11", "-Wall", "-Wextra", "-Werror", "-O2", "host.c", "-o"])
+        .arg(&executable)
+        .output()
+        .unwrap();
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    let run = Command::new(executable).output().unwrap();
+    assert!(run.status.success(), "{run:?}");
+    // LF from print(""); followed by "x" and LF: three nonempty writes.
+    assert_eq!(run.stdout, b"0:3:3\n");
+}
+
+#[test]
 fn freestanding_scalar_object_has_no_undefined_symbols_when_requested() {
     if std::env::var_os("SCARP_FREESTANDING").is_none() {
         return;
