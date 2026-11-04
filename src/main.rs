@@ -95,7 +95,8 @@ unsupported for successful AST output; --diagnostic-format=json serializes
 only source/parser errors with the existing diagnostic schema.
 ";
 
-const INSPECT_MODULES_HELP: &str = "Usage: scarp inspect modules [--json] [--] <file.srp|project-directory>
+const INSPECT_MODULES_HELP: &str =
+    "Usage: scarp inspect modules [--json] [--] <file.srp|project-directory>
 
 Statically check the source module graph and list real imports, dependencies,
 declarations and typed signatures without executing runtime statements.
