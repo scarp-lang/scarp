@@ -344,7 +344,9 @@ int main(void) {
         .join(if cfg!(windows) { "host.exe" } else { "host" });
     let built = Command::new(cc)
         .current_dir(&directory.0)
-        .args(["-std=c11", "-Wall", "-Wextra", "-Werror", "-O2", "host.c", "-o"])
+        .args([
+            "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2", "host.c", "-o",
+        ])
         .arg(&executable)
         .output()
         .unwrap();
