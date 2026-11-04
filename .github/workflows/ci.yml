@@ -51,7 +51,7 @@ jobs:
           SCARP_FREESTANDING: "1"
         run: |
           command -v clang
-          command -v llvm-nm
+          command -v readelf
           cargo test --locked --offline --test c_backend freestanding_scalar_object_has_no_undefined_symbols_when_requested -- --exact
       - name: Smoke-test benchmark workloads
         run: |
