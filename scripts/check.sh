@@ -57,6 +57,8 @@ for example in scalar_conversions unicode_text text_construction integer_collect
     cargo run --locked -- run "examples/$example.srp"
     cargo run --locked -- check "examples/$example.srp"
 done
+cargo run --locked -- run examples/native_scalar_repeat.srp
+cargo run --locked -- check examples/native_scalar_repeat.srp
 cargo run --locked -- run examples/inspection_json.srp
 cargo run --locked -- modules --json examples/inspection_json.srp
 cargo run --locked -- explain E0044
