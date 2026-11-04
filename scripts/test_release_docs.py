@@ -35,7 +35,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
             "docs/development/feature-matrix.md": (f"Cargo declares {version}",),
             "CHANGELOG.md": (f"## {version} — prerelease candidate (unpublished)",),
             "docs/releases/v0.0.5-alpha.4.md": (f"Scarp v{PUBLISHED_VERSION}",),
-            "docs/releases/v0.0.5-alpha.5.md": (f"Scarp v{version}", "not published"),
+            "docs/releases/v0.0.5-alpha.5.md": (f"Scarp v{version}", "Publication integrity", "not evidence of publication"),
             "docs/releases/v0.0.5-alpha.4-validation.md": (
                 f"Scarp v{PUBLISHED_VERSION}",
                 "79141329176f5dce51457e90a6652902f6432135",
