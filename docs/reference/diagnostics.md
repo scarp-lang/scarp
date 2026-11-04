@@ -7,7 +7,8 @@ codes through `E0015` are available in v0.0.2. Beta.1 adds `E0016` through
 declaration/assignment repair help. E0020–E0029 cover functions, E0030–E0036
 cover numerical values/budgets, and published 0.0.5-alpha.1 adds
 E0037–E0043 for modules. Unreleased scalar/text intrinsics add E0044/E0045.
-Existing assignments are unchanged. Unreleased `scarp explain E####` prints
+Existing assignments are unchanged. E0049 is reserved for the unreleased,
+experimental scalar C11 backend, not the published alpha.4 compiler. Unreleased `scarp explain E####` prints
 general repairs without loading source; see [developer tooling](../module-json.md).
 
 ## Codes and first repairs
@@ -59,6 +60,10 @@ general repairs without loading source; see [developer tooling](../module-json.m
 | `E0043` | Invalid module path | Use a relative /-separated .srp path inside the trusted root |
 | `E0044` | Inexact or out-of-range numeric conversion | Supply an exactly representable integer or integral in-range float |
 | `E0045` | Invalid text scalar index | Use a nonnegative index below text_len; count Unicode scalars rather than bytes |
+| `E0046` | Invalid signed-integer shift count | Use a count from 0 through 63 |
+| `E0047` | Semantic type registry limit | Reduce type complexity or adjust host type limits |
+| `E0048` | Invalid or excessive constructed text | Reduce text payload or increase the bounded allowance |
+| `E0049` | Unrepresentable experimental C11 native subset | Use the interpreter or restrict operations to supported scalar forms; see [Proposal 0035](../proposals/0035-native-scalar-c11.md) |
 
 Run/check file-read and UTF-8 failures use E0038; imported-file failures also
 identify the import location. Tokens file-read failures and output I/O failures

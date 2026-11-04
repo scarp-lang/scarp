@@ -149,6 +149,7 @@ diagnostic_catalogue! {
     InvalidShift => ("E0046", "Invalid integer shift count. Supply an integer from 0 through 63. Left shift operates on a fixed 64-bit bit pattern, >> extends the sign and >>> fills with zero. Counts are checked rather than masked."),
     TypeComplexity => ("E0047", "Semantic type registry limit exceeded or invalid type limits. Reduce signature/type complexity or adjust TypeLimits in an embedding host. These compiler limits are independent of runtime execution and allocation budgets."),
     TextConstruction => ("E0048", "Invalid or excessive text construction. Repetition counts must be nonnegative, each materialized string is limited to 1048576 UTF-8 bytes, and cumulative new payload is limited by --max-text-bytes / ExecutionOptions.max_text_bytes. Sharing strings does not recharge; retirement does not refund allocation. This is a logical payload cap, not a physical process-memory limit."),
+    NativeUnsupported => ("E0049", "Experimental scalar native emission cannot represent this program or would exceed its explicit resource caps. Use interpreter execution, or restrict the source to supported integer/boolean operations, bounded control flow and single-argument stdout lines."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
