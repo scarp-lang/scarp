@@ -23,7 +23,7 @@ not alpha.3 packages. Confirm the exact release tag/commit and use
 | `scarp verify DIRECTORY` | From alpha.4: validate `Scarp.project` and check its entrypoint statically |
 | `scarp inspect tokens FILE` | List lexer tokens and real source locations |
 | `scarp inspect ast FILE` | Parse just the entry source and display its actual frontend syntax tree without execution |
-| `scarp inspect modules [--json] FILE` | Inspect statically checked modules; JSON retains schema version 1 |
+| `scarp inspect modules [--json] FILE_OR_DIRECTORY` | Inspect statically checked modules or an explicit project directory; JSON retains schema version 1 |
 | `scarp explain E####` | Explain an existing compiler diagnostic |
 
 For the alpha.4 release, examples include:
@@ -38,6 +38,7 @@ scarp verify examples/hello.srp
 scarp inspect tokens examples/hello.srp
 scarp inspect ast examples/hello.srp
 scarp inspect modules --json examples/module_inspection.srp
+scarp inspect modules --json hello-world
 scarp guide inspect modules
 ```
 
@@ -70,7 +71,13 @@ errors using existing diagnostic schema version 1. For `inspect modules`,
 `--json` selects successful module metadata; `--diagnostic-format=json`
 selects error output only. `exec` retains program stdout/stderr behavior.
 The nested `inspect` command forwards diagnostic flags to the same real
-lexer and module compiler without changing the error schema.
+lexer and module compiler without changing the error schema. `inspect modules`
+also accepts an explicit project directory, resolving its `Scarp.project` to
+the same contained entrypoint used by `launch` and `verify`. Source and project
+inventories are identical when they resolve to the same canonical entry file.
+This is static inspection: it does not execute program statements or produce
+native artifacts. Invalid manifests return status 1 with no partial output;
+`--diagnostic-format=json` applies to these errors as well.
 
 `compile`, `polish`, and package or registry management are not available.
 Alpha.4 `create` and `launch` use the real interpreter; see
