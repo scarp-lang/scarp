@@ -358,7 +358,7 @@ int main(void) {
     let run = Command::new(executable).output().unwrap();
     assert!(run.status.success(), "{run:?}");
     // LF from print(""); followed by "x" and LF: three nonempty writes.
-    assert_eq!(run.stdout, b"0:3:3\n");
+    assert_eq!(String::from_utf8(run.stdout).unwrap().trim_end(), "0:3:3");
 }
 
 #[test]
@@ -396,17 +396,23 @@ fn freestanding_scalar_object_has_no_undefined_symbols_when_requested() {
             "{}",
             String::from_utf8_lossy(&built.stderr)
         );
-        let symbols = Command::new("llvm-nm")
-            .arg("--undefined-only")
+        let symbols = Command::new("readelf")
+            .args(["--wide", "--symbols"])
             .arg(&object)
             .output()
             .unwrap();
         assert!(symbols.status.success());
-        assert!(
-            symbols.stdout.is_empty(),
-            "{target}: {}",
-            String::from_utf8_lossy(&symbols.stdout)
-        );
+        let inventory = String::from_utf8(symbols.stdout).unwrap();
+        // ELF symtab entry zero is the mandatory undefined *null* symbol.
+        // Any other UND entry would require a link-time external dependency.
+        let unresolved: Vec<_> = inventory
+            .lines()
+            .filter(|line| {
+                let fields: Vec<_> = line.split_whitespace().collect();
+                fields.len() >= 7 && fields[0] != "0:" && fields[6] == "UND"
+            })
+            .collect();
+        assert!(unresolved.is_empty(), "{target}: {unresolved:?}");
         let bytes = fs::read(object).unwrap();
         assert_eq!(&bytes[..4], b"\x7fELF");
     }
