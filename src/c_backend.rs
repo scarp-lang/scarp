@@ -133,7 +133,10 @@ pub fn emit_program(program: &ResolvedProgram) -> Result<String, Diagnostic> {
                 .unwrap();
             }
             ResolvedStatement::Update {
-                slot, operator, operator_span, ..
+                slot,
+                operator,
+                operator_span,
+                ..
             } => {
                 writeln!(out, "if(!scarp_e{index}(w,&value)) return 0;").unwrap();
                 writeln!(out,"if(!scarp_binary(w,{},w->slots[{slot}],value,&w->slots[{slot}],{},{})) return 0;\npc={};",opcode(*operator),operator_span.start,operator_span.end,index+1).unwrap();
@@ -146,8 +149,7 @@ pub fn emit_program(program: &ResolvedProgram) -> Result<String, Diagnostic> {
                 )
                 .unwrap();
             }
-            ResolvedStatement::Jump { target }
-            | ResolvedStatement::LoopControl { target, .. } => {
+            ResolvedStatement::Jump { target } | ResolvedStatement::LoopControl { target, .. } => {
                 writeln!(out, "pc={target};").unwrap();
             }
             ResolvedStatement::Retire { .. } => {
@@ -159,8 +161,7 @@ pub fn emit_program(program: &ResolvedProgram) -> Result<String, Diagnostic> {
                 writeln!(
                     out,
                     "if(w->prints>=max_prints) return scarp_fail(w,18u,{},{});\n++w->prints;",
-                    operation.span.start,
-                    operation.span.end
+                    operation.span.start, operation.span.end
                 )
                 .unwrap();
                 match &arguments[0] {
