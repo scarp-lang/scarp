@@ -82,7 +82,8 @@ program statements. This is not available in published alpha.4 packages.
 
 **Separate experimental source-only native milestone:** The optional Rust library
 `scarp::c_backend::emit_c` can generate freestanding C11 source for a tightly
-restricted checked integer/Boolean subset. See [Proposal 0035](docs/proposals/0035-native-scalar-c11.md)
+restricted checked integer/Boolean subset, including bounded counted-repeat
+loops. See [Proposal 0035](docs/proposals/0035-native-scalar-c11.md)
 for accepted syntax, validation, output contracts and deliberate exclusions.
 There is still **no** `scarp compile` command or new published native artifact.
 
