@@ -1,6 +1,10 @@
 # Command-line reference
 
-## Scarp-first CLI (v0.0.5-alpha.4 published prerelease)
+## Scarp-first CLI (v0.0.5-alpha.5 development candidate)
+
+This candidate is **not published**. The latest published version remains
+v0.0.5-alpha.4. The new C11 source emitter is a Rust embedding API, not a
+Scarp CLI command; `scarp compile` still does not exist.
 
 The Scarp-first commands and offline `diagnose` shipped in published alpha.3.
 Alpha.1/alpha.2 binaries retain the older vocabulary. `create`, `launch`, and
@@ -72,7 +76,7 @@ selects error output only. `exec` retains program stdout/stderr behavior.
 The nested `inspect` command forwards diagnostic flags to the same real
 lexer and module compiler without changing the error schema.
 
-**Unreleased development-source extension (not in v0.0.5-alpha.4 packages):**
+**Alpha.5 development-candidate extension (not in published alpha.4 packages):**
 `scarp inspect modules [--json] PROJECT_DIRECTORY` also accepts an explicit
 project directory, resolving its `Scarp.project` to
 the same contained entrypoint used by `launch` and `verify`. Source and project
