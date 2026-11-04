@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-### 0.0.5-alpha.5 development candidate — not published
+Candidate release publication is pending exact-source verification and
+reviewed maintainer authorization.
 
 ## 0.0.5-alpha.5 — prerelease candidate (unpublished)
 
