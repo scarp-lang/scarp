@@ -9,25 +9,26 @@ publication; changing a package version alone does not authorize a release.
 ## Build inputs and packages
 
 The package version comes from `Cargo.toml`; use a three-part version.
-The source now prepares **0.0.5-alpha.5 as an unpublished candidate**; this
-version change is not authorization to tag or publish. Published alpha.4
-assets and the completed alpha.4 request remain immutable. The
-latest published prerelease is `0.0.5-alpha.4`, from source commit
-`79141329176f5dce51457e90a6652902f6432135`. Its completed publication
-request is retired in a separate follow-up maintenance PR. The
-[alpha.4 release page](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.4)
-identifies the seven public assets, and the
-[publication record](releases/v0.0.5-alpha.4-validation.md) identifies the
-verified source, package and publication workflows. A Cargo version change
-alone is never publication evidence.
+Version **0.0.5-alpha.5** was published as a GitHub prerelease on
+4 November 2026 from exact source
+`2eeed0aa52ccb59523307841ad8ffbd83f8911a8`. Its separately authorized
+publication-control revision is
+`7a6248e680c3683291d7dbd3f033d2cc74d7f787`.
+The [alpha.5 release page](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.5)
+lists seven uploaded assets, and the
+[publication record](releases/v0.0.5-alpha.5-validation.md) records the
+verified tag, checksums, source and workflow runs. The one-time release
+request is retired in a post-publication maintenance PR. Earlier alpha.4
+tags and release assets remain immutable. A Cargo version change alone
+is never publication evidence.
 Earlier published tags/assets must remain unchanged. For a future
 release, choose an unused version, update Cargo/lockfile/docs consistently, and
 use its exact tag and archive names throughout the process. An unpublished
 development identifier is not evidence that a public release exists.
 `v0.0.0.1` is not a three-part version.
 
-Alpha.1, alpha.2, alpha.3 and alpha.4 are published; their fulfilled
-requests are retired. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve
+Alpha.1, alpha.2, alpha.3, alpha.4 and alpha.5 are published; fulfilled
+requests are retired after publication verification. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve
 the original candidate contract. Every new release needs fresh exact-version
 and full source-commit approval after all gates. The verifier requires nested module libraries/guides
 as well as inherited alpha.4 contents. The [migration record](migrations/scarp-lang-Scarp.md)
