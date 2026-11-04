@@ -46,9 +46,9 @@ pub fn emit_program(program: &ResolvedProgram) -> Result<String, Diagnostic> {
     let mut text_bytes = 0usize;
     for operation in &program.statements {
         let expression = match &operation.kind {
-            ResolvedStatement::Store { value, .. } | ResolvedStatement::Update { value, .. } => {
-                Some(value)
-            }
+            ResolvedStatement::Store { value, .. }
+            | ResolvedStatement::Update { value, .. }
+            | ResolvedStatement::RepeatInit { count: value, .. } => Some(value),
             ResolvedStatement::JumpIfFalse { condition, .. } => Some(condition),
             ResolvedStatement::Output {
                 arguments,
@@ -65,7 +65,9 @@ pub fn emit_program(program: &ResolvedProgram) -> Result<String, Diagnostic> {
             },
             ResolvedStatement::Jump { .. }
             | ResolvedStatement::LoopControl { .. }
-            | ResolvedStatement::Retire { .. } => None,
+            | ResolvedStatement::Retire { .. }
+            | ResolvedStatement::RepeatGuard { .. }
+            | ResolvedStatement::RepeatNext { .. } => None,
             _ => return Err(unsupported(operation.span)),
         };
         if let Some(expression) = expression {
@@ -102,7 +104,9 @@ pub fn emit_program(program: &ResolvedProgram) -> Result<String, Diagnostic> {
     out.push_str(include_str!("c_runtime.h"));
     for (index, operation) in program.statements.iter().enumerate() {
         match &operation.kind {
-            ResolvedStatement::Store { value, .. } | ResolvedStatement::Update { value, .. } => {
+            ResolvedStatement::Store { value, .. }
+            | ResolvedStatement::Update { value, .. }
+            | ResolvedStatement::RepeatInit { count: value, .. } => {
                 emit_expression(&mut out, index, value)
             }
             ResolvedStatement::JumpIfFalse { condition, .. } => {
@@ -132,6 +136,40 @@ pub fn emit_program(program: &ResolvedProgram) -> Result<String, Diagnostic> {
                 )
                 .unwrap();
             }
+            ResolvedStatement::RepeatInit {
+                count_slot,
+                index_slot,
+                ..
+            } => {
+                writeln!(out, "if(!scarp_e{index}(w,&value)) return 0;").unwrap();
+                writeln!(
+                    out,
+                    "if(value<0) return scarp_fail(w,19u,{},{});\nw->slots[{count_slot}]=value;\nw->slots[{index_slot}]=0;\npc={};",
+                    operation.span.start, operation.span.end, index + 1
+                )
+                .unwrap();
+            }
+            ResolvedStatement::RepeatGuard {
+                count_slot,
+                index_slot,
+                target,
+            } => {
+                writeln!(
+                    out,
+                    "pc=w->slots[{index_slot}]>=w->slots[{count_slot}]?{target}:{};",
+                    index + 1
+                )
+                .unwrap();
+            }
+            ResolvedStatement::RepeatNext { index_slot } => {
+                writeln!(
+                    out,
+                    "if(w->slots[{index_slot}]==INT64_MAX) return scarp_fail(w,7u,{},{});\n++w->slots[{index_slot}];\npc={};",
+                    operation.span.start, operation.span.end, index + 1
+                )
+                .unwrap();
+            }
+
             ResolvedStatement::Update {
                 slot,
                 operator,
