@@ -75,6 +75,8 @@ static inline int scarp_binary(struct scarp_workspace *w, unsigned op,
 }
 static inline int scarp_write(struct scarp_workspace *w, const struct scarp_host *host,
     const uint8_t *bytes, size_t count, uint64_t start, uint64_t end) {
+    /* Match Write::write_all(&[]): no callback for an empty buffer. */
+    if (!count) return 1;
     if (!host || !host->write || host->write(host->context, bytes, count))
         return scarp_fail(w, SCARP_OUTPUT_ERROR, start, end);
     return 1;
