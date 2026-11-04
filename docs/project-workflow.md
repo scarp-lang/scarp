@@ -1,6 +1,7 @@
-# Scarp projects (v0.0.5-alpha.4 prerelease)
+# Scarp projects (v0.0.5-alpha.5 prerelease)
 
-The published alpha.4 prerelease has an offline, explicit project workflow.
+The published alpha.5 prerelease retains the offline, explicit project workflow
+introduced in alpha.4.
 It uses the **real Scarp compiler and interpreter**, not a native code
 generator or package manager. These directory commands are not available in
 alpha.3 packages.
@@ -68,7 +69,7 @@ Unlike `launch`, `verify` does not accept execution-budget flags. File-based
 `verify FILE.srp` remains unchanged. Manifest failures return status 1 and
 support `--diagnostic-format=json`.
 
-**Alpha.5 development-candidate extension (not in published alpha.4 packages):**
+**Published alpha.5 extension (not in alpha.4 packages):**
 
 ```sh
 scarp inspect modules --json hello-world
