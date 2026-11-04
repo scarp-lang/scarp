@@ -267,7 +267,11 @@ fn emitted_scalar_c_matches_interpreter_outputs_errors_spans_and_work_budgets() 
         let results = native_batch(&cc, &cases, optimization);
         assert_eq!(results.len(), cases.len());
         for ((source, limits), actual) in cases.iter().zip(results) {
-            assert_eq!(actual, reference(source, *limits, 1), "{optimization}: {source}");
+            assert_eq!(
+                actual,
+                reference(source, *limits, 1),
+                "{optimization}: {source}"
+            );
         }
     }
 }
@@ -277,10 +281,16 @@ fn native_validation_precedes_io_and_scalar_retirement_does_not_consume_work() {
     let Some(cc) = compiler() else { return };
     let limits = ExecutionLimits::default();
     let source = "var x = 0; while x < 3 { { bind y = x; print(y); } x += 1; }";
-    assert_eq!(native(&cc, source, limits, "-O2", false, 2), reference(source, limits, 2));
+    assert_eq!(
+        native(&cc, source, limits, "-O2", false, 2),
+        reference(source, limits, 2)
+    );
     assert!(native(&cc, "print(1);", limits, "-O2", true, 1).starts_with("65535:"));
     let invalid = "print(1); print(1 / 0);";
-    assert_eq!(native(&cc, invalid, limits, "-O2", true, 1), reference(invalid, limits, 1));
+    assert_eq!(
+        native(&cc, invalid, limits, "-O2", true, 1),
+        reference(invalid, limits, 1)
+    );
 }
 
 #[test]
@@ -290,20 +300,45 @@ fn freestanding_scalar_object_has_no_undefined_symbols_when_requested() {
     }
     let cc = compiler().expect("freestanding compiler required");
     let directory = Directory::new();
-    fs::write(directory.0.join("program.c"), c_backend::emit_c("print(0xFF & 7);").unwrap()).unwrap();
+    fs::write(
+        directory.0.join("program.c"),
+        c_backend::emit_c("print(0xFF & 7);").unwrap(),
+    )
+    .unwrap();
     for target in ["x86_64-unknown-none-elf", "aarch64-unknown-none-elf"] {
         let object = directory.0.join(format!("{target}.o"));
         let built = Command::new(&cc)
-            .args(["-target", target, "-std=c11", "-ffreestanding", "-fno-builtin", "-fno-stack-protector", "-O2", "-c"])
+            .args([
+                "-target",
+                target,
+                "-std=c11",
+                "-ffreestanding",
+                "-fno-builtin",
+                "-fno-stack-protector",
+                "-O2",
+                "-c",
+            ])
             .arg(directory.0.join("program.c"))
             .arg("-o")
             .arg(&object)
             .output()
             .unwrap();
-        assert!(built.status.success(), "{}", String::from_utf8_lossy(&built.stderr));
-        let symbols = Command::new("llvm-nm").arg("--undefined-only").arg(&object).output().unwrap();
+        assert!(
+            built.status.success(),
+            "{}",
+            String::from_utf8_lossy(&built.stderr)
+        );
+        let symbols = Command::new("llvm-nm")
+            .arg("--undefined-only")
+            .arg(&object)
+            .output()
+            .unwrap();
         assert!(symbols.status.success());
-        assert!(symbols.stdout.is_empty(), "{target}: {}", String::from_utf8_lossy(&symbols.stdout));
+        assert!(
+            symbols.stdout.is_empty(),
+            "{target}: {}",
+            String::from_utf8_lossy(&symbols.stdout)
+        );
         let bytes = fs::read(object).unwrap();
         assert_eq!(&bytes[..4], b"\x7fELF");
     }
