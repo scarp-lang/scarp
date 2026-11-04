@@ -23,15 +23,16 @@ output path, registry or network action is created here.
 
 - Scalar i64 integers and booleans, with checked arithmetic, bit operations,
   comparison and short-circuit boolean logic.
-- `bind` / `var` slots, compound assignments, blocks, `if` and `while` flow,
-  `break` / `continue`. Scalar retirement does not consume work steps and
-  needs no C heap action.
+- `bind` / `var` slots, compound assignments, blocks, `if` / `while`, and
+  `repeat COUNT as index` counted loops (one-time count snapshot, zero-based
+  immutable index, bounded advancement). `break` / `continue` follow the
+  nearest loop. Scalar retirement does not consume work steps or need a C heap.
 - Exactly one output argument on stdout with terminating newline
   (`print` / `println`). The argument is a scalar expression or a literal
   UTF-8 string. Strings in bindings or computed text are unsupported.
 
 All unsupported forms fail with `E0049` before emission: functions,
-unsupported imports, `repeat`, floats, vectors, tiles, arrays, calls,
+unsupported imports, floats, vectors, tiles, arrays, calls,
 text construction, stderr, `write`, and multiple/zero output arguments.
 Frontend source errors keep their original diagnostic code.
 
@@ -60,7 +61,9 @@ ABI, native executable, GPU backend, or C-to-Scarp calls are implied.
 ## Validation and next phases
 
 1. Differential tests compare stdout, error codes, source spans and work/
-   print budgets between the interpreter and emitted C at `-O0` and `-O2`.
+   print budgets between the interpreter and emitted C at `-O0` and `-O2`,
+   including nested counted-repeat loops, negative counts, break/continue,
+   snapshots, oversized counts and the interpreter's exact E0019 code.
    Include repeated workspace use, callback failures and rejected forms.
 2. Require a working C11 compiler in stable CI on Linux, macOS and Windows,
    rather than silently skipping C differential tests; retain minimum Rust 1.74.
