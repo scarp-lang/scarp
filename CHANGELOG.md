@@ -2,7 +2,24 @@
 
 ## Unreleased
 
-No language or runtime changes beyond the published alpha.4 prerelease are recorded yet.
+### 0.0.5-alpha.5 development candidate — not published
+
+## 0.0.5-alpha.5 — prerelease candidate (unpublished)
+
+- Add project-aware module inspection of an explicit `Scarp.project` directory,
+  reusing the existing module JSON schema and path-traversal protections.
+- Integrate opt-in freestanding C11 scalar source emission with checked integer
+  and Boolean expressions, branches, `while` and counted `repeat` loops.
+- Match interpreter negative-count, overflow, invalid-shift, work-budget and
+  nearest-loop `break`/`continue` behavior with differential C tests.
+- Add E0049 for unsupported experimental backend forms. Generated C does not
+  imply a `scarp compile` command, a native executable or a stable ABI.
+- Strengthen required-C, freestanding ELF and cross-platform native checks;
+  avoid zero-length host callbacks and test checked output/repeated execution.
+- Include runnable `native_scalar_repeat.srp` with an exact stdout fixture,
+  release-metadata validation, compatibility updates and candidate notes.
+- **Unreleased:** no tag, final-main evidence, source authorization or public
+  package assets have been created for alpha.5.
 
 ## 0.0.5-alpha.4 — prerelease, 2026-11-03
 
