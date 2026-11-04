@@ -12,6 +12,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLISHED_VERSION = "0.0.5-alpha.5"
+HISTORICAL_ALPHA4 = "0.0.5-alpha.4"
 PACKAGE_VERSION = "0.0.5-alpha.5"
 
 
@@ -34,14 +35,14 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
             "docs/reference/cli.md": (f"v{version}",),
             "docs/development/feature-matrix.md": (f"Cargo declares {version}",),
             "CHANGELOG.md": (f"## {version} — prerelease, 2026-11-04",),
-            "docs/releases/v0.0.5-alpha.4.md": (f"Scarp v{PUBLISHED_VERSION}",),
+            "docs/releases/v0.0.5-alpha.4.md": (f"Scarp v{HISTORICAL_ALPHA4}",),
             "docs/releases/v0.0.5-alpha.5.md": (f"Scarp v{version}", "Publication integrity", "not evidence of publication"),
             "docs/releases/v0.0.5-alpha.5-validation.md": (
                 f"Scarp v{version}", "2eeed0aa52ccb59523307841ad8ffbd83f8911a8",
-                "41825396712", "2026-11-04",
+                "41825396712", "4 November 2026",
             ),
             "docs/releases/v0.0.5-alpha.4-validation.md": (
-                f"Scarp v{PUBLISHED_VERSION}",
+                f"Scarp v{HISTORICAL_ALPHA4}",
                 "79141329176f5dce51457e90a6652902f6432135",
                 "41642854489",
             ),
