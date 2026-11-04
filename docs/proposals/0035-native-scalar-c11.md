@@ -65,7 +65,7 @@ ABI, native executable, GPU backend, or C-to-Scarp calls are implied.
 2. Require a working C11 compiler in stable CI on Linux, macOS and Windows,
    rather than silently skipping C differential tests; retain minimum Rust 1.74.
    On Linux, explicitly compile freestanding x86-64 and AArch64 ELF objects
-   and check that they contain no undefined symbols with `llvm-nm`.
+   and check that they contain no undefined symbols with `readelf`.
 3. Only after independent review, propose CLI integration against the current
    compiler. Specify artifact publication, compiler discovery, output safety,
    cross-compilation and full option parity before advertising `scarp compile`.
