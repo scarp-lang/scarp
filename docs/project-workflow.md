@@ -8,7 +8,6 @@ alpha.3 packages.
 ```sh
 scarp create hello-world
 scarp verify hello-world
-scarp inspect modules --json hello-world
 scarp launch hello-world
 scarp guide launch
 ```
@@ -68,6 +67,12 @@ constants, without running statements or writing files. It is silent on success.
 Unlike `launch`, `verify` does not accept execution-budget flags. File-based
 `verify FILE.srp` remains unchanged. Manifest failures return status 1 and
 support `--diagnostic-format=json`.
+
+**Unreleased development-source extension (not in the published alpha.4 packages):**
+
+```sh
+scarp inspect modules --json hello-world
+```
 
 `inspect modules PROJECT_DIRECTORY` (optionally with `--json`) resolves the
 same explicit `Scarp.project` entrypoint and compiles its full module graph
