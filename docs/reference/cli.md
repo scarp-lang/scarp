@@ -1,10 +1,12 @@
 # Command-line reference
 
-## Scarp-first CLI (v0.0.5-alpha.5 development candidate)
+## Scarp-first CLI (v0.0.5-alpha.5 prerelease)
 
-This candidate is **not published**. The latest published version remains
-v0.0.5-alpha.4. The new C11 source emitter is a Rust embedding API, not a
-Scarp CLI command; `scarp compile` still does not exist.
+The latest published prerelease is
+[v0.0.5-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.5).
+It adds project-directory module inspection. The experimental C11 scalar
+source emitter is a Rust embedding API, **not** a Scarp CLI command;
+`scarp compile` still does not exist.
 
 The Scarp-first commands and offline `diagnose` shipped in published alpha.3.
 Alpha.1/alpha.2 binaries retain the older vocabulary. `create`, `launch`, and
