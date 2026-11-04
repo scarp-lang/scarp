@@ -294,6 +294,7 @@ fn emitted_scalar_c_matches_interpreter_outputs_errors_spans_and_work_budgets() 
         ("repeat 999999999 as i { repeat 999999999 as j {} }", ExecutionLimits { max_steps: 100, max_prints: 10 }),
         ("print(3); repeat 3 as i { print(i); }", ExecutionLimits { max_steps: 10, max_prints: 10 }),
         ("repeat 2 as i { print(i); }", ExecutionLimits { max_steps: 100, max_prints: 1 }),
+        (include_str!("../examples/native_scalar_repeat.srp"), defaults),
         ("", ExecutionLimits { max_steps: 0, max_prints: 0 }),
     ];
     for optimization in ["-O0", "-O2"] {
