@@ -1,11 +1,11 @@
 # Version and API compatibility
 
-**Current source:** `0.0.5-alpha.5` is an unpublished development candidate.
+**Current source:** `0.0.5-alpha.5` is a published prerelease.
 The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.5-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.4).
+[0.0.5-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.5).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a
@@ -81,8 +81,10 @@ Use this guide before copying an example into a different Scarp executable or
 updating a Rust embedding host. It compares the published v0.0.1, v0.0.2,
 v0.0.3-beta.1, beta.2, and beta.3 snapshots. Beta.3 uses the syntax described below;
 separate feature branches can differ from both main and downloaded binaries.
-The latest published prerelease is alpha.4. It retains the implemented
-module/language contract from alpha.3 while extending project tooling.
+The latest published prerelease is alpha.5. It retains the alpha.4
+project workflow and adds project-directory module inspection plus an
+experimental scalar C11 source emitter for Rust embedding hosts. The emitter
+does not add a general `scarp compile` command.
 [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) remain a historical
 snapshot, not an alpha.3 status report.
 

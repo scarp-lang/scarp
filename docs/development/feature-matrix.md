@@ -2,9 +2,9 @@
 
 Audit date: 2026-11-04. This inventory describes the tested development
 baseline; update a row when an implementation lands. No roadmap row implies
-a release or an available CLI command. Cargo declares 0.0.5-alpha.5 as an
-**unpublished development candidate**; the latest published prerelease
-remains v0.0.5-alpha.4 (3 November 2026). Future feature rows remain proposals.
+a release or an available CLI command. Cargo declares 0.0.5-alpha.5 as a
+**published prerelease** (4 November 2026), not a stable language contract.
+Future feature rows remain proposals.
 
 Initial main: `1d3b69a79bb0f656b4da3517560ce59e1e41f3bc`. Inspected development:
 `05b4c40f63567267f5d9662ba8108d403d682f88` (148 main-only and 31 development-only
@@ -15,10 +15,12 @@ PR #70 (inspection) and #71 (constants) were independently checked against their
 seven successful CI jobs, then integrated in that order. Retargeting #71 to main
 preserved its verified source tree. Integration commits are `4ec11a3` and `93ae364`.
 The guarded prerelease publisher requires an explicit reviewed request pinned
-to a verified source commit. Alpha.4 was published from source
-`79141329176f5dce51457e90a6652902f6432135` with seven verified assets;
-see the [publication record](../releases/v0.0.5-alpha.4-validation.md).
-The completed request is retired separately; no package registry publication occurred.
+to a verified source commit. Alpha.5 was published from source
+`2eeed0aa52ccb59523307841ad8ffbd83f8911a8` with seven verified assets;
+see the [publication record](../releases/v0.0.5-alpha.5-validation.md).
+The completed request is retired in a post-publication PR; no package registry
+publication occurred. The [alpha.4 record](../releases/v0.0.5-alpha.4-validation.md)
+remains a historical snapshot.
 
 Priorities: P0 current foundation; P1 next enabling work; P2 later; P3 long term.
 Complexity: S local; M several compiler layers; L substantial design/runtime; XL

@@ -2,10 +2,9 @@
 
 ## Unreleased
 
-Candidate release publication is pending exact-source verification and
-reviewed maintainer authorization.
+No post-alpha.5 changes are recorded yet.
 
-## 0.0.5-alpha.5 — prerelease candidate (unpublished)
+## 0.0.5-alpha.5 — prerelease, 2026-11-04
 
 - Add project-aware module inspection of an explicit `Scarp.project` directory,
   reusing the existing module JSON schema and path-traversal protections.
@@ -19,8 +18,12 @@ reviewed maintainer authorization.
   avoid zero-length host callbacks and test checked output/repeated execution.
 - Include runnable `native_scalar_repeat.srp` with an exact stdout fixture,
   release-metadata validation, compatibility updates and candidate notes.
-- **Unreleased:** no tag, final-main evidence, source authorization or public
-  package assets have been created for alpha.5.
+- Published as a **prerelease**, not stable, from exact source
+  `2eeed0aa52ccb59523307841ad8ffbd83f8911a8` on 4 November 2026.
+  Four Rust and three native package jobs passed for both the source and the
+  separate authorization control revision. The guarded publisher verified
+  all seven public downloads. See the
+  [alpha.5 publication record](docs/releases/v0.0.5-alpha.5-validation.md).
 
 ## 0.0.5-alpha.4 — prerelease, 2026-11-03
 
