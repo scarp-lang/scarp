@@ -265,7 +265,7 @@ fn emitted_scalar_c_matches_interpreter_outputs_errors_spans_and_work_budgets() 
         ("print(\"first\"); print(2);", ExecutionLimits { max_steps: 100, max_prints: 1 }),
         ("print(1+2*3);", ExecutionLimits { max_steps: 5, max_prints: 1 }),
         ("print(\"x\");", ExecutionLimits { max_steps: 1, max_prints: 1 }),
-        ("print(""); print("नमस्ते 🌍");", defaults),
+        ("print(\"\"); print(\"नमस्ते 🌍\");", defaults),
         ("print(1 == 1); print(2 != 3); print(true == false);", defaults),
         ("var x = 1; { var x = 2; print(x); } print(x);", defaults),
         ("var x = 0; while x < 5 { x += 1; if x % 2 == 0 { print(x); } }", defaults),
