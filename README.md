@@ -2,17 +2,18 @@
 
 **Build Beyond Boundaries.**
 
-**0.0.5-alpha.5** is an **unpublished development candidate**, not a downloadable
-release. Published builds remain at
-[0.0.5-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.4).
-This candidate adds project module inspection and an opt-in, experimental
-C11 scalar backend with counted-repeat support; see
-[alpha.5 candidate notes](docs/releases/v0.0.5-alpha.5.md).
+**0.0.5-alpha.5** is a [published GitHub prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.5)
+for Windows x64, Linux x64 and macOS Apple Silicon. It adds project-aware
+module inspection and an opt-in experimental C11 scalar emitter for Rust hosts.
+See [alpha.5 release notes](docs/releases/v0.0.5-alpha.5.md) and the
+[publication record](docs/releases/v0.0.5-alpha.5-validation.md).
 
-Scarp is an experimental programming language implemented in Rust. The current **0.0.5-alpha.4** prerelease was published on 3 November 2026. Its exact source is tagged at `79141329176f5dce51457e90a6652902f6432135`. The compiler provides a lexer, parser, typed resolver,
-interpreter, source modules, finite binary64 numerics and a Scarp-first CLI.
-This release adds a bounded project workflow with `create`, `launch` and
-project-directory `verify`. Syntax and APIs are not stable.
+Scarp is an experimental programming language implemented in Rust. The current
+**0.0.5-alpha.5** prerelease was published on 4 November 2026 from exact source
+`2eeed0aa52ccb59523307841ad8ffbd83f8911a8`. The compiler provides a lexer,
+parser, typed resolver, interpreter, source modules, finite binary64 numerics
+and a Scarp-first CLI. The bounded `create`, `launch` and project-directory
+`verify` workflow remains available. Syntax and APIs are not stable.
 
 [Static module inspection](docs/module-inspection.md) lists imports, dependencies
 and typed public/private declarations without executing runtime statements.
@@ -49,9 +50,9 @@ print("Hello from Scarp!");
 Hello from Scarp!
 ```
 
-## Scarp-first CLI (v0.0.5-alpha.4 prerelease)
+## Scarp-first CLI (v0.0.5-alpha.5 prerelease)
 
-The alpha.4 prerelease provides `exec`, `verify FILE`, `inspect`, `guide`,
+The alpha.5 prerelease provides `exec`, `verify FILE`, `inspect`, `guide`,
 `diagnose`, and project commands `create`, `launch`, and `verify DIRECTORY`.
 Alpha.3 provides the Scarp-first file commands, but not the project commands.
 Older commands remain temporarily compatible. After building the intended source, use `scarp`
@@ -65,6 +66,7 @@ scarp diagnose --json
 scarp create hello-world
 scarp launch hello-world
 scarp verify hello-world
+scarp inspect modules --json hello-world
 scarp exec examples/hello.srp
 scarp verify examples/hello.srp
 scarp verify --diagnostic-format=json examples/hello.srp
@@ -82,17 +84,17 @@ manifest and a runnable starter, verifies a project directory without running
 statements, then launches via the real interpreter. This is available in the published alpha.4 packages, not in alpha.3
 packages, and does not generate a native executable.
 
-**Unreleased development-source addition:** `scarp inspect modules --json DIRECTORY`
+**New in published alpha.5:** `scarp inspect modules --json DIRECTORY`
 resolves an explicit `Scarp.project` and inspects its checked module graph with
 the same schema-v1 inventory as the contained entry file. It does not execute
-program statements. This is not available in published alpha.4 packages.
+program statements. This was not available in alpha.4 packages.
 
-**Separate experimental source-only native milestone:** The optional Rust library
+**Experimental alpha.5 Rust embedding feature:** The optional Rust library
 `scarp::c_backend::emit_c` can generate freestanding C11 source for a tightly
 restricted checked integer/Boolean subset, including bounded counted-repeat
 loops. See [Proposal 0035](docs/proposals/0035-native-scalar-c11.md)
 for accepted syntax, validation, output contracts and deliberate exclusions.
-There is still **no** `scarp compile` command or new published native artifact.
+There is still **no** `scarp compile` command or native executable generation from arbitrary `.srp` sources.
 
 These routes preserve the current compiler's schema-version-1
 `--diagnostic-format=json` errors without executing unsupported features.
@@ -139,16 +141,14 @@ one-hot targets and explicit loss gradients. See [vectors](docs/vectors.md),
 [error repairs](docs/reference/numerical-errors.md).
 
 The latest published prerelease is
-[0.0.5-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.4),
-published 3 November 2026 from source commit
-`79141329176f5dce51457e90a6652902f6432135`. The release provides Windows
-x64, Linux x64 and macOS Apple Silicon archives with SHA-256 checksums.
-[Alpha.1's verification record](docs/releases/v0.0.5-alpha.1-validation.md)
-is preserved as historical evidence for that earlier release, not alpha.3.
-See the [alpha.4 release notes](docs/releases/v0.0.5-alpha.4.md),
-[publication verification record](docs/releases/v0.0.5-alpha.4-validation.md),
-[historical candidate checklist](docs/releases/v0.0.5-alpha.4-preparation.md),
+[0.0.5-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.5),
+published 4 November 2026 from source commit
+`2eeed0aa52ccb59523307841ad8ffbd83f8911a8`. It provides Windows x64,
+Linux x64 and macOS Apple Silicon archives with SHA-256 checksums.
+See the [alpha.5 release notes](docs/releases/v0.0.5-alpha.5.md),
+[publication verification record](docs/releases/v0.0.5-alpha.5-validation.md)
 and [release engineering](docs/releasing.md) for publication gates.
+Earlier prerelease records remain historical snapshots.
 
 The maintainer transferred this repository to **scarp-lang/scarp**. The
 [migration record](docs/migrations/scarp-lang-Scarp.md) documents identity,
@@ -158,7 +158,7 @@ history, release/download verification and updated clone instructions.
 
 Binary archives and checksums are available through
 [GitHub Releases](https://github.com/scarp-lang/scarp/releases). See the
-[latest alpha.4 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.4)
+[latest alpha.5 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.5)
 for its supported archives, checksums and source commit. The
 [changelog](CHANGELOG.md) records recent language and tooling changes.
 
