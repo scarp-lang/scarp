@@ -61,6 +61,8 @@ try {
         Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', "examples/$example.srp")
         Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'check', "examples/$example.srp")
     }
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', 'examples/native_scalar_repeat.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'check', 'examples/native_scalar_repeat.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', 'examples/inspection_json.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'modules', '--json', 'examples/inspection_json.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'explain', 'E0044')

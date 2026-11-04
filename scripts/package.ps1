@@ -79,7 +79,7 @@ try {
     foreach ($directory in @('examples', 'docs')) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $directory) -Destination $packageRoot -Recurse
     }
-    if ($version -in @('0.0.5-alpha.2', '0.0.5-alpha.3', '0.0.5-alpha.4')) {
+    if ($version -in @('0.0.5-alpha.2', '0.0.5-alpha.3', '0.0.5-alpha.4', '0.0.5-alpha.5')) {
         $releaseMetadataPath = Join-Path $projectRoot '.github/release-metadata.json'
         $releaseMetadata = Get-Content -LiteralPath $releaseMetadataPath -Raw | ConvertFrom-Json
         if ($releaseMetadata.schema_version -cne 1 -or $releaseMetadata.version -cne $version -or $releaseMetadata.documentation_repository -cne 'https://github.com/scarp-lang/scarp-docs') {
@@ -133,7 +133,7 @@ try {
     [System.IO.File]::WriteAllText($staticSource, 'print(1/0);')
     $staticCheck = Invoke-ScarpProcess -Executable $executable -Arguments @('verify', '--diagnostic-format=json', $staticSource)
     if ($staticCheck.ExitCode -ne 0 -or $staticCheck.Stdout.Length -ne 0 -or $staticCheck.Stderr.Length -ne 0) { throw 'Packaged verify must remain static and silent' }
-    if ($version -eq '0.0.5-alpha.4') {
+    if ($version -in @('0.0.5-alpha.4', '0.0.5-alpha.5')) {
         # Exercise the actual extracted distributable, not a development binary.
         $projectPath = Join-Path $stagingRoot 'alpha4-project-smoke'
         $created = Invoke-ScarpProcess -Executable $executable -Arguments @('create', $projectPath)
@@ -143,6 +143,16 @@ try {
         $projectVerify = Invoke-ScarpProcess -Executable $executable -Arguments @('verify', $projectPath)
         if ($projectVerify.ExitCode -ne 0 -or $projectVerify.Stdout.Length -ne 0 -or $projectVerify.Stderr.Length -ne 0) {
             throw 'Packaged Scarp project static verification failed'
+        }
+        if ($version -eq '0.0.5-alpha.5') {
+            $projectModules = Invoke-ScarpProcess -Executable $executable -Arguments @('inspect', 'modules', '--json', $projectPath)
+            if ($projectModules.ExitCode -ne 0 -or $projectModules.Stderr.Length -ne 0) {
+                throw 'Packaged project directory module inspection failed'
+            }
+            $projectReport = [Text.Encoding]::UTF8.GetString($projectModules.Stdout) | ConvertFrom-Json -ErrorAction Stop
+            if ($projectReport.schema_version -ne 1 -or $projectReport.modules.Count -lt 1) {
+                throw 'Packaged project module JSON does not match schema 1'
+            }
         }
         $projectLaunch = Invoke-ScarpProcess -Executable $executable -Arguments @('launch', $projectPath)
         if ($projectLaunch.ExitCode -ne 0 -or $projectLaunch.Stderr.Length -ne 0 -or [Text.Encoding]::UTF8.GetString($projectLaunch.Stdout) -cne "Hello from Scarp!`n") {

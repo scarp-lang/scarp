@@ -1,6 +1,9 @@
 # Version and API compatibility
 
-**Current source:** `0.0.5-alpha.4` is a published experimental prerelease.
+**Current source:** `0.0.5-alpha.5` is an unpublished development candidate.
+The opt-in C11 scalar source emitter does not add a native executable CLI;
+its supported integer/Boolean subset is documented in
+[Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
 [0.0.5-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.4).
 

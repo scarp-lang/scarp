@@ -2,6 +2,13 @@
 
 **Build Beyond Boundaries.**
 
+**0.0.5-alpha.5** is an **unpublished development candidate**, not a downloadable
+release. Published builds remain at
+[0.0.5-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.4).
+This candidate adds project module inspection and an opt-in, experimental
+C11 scalar backend with counted-repeat support; see
+[alpha.5 candidate notes](docs/releases/v0.0.5-alpha.5.md).
+
 Scarp is an experimental programming language implemented in Rust. The current **0.0.5-alpha.4** prerelease was published on 3 November 2026. Its exact source is tagged at `79141329176f5dce51457e90a6652902f6432135`. The compiler provides a lexer, parser, typed resolver,
 interpreter, source modules, finite binary64 numerics and a Scarp-first CLI.
 This release adds a bounded project workflow with `create`, `launch` and

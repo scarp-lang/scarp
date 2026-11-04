@@ -1,0 +1,25 @@
+// Experimental C11 scalar subset: this file also runs in the Scarp interpreter.
+// The native emitter is a Rust library API, not a Scarp CLI command.
+var even_sum = 0;
+repeat 5 as index {
+    if index % 2 == 0 {
+        even_sum += index;
+    }
+}
+print("even-index sum");
+print(even_sum);
+
+var triangle = 0;
+repeat 4 as row {
+    repeat row as column {
+        triangle += 1;
+    }
+}
+print("triangle cells");
+print(triangle);
+
+repeat 4 as step {
+    if step == 1 { continue; }
+    if step == 3 { break; }
+    print(step);
+}

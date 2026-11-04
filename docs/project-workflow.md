@@ -68,7 +68,7 @@ Unlike `launch`, `verify` does not accept execution-budget flags. File-based
 `verify FILE.srp` remains unchanged. Manifest failures return status 1 and
 support `--diagnostic-format=json`.
 
-**Unreleased development-source extension (not in the published alpha.4 packages):**
+**Alpha.5 development-candidate extension (not in published alpha.4 packages):**
 
 ```sh
 scarp inspect modules --json hello-world

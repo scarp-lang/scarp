@@ -8,7 +8,10 @@ publication; changing a package version alone does not authorize a release.
 
 ## Build inputs and packages
 
-The package version comes from `Cargo.toml`; use a three-part version. The
+The package version comes from `Cargo.toml`; use a three-part version.
+The source now prepares **0.0.5-alpha.5 as an unpublished candidate**; this
+version change is not authorization to tag or publish. Published alpha.4
+assets and the completed alpha.4 request remain immutable. The
 latest published prerelease is `0.0.5-alpha.4`, from source commit
 `79141329176f5dce51457e90a6652902f6432135`. Its completed publication
 request is retired in a separate follow-up maintenance PR. The

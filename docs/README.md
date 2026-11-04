@@ -1,5 +1,9 @@
 # Scarp documentation
 
+**0.0.5-alpha.5 development candidate** is not yet published. The candidate
+adds project-directory module inspection and an opt-in scalar C11 backend;
+see [alpha.5 candidate notes](releases/v0.0.5-alpha.5.md) for limits.
+
 Development declarations use `bind` and `var`; see the [migration guide](syntax-migration.md). Published tags retain their original syntax.
 
 Choose a guide by the task you want to complete. Current tutorials are
@@ -12,8 +16,8 @@ with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)
 records the verified maintainer transfer to scarp-lang/scarp. Historical release
-notes describe fixed snapshots. Tensors, native
-backends, a package manager and website deployment remain separate.
+notes describe fixed snapshots. Tensors, general native executable compilation, a package manager and
+website deployment remain separate.
 
 ## Guides and what each adds
 
