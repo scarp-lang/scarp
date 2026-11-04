@@ -3,7 +3,7 @@
 **Build Beyond Boundaries.**
 
 **0.0.5-alpha.5** is an **unpublished development candidate**, not a downloadable
-release. The latest published prerelease is
+release. Published builds remain at
 [0.0.5-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.4).
 This candidate adds project module inspection and an opt-in, experimental
 C11 scalar backend with counted-repeat support; see
