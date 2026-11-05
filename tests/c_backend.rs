@@ -339,6 +339,7 @@ fn empty_string_output_never_calls_host_with_zero_bytes() {
     let host = r#"
 #include "program.c"
 #include <stdio.h>
+#include <inttypes.h>
 static int calls = 0;
 static size_t total_bytes = 0;
 static int write_bytes(void *ctx, const uint8_t *ptr, size_t count) {
@@ -352,7 +353,7 @@ int main(void) {
     struct scarp_workspace workspace;
     struct scarp_host host = {0, write_bytes};
     unsigned result = scarp_run(&workspace, &host, UINT64_C(10000), 20);
-    printf("%u:%d:%zu\n", result, calls, total_bytes);
+    printf("%u:%d:%" PRIuMAX "\n", result, calls, (uintmax_t)total_bytes);
     return 0;
 }
 "#;
