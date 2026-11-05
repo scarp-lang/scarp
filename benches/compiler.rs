@@ -77,6 +77,35 @@ fn main() {
             black_box(compile());
         },
     );
+    let compile_indexed = || {
+        modules::compile_indexed_with_loader(
+            "main.srp",
+            &loader,
+            ModuleLimits::default(),
+            Default::default(),
+        )
+        .unwrap()
+    };
+    let indexed = compile_indexed();
+    assert_eq!(indexed.program().modules().len(), 4);
+    for reference in indexed.index().references() {
+        assert_eq!(
+            indexed
+                .index()
+                .goto_definition(reference.location.source, reference.location.span.start)
+                .unwrap()
+                .id,
+            reference.target
+        );
+    }
+    measure(
+        "indexed_module_constants_4files",
+        files.iter().map(|(_, text)| text.len()).sum(),
+        iterations,
+        || {
+            black_box(compile_indexed());
+        },
+    );
     measure("inspection_json_4files", size, iterations, || {
         json.clear();
         program.write_inspection_json(black_box(&mut json)).unwrap();

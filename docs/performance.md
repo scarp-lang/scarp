@@ -17,6 +17,13 @@ iteration. These exploratory measurements are not CPU instruction counts, memory
 profiles, interpreter/native speedup claims or a statistically controlled comparison.
 Record toolchain, host and raw samples when assessing a later optimization.
 
+The v0.0.6 candidate adds `indexed_module_constants_4files` on the same four-file
+graph. Before timing, every reference is checked against go-to-definition.
+This case includes ordinary compilation **and** optional index construction,
+unlike `module_constants_4files`, which retains no navigation snapshot. Compare
+them as distinct APIs; the difference is not an interpreter speedup. The
+numerical harness includes correctness-checked RMS at 16 and 32,768 elements.
+
 ## Alpha.4 terminal-call storage experiment — 1 November 2026
 
 Baseline code: `6d9a39a8d1f2b2a3a14947be3ad6ebf59c0b9828`.
