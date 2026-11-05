@@ -24,6 +24,7 @@ use std::{collections::HashMap, fmt, io, path::Path, sync::Arc};
 mod constants;
 mod inspection;
 mod json;
+pub mod symbols;
 pub use constants::{ConstantDependency, ConstantLimits};
 mod spelling;
 use spelling::spelling_hint;
@@ -567,6 +568,43 @@ pub fn resolve_with_compiler_limits(
 ) -> Result<ModuleProgram, ModuleDiagnostic> {
     linker::resolve(graph, constants, types)
 }
+/// Compile and build an opt-in navigation snapshot without executing statements.
+pub fn resolve_indexed(
+    graph: ModuleGraph,
+    limits: symbols::IndexLimits,
+) -> Result<symbols::IndexedProgram, ModuleDiagnostic> {
+    resolve_indexed_with_compiler_limits(
+        graph,
+        ConstantLimits::default(),
+        crate::types::TypeLimits::default(),
+        limits,
+    )
+}
+/// Build navigation while retaining an embedder's existing compilation budgets.
+pub fn resolve_indexed_with_compiler_limits(
+    graph: ModuleGraph,
+    constants: ConstantLimits,
+    types: crate::types::TypeLimits,
+    index: symbols::IndexLimits,
+) -> Result<symbols::IndexedProgram, ModuleDiagnostic> {
+    linker::resolve_indexed(graph, constants, types, index)
+}
+pub fn compile_indexed_with_loader(
+    entry: &str,
+    loader: &dyn SourceLoader,
+    modules: ModuleLimits,
+    index: symbols::IndexLimits,
+) -> Result<symbols::IndexedProgram, ModuleDiagnostic> {
+    resolve_indexed(load(entry, loader, modules)?, index)
+}
+pub fn compile_indexed_file(
+    path: impl AsRef<Path>,
+    modules: ModuleLimits,
+    index: symbols::IndexLimits,
+) -> Result<symbols::IndexedProgram, ModuleDiagnostic> {
+    resolve_indexed(load_file(path.as_ref(), modules)?, index)
+}
+
 pub fn compile_with_loader(
     entry: &str,
     loader: &dyn SourceLoader,
@@ -595,7 +633,9 @@ pub fn compile_file_with_constant_limits(
     limits: ModuleLimits,
     constants: ConstantLimits,
 ) -> Result<ModuleProgram, ModuleDiagnostic> {
-    let path = path.as_ref();
+    resolve_with_constant_limits(load_file(path.as_ref(), limits)?, constants)
+}
+fn load_file(path: &Path, limits: ModuleLimits) -> Result<ModuleGraph, ModuleDiagnostic> {
     let label = path.to_string_lossy().into_owned();
     let make_error = |message: String| ModuleDiagnostic {
         diagnostic: Diagnostic::new(Kind::ModuleLoad, Span::default(), message),
@@ -619,10 +659,7 @@ pub fn compile_file_with_constant_limits(
             entry: label.clone(),
         }),
     })?;
-    resolve_with_constant_limits(
-        load_identity(&label, &loader, limits, Some(identity))?,
-        constants,
-    )
+    load_identity(&label, &loader, limits, Some(identity))
 }
 fn shift(span: &mut Span, base: usize) {
     span.start += base;

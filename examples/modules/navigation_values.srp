@@ -1,0 +1,3 @@
+bind private_seed = 2;
+pub bind offset = private_seed;
+pub pure funcra adjust(n: integer) -> integer { return n + offset; }

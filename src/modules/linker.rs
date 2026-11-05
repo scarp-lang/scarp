@@ -4,7 +4,7 @@ use crate::{
     ast::{Expression, ExpressionKind, PrintArgument, Statement},
     value::{Value, ValueType},
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 struct Symbol {
     info: SymbolInfo,
@@ -260,9 +260,92 @@ struct Rewriter<'a> {
     id: usize,
     tables: &'a [Table],
     remaining: &'a mut usize,
-    scopes: Vec<HashSet<String>>,
+    scopes: Vec<HashMap<String, Span>>,
+    navigation: Option<&'a mut Result<symbols::Builder, Diagnostic>>,
+    function: Option<Span>,
 }
 impl Rewriter<'_> {
+    fn navigation(&mut self, action: impl FnOnce(&mut symbols::Builder) -> Result<(), Diagnostic>) {
+        if let Some(state) = self.navigation.as_deref_mut() {
+            if let Ok(builder) = state {
+                if let Err(error) = action(builder) {
+                    *state = Err(error);
+                }
+            }
+        }
+    }
+    fn index_node(&mut self, node: &crate::ast::ExpressionNode) -> Result<(), Diagnostic> {
+        if !matches!(self.navigation.as_deref(), Some(Ok(_))) {
+            return Ok(());
+        }
+        let source = self.id;
+        match &node.kind {
+            ExpressionKind::Name(name) => {
+                let declaration = if !name.contains('.') {
+                    self.scopes
+                        .iter()
+                        .rev()
+                        .find_map(|scope| scope.get(name))
+                        .copied()
+                } else {
+                    None
+                };
+                let declaration = match declaration {
+                    Some(span) => Some(span),
+                    None => self.symbol(name, node.span)?.map(|s| s.info.span),
+                };
+                self.navigation(|b| {
+                    b.step(node.span)?;
+                    if let Some(declaration) = declaration {
+                        b.use_symbol(
+                            source,
+                            name,
+                            node.span,
+                            declaration,
+                            symbols::ReferenceKind::Read,
+                        )?;
+                    }
+                    Ok(())
+                });
+            }
+            ExpressionKind::UserCall {
+                name,
+                arguments,
+                function_span,
+            } => {
+                let declaration = self
+                    .symbol(name, *function_span)?
+                    .filter(|s| s.target.is_some())
+                    .map(|s| s.info.span);
+                let builtin = declaration.is_none()
+                    && !name.contains('.')
+                    && crate::numeric::Builtin::from_name(name).is_some();
+                self.navigation(|b| {
+                    b.step(node.span)?;
+                    if let Some(declaration) = declaration {
+                        b.use_symbol(
+                            source,
+                            name,
+                            *function_span,
+                            declaration,
+                            symbols::ReferenceKind::Call,
+                        )?;
+                        for argument in arguments {
+                            if let Some((label, span)) = &argument.label {
+                                b.label(source, declaration, label, *span)?;
+                            }
+                        }
+                    } else if builtin {
+                        b.builtin(source, name, *function_span)?;
+                    }
+                    Ok(())
+                });
+            }
+            _ => self.navigation(|b| b.step(node.span)),
+        }
+        Ok(())
+    }
+
     fn binding_name(&self, name: &str, span: Span) -> Result<(), Diagnostic> {
         if let Some(symbol) = self.tables[self.id]
             .symbols
@@ -288,6 +371,7 @@ impl Rewriter<'_> {
     }
     fn expression(&mut self, expression: &mut Expression) -> Result<(), Diagnostic> {
         for node in &mut expression.nodes {
+            self.index_node(node)?;
             match &mut node.kind {
                 ExpressionKind::UserCall {
                     name,
@@ -321,7 +405,11 @@ impl Rewriter<'_> {
                 }
                 ExpressionKind::Name(name) => {
                     if !name.contains('.')
-                        && self.scopes.iter().rev().any(|scope| scope.contains(name))
+                        && self
+                            .scopes
+                            .iter()
+                            .rev()
+                            .any(|scope| scope.contains_key(name))
                     {
                         continue;
                     }
@@ -346,29 +434,32 @@ impl Rewriter<'_> {
     }
     fn list(&mut self, statements: &mut [Statement], nested: bool) -> Result<(), Diagnostic> {
         if nested {
-            self.scopes.push(HashSet::new());
+            self.scopes.push(HashMap::new());
         }
         for statement in statements {
+            self.navigation(|b| b.step(statement.span()));
             match statement {
                 Statement::Function(function) => {
                     let old = std::mem::take(&mut self.scopes);
-                    self.scopes.push(HashSet::new());
+                    let old_function = self.function.replace(function.name_span);
+                    self.scopes.push(HashMap::new());
                     for parameter in &mut function.parameters {
                         self.binding_name(&parameter.name, parameter.span)?;
                         if let Some(default) = &mut parameter.default {
                             self.expression(default)?;
                         }
-                        self.scopes[0].insert(parameter.name.clone());
+                        self.scopes[0].insert(parameter.name.clone(), parameter.span);
                     }
                     for contract in &mut function.contracts {
                         if contract.postcondition && function.result != ValueType::Unit {
-                            self.scopes[0].insert("result".into());
+                            self.scopes[0].insert("result".into(), contract.span);
                         }
                         self.expression(&mut contract.expression)?;
                         self.scopes[0].remove("result");
                     }
                     self.list(&mut function.statements, true)?;
                     self.scopes = old;
+                    self.function = old_function;
                     function.name = self.tables[self.id].symbols[&function.name]
                         .target
                         .as_ref()
@@ -379,19 +470,35 @@ impl Rewriter<'_> {
                     name,
                     name_span,
                     initializer,
+                    mutable,
                     ..
                 } => {
                     self.binding_name(name, *name_span)?;
                     self.expression(initializer)?;
-                    self.scopes.last_mut().unwrap().insert(name.clone());
+                    let (source, owner) = (self.id, self.function);
+                    self.navigation(|b| {
+                        b.binding(
+                            source,
+                            owner,
+                            name,
+                            *name_span,
+                            symbols::SymbolKind::Binding,
+                            *mutable,
+                        )
+                    });
+                    self.scopes
+                        .last_mut()
+                        .unwrap()
+                        .insert(name.clone(), *name_span);
                 }
                 Statement::Assign {
                     name,
                     name_span,
                     value,
+                    operator,
                     ..
                 } => {
-                    if !self.scopes.iter().any(|scope| scope.contains(name))
+                    if !self.scopes.iter().any(|scope| scope.contains_key(name))
                         && self.tables[self.id]
                             .symbols
                             .get(name)
@@ -403,6 +510,24 @@ impl Rewriter<'_> {
                             format!("module constant {name:?} cannot be assigned"),
                         ));
                     }
+                    let source = self.id;
+                    let declaration = self
+                        .scopes
+                        .iter()
+                        .rev()
+                        .find_map(|scope| scope.get(name))
+                        .copied();
+                    let kind = if *operator == crate::ast::AssignmentOperator::Set {
+                        symbols::ReferenceKind::Write
+                    } else {
+                        symbols::ReferenceKind::ReadWrite
+                    };
+                    self.navigation(|b| {
+                        if let Some(declaration) = declaration {
+                            b.use_symbol(source, name, *name_span, declaration, kind)?;
+                        }
+                        Ok(())
+                    });
                     self.expression(value)?;
                 }
                 Statement::Call { expression, .. } => self.expression(expression)?,
@@ -420,7 +545,19 @@ impl Rewriter<'_> {
                 } => {
                     self.expression(count)?;
                     self.binding_name(index, *index_span)?;
-                    self.scopes.push(HashSet::from([index.clone()]));
+                    let (source, owner) = (self.id, self.function);
+                    self.navigation(|b| {
+                        b.binding(
+                            source,
+                            owner,
+                            index,
+                            *index_span,
+                            symbols::SymbolKind::RepeatIndex,
+                            false,
+                        )
+                    });
+                    self.scopes
+                        .push(HashMap::from([(index.clone(), *index_span)]));
                     self.list(statements, false)?;
                     self.scopes.pop();
                 }
@@ -470,17 +607,44 @@ impl Rewriter<'_> {
 }
 
 pub(super) fn resolve(
-    mut graph: ModuleGraph,
+    graph: ModuleGraph,
     constants: ConstantLimits,
     types: crate::types::TypeLimits,
 ) -> Result<ModuleProgram, ModuleDiagnostic> {
+    resolve_impl(graph, constants, types, None).map(|(program, _)| program)
+}
+pub(super) fn resolve_indexed(
+    graph: ModuleGraph,
+    constants: ConstantLimits,
+    types: crate::types::TypeLimits,
+    limits: symbols::IndexLimits,
+) -> Result<symbols::IndexedProgram, ModuleDiagnostic> {
+    resolve_impl(graph, constants, types, Some(limits)).map(|(program, index)| {
+        symbols::IndexedProgram::new(program, index.expect("requested symbol index"))
+    })
+}
+fn resolve_impl(
+    mut graph: ModuleGraph,
+    constants: ConstantLimits,
+    types: crate::types::TypeLimits,
+    index_limits: Option<symbols::IndexLimits>,
+) -> Result<(ModuleProgram, Option<symbols::SymbolIndex>), ModuleDiagnostic> {
     let result = (|| -> Result<_, Diagnostic> {
         let mut remaining = graph.limits.max_expansion_bytes;
         let (tables, dependencies) = collect(&graph, &mut remaining, constants)?;
+        let mut navigation = index_limits.map(|limits| symbols::Builder::new(&graph, limits));
         let mut statements = Vec::new();
         let mut info = Vec::new();
         for (id, module) in graph.modules.iter_mut().enumerate() {
             let mut body = Vec::new();
+            let mut rewriter = Rewriter {
+                id,
+                tables: &tables,
+                remaining: &mut remaining,
+                scopes: vec![HashMap::new()],
+                navigation: navigation.as_mut(),
+                function: None,
+            };
             for wrapped in std::mem::take(&mut module.program.statements) {
                 let (statement, public) = match wrapped {
                     Statement::Export { declaration, .. } => (*declaration, true),
@@ -488,17 +652,15 @@ pub(super) fn resolve(
                 };
                 match &statement {
                     Statement::Import { .. } => {}
-                    Statement::Declaration { .. } if id != 0 || public => {}
+                    Statement::Declaration { initializer, .. } if id != 0 || public => {
+                        for node in initializer.nodes() {
+                            rewriter.index_node(node)?;
+                        }
+                    }
                     _ => body.push(statement),
                 }
             }
-            Rewriter {
-                id,
-                tables: &tables,
-                remaining: &mut remaining,
-                scopes: vec![HashSet::new()],
-            }
-            .list(&mut body, false)?;
+            rewriter.list(&mut body, false)?;
             statements.extend(body);
             info.push(ModuleInfo {
                 source: id,
@@ -515,20 +677,25 @@ pub(super) fn resolve(
             crate::resolver::resolve_with_type_limits(Program { statements }, types)?,
             info,
             dependencies,
+            navigation.transpose()?,
         ))
     })();
     let sources = Arc::new(graph.sources);
     match result {
-        Ok((program, modules, constant_dependencies)) => {
+        Ok((program, modules, constant_dependencies, navigation)) => {
             let inspection = inspection::Inspection::new(&graph.modules, &modules);
             debug_assert_eq!(inspection.function_count(), program.functions().len());
-            Ok(ModuleProgram {
-                program,
-                sources,
-                modules,
-                inspection,
-                constant_dependencies,
-            })
+            let index = navigation.map(|b| b.finish(sources.clone()));
+            Ok((
+                ModuleProgram {
+                    program,
+                    sources,
+                    modules,
+                    inspection,
+                    constant_dependencies,
+                },
+                index,
+            ))
         }
         Err(diagnostic) => Err(ModuleDiagnostic {
             diagnostic,

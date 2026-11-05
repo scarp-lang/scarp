@@ -22,6 +22,7 @@ Usage:
   scarp <command> [options]
 
 Commands:
+  inspect symbols|references [--json] <file.srp|project-directory>  Source navigation
   exec <file.srp>                  Execute a Scarp program
   verify <file.srp|directory>      Perform static source or project validation
   inspect tokens <file.srp>        Inspect lexer tokens and source locations
@@ -68,6 +69,8 @@ Runtime arithmetic, contracts, dynamic paths and budgets are not evaluated.
 ";
 
 const INSPECT_HELP: &str = "Usage:
+  scarp inspect symbols [--json] <file.srp|project-directory>
+  scarp inspect references [--json] <file.srp|project-directory>
   scarp inspect tokens [--] <file.srp>
   scarp inspect ast [--] <file.srp>
   scarp inspect modules [--json] [--] <file.srp|project-directory>
@@ -83,6 +86,22 @@ const INSPECT_TOKENS_HELP: &str = "Usage: scarp inspect tokens [--] <file.srp>
 List lexer tokens and UTF-8 source locations without parsing or executing code.
 Runtime execution-limit options and --json are not accepted.
 --diagnostic-format=json is available for lexer errors.
+";
+
+const SYMBOLS_HELP: &str = "Usage: scarp inspect symbols [--json] [--diagnostic-format=json] [--] <file.srp|project-directory>
+
+Compile a complete source graph and inspect source-ordered definitions without
+executing statements, defaults or contracts. Compile-time constants are checked.
+--json emits schema-v1 scarp.symbols metadata; compiler errors use the existing
+diagnostic format. Limits are bounded independently from runtime budgets.
+Use inspect references for use sites, including calls, writes and named labels.
+";
+const REFERENCES_HELP: &str = "Usage: scarp inspect references [--json] [--diagnostic-format=json] [--] <file.srp|project-directory>
+
+Build the same static navigation snapshot as inspect symbols and include every
+resolved reference with its target symbol ID and file-local UTF-8 byte span.
+--json emits schema-v1 scarp.references metadata, including the symbol table.
+IDs belong to one snapshot. Invalid graphs fail before any inventory is written.
 ";
 
 const INSPECT_AST_HELP: &str =
@@ -312,6 +331,8 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                 Some("tokens") => Some(INSPECT_TOKENS_HELP),
                 Some("ast") => Some(INSPECT_AST_HELP),
                 Some("modules") => Some(INSPECT_MODULES_HELP),
+                Some("symbols") => Some(SYMBOLS_HELP),
+                Some("references") => Some(REFERENCES_HELP),
                 _ => None,
             };
             return match page {
@@ -373,6 +394,8 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                 Some("tokens") => Some(INSPECT_TOKENS_HELP),
                 Some("ast") => Some(INSPECT_AST_HELP),
                 Some("modules") => Some(INSPECT_MODULES_HELP),
+                Some("symbols") => Some(SYMBOLS_HELP),
+                Some("references") => Some(REFERENCES_HELP),
                 _ => None,
             };
             return match page {
@@ -454,12 +477,24 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             .expect("validated invocation has an entry") = entry.into_os_string();
         return dispatch(forwarded, output, errors);
     }
+    let navigation = if args.first().is_some_and(|command| command == "inspect") {
+        match args.get(1).and_then(|s| s.to_str()) {
+            Some("symbols") => Some(false),
+            Some("references") => Some(true),
+            _ => None,
+        }
+    } else {
+        None
+    };
     let inspect_ast = args.first().is_some_and(|command| command == "inspect")
         && args.get(1).is_some_and(|topic| topic == "ast");
     if args.first().is_some_and(|command| command == "inspect") {
         match args.get(1).and_then(|topic| topic.to_str()) {
-            Some("tokens" | "ast" | "modules") => {
+            Some("tokens" | "ast" | "modules" | "symbols" | "references") => {
                 args.remove(0);
+                if navigation.is_some() {
+                    args[0] = OsString::from("modules");
+                }
                 if inspect_ast {
                     // Route through the existing file option parser without
                     // adding an unintended top-level 'ast' alias.
@@ -469,7 +504,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             _ => {
                 let _ = writeln!(
                     errors,
-                    "error: expected inspect tokens, inspect ast or inspect modules\n\n{INSPECT_HELP}"
+                    "error: expected inspect tokens, inspect ast, inspect modules, inspect symbols or inspect references\n\n{INSPECT_HELP}"
                 );
                 return 2;
             }
@@ -576,6 +611,26 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         None
     };
     let path = project_entry.as_deref().unwrap_or(path);
+    if let Some(references) = navigation {
+        let indexed = match modules::compile_indexed_file(
+            path,
+            ModuleLimits::default(),
+            modules::symbols::IndexLimits::default(),
+        ) {
+            Ok(p) => p,
+            Err(error) => return report_module_diagnostic(&error, errors, json_diagnostics),
+        };
+        return write_formatted_output(
+            match (references, json) {
+                (false, false) => indexed.index().write_symbols(output),
+                (true, false) => indexed.index().write_references(output),
+                (false, true) => indexed.index().write_symbols_json(output),
+                (true, true) => indexed.index().write_references_json(output),
+            },
+            errors,
+            json_diagnostics,
+        );
+    }
     if command != "tokens" {
         let program = match modules::compile_file(path, ModuleLimits::default()) {
             Ok(program) => program,
