@@ -53,6 +53,16 @@ jobs:
           command -v clang
           command -v readelf
           cargo test --locked --offline --test c_backend freestanding_scalar_object_has_no_undefined_symbols_when_requested -- --exact
+      - name: Verify C differential behavior with GCC and Clang UBSan
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          SCARP_REQUIRE_C: "1"
+        run: |
+          command -v gcc
+          command -v clang
+          SCARP_CC=gcc cargo test --locked --offline --test c_backend
+          SCARP_CC=clang SCARP_C_SANITIZE=1 cargo test --locked --offline --test c_backend
       - name: Smoke-test benchmark workloads
         run: |
           cargo bench --locked --offline --bench runtime -- --quick
