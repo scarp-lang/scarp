@@ -8,6 +8,11 @@
   original UTF-8 locations, named-argument and assignment references, and E0050.
 - Add independent JSON/source-span checks, exact fixtures and runnable examples.
   Existing module/diagnostic JSON schemas and execution behavior are preserved.
+- Add pure `rms(vector) -> float` with scaled compensated reduction, finite
+  extreme-magnitude results, exact 4n native work and no new element allocation.
+  Cover windows, modules, contracts, empty domains and a high-precision oracle.
+- Require GCC and Clang UBSan differential checks on Linux; make the C host
+  fixture's size formatting portable to Windows GCC without weakening warnings.
 
 ## 0.0.5-alpha.5 — prerelease, 2026-11-04
 

@@ -295,6 +295,11 @@ task, parser and host memory. Snapshots account 64 + 8n bytes per value even whe
 shared; output preparation charges n in both run/check. No new option field or
 hidden mutable global state is introduced. See [the contract](proposals/0017-numerical-vectors.md).
 
+The RMS reduction restores its input scale only after division by the square
+root of the count; it adds no numerical payload allocation. The same signature
+registry feeds the resolver, runtime and optional symbol index.
+See [RMS](root-mean-square.md).
+
 Parser container state is separated from leaf-statement and atom temporaries.
 Private boxed parse failures keep recursive Result values small without changing
 public diagnostics or adding valid-path error allocations. This preserves the

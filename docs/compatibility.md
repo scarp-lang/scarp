@@ -1,5 +1,14 @@
 # Version and API compatibility
 
+Unreleased v0.0.6 development adds the pure `rms` builtin and public
+`numeric::Builtin::Rms` variant. Exhaustive Rust host matches need an arm;
+user function declarations named `rms` retain precedence. Existing primitive
+types, diagnostic codes, runtime options and source syntax remain compatible.
+See [RMS semantics and limits](root-mean-square.md). The opt-in
+[symbol index](symbol-index.md) is additive, with compilation-local identities
+and independent resource limits; it does not change the existing module or
+diagnostic JSON schema-v1 contracts.
+
 **Current source:** `0.0.5-alpha.5` is a published prerelease.
 The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in

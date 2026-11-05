@@ -13,6 +13,7 @@ enum Native {
     Allocation,
     Statistics(usize),
     Activations(usize),
+    Rms(usize),
 }
 
 fn call(kernel: Builtin, args: &[Value]) -> Value {
@@ -27,6 +28,7 @@ fn fill(value: f64, count: usize) -> Value {
 
 fn native(workload: Native) -> Value {
     match workload {
+        Native::Rms(count) => call(Builtin::Rms, &[fill(3.0, count)]),
         Native::Statistics(count) => {
             let values = call(
                 Builtin::Stitch,
@@ -115,6 +117,13 @@ fn main() {
     );
     let mut cases = Vec::new();
     for count in [16, 32_768] {
+        cases.push((
+            format!("root_mean_square_{count}"),
+            format!("print(rms(fill(3.0,{count})));"),
+            3.0,
+            Native::Rms(count),
+            count,
+        ));
         cases.push((
             format!("population_statistics_{count}"),
             format!(

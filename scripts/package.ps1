@@ -435,6 +435,21 @@ try {
             if ($failed.ExitCode -ne 1 -or $failed.Stdout.Length -ne 0 -or -not [System.Text.Encoding]::UTF8.GetString($failed.Stderr).StartsWith(('error[' + $case[1] + ']'))) { throw 'Packaged statistics diagnostic or atomicity failed' }
         }
     }
+    $rmsSource = Join-Path $stagingRoot 'rms.srp'
+    [System.IO.File]::WriteAllText($rmsSource, 'print(rms([1e308,-1e308])==1e308);')
+    foreach ($verb in @('exec','check')) {
+        $result = Invoke-ScarpProcess -Executable $executable -Arguments @($verb,'--max-vector-bytes','16',$rmsSource)
+        $expected = if ($verb -eq 'exec') { "true`n" } else { '' }
+        if ($result.ExitCode -ne 0 -or $result.Stderr.Length -ne 0 -or [System.Text.Encoding]::UTF8.GetString($result.Stdout) -cne $expected) { throw 'Packaged finite RMS or allocation accounting failed' }
+        $limited = Invoke-ScarpProcess -Executable $executable -Arguments @($verb,'--max-vector-bytes','15',$rmsSource)
+        if ($limited.ExitCode -ne 1 -or $limited.Stdout.Length -ne 0 -or -not [System.Text.Encoding]::UTF8.GetString($limited.Stderr).StartsWith('error[E0036]')) { throw 'Packaged RMS input allocation cap failed' }
+    }
+    [System.IO.File]::WriteAllText($rmsSource, 'print("OUT"); eprint("ERR"); print(rms([]));')
+    $rmsError = Invoke-ScarpProcess -Executable $executable -Arguments @('exec','--diagnostic-format=json',$rmsSource)
+    $rmsDiagnostic = [System.Text.Encoding]::UTF8.GetString($rmsError.Stderr) | ConvertFrom-Json -ErrorAction Stop
+    if ($rmsError.ExitCode -ne 1 -or $rmsError.Stdout.Length -ne 0 -or $rmsDiagnostic.code -cne 'E0034') { throw 'Packaged RMS domain failure must discard program streams' }
+    $rmsStatic = Invoke-ScarpProcess -Executable $executable -Arguments @('verify',$rmsSource)
+    if ($rmsStatic.ExitCode -ne 0 -or $rmsStatic.Stdout.Length -ne 0 -or $rmsStatic.Stderr.Length -ne 0) { throw 'Packaged RMS static verification must not evaluate calls' }
     $tokens = & $executable tokens (Join-Path $extractedPackage 'examples/arithmetic.srp')
     if ($LASTEXITCODE -ne 0 -or -not ($tokens -match 'integer\(1\)')) {
         throw 'Packaged token inspection failed'
