@@ -1,5 +1,14 @@
 # Test and validate changes
 
+For the unpublished v0.0.6-alpha.1 candidate, include `--test symbol_navigation
+--test symbol_navigation_cli --test root_mean_square`. Run the independent
+`scripts/test_symbol_index_json.py` and `scripts/test_rms.py` against the built
+executable. The former validates original UTF-8 locations and schema fixtures;
+the latter compares exact binary64 inputs with 200-digit Decimal RMS results.
+Both use only Python's standard library. The full check scripts run the Rust
+and `.srp` examples, and native packages repeat navigation/RMS smoke checks.
+Linux CI additionally requires GCC, Clang UBSan and freestanding ELF checks.
+
 Developer tooling checks include `--test developer_tools --test module_files` and
 `python scripts/test_inspection_json.py target/debug/scarp` (use scarp.exe on
 Windows). Rust tests lock exact JSON and catalogue invariants; Python independently

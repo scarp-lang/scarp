@@ -1,6 +1,9 @@
 # Command-line reference
 
-## Scarp-first CLI (v0.0.5-alpha.5 prerelease)
+## Scarp-first CLI (v0.0.6-alpha.1 candidate)
+
+The candidate is unpublished. `inspect symbols` and `inspect references` are
+new static inspection commands; published alpha.5 binaries do not have them.
 
 The latest published prerelease is
 [v0.0.5-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.5).

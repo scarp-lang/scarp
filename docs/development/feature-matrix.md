@@ -2,8 +2,9 @@
 
 Audit date: 2026-11-05. This inventory describes the tested development
 baseline; update a row when an implementation lands. No roadmap row implies
-a release or an available CLI command. Cargo declares 0.0.5-alpha.5 as a
-**published prerelease** (4 November 2026), not a stable language contract.
+a release or an available CLI command. Cargo declares 0.0.6-alpha.1 as an
+**unpublished candidate**. The latest published prerelease remains v0.0.5-alpha.5
+(4 November 2026), not a stable language contract.
 Future feature rows remain proposals.
 
 Current audit baseline: `1aff6cabf93f2e0bce6953b29e1abe7d00ebd5fb`.
@@ -38,9 +39,9 @@ requires separate architecture and multiple implementation phases.
 | Integer and finite-float math | Checked i64/binary64 and exact explicit conversions | Additional scalar math after domain design | Built-in registry and evaluator | P0 | S | Bounds, signed zero, loss of precision | Numeric reference |
 | Scalar constants | Implemented by #71; annotations checked before evaluation | Approved constant intrinsics only after separate design | Shared expression typing/evaluation | P0 | M | Order/cycles, import visibility, task/node bounds | Constant guide |
 | Bitwise/radix/remainder | Implemented in main and published alpha.3; tests/bit_operations.rs covers full-width operations | No missing signed-i64 operator in this subset | Current lexer, parser, resolver and evaluator | P0 | M | All shift counts, overflow, precedence, module parity | Values/operators |
-| Strings | UTF-8 literals/equality, shared storage and seven bounded scalar queries | Construction, slicing, normalization with allocation policy | Typed pure built-ins and work charging | P0 | M | Combining marks, emoji, empty input, limits | Text indexing contract |
+| Strings | UTF-8 literals/equality, shared storage, bounded queries and construction | Normalization and richer text policy | Typed pure built-ins and work charging | P0 | M | Combining marks, emoji, empty input, limits | Text indexing contract |
 | Characters and bytes | Missing | Distinct types, decoding and conversion rules | Type representation and allocation limits | P2 | L | Encoding/invalid sequences, host parity | Type proposal |
-| Tuples/fixed arrays | Missing | Types, literals, destructuring, indexing | Composite type representation | P1 | L | Nested types, length/index/type errors | Grammar/types |
+| Tuples/fixed arrays | Deferred; [proposal 0036](../proposals/0036-composite-values-and-tensor-boundaries.md), no source/runtime implementation | Types, literals, destructuring, indexing | Composite type representation | P1 | L | Nested types, length/index/type errors | Grammar/types |
 | Dynamic typed lists | Numeric vectors only | General element types and mutation policy | Composite types, allocation budgets | P2 | XL | Aliasing, shape, limits, retirement | Collection contract |
 | Maps/sets | Missing | Key equality/hash policy, deterministic iteration | Composite types and allocation accounting | P2 | XL | Collisions/order/limits, Unicode keys | Collection contract |
 | Optional/structured errors | Missing | Tagged values and propagation | Variants and match typing | P1 | L | Success/error paths, exhaustive handling | Error model |
@@ -64,14 +65,14 @@ requires separate architecture and multiple implementation phases.
 | Module initialization | Intentionally absent | Effectful initialization requires separate design | Capability/effect and cycle policy | P3 | XL | Failure/ordering/deduplication | Initialization design |
 | Typed execution plan | Implemented lowered slot/operation plan | Explicit stable IR and CFG views | Resolver plan invariants | P1 | L | IR/source mapping and control edges | IR architecture |
 | Optimizations | Constant modules, slot retirement, terminal self transfer | General folding, DCE and CFG passes | IR/effect/budget-equivalence contract | P1 | L | Differential output/errors/budgets | Optimization semantics |
-| Native backend | Experimental scalar C11 library emitter integrated on main via PR #103; includes counted-repeat lowering, no native CLI and unavailable in published alpha.4 | Complete modern features, signed-off ABI, complete budget model | Current type rules, source graph and safety budgets | P1 | XL | Differential interpreter/C, all rejected forms | Experimental subset |
+| Native backend | Experimental scalar C11 library emitter published in alpha.5; counted-repeat lowering, no native CLI | Complete modern features, signed-off ABI, complete budget model | Current type rules, source graph and safety budgets | P1 | XL | Differential interpreter/C, all rejected forms | Experimental subset |
 | Native build/compile CLI | Historical PR #22 only; unavailable on main | Current backend integration and toolchain boundary | Backend, platform compiler/error handling | P2 | L | Artifact overwrite, subprocess/path/ABI | Build contract |
 | Math/linear algebra library | Bounded vector/tile kernels and exact scalar conversions; unreleased RMS with independent Decimal oracle | Broader scalar math catalogue after domain design | Pure intrinsic dispatch | P0 | M | Numeric domains, finiteness, exact budgets | Built-in reference |
 | General text/algorithms | Unicode length/codepoint/search/prefix/suffix implemented | General collection sorting/search | Allocation/work policy, collection types | P0 | M | Unicode semantics, deterministic search, limits | Standard library |
 | Formatting/JSON/serialization | Versioned module metadata JSON implemented | Language value JSON, general formatting and serialization | Error/composite values; bounded parsing | P1 | L | Escaping, schemas, invalid data, limits | Format/version policy |
 | Filesystem/network/process I/O | Explicit source loader only | External capability model and structured errors | Effects, permissions, errors | P2 | XL | Denied access, roots, no ambient authority | Security model |
 | Dates/time/random/environment | Missing | Explicit nondeterministic host capabilities | Effects/host interfaces | P3 | L | Seed/replay, denied host calls | Capability APIs |
-| Numerical AI kernels | Vectors/tiles, stable softmax/loss/gradients | Generalized tensors/broadcasting and shape types | Composite numeric type/shape design | P1 | XL | Reference models, shapes, budgets, precision | Tensor proposal |
+| Numerical AI kernels | Vectors/tiles, stable softmax/loss/gradients; candidate RMS | Generalized tensors/broadcasting and shape types (proposal 0036) | Composite numeric type/shape design | P1 | XL | Reference models, shapes, budgets, precision | Tensor proposal |
 | CPU training/inference | Small classification examples implemented | Parameter/layer APIs and general models | Tensor/shape and serialization design | P2 | XL | Numerical oracles, convergence, reproducibility | AI tutorials |
 | Automatic differentiation | Loss gradient kernels only | Graph/tape and chain-rule architecture | Tensor representation and lifetime budgets | P2 | XL | Finite differences, graph reuse, memory | AD design |
 | GPU/backend abstraction | Missing | Explicit devices, transfer and backend contracts | General tensors and stable IR | P3 | XL | CPU differential, deterministic error rules | No GPU-support claim |
@@ -79,7 +80,7 @@ requires separate architecture and multiple implementation phases.
 | Allocation budgets | Work/output/calls/slots/vector payload bounded | Unified measured statistics and string construction budget | Distinguish cumulative/live/process memory | P1 | L | Exact boundary and no-partial-output tests | Budgets/profiling |
 | CLI exec/verify/inspect/create/launch | Implemented and published in alpha.4, including static Scarp.project verification | Additional commands require complete contracts | Source graph, manifest and diagnostics | P0 | M | Help/usage/native paths/status/output failures | CLI reference |
 | fmt/test/bench/doc/doctor | Not CLI commands | Complete contracts/tool discovery before advertising | Parser/trivia or runner/host capabilities | P2 | L | Idempotence/discovery/status/side effects | CLI proposals |
-| LSP/IDE/debugger | Missing | JSON consumers, reference index, protocol and stepping | Stable diagnostics/source/reference metadata | P1 | XL | Protocol, edits/cancellation, UTF-16 mapping | IDE design |
+| LSP/IDE/debugger | Snapshot API/CLI available for consumers; protocol and debugger missing | Versioned document adapter, protocol and stepping | Stable diagnostics/source/reference metadata | P1 | XL | Protocol, edits/cancellation, UTF-16 mapping | IDE design |
 | Package/build tooling | Cargo builds Scarp; published alpha.4 has bounded `Scarp.project` and interpreter-backed `create`/`launch` but no native build or registry | Dependency trust and lockfiles | Module/package identity design | P2 | XL | Reproducibility, traversal, offline cache | Package design |
 | Interoperability/FFI | Rust host APIs only | Safe value/ABI and ownership boundaries | Stable IR/types/capabilities | P3 | XL | Lifetime/ABI/error/host permission tests | FFI design |
 | Concurrency/async | Programs reusable across host threads | Language scheduling, synchronization, cancellation | Effects, values and runtime model | P3 | XL | Races/replay/deadlocks and quotas | Concurrency design |

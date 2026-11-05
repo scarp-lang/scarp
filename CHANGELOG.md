@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.0.6-alpha.1 — candidate, unpublished
 
 - Add opt-in, bounded source symbol/reference snapshots with go-to-definition and
   find-references Rust APIs; retain original cross-file and folded constant sites.
