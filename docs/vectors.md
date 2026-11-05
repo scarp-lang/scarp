@@ -1,9 +1,10 @@
 # Numerical vectors
 
-The current alpha.4 candidate includes immutable, one-dimensional finite
-binary64 vectors. Published alpha.1 supports scalar floats but not vectors.
-See [candidate release notes](releases/v0.0.4-alpha.4.md) for the publication
-and the [integration audit](development/numerical-vectors-audit.md).
+Published v0.0.5-alpha.5 includes immutable, one-dimensional finite binary64
+vectors and the previously introduced vector kernels below. Development source
+additionally includes [root mean square](root-mean-square.md), unreleased work
+for v0.0.6. Older alpha-specific sections retain the introduction history; see
+the [integration audit](development/numerical-vectors-audit.md).
 
 ## Construct, inspect and replace
 
@@ -32,7 +33,7 @@ Copies and captured outputs share immutable storage. Replacing weights cannot
 change snapshot or pending output. Display uses the scalar float formatter in
 brackets, for example `[1.0, -0.0]`; binary rounding remains observable.
 
-## Ten pure kernels
+## Core pure kernels
 
 All arguments are positional. Scalar arguments must be float unless marked
 integer. Each returned vector owns a new buffer; inputs are borrowed unchanged.
@@ -49,6 +50,7 @@ integer. Each returned vector owns a new buffer; inputs are borrowed unchanged.
 | `clamp(v, low, high)` | vector | Float low <= high, also for empty input |
 | `fill(value, count)` | vector | Float value then integer count in 0..65536 |
 | `softmax(v)` | vector | Nonempty; maximum-shifted normalized exponentials |
+| `rms(v)` | float | Nonempty; scaled root mean square; unreleased v0.0.6 work |
 
 The unreleased old #18 used the opposite fill order. This milestone follows
 `fill(value, count)` from the current specification; there is no overload.

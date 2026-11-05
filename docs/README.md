@@ -49,6 +49,7 @@ experimental Rust-hosted C11 scalar emitter; see
 | [Import tutorial](tutorials/modules.md) | Run a three-file numerical program and repair private-member/cycle errors |
 | [Finite floats](floats.md) | Use the alpha's binary64 scalars, numeric diagnostics, and function integration |
 | [Numerical vectors](vectors.md) | Use immutable numerical data, pure kernels, typed vector calls and bounded allocation |
+| [Root mean square](root-mean-square.md) | Use the unreleased finite RMS reduction, visible windows and exact work/allocation rules |
 | [Your first numerical program](tutorials/numerical-program.md) | Build a small typed numerical calculation and compare probabilities safely |
 | [Numerical errors](reference/numerical-errors.md) | Repair type, shape, index, domain, overflow and quota failures |
 | [Functions](functions.md) | Learn typed calls, defaults, contracts, and bounded invocation resources |

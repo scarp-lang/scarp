@@ -306,3 +306,10 @@ finite-result and work checks execute only on selected paths. Static type checks
 still inspect unused bodies. Whole-vector var replacement is allowed, while
 element mutation, broadcasting and vector arithmetic operators are not.
 See [vectors](vectors.md) for signatures, algorithms, resource costs and examples.
+
+## Unreleased RMS reduction
+
+Development source adds `rms(vector) -> float` for nonempty finite vectors.
+It uses the ordinary pure builtin call rules, has no new syntax, and does not
+add arrays or general tensors. See [RMS](root-mean-square.md) for numerical
+domain, allocation, work and host API compatibility.

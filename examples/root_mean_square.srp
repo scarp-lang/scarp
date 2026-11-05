@@ -1,0 +1,7 @@
+// RMS measures signal magnitude without forming an overflowing norm.
+bind signal = [3.0, 4.0];
+print(rms(signal) > 3.5, rms(signal) < 3.6);
+print(rms([2.0, -2.0]));
+print(rms(window([99.0, 3.0, 4.0, 99.0], 1, 2)) == rms(signal));
+print(rms([1e308, -1e308]) == 1e308);
+print(rms([0.0, -0.0]));

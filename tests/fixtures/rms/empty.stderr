@@ -1,0 +1,6 @@
+error[E0034]: rms requires a nonempty vector
+ --> empty.srp:3:11
+  |
+3 | print(rms([]));
+  |           ^^
+ = help: provide at least one vector element; an empty window has no RMS

@@ -50,6 +50,7 @@ pub enum Builtin {
     Fill,
     Softmax,
     Norm,
+    Rms,
     Normalize,
     LogSumExp,
     LogSoftmax,
@@ -129,6 +130,7 @@ impl Builtin {
             "fill" => Self::Fill,
             "softmax" => Self::Softmax,
             "norm" => Self::Norm,
+            "rms" => Self::Rms,
             "normalize" => Self::Normalize,
             "logsumexp" => Self::LogSumExp,
             "logsoftmax" => Self::LogSoftmax,
@@ -180,6 +182,7 @@ impl Builtin {
             | Self::Mean
             | Self::Softmax
             | Self::Norm
+            | Self::Rms
             | Self::Normalize
             | Self::LogSumExp
             | Self::LogSoftmax
@@ -229,6 +232,7 @@ impl Builtin {
             | Self::Dot
             | Self::Mse
             | Self::Norm
+            | Self::Rms
             | Self::LogSumExp
             | Self::MaxValue
             | Self::MinValue
@@ -628,6 +632,10 @@ pub(crate) fn evaluate_with_spans(
     } else {
         None
     };
+    if function == Builtin::Rms && left.is_empty() {
+        return Err(domain(argument_span(0), "rms requires a nonempty vector")
+            .with_help("provide at least one vector element; an empty window has no RMS"));
+    }
     if matches!(
         function,
         Builtin::Mean
@@ -671,6 +679,7 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::Mse
         | Builtin::Softmax
         | Builtin::Norm
+        | Builtin::Rms
         | Builtin::Normalize
         | Builtin::LogSumExp
         | Builtin::LogSoftmax
@@ -762,8 +771,14 @@ pub(crate) fn evaluate_with_spans(
             }
             vector(values, span)
         }
-        Builtin::Norm | Builtin::Normalize => {
+        Builtin::Norm | Builtin::Normalize | Builtin::Rms => {
             let (scale, magnitude) = scaled_l2(left, span)?;
+            if function == Builtin::Rms {
+                // Divide the scaled magnitude before restoring the input scale:
+                // the RMS stays finite even when the L2 norm would overflow.
+                let fraction = (magnitude / (left.len() as f64).sqrt()).clamp(0.0, 1.0);
+                return finite_number(scale * fraction, span).map(Value::Float);
+            }
             if function == Builtin::Norm {
                 return finite_number(scale * magnitude, span).map(Value::Float);
             }
