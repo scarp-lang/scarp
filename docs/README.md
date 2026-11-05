@@ -1,5 +1,11 @@
 # Scarp documentation
 
+**0.0.6-alpha.1 candidate** is unpublished. Development source adds
+[bounded symbol navigation](symbol-index.md) and [RMS](root-mean-square.md);
+[candidate notes](releases/v0.0.6-alpha.1.md) distinguish implemented work,
+experimental APIs and deferred features. Published availability below remains
+v0.0.5-alpha.5 until separate publication approval and verification.
+
 **0.0.5-alpha.5 prerelease** is published with project-directory module
 inspection and an opt-in experimental C11 scalar backend for Rust hosts;
 see [alpha.5 release notes](releases/v0.0.5-alpha.5.md) and the

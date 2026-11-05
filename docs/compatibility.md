@@ -9,7 +9,9 @@ See [RMS semantics and limits](root-mean-square.md). The opt-in
 and independent resource limits; it does not change the existing module or
 diagnostic JSON schema-v1 contracts.
 
-**Current source:** `0.0.5-alpha.5` is a published prerelease.
+**Current source:** `0.0.6-alpha.1` is an unpublished candidate.
+The latest published v0.0.5-alpha.5 remains available; candidate features require
+a source build until the separate exact-SHA release gate is approved.
 The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).

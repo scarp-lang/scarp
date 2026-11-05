@@ -2,13 +2,19 @@
 
 **Build Beyond Boundaries.**
 
+**0.0.6-alpha.1** is the current **unpublished candidate**, adding bounded
+cross-file symbol/reference navigation and finite root mean square. See
+[candidate notes](docs/releases/v0.0.6-alpha.1.md), [symbol APIs and JSON](docs/symbol-index.md)
+and [RMS](docs/root-mean-square.md). Exact-main CI and archive validation precede
+a separate exact-version/source-SHA publication approval.
+
 **0.0.5-alpha.5** is a [published GitHub prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.5)
 for Windows x64, Linux x64 and macOS Apple Silicon. It adds project-aware
 module inspection and an opt-in experimental C11 scalar emitter for Rust hosts.
 See [alpha.5 release notes](docs/releases/v0.0.5-alpha.5.md) and the
 [publication record](docs/releases/v0.0.5-alpha.5-validation.md).
 
-Scarp is an experimental programming language implemented in Rust. The current
+Scarp is an experimental programming language implemented in Rust. The latest published
 **0.0.5-alpha.5** prerelease was published on 4 November 2026 from exact source
 `2eeed0aa52ccb59523307841ad8ffbd83f8911a8`. The compiler provides a lexer,
 parser, typed resolver, interpreter, source modules, finite binary64 numerics

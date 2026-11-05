@@ -13,7 +13,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 PUBLISHED_VERSION = "0.0.5-alpha.5"
 HISTORICAL_ALPHA4 = "0.0.5-alpha.4"
-PACKAGE_VERSION = "0.0.5-alpha.5"
+PACKAGE_VERSION = "0.0.6-alpha.1"
 
 
 def package_version():
@@ -30,15 +30,16 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         self.assertEqual(version, PACKAGE_VERSION)
         needles = {
             "README.md": (f"**{version}**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
-            "docs/README.md": (f"**{version} prerelease**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
-            "docs/compatibility.md": (f"`{version}` is a published prerelease", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
+            "docs/README.md": (f"**{version} candidate**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
+            "docs/compatibility.md": (f"`{version}` is an unpublished candidate", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/reference/cli.md": (f"v{version}",),
             "docs/development/feature-matrix.md": (f"Cargo declares {version}",),
-            "CHANGELOG.md": (f"## {version} — prerelease, 2026-11-04",),
+            "CHANGELOG.md": (f"## {version} — candidate, unpublished",),
+            "docs/releases/v0.0.6-alpha.1.md": (f"Scarp v{version}", "unpublished prerelease candidate", "not evidence of publication"),
             "docs/releases/v0.0.5-alpha.4.md": (f"Scarp v{HISTORICAL_ALPHA4}",),
-            "docs/releases/v0.0.5-alpha.5.md": (f"Scarp v{version}", "Publication integrity", "not evidence of publication"),
+            "docs/releases/v0.0.5-alpha.5.md": (f"Scarp v{PUBLISHED_VERSION}", "Publication integrity", "not evidence of publication"),
             "docs/releases/v0.0.5-alpha.5-validation.md": (
-                f"Scarp v{version}", "2eeed0aa52ccb59523307841ad8ffbd83f8911a8",
+                f"Scarp v{PUBLISHED_VERSION}", "2eeed0aa52ccb59523307841ad8ffbd83f8911a8",
                 "41825396712", "4 November 2026",
             ),
             "docs/releases/v0.0.5-alpha.4-validation.md": (
@@ -53,7 +54,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
                 for needle in expected:
                     self.assertIn(needle, text, f"update {filename} when changing the package release anchor")
 
-    def test_latest_published_prerelease_matches_package(self):
+    def test_latest_published_prerelease_remains_separate_from_candidate(self):
         version = PUBLISHED_VERSION
         self.assertEqual(PACKAGE_VERSION, package_version())
         for filename in ("README.md", "docs/README.md", "docs/compatibility.md"):
@@ -63,7 +64,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
                 self.assertEqual(matches, [version])
 
 
-    def test_published_metadata_and_lockfile(self):
+    def test_candidate_metadata_and_lockfile(self):
         version = package_version()
         metadata = json.loads(
             (ROOT / ".github/release-metadata.json").read_text(encoding="utf-8")
