@@ -1,12 +1,13 @@
 # Feature completeness and development roadmap
 
-Audit date: 2026-11-04. This inventory describes the tested development
+Audit date: 2026-11-05. This inventory describes the tested development
 baseline; update a row when an implementation lands. No roadmap row implies
 a release or an available CLI command. Cargo declares 0.0.5-alpha.5 as a
 **published prerelease** (4 November 2026), not a stable language contract.
 Future feature rows remain proposals.
 
-Initial main: `1d3b69a79bb0f656b4da3517560ce59e1e41f3bc`. Inspected development:
+Current audit baseline: `1aff6cabf93f2e0bce6953b29e1abe7d00ebd5fb`.
+Historical initial main: `1d3b69a79bb0f656b4da3517560ce59e1e41f3bc`. Inspected development:
 `05b4c40f63567267f5d9662ba8108d403d682f88` (148 main-only and 31 development-only
 commits). That branch contains older native/project/CLI experiments and lacks
 later numerical, module and safety work. It must not be merged wholesale.
@@ -57,8 +58,8 @@ requires separate architecture and multiple implementation phases.
 | Pure functions/contracts | Implemented | General effect system | Explicit external capabilities first | P1 | L | Transitive purity, defaults/postconditions | Effects/contracts |
 | Recursion/tail handling | Bounded heap frames; terminal self transfer | Mutual-tail optimization and profiling | Call-graph/IR analysis | P2 | L | Depth/call parity, postconditions | Runtime trade-offs |
 | Module loading/visibility | Implemented; trusted roots and bounds | Explicit re-exports and standard modules | Export/alias contract | P1 | M | Re-export collisions/private access, cycles | Modules |
-| Import/dependency inspection | #70/#71 integrated; schema-v1 JSON and constant edges implemented; project-directory metadata inspection added in unreleased development source | Full symbol-reference index | Existing immutable metadata | P0 | M | Exact schema/order/escaping/I/O/CLI | Inspection schema |
-| Source navigation | Import and constant-use locations | All symbol references, go-to-definition | Reference index and stable source identity | P1 | L | Cross-file/Unicode/reference ownership | Tooling API |
+| Import/dependency inspection | #70/#71 integrated; schema-v1 JSON and constant edges implemented; project-directory metadata inspection published in alpha.5 | Navigation builds on this inventory | Existing immutable metadata | P0 | M | Exact schema/order/escaping/I/O/CLI | Inspection schema |
+| Source navigation | Implemented on main, unreleased: bounded symbol/reference snapshots, go-to-definition/find-references APIs and static JSON/text CLI | Type-symbol navigation, LSP, rename and incremental invalidation | Shared linker scopes and immutable source maps | P0 | L | Cross-file, shadowing, Unicode, exact JSON, limits, no execution | [Navigation contract](../symbol-index.md) |
 | Incremental checking/cache | Missing | Identity, invalidation and immutable result reuse | Dependency/reference graph; cache contract | P1 | L | Changed/deleted dependencies, stale diagnostics | Invalidation design |
 | Module initialization | Intentionally absent | Effectful initialization requires separate design | Capability/effect and cycle policy | P3 | XL | Failure/ordering/deduplication | Initialization design |
 | Typed execution plan | Implemented lowered slot/operation plan | Explicit stable IR and CFG views | Resolver plan invariants | P1 | L | IR/source mapping and control edges | IR architecture |

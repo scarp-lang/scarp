@@ -154,6 +154,16 @@ The maintainer transferred this repository to **scarp-lang/scarp**. The
 [migration record](docs/migrations/scarp-lang-Scarp.md) documents identity,
 history, release/download verification and updated clone instructions.
 
+## Unreleased source navigation toward v0.0.6
+
+Current main adds [symbol/reference navigation](docs/symbol-index.md) through
+`scarp inspect symbols --json FILE` and `scarp inspect references --json FILE`
+(or an explicit project directory). The Rust snapshot API provides go-to-definition
+and find-references without running statements, defaults or contracts. It retains
+cross-file aliases, folded constant uses and lexical shadowing under independent
+index limits. Try `examples/symbol_navigation.srp` and `cargo run --example symbol_index`.
+These commands are absent from published alpha.5 binaries.
+
 ## Build and run
 
 Binary archives and checksums are available through

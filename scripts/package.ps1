@@ -133,6 +133,15 @@ try {
     [System.IO.File]::WriteAllText($staticSource, 'print(1/0);')
     $staticCheck = Invoke-ScarpProcess -Executable $executable -Arguments @('verify', '--diagnostic-format=json', $staticSource)
     if ($staticCheck.ExitCode -ne 0 -or $staticCheck.Stdout.Length -ne 0 -or $staticCheck.Stderr.Length -ne 0) { throw 'Packaged verify must remain static and silent' }
+    foreach ($navigationMode in @('symbols', 'references')) {
+        $navigationResult = Invoke-ScarpProcess -Executable $executable -Arguments @('inspect', $navigationMode, '--json', (Join-Path $extractedPackage 'examples/symbol_navigation.srp'))
+        $symbolInventory = [System.Text.Encoding]::UTF8.GetString($navigationResult.Stdout) | ConvertFrom-Json -ErrorAction Stop
+        if ($navigationResult.ExitCode -ne 0 -or $navigationResult.Stderr.Length -ne 0 -or $symbolInventory.schema_version -ne 1 -or $symbolInventory.kind -cne "scarp.$navigationMode" -or $symbolInventory.symbols.Count -lt 2) { throw 'Packaged source navigation inventory failed' }
+        if ($navigationMode -eq 'references' -and $symbolInventory.references.Count -eq 0) { throw 'Packaged reference inventory is empty' }
+        $staticNavigation = Invoke-ScarpProcess -Executable $executable -Arguments @('inspect', $navigationMode, '--json', $staticSource)
+        if ($staticNavigation.ExitCode -ne 0 -or $staticNavigation.Stderr.Length -ne 0) { throw 'Packaged navigation must not evaluate runtime arithmetic' }
+    }
+
     if ($version -in @('0.0.5-alpha.4', '0.0.5-alpha.5')) {
         # Exercise the actual extracted distributable, not a development binary.
         $projectPath = Join-Path $stagingRoot 'alpha4-project-smoke'

@@ -288,3 +288,13 @@ the [diagnostic reference](diagnostics.md) for caret interpretation and the
 
 Development output statements can write to stdout or stderr; see the
 [output guide](../output.md). Successful `check` stays silent on both streams.
+
+## Unreleased symbol and reference inspection
+
+Current main supports `inspect symbols [--json] FILE_OR_PROJECT_DIRECTORY` and
+`inspect references [--json] FILE_OR_PROJECT_DIRECTORY`. Both are static complete-
+graph inspections; runtime budgets do not apply. They accept the existing
+`--diagnostic-format=json` error format and `--` filename separator. No top-level
+`symbols` or `references` aliases are introduced. See the [navigation contract](../symbol-index.md)
+for snapshot-local IDs, precise source positions, limits, schema-v1 fixtures,
+implicit definitions and failure behavior. These commands are not in alpha.5.

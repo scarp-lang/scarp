@@ -2,7 +2,12 @@
 
 ## Unreleased
 
-No post-alpha.5 changes are recorded yet.
+- Add opt-in, bounded source symbol/reference snapshots with go-to-definition and
+  find-references Rust APIs; retain original cross-file and folded constant sites.
+- Add static `inspect symbols` / `inspect references` text and versioned JSON views,
+  original UTF-8 locations, named-argument and assignment references, and E0050.
+- Add independent JSON/source-span checks, exact fixtures and runnable examples.
+  Existing module/diagnostic JSON schemas and execution behavior are preserved.
 
 ## 0.0.5-alpha.5 — prerelease, 2026-11-04
 
