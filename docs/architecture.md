@@ -300,3 +300,20 @@ Private boxed parse failures keep recursive Result values small without changing
 public diagnostics or adding valid-path error allocations. This preserves the
 independent 64 block/expression limits on small parser stacks; a 512 KiB
 regression covers grouped scalars/vectors and nested calls at the combined bounds.
+
+## Opt-in source navigation (unreleased v0.0.6)
+
+`modules::symbols` captures definitions and references before linker name rewriting
+and scalar substitution erase their syntax. The linker's lexical maps retain
+binding declaration spans and supply targets from the same visibility/builtin
+lookup used for compilation. Constants and signature parameters are captured from
+the original graph; body/default/contract occurrences follow the existing visitor.
+No second semantic resolver or retained AST clone is introduced. Compilation must
+succeed before a snapshot is exposed; index failures remain separate from normal
+compiler diagnostics and runtime quotas.
+
+The frozen index shares `SourceMap` through `Arc`, sorts and caches original
+file-local positions with incremental trackers, and builds token and reverse-use
+tables. Queries use binary search and read-only slices without new source loading.
+Normal compilation retains no navigation snapshot. See [symbol navigation](symbol-index.md)
+for limits, storage-accounting scope and client integration boundaries.

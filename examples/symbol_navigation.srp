@@ -1,0 +1,16 @@
+import "modules/navigation_values.srp" as library;
+
+bind base = library.offset;
+pure funcra twice(value: integer = library.offset) -> integer
+    needs value >= 0;
+    ensures result == value * 2;
+{
+    return value * 2;
+}
+
+var total = 0;
+repeat 3 as step {
+    bind base = twice(value: library.adjust(n: base + step));
+    total += base;
+}
+print(total);

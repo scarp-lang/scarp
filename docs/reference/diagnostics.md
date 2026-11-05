@@ -6,10 +6,12 @@ codes through `E0015` are available in v0.0.2. Beta.1 adds `E0016` through
 `E0019`; published beta.2 retains those assignments and adds contextual
 declaration/assignment repair help. E0020–E0029 cover functions, E0030–E0036
 cover numerical values/budgets, and published 0.0.5-alpha.1 adds
-E0037–E0043 for modules. Unreleased scalar/text intrinsics add E0044/E0045.
-Existing assignments are unchanged. E0049 is reserved for the unreleased,
-experimental scalar C11 backend, not the published alpha.4 compiler. Unreleased `scarp explain E####` prints
-general repairs without loading source; see [developer tooling](../module-json.md).
+E0037 through E0043 for modules. Published alpha.2/alpha.3 add scalar/text,
+integer-bit, semantic-type and text-allocation codes E0044 through E0048.
+E0049 identifies the experimental C11 embedding subset published in alpha.5.
+E0050 applies to the unreleased, opt-in symbol navigation index. Existing code
+assignments are preserved. `scarp explain E####` prints general repairs without
+loading source; see [developer tooling](../module-json.md).
 
 ## Codes and first repairs
 
@@ -64,6 +66,7 @@ general repairs without loading source; see [developer tooling](../module-json.m
 | `E0047` | Semantic type registry limit | Reduce type complexity or adjust host type limits |
 | `E0048` | Invalid or excessive constructed text | Reduce text payload or increase the bounded allowance |
 | `E0049` | Unrepresentable experimental C11 native subset | Use the interpreter or restrict operations to supported scalar forms; see [Proposal 0035](../proposals/0035-native-scalar-c11.md) |
+| `E0050` | Opt-in symbol index limit exceeded; reduce metadata or adjust Rust `IndexLimits` independently from compiler/runtime budgets |
 
 Run/check file-read and UTF-8 failures use E0038; imported-file failures also
 identify the import location. Tokens file-read failures and output I/O failures
