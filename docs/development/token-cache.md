@@ -4,7 +4,7 @@ This is an incremental front-end milestone for [issue #117](https://github.com/s
 
 ## What it does
 
-The compiler's regular `modules::load()` behavior is unchanged. Embedders may opt into `modules::load_with_token_cache(entry, loader, module_limits, &mut token_cache)` or combine the lexical cache with the existing semantic cache by calling `CompilationCache::compile_with_token_cache(..., &mut token_cache)`.
+The compiler's regular `modules::load()` behavior is unchanged. Embedders may opt into `modules::load_with_token_cache(entry, loader, module_limits, &mut token_cache)` or combine the lexical cache with the existing semantic cache by calling `CompilationCache::compile_with_token_cache(entry, loader, CachedCompileOptions::new(&revisions), &mut token_cache)`. The options value groups the regular module/constant/type budgets and explicit per-source revisions.
 
 Every request still performs normal source loading and re-resolves **all** imports using the trusted `SourceLoader`. It checks file/import/depth/source-byte budgets, runs the **full parser** and validates import declarations, path identities, cycle rules, linker visibility, constants and types as before. **The only skipped work on a token hit is lexing that unchanged individual source.**
 
