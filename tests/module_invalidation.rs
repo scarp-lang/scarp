@@ -473,6 +473,29 @@ fn budgets_bound_graph_construction_and_input_edits() {
         short_identity.plan_edits(&["main.srp", "main.srp", "main.srp"]),
         Err(InvalidationError::IdentityLimit)
     );
+    // Previously an unknown first identity returned full invalidation before
+    // reading later entries, silently bypassing the aggregate byte budget.
+    for edits in [
+        ["unknown.srp", "main.srp", "lib.srp"],
+        ["main.srp", "unknown.srp", "lib.srp"],
+    ] {
+        assert_eq!(
+            short_identity.plan_edits(&edits),
+            Err(InvalidationError::IdentityLimit)
+        );
+    }
+    // Exactly the identity-byte budget is valid, even if one path is unknown.
+    let full = short_identity
+        .plan_edits(&["unknown.srp", "main.srp"])
+        .unwrap();
+    assert_eq!(
+        full,
+        EditImpact {
+            affected: vec![0, 1],
+            unknown_identity: true,
+            must_rediscover: true,
+        }
+    );
 }
 
 #[test]
