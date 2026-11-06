@@ -38,11 +38,29 @@ def release_notes_at(source_directory, commit, version):
         # Read the reviewed notes from the exact approved source commit. Unlike
         # earlier metadata-only releases, alpha.4 carries a real feature/limit
         # inventory and must not render notes from a moving checkout.
-        notes_path = f"docs/releases/v{version}.md"
+        # The alpha.2 candidate guide deliberately says "not published".
+        # Publishing that guide verbatim would mislabel a successful GitHub
+        # release. Use separately reviewed public-facing notes from the SAME
+        # immutable source commit; never read a moving workspace file.
+        notes_path = (
+            "docs/releases/v0.0.6-alpha.2-publication.md"
+            if version == "0.0.6-alpha.2"
+            else f"docs/releases/v{version}.md"
+        )
         notes = subprocess.check_output(
             ["git", "-C", str(source_directory), "show", f"{commit}:{notes_path}"],
             text=True, encoding="utf-8",
         ).rstrip()
+        if version == "0.0.6-alpha.2":
+            if (
+                not notes.startswith("# Scarp v0.0.6-alpha.2 — prerelease\n")
+                or any(phrase in notes.lower() for phrase in (
+                    "not a published github release",
+                    "source candidate under validation",
+                    "do not authorize a tag",
+                ))
+            ):
+                raise ValueError("alpha.2 publication notes contain candidate-only status")
         return (f"{notes}\n\nSource commit: `{commit}`\n\n"
                 f"[Scarp documentation]({metadata['documentation_repository']})\n")
     return (f"Scarp v{version}\n\nSource commit: `{commit}`\n\n"
@@ -210,6 +228,8 @@ def verify(directory, version, commit, source_directory=None):
         ) if version in ("0.0.6-alpha.1", "0.0.6-alpha.2") else ()
         alpha6_2_files = (
             "docs/releases/v0.0.6-alpha.2.md",
+            "docs/releases/v0.0.6-alpha.2-publication.md",
+            "docs/proposals/0037-compiler-owned-native-ir.md",
             "docs/development/incremental-invalidation.md",
             "docs/development/semantic-cache.md",
             "docs/development/token-cache.md",

@@ -159,6 +159,8 @@ class ReleaseAssets(unittest.TestCase):
             if version == "0.0.6-alpha.2":
                 for member in (
                     "docs/releases/v0.0.6-alpha.2.md",
+                    "docs/releases/v0.0.6-alpha.2-publication.md",
+                    "docs/proposals/0037-compiler-owned-native-ir.md",
                     "docs/development/incremental-invalidation.md",
                     "docs/development/semantic-cache.md",
                     "docs/development/token-cache.md",
@@ -194,6 +196,8 @@ class ReleaseAssets(unittest.TestCase):
         for member in (
             "RELEASE-METADATA.json",
             "docs/releases/v0.0.6-alpha.2.md",
+            "docs/releases/v0.0.6-alpha.2-publication.md",
+            "docs/proposals/0037-compiler-owned-native-ir.md",
             "docs/development/incremental-invalidation.md",
             "docs/development/semantic-cache.md",
             "docs/development/token-cache.md",
@@ -220,24 +224,29 @@ class ReleaseAssets(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid release metadata"):
             verifier.verify(self.directory, version, COMMIT)
 
-    def test_alpha6_2_notes_and_cache_docs_use_exact_approved_source(self):
+    def test_alpha6_2_publication_notes_and_cache_docs_use_exact_source(self):
         version = "0.0.6-alpha.2"
         source, _, files = self.alpha2_source_fixture(version=version)
-        notes = f"docs/releases/v{version}.md"
+        candidate = f"docs/releases/v{version}.md"
+        publication = f"docs/releases/v{version}-publication.md"
         syntax = "docs/development/syntax-cache.md"
         for name, data in (
-            (notes, b"# Approved source-relative cache features\n"),
+            (candidate, b"# Internal release candidate, not a published GitHub release\n"),
+            (publication, (
+                "# Scarp v0.0.6-alpha.2 — prerelease\n\n"
+                "Approved public release notes and cache features.\n"
+            ).encode("utf-8")),
             (syntax, b"# Verified source-relative syntax spans\n"),
         ):
             path = source / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
             files[name] = data
-        subprocess.run(["git", "-C", str(source), "add", "--", notes, syntax], check=True)
+        subprocess.run(["git", "-C", str(source), "add", "--", candidate, publication, syntax], check=True)
         subprocess.run([
             "git", "-C", str(source), "-c", "user.name=Release Fixture",
             "-c", "user.email=fixture@example.invalid",
-            "commit", "--quiet", "-m", "approved alpha6.2",
+            "commit", "--quiet", "-m", "approved alpha2 public notes",
         ], check=True)
         commit = subprocess.check_output(
             ["git", "-C", str(source), "rev-parse", "HEAD"], text=True
@@ -245,14 +254,47 @@ class ReleaseAssets(unittest.TestCase):
         self.build(version=version, commit=commit, extra_files=files)
         self.assertEqual(len(verifier.verify(self.directory, version, commit, source).splitlines()), 3)
         expected = verifier.release_notes_at(source, commit, version)
-        self.assertIn("source-relative cache features", expected)
+        self.assertIn("Approved public release notes", expected)
+        self.assertNotIn("Internal release candidate", expected)
         self.assertIn(commit, expected)
-        (source / notes).write_text("# Modified checkout notes\n", encoding="utf-8")
+
+        # A moving checkout must not change the already-approved Git source.
+        (source / publication).write_text("# Modified checkout notes\n", encoding="utf-8")
         self.assertEqual(verifier.release_notes_at(source, commit, version), expected)
+        files[publication] += b"tampered\n"
+        self.build(version=version, commit=commit, extra_files=files)
+        with self.assertRaisesRegex(ValueError, "source differs.*publication.md"):
+            verifier.verify(self.directory, version, commit, source)
+        files[publication] = (
+            "# Scarp v0.0.6-alpha.2 — prerelease\n\n"
+            "Approved public release notes and cache features.\n"
+        ).encode("utf-8")
         files[syntax] += b"tampered\n"
         self.build(version=version, commit=commit, extra_files=files)
         with self.assertRaisesRegex(ValueError, "source differs.*syntax-cache.md"):
             verifier.verify(self.directory, version, commit, source)
+
+    def test_alpha6_2_publisher_rejects_candidate_only_public_notes(self):
+        source, _, _ = self.alpha2_source_fixture(version="0.0.6-alpha.2")
+        publication = source / "docs/releases/v0.0.6-alpha.2-publication.md"
+        publication.parent.mkdir(parents=True, exist_ok=True)
+        for text in (
+            "# Scarp v0.0.6-alpha.2 — release candidate\n",
+            "# Scarp v0.0.6-alpha.2 — prerelease\n\n"
+            "Status: source candidate under validation.\n",
+        ):
+            publication.write_text(text, encoding="utf-8")
+            subprocess.run(["git", "-C", str(source), "add", "--", str(publication)], check=True)
+            subprocess.run([
+                "git", "-C", str(source), "-c", "user.name=Release Fixture",
+                "-c", "user.email=fixture@example.invalid", "commit", "--quiet",
+                "-m", "invalid candidate-only publication notes",
+            ], check=True)
+            commit = subprocess.check_output(
+                ["git", "-C", str(source), "rev-parse", "HEAD"], text=True
+            ).strip()
+            with self.assertRaisesRegex(ValueError, "candidate-only status"):
+                verifier.release_notes_at(source, commit, "0.0.6-alpha.2")
 
     def test_alpha6_requires_navigation_rms_and_all_prior_feature_contents(self):
         version = "0.0.6-alpha.1"
