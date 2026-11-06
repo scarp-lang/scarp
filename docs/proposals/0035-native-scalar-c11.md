@@ -1,8 +1,10 @@
 # Proposal 0035 — Experimental scalar C11 emission
 
-**Status:** implemented only on the accompanying unreleased feature branch; not
-part of v0.0.5-alpha.4 or the supported `scarp` CLI. This is a deliberately
-restricted port of historical PR #20, **not a merge of its old compiler tree**.
+**Status:** experimental Rust embedding API published in
+`v0.0.5-alpha.5` and retained in the current compiler. It is **not** a
+`scarp compile` command or a general native executable compiler. This is a
+deliberately restricted port of historical PR #20, **not a merge of its old
+compiler tree**.
 
 ## Purpose and invocation
 
@@ -35,6 +37,15 @@ All unsupported forms fail with `E0049` before emission: functions,
 unsupported imports, floats, vectors, tiles, arrays, calls,
 text construction, stderr, `write`, and multiple/zero output arguments.
 Frontend source errors keep their original diagnostic code.
+
+The current implementation first applies a **crate-internal native scalar
+preflight** to the already resolved program, before generating any C source.
+It validates operation and expression kinds, logical workspace size and
+resource quotas in one pass. The C emitter then consumes the checked workspace
+counts. This preparatory boundary does **not** introduce a separately supported
+native IR, object writer, compiler invocation or a new Rust public API.
+Any future machine-code emitter must pass its own reviewed target/ABI and
+resource checks; see [the native pipeline plan](https://github.com/scarp-lang/scarp/issues/128).
 
 The initial caps are 256 scalar slots, 4096 operations, 1024 nodes
 per expression, 16384 total expression nodes, and 65536 bytes of
