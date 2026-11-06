@@ -165,6 +165,7 @@ class ReleaseAssets(unittest.TestCase):
                     "docs/development/semantic-cache.md",
                     "docs/development/token-cache.md",
                     "docs/development/syntax-cache.md",
+                    "docs/development/cache-eviction.md",
                 ):
                     if member != omit:
                         files[member] = b"fixture"
@@ -202,6 +203,7 @@ class ReleaseAssets(unittest.TestCase):
             "docs/development/semantic-cache.md",
             "docs/development/token-cache.md",
             "docs/development/syntax-cache.md",
+            "docs/development/cache-eviction.md",
             "docs/releases/v0.0.6-alpha.1.md",
             "docs/symbol-index.md", "docs/root-mean-square.md",
             "examples/symbol_navigation.references.json",
@@ -230,6 +232,7 @@ class ReleaseAssets(unittest.TestCase):
         candidate = f"docs/releases/v{version}.md"
         publication = f"docs/releases/v{version}-publication.md"
         syntax = "docs/development/syntax-cache.md"
+        retention = "docs/development/cache-eviction.md"
         for name, data in (
             (candidate, b"# Internal release candidate, not a published GitHub release\n"),
             (publication, (
@@ -237,12 +240,16 @@ class ReleaseAssets(unittest.TestCase):
                 "Approved public release notes and cache features.\n"
             ).encode("utf-8")),
             (syntax, b"# Verified source-relative syntax spans\n"),
+            (retention, b"# Approved scoped cache eviction contract\n"),
         ):
             path = source / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
             files[name] = data
-        subprocess.run(["git", "-C", str(source), "add", "--", candidate, publication, syntax], check=True)
+        subprocess.run(
+            ["git", "-C", str(source), "add", "--", candidate, publication, syntax, retention],
+            check=True,
+        )
         subprocess.run([
             "git", "-C", str(source), "-c", "user.name=Release Fixture",
             "-c", "user.email=fixture@example.invalid",
@@ -272,6 +279,11 @@ class ReleaseAssets(unittest.TestCase):
         files[syntax] += b"tampered\n"
         self.build(version=version, commit=commit, extra_files=files)
         with self.assertRaisesRegex(ValueError, "source differs.*syntax-cache.md"):
+            verifier.verify(self.directory, version, commit, source)
+        files[syntax] = b"# Verified source-relative syntax spans\n"
+        files[retention] += b"tampered\n"
+        self.build(version=version, commit=commit, extra_files=files)
+        with self.assertRaisesRegex(ValueError, "source differs.*cache-eviction.md"):
             verifier.verify(self.directory, version, commit, source)
 
     def test_alpha6_2_publisher_rejects_candidate_only_public_notes(self):

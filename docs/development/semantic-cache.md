@@ -98,6 +98,13 @@ logical source-byte quotas. Hits do not change eviction order.
 bypasses and evictions. Calling `clear()` drops retained entries and
 increments cumulative evictions. The API does not store failed builds.
 
+For finer retention cleanup, `CompilationCache::evict_identity(identity)`
+drops every cached whole-graph success containing that exact trusted loader
+identity, including as an imported dependency. Unaffected compiled entry
+graphs remain in FIFO order. This is independent of the optional
+[three-tier source purge](cache-eviction.md); neither operation invalidates
+already returned `Arc<ModuleProgram>` values or guarantees memory erasure.
+
 **The quota is not a hard process-memory cap.** Cache entries also retain
 resolved functions, source metadata, imported symbol tables, and an
 `Arc<ModuleProgram>` which callers may keep alive after eviction.

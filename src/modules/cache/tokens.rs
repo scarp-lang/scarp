@@ -105,6 +105,34 @@ impl TokenCache {
         self.tokens = 0;
     }
 
+    /// Drop only token entries for an exact resolved loader identity.
+    /// Retention counters are decremented for every matching source version;
+    /// survivors keep their original FIFO order.
+    ///
+    /// This is not secure erasure, nor proof the current source has changed.
+    pub fn evict_identity(&mut self, identity: &str) -> usize {
+        let mut removed = 0usize;
+        let mut source_bytes = 0usize;
+        let mut identity_bytes = 0usize;
+        let mut tokens = 0usize;
+        self.entries.retain(|entry| {
+            if entry.identity == identity {
+                removed += 1;
+                source_bytes += entry.source.len();
+                identity_bytes += entry.identity.len();
+                tokens += entry.tokens.len();
+                false
+            } else {
+                true
+            }
+        });
+        self.bytes -= source_bytes;
+        self.identity_bytes -= identity_bytes;
+        self.tokens -= tokens;
+        self.evictions = self.evictions.saturating_add(removed as u64);
+        removed
+    }
+
     /// Return freshly owned, source-relative tokens. Failure diagnostics are
     /// also relative to this source and must be shifted by the caller.
     ///

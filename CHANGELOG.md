@@ -14,6 +14,9 @@
   benchmark workloads that check correctness without asserting speedups.
 - Extend native archive requirements and damage-test the alpha.2 release
   metadata and cache contracts across all three supported targets.
+- Add opt-in exact-loader-identity eviction for individual source versions
+  across semantic, lexical and syntax cache tiers, with preserved FIFO
+  survivors, quota accounting and retained-program safety regressions.
 - Add approved-source public release-description notes that omit
   unpublished-candidate wording, require them in each native package and
   regression-test immutable source-note selection and tamper rejection.

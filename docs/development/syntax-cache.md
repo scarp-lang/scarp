@@ -57,6 +57,12 @@ An oversized entry, zero-capacity cache, or failed cache reservation still allow
 
 `SyntaxCacheStats` contains retained entries, payload counters, hits, misses, bypasses, and FIFO evictions. Hits never refresh eviction order. `clear()` explicitly frees cache-owned entries while preserving lifetime counters. Cache memory may also remain live outside the cache when held by a separate compiler result.
 
+`SyntaxCache::evict_identity(identity)` drops all cached parsed versions for
+one exact resolved loader identity, leaving unrelated syntax entries intact
+and preserving FIFO order. The [three-tier source purge](cache-eviction.md)
+also evicts matching token entries and whole-graph semantic entries that
+depend on this source. Eviction never revokes already returned programs.
+
 **These are logical quotas, not a heap-memory bound.** AST allocations, decoded strings, container overhead, temporary clones, and other compiler structures are not precisely charged. Benchmarking and actual memory accounting remain separate work.
 
 The cache is process-local, opt-in and nonpersistent. The source loader remains trusted by the embedder; file-system trust and path resolution are not outsourced to the cache.
