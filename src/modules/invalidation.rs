@@ -282,7 +282,12 @@ impl InvalidationSnapshot {
                 continue;
             }
             dirty[id] = true;
-            pending.extend(self.reverse[id].iter().copied().filter(|&next| !dirty[next]));
+            pending.extend(
+                self.reverse[id]
+                    .iter()
+                    .copied()
+                    .filter(|&next| !dirty[next]),
+            );
         }
         dirty
             .into_iter()
