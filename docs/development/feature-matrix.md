@@ -2,9 +2,9 @@
 
 Audit date: 2026-11-05. This inventory describes the tested development
 baseline; update a row when an implementation lands. No roadmap row implies
-a release or an available CLI command. Cargo declares 0.0.6-alpha.1 as an
-**unpublished candidate**. The latest published prerelease remains v0.0.5-alpha.5
-(4 November 2026), not a stable language contract.
+a release or an available CLI command. Cargo declares 0.0.6-alpha.1, the
+latest **published GitHub prerelease** (5 November 2026). The published source
+is still experimental, not a stable language contract.
 Future feature rows remain proposals.
 
 Current audit baseline: `1aff6cabf93f2e0bce6953b29e1abe7d00ebd5fb`.
@@ -60,14 +60,14 @@ requires separate architecture and multiple implementation phases.
 | Recursion/tail handling | Bounded heap frames; terminal self transfer | Mutual-tail optimization and profiling | Call-graph/IR analysis | P2 | L | Depth/call parity, postconditions | Runtime trade-offs |
 | Module loading/visibility | Implemented; trusted roots and bounds | Explicit re-exports and standard modules | Export/alias contract | P1 | M | Re-export collisions/private access, cycles | Modules |
 | Import/dependency inspection | #70/#71 integrated; schema-v1 JSON and constant edges implemented; project-directory metadata inspection published in alpha.5 | Navigation builds on this inventory | Existing immutable metadata | P0 | M | Exact schema/order/escaping/I/O/CLI | Inspection schema |
-| Source navigation | Implemented on main, unreleased: bounded symbol/reference snapshots, go-to-definition/find-references APIs and static JSON/text CLI | Type-symbol navigation, LSP, rename and incremental invalidation | Shared linker scopes and immutable source maps | P0 | L | Cross-file, shadowing, Unicode, exact JSON, limits, no execution | [Navigation contract](../symbol-index.md) |
+| Source navigation | Published in alpha.6: bounded symbol/reference snapshots, go-to-definition/find-references APIs and static JSON/text CLI | Type-symbol navigation, LSP, rename and incremental invalidation | Shared linker scopes and immutable source maps | P0 | L | Cross-file, shadowing, Unicode, exact JSON, limits, no execution | [Navigation contract](../symbol-index.md) |
 | Incremental checking/cache | Missing | Identity, invalidation and immutable result reuse | Dependency/reference graph; cache contract | P1 | L | Changed/deleted dependencies, stale diagnostics | Invalidation design |
 | Module initialization | Intentionally absent | Effectful initialization requires separate design | Capability/effect and cycle policy | P3 | XL | Failure/ordering/deduplication | Initialization design |
 | Typed execution plan | Implemented lowered slot/operation plan | Explicit stable IR and CFG views | Resolver plan invariants | P1 | L | IR/source mapping and control edges | IR architecture |
 | Optimizations | Constant modules, slot retirement, terminal self transfer | General folding, DCE and CFG passes | IR/effect/budget-equivalence contract | P1 | L | Differential output/errors/budgets | Optimization semantics |
 | Native backend | Experimental scalar C11 library emitter published in alpha.5; counted-repeat lowering, no native CLI | Complete modern features, signed-off ABI, complete budget model | Current type rules, source graph and safety budgets | P1 | XL | Differential interpreter/C, all rejected forms | Experimental subset |
 | Native build/compile CLI | Historical PR #22 only; unavailable on main | Current backend integration and toolchain boundary | Backend, platform compiler/error handling | P2 | L | Artifact overwrite, subprocess/path/ABI | Build contract |
-| Math/linear algebra library | Bounded vector/tile kernels and exact scalar conversions; unreleased RMS with independent Decimal oracle | Broader scalar math catalogue after domain design | Pure intrinsic dispatch | P0 | M | Numeric domains, finiteness, exact budgets | Built-in reference |
+| Math/linear algebra library | Bounded vector/tile kernels and exact scalar conversions; published alpha.6 RMS with independent Decimal oracle | Broader scalar math catalogue after domain design | Pure intrinsic dispatch | P0 | M | Numeric domains, finiteness, exact budgets | Built-in reference |
 | General text/algorithms | Unicode length/codepoint/search/prefix/suffix implemented | General collection sorting/search | Allocation/work policy, collection types | P0 | M | Unicode semantics, deterministic search, limits | Standard library |
 | Formatting/JSON/serialization | Versioned module metadata JSON implemented | Language value JSON, general formatting and serialization | Error/composite values; bounded parsing | P1 | L | Escaping, schemas, invalid data, limits | Format/version policy |
 | Filesystem/network/process I/O | Explicit source loader only | External capability model and structured errors | Effects, permissions, errors | P2 | XL | Denied access, roots, no ambient authority | Security model |
