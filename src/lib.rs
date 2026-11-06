@@ -20,6 +20,7 @@ mod json;
 pub mod lexer;
 pub mod limits;
 pub mod modules;
+mod native_preflight;
 pub mod numeric;
 pub mod parser;
 pub mod resolver;
