@@ -4,23 +4,12 @@
 //! language features fail before any generated artifact is returned.
 
 use crate::{
-    ast::{BinaryOperator, ExpressionKind, LogicalOperator, OutputTarget},
-    diagnostics::{Diagnostic, DiagnosticKind, Span},
+    ast::{BinaryOperator, ExpressionKind, LogicalOperator},
+    diagnostics::{Diagnostic, Span},
     resolver::{ResolvedArgument, ResolvedExpression, ResolvedProgram, ResolvedStatement},
     value::ValueType,
 };
 use std::fmt::Write;
-
-fn unsupported(span: Span) -> Diagnostic {
-    Diagnostic::new(
-        DiagnosticKind::NativeUnsupported,
-        span,
-        "program exceeds the experimental scalar C11 subset or its resource limits",
-    )
-    .with_help(
-        "use scalar integer/boolean expressions and one-argument stdout print; see docs/proposals/0035-native-scalar-c11.md",
-    )
-}
 
 /// Emit a complete C translation unit. This does not invoke a C compiler.
 pub fn emit_c(source: &str) -> Result<String, Diagnostic> {
@@ -30,77 +19,12 @@ pub fn emit_c(source: &str) -> Result<String, Diagnostic> {
 /// Emit an opt-in, freestanding C11 translation unit from a statically
 /// resolved plan. All unsupported forms are rejected before emission.
 pub fn emit_program(program: &ResolvedProgram) -> Result<String, Diagnostic> {
-    if !program.functions.is_empty()
-        || program.binding_count() > 256
-        || program.statements.len() > 4096
-        || program
-            .binding_types()
-            .iter()
-            .any(|kind| !matches!(kind, ValueType::Integer | ValueType::Boolean))
-    {
-        return Err(unsupported(Span::default()));
-    }
-
-    let mut max_nodes = 1;
-    let mut total_nodes = 0usize;
-    let mut text_bytes = 0usize;
-    for operation in &program.statements {
-        let expression = match &operation.kind {
-            ResolvedStatement::Store { value, .. }
-            | ResolvedStatement::Update { value, .. }
-            | ResolvedStatement::RepeatInit { count: value, .. } => Some(value),
-            ResolvedStatement::JumpIfFalse { condition, .. } => Some(condition),
-            ResolvedStatement::Output {
-                arguments,
-                target: OutputTarget::Stdout,
-                newline: true,
-            } if arguments.len() == 1 => match &arguments[0] {
-                ResolvedArgument::Expression(value) => Some(value),
-                ResolvedArgument::String(value) => {
-                    text_bytes = text_bytes
-                        .checked_add(value.len())
-                        .ok_or_else(|| unsupported(operation.span))?;
-                    None
-                }
-            },
-            ResolvedStatement::Jump { .. }
-            | ResolvedStatement::LoopControl { .. }
-            | ResolvedStatement::Retire { .. }
-            | ResolvedStatement::RepeatGuard { .. }
-            | ResolvedStatement::RepeatNext { .. } => None,
-            _ => return Err(unsupported(operation.span)),
-        };
-        if let Some(expression) = expression {
-            if !matches!(expression.kind, ValueType::Integer | ValueType::Boolean) {
-                return Err(unsupported(operation.span));
-            }
-            for node in expression.syntax.nodes() {
-                if !matches!(
-                    node.kind,
-                    ExpressionKind::Integer(_)
-                        | ExpressionKind::Boolean(_)
-                        | ExpressionKind::Name(_)
-                        | ExpressionKind::Negate { .. }
-                        | ExpressionKind::BitNot { .. }
-                        | ExpressionKind::Not { .. }
-                        | ExpressionKind::Binary { .. }
-                        | ExpressionKind::Logical { .. }
-                        | ExpressionKind::Group { .. }
-                ) {
-                    return Err(unsupported(node.span));
-                }
-            }
-            let count = expression.syntax.nodes().len();
-            max_nodes = max_nodes.max(count);
-            total_nodes = total_nodes
-                .checked_add(count)
-                .ok_or_else(|| unsupported(operation.span))?;
-        }
-        if max_nodes > 1024 || total_nodes > 16384 || text_bytes > 65536 {
-            return Err(unsupported(operation.span));
-        }
-    }
-    let mut out=format!("/* Scarp freestanding C11 unit. Caller supplies workspace and output. */\n#define SCARP_SLOT_COUNT {}\n#define SCARP_TEMP_COUNT {}\n",program.binding_count().max(1),max_nodes);
+    let requirements = crate::native_preflight::inspect(program)?;
+    let mut out = format!(
+        "/* Scarp freestanding C11 unit. Caller supplies workspace and output. */\n#define SCARP_SLOT_COUNT {}\n#define SCARP_TEMP_COUNT {}\n",
+        requirements.slot_count,
+        requirements.temporary_count
+    );
     out.push_str(include_str!("c_runtime.h"));
     for (index, operation) in program.statements.iter().enumerate() {
         match &operation.kind {
