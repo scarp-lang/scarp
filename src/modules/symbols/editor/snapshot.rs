@@ -24,7 +24,10 @@ impl Default for EditorLimits {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditorBuildError {
-    VersionCount { expected: usize, actual: usize },
+    VersionCount {
+        expected: usize,
+        actual: usize,
+    },
     LineLimit,
     LineNumberLimit,
     Allocation,
@@ -65,7 +68,10 @@ impl fmt::Display for EditorQueryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::VersionCount { expected, actual } => {
-                write!(f, "expected {expected} document revisions; received {actual}")
+                write!(
+                    f,
+                    "expected {expected} document revisions; received {actual}"
+                )
             }
             Self::StaleVersion {
                 source,
