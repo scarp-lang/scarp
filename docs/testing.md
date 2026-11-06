@@ -12,11 +12,11 @@ missing alpha.2 cache docs and stale metadata must fail native package checks.
 The last released binary is still alpha.1. See
 [candidate gates](releases/v0.0.6-alpha.2-preparation.md).
 
-For the post-alpha.6 version-guarded editor adapter (issue #116), run
+For the after-v0.0.6-alpha.1 version-guarded editor adapter (issue #116), run
 `cargo test --locked --offline --test editor_snapshot` and
 `cargo run --locked --offline --example editor_snapshot`. These cover strict
 UTF-8/UTF-16 boundaries, stale imports, multi-file queries and line-table
-limits. The new adapter is not part of the published alpha.6 archives.
+limits. The new adapter is not part of the published v0.0.6-alpha.1 archives.
 
 For the published v0.0.6-alpha.1 prerelease, include `--test symbol_navigation
 --test symbol_navigation_cli --test root_mean_square`. Run the independent
@@ -40,20 +40,20 @@ expressions/chains, and six `.srp`/`.stderr` fixtures exercised by the embedding
 and run/check/modules. The three-file `constant_expressions` example has exact
 stdout. Native package checks include invalid constant initializers.
 
-For the post-alpha.6 parsed AST cache (issue #117), run
+For the after-v0.0.6-alpha.1 parsed AST cache (issue #117), run
 `cargo test --locked --offline --test module_syntax_cache`. This compares cold
 versus warm source spans and navigation JSON after Unicode/CRLF changes,
 source reorder, loader retargeting, syntax/lex/visibility failures,
 resource quotas, FIFO eviction and combined frontend/semantic caching.
 
-For the post-alpha.6 source-relative lexer reuse API (issue #117), run
+For the after-v0.0.6-alpha.1 source-relative lexer reuse API (issue #117), run
 `cargo test --locked --offline --test module_token_cache`. It compares cold
 and warm module compilation, exact symbol index JSON after shifting source
 bases, source reordering, parser/lexer diagnostics, import budgets, cache
 resource quotas, and combined whole-graph semantic caching. Lexing may be
 reused, but all sources still reload and reparse on every call.
 
-For the post-alpha.6 semantic cache (issue #117), also run
+For the after-v0.0.6-alpha.1 semantic cache (issue #117), also run
 `cargo test --locked --offline --test module_cache` to cover exact input hits,
 constant/type/module budgets, edit revisions, import retargets, Unicode labels,
 invalid or missing sources, FIFO eviction and caller-owned immutable reuse.
@@ -62,7 +62,7 @@ parser. The separately opt-in combined front-end caches can avoid lexing and
 parsing unchanged individual source files, but always reload and validate the
 graph and current semantics.
 
-For the post-alpha.6 invalidation planning API (issue #117), also run
+For the after-v0.0.6-alpha.1 invalidation planning API (issue #117), also run
 `cargo test --locked --offline --test module_invalidation` to exercise diamond
 closures, exact-content graph transitions, loader retargeting, unknown changes,
 rejected compilation, bounded input metadata and read-only sharing. This is a
