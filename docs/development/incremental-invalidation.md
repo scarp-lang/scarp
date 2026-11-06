@@ -41,6 +41,13 @@ A changed `shared.srp` imported by `a.srp` and `b.srp` through a diamond
 invalidates both importers and the entry file. A leaf edit does not mark
 unrelated leaves. Repeated edit entries do not duplicate results.
 
+The entire input list is preflight-checked against `max_changed_files` and the
+**cumulative** `max_identity_bytes` before resolving any loader identity.
+Repeated inputs count toward those limits even though the affected output is
+deduplicated. An unknown identity cannot bypass the quota for later entries.
+Exactly-at-limit requests are accepted; over-budget requests return the typed
+`EditLimit` or `IdentityLimit` error instead of an `EditImpact`.
+
 **Any unknown identity causes full old-graph invalidation** because the new
 graph may add/remove files, change canonical identity, or target previously
 unreachable modules. Any nonempty edit set requires full graph discovery and
