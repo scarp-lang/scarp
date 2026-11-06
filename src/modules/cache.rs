@@ -14,6 +14,7 @@ use super::{
     resolve_with_compiler_limits, ConstantLimits, ModuleDiagnostic, ModuleGraph, ModuleLimits,
     ModuleProgram, SourceLoader,
 };
+use super::invalidation::{EditImpact, InvalidationError, InvalidationSnapshot};
 use crate::types::TypeLimits;
 use std::{collections::VecDeque, error::Error, fmt, sync::Arc};
 
@@ -474,4 +475,75 @@ pub fn purge_source_identity(
         token_entries: tokens.evict_identity(identity),
         syntax_entries: syntax.evict_identity(identity),
     }
+}
+
+/// The dependency planner's complete preflight result and resulting cache
+/// retention changes. SourceIds in `impact` refer only to the supplied
+/// original snapshot, never to a later compiler graph.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlannedCachePurge {
+    pub impact: EditImpact,
+    pub removed: SourceCacheEvictions,
+}
+
+/// Validate an entire batch of reported edits against a previously compiled
+/// dependency graph **before modifying any cache**.
+///
+/// The caller supplies trusted, resolved loader identities, not display
+/// names or unresolved import literals. Known edits remove semantic results
+/// containing any old-graph affected importer, while token and syntax cache
+/// entries are removed only for the exact reported identities. Unrelated
+/// front-end sources and whole-graph programs remain cached.
+///
+/// An unknown identity can introduce a new import or change a loader's
+/// canonical mapping, so *all three* caches are conservatively cleared.
+/// Failed edit preflight (including budgets) leaves every cache untouched.
+/// An empty input is a no-op and never certifies that source files are
+/// unchanged. Any nonempty edit plan still needs a fresh trusted loader,
+/// graph discovery, parse and semantic validation; this is retention
+/// management, **not** incremental semantic linking or stale-result recovery.
+///
+/// The returned counts describe cache-owned entries only. Existing shared
+/// `Arc<ModuleProgram>` results remain live and are not securely erased.
+pub fn purge_reported_edits(
+    snapshot: &InvalidationSnapshot,
+    changed: &[&str],
+    semantic: &mut CompilationCache,
+    tokens: &mut TokenCache,
+    syntax: &mut SyntaxCache,
+) -> Result<PlannedCachePurge, InvalidationError> {
+    // This call enforces the COMPLETE edit-count and aggregate identity-byte
+    // quotas before the first mutation, even when the first name is unknown.
+    let impact = snapshot.plan_edits(changed)?;
+    let mut removed = SourceCacheEvictions::default();
+
+    if impact.unknown_identity {
+        removed = SourceCacheEvictions {
+            semantic_entries: semantic.stats().entries,
+            token_entries: tokens.stats().entries,
+            syntax_entries: syntax.stats().entries,
+        };
+        semantic.clear();
+        tokens.clear();
+        syntax.clear();
+    } else if !changed.is_empty() {
+        // Old SourceIds are scoped to this exact snapshot; do not compare
+        // them to IDs in cache entries created for other discovery orders.
+        // Instead, use the loader identities owned by the old snapshot.
+        for &id in &impact.affected {
+            if let Some(identity) = snapshot.identity(id) {
+                removed.semantic_entries += semantic.evict_identity(identity);
+            }
+        }
+        // A changed source does not make its unchanged importers' original
+        // token/AST bytes invalid. Preserve those independently keyed caches.
+        for (index, identity) in changed.iter().enumerate() {
+            if !changed[..index].contains(identity) {
+                removed.token_entries += tokens.evict_identity(identity);
+                removed.syntax_entries += syntax.evict_identity(identity);
+            }
+        }
+    }
+
+    Ok(PlannedCachePurge { impact, removed })
 }
