@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 pub struct TokenCacheLimits {
     pub max_entries: usize,
     pub max_source_bytes: usize,
+    pub max_identity_bytes: usize,
     pub max_tokens: usize,
 }
 impl Default for TokenCacheLimits {
@@ -23,6 +24,7 @@ impl Default for TokenCacheLimits {
         Self {
             max_entries: 128,
             max_source_bytes: 8 * 1024 * 1024,
+            max_identity_bytes: 1024 * 1024,
             max_tokens: 1_000_000,
         }
     }
@@ -32,6 +34,7 @@ impl Default for TokenCacheLimits {
 pub struct TokenCacheStats {
     pub entries: usize,
     pub retained_source_bytes: usize,
+    pub retained_identity_bytes: usize,
     pub retained_tokens: usize,
     pub hits: u64,
     pub misses: u64,
@@ -59,6 +62,7 @@ pub struct TokenCache {
     limits: TokenCacheLimits,
     entries: VecDeque<TokenEntry>,
     bytes: usize,
+    identity_bytes: usize,
     tokens: usize,
     hits: u64,
     misses: u64,
@@ -71,6 +75,7 @@ impl TokenCache {
             limits,
             entries: VecDeque::new(),
             bytes: 0,
+            identity_bytes: 0,
             tokens: 0,
             hits: 0,
             misses: 0,
@@ -83,6 +88,7 @@ impl TokenCache {
         TokenCacheStats {
             entries: self.entries.len(),
             retained_source_bytes: self.bytes,
+            retained_identity_bytes: self.identity_bytes,
             retained_tokens: self.tokens,
             hits: self.hits,
             misses: self.misses,
@@ -95,6 +101,7 @@ impl TokenCache {
         self.evictions = self.evictions.saturating_add(self.entries.len() as u64);
         self.entries.clear();
         self.bytes = 0;
+        self.identity_bytes = 0;
         self.tokens = 0;
     }
 
@@ -120,6 +127,7 @@ impl TokenCache {
 
         if self.limits.max_entries == 0
             || source.len() > self.limits.max_source_bytes
+            || identity.len() > self.limits.max_identity_bytes
             || tokens.len() > self.limits.max_tokens
         {
             self.bypasses = self.bypasses.saturating_add(1);
@@ -134,6 +142,7 @@ impl TokenCache {
 
         while self.entries.len() >= self.limits.max_entries
             || self.bytes > self.limits.max_source_bytes - source.len()
+            || self.identity_bytes > self.limits.max_identity_bytes - identity.len()
             || self.tokens > self.limits.max_tokens - tokens.len()
         {
             let old = self
@@ -141,11 +150,13 @@ impl TokenCache {
                 .pop_front()
                 .expect("nonzero limits and fitting source imply a removable entry");
             self.bytes -= old.source.len();
+            self.identity_bytes -= old.identity.len();
             self.tokens -= old.tokens.len();
             self.evictions = self.evictions.saturating_add(1);
         }
 
         self.bytes += source.len();
+        self.identity_bytes += identity.len();
         self.tokens += tokens.len();
         self.entries.push_back(TokenEntry {
             identity: identity.to_owned(),
