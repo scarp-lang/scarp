@@ -205,11 +205,11 @@ fn scalar_preflight_keeps_exact_c_workspace_and_typed_plan_parity() {
     let typed = scarp::compile(source).unwrap();
     let emitted = c_backend::emit_c(source).unwrap();
     assert_eq!(emitted, c_backend::emit_program(&typed).unwrap());
-    assert!(emitted.contains("#define SCARP_SLOT_COUNT 1\\n#define SCARP_TEMP_COUNT 3\\n"));
+    assert!(emitted.contains("#define SCARP_SLOT_COUNT 1\n#define SCARP_TEMP_COUNT 3\n"));
     assert!(emitted.contains("static const uint8_t text[]={195,169,0};"));
 
     let no_bindings = c_backend::emit_c("print(true);").unwrap();
-    assert!(no_bindings.contains("#define SCARP_SLOT_COUNT 1\\n#define SCARP_TEMP_COUNT 1\\n"));
+    assert!(no_bindings.contains("#define SCARP_SLOT_COUNT 1\n#define SCARP_TEMP_COUNT 1\n"));
 
     // Structural acceptance is unchanged for the experimental scalar subset.
     for source in [
