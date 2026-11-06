@@ -103,11 +103,7 @@ impl TokenCache {
     ///
     /// Lexical errors are NEVER cached. A syntactically invalid but lexically
     /// valid source may retain tokens, but still must run the parser anew.
-    pub(crate) fn lex(
-        &mut self,
-        identity: &str,
-        source: &str,
-    ) -> Result<Vec<Token>, Diagnostic> {
+    pub(crate) fn lex(&mut self, identity: &str, source: &str) -> Result<Vec<Token>, Diagnostic> {
         if let Some(entry) = self
             .entries
             .iter()
