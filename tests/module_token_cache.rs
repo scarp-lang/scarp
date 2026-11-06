@@ -2,11 +2,13 @@ use scarp::{
     diagnostics::DiagnosticKind as Kind,
     modules::{
         self,
-        cache::{CacheLimits, CacheStatus, CompilationCache, TokenCache, TokenCacheLimits},
+        cache::{
+            CacheLimits, CacheStatus, CachedCompileOptions, CompilationCache, TokenCache,
+            TokenCacheLimits,
+        },
         symbols::IndexLimits,
-        ConstantLimits, MemorySourceLoader, ModuleLimits, SourceLoadError, SourceLoader,
+        MemorySourceLoader, ModuleLimits, SourceLoadError, SourceLoader,
     },
-    types::TypeLimits,
     ExecutionOptions,
 };
 
@@ -312,10 +314,7 @@ fn token_cache_works_with_opt_in_whole_graph_semantic_reuse() {
         .compile_with_token_cache(
             "main.srp",
             &source,
-            ModuleLimits::default(),
-            ConstantLimits::default(),
-            TypeLimits::default(),
-            &[1, 1],
+            CachedCompileOptions::new(&[1, 1]),
             &mut tokens,
         )
         .unwrap();
@@ -323,10 +322,7 @@ fn token_cache_works_with_opt_in_whole_graph_semantic_reuse() {
         .compile_with_token_cache(
             "main.srp",
             &source,
-            ModuleLimits::default(),
-            ConstantLimits::default(),
-            TypeLimits::default(),
-            &[1, 1],
+            CachedCompileOptions::new(&[1, 1]),
             &mut tokens,
         )
         .unwrap();
