@@ -28,6 +28,13 @@ expressions/chains, and six `.srp`/`.stderr` fixtures exercised by the embedding
 and run/check/modules. The three-file `constant_expressions` example has exact
 stdout. Native package checks include invalid constant initializers.
 
+For the post-alpha.6 source-relative lexer reuse API (issue #117), run
+`cargo test --locked --offline --test module_token_cache`. It compares cold
+and warm module compilation, exact symbol index JSON after shifting source
+bases, source reordering, parser/lexer diagnostics, import budgets, cache
+resource quotas, and combined whole-graph semantic caching. Lexing may be
+reused, but all sources still reload and reparse on every call.
+
 For the post-alpha.6 semantic cache (issue #117), also run
 `cargo test --locked --offline --test module_cache` to cover exact input hits,
 constant/type/module budgets, edit revisions, import retargets, Unicode labels,
