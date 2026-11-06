@@ -133,6 +133,11 @@ misses. The trusted source loader, import graph validation and semantic cache
 input checks still run for every build. All caches retain independent budgets
 and counters.
 
+A caller may [preflight reported edits](cache-edit-planning.md) against the
+previous successful graph and evict affected old whole-graph semantic results
+while preserving unchanged source-relative syntax/token caches. This API is
+**not** partial relinking: any later miss must run the standard compiler.
+
 The earlier [invalidation-planning API](incremental-invalidation.md) remains
 useful for discovering affected importers and comparing successful graphs.
 This cache is a separate opt-in interface; it does **not** yet reuse

@@ -14,6 +14,9 @@
   benchmark workloads that check correctness without asserting speedups.
 - Extend native archive requirements and damage-test the alpha.2 release
   metadata and cache contracts across all three supported targets.
+- Connect bounded edit-list preflight and transitive importer impact to
+  three-tier cache retention; invalid edit input causes no cache mutation,
+  and unknown canonical identities trigger conservative full eviction.
 - Add opt-in exact-loader-identity eviction for individual source versions
   across semantic, lexical and syntax cache tiers, with preserved FIFO
   survivors, quota accounting and retained-program safety regressions.

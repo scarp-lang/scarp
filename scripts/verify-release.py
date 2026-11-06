@@ -235,6 +235,7 @@ def verify(directory, version, commit, source_directory=None):
             "docs/development/token-cache.md",
             "docs/development/syntax-cache.md",
             "docs/development/cache-eviction.md",
+            "docs/development/cache-edit-planning.md",
         ) if version == "0.0.6-alpha.2" else ()
         release_files = (METADATA_MEMBER,) if version in EXTERNAL_DOCS_VERSIONS else (f"docs/releases/v{version}.md",)
         for member in (
