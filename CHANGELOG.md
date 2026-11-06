@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.0.6-alpha.2 — prerelease candidate, 2026-11-06
+
+- Add conservative, bounded module-graph invalidation planning and exact
+  source-graph comparisons for trusted loaders and import retargeting (#121).
+- Add caller-owned exact-input whole-graph semantic compilation cache with
+  checked compiler budgets, revisions, source identities, and FIFO eviction (#122).
+- Add source-relative lexical token caching for unchanged individual modules,
+  with source-span rebasing and independent logical resource limits (#123).
+- Add source-relative parsed AST caching with exhaustive nested span
+  rebasing, independent FIFO quotas and cold/warm diagnostics/index tests (#124).
+- Add opt-in combined front-end/semantic cache entry points and compiler
+  benchmark workloads that check correctness without asserting speedups.
+- Extend native archive requirements and damage-test the alpha.2 release
+  metadata and cache contracts across all three supported targets.
+- **Candidate source only:** not tagged, not a GitHub prerelease, not stable.
+  Publication requires exact-main CI and separately approved source SHA.
+  The latest public prerelease remains v0.0.6-alpha.1.
+
 ## 0.0.6-alpha.1 — prerelease, 2026-11-05
 
 - Add opt-in, bounded source symbol/reference snapshots with go-to-definition and
