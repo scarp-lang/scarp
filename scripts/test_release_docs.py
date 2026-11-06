@@ -121,7 +121,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
             with self.subTest(contract=name):
                 path = ROOT / "docs/development" / name
                 self.assertTrue(path.is_file(), f"missing bundled contract: {name}")
-                self.assertIn(f"\`docs/development/{name}\`".replace("\\`", "`"), notes)
+                self.assertIn(f"`docs/development/{name}`", notes)
         for name in ("cache-eviction.md", "cache-edit-planning.md"):
             with self.subTest(link=name):
                 self.assertIn(
