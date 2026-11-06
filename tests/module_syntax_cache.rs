@@ -39,19 +39,11 @@ fn run(program: &modules::ModuleProgram) -> Vec<u8> {
     assert!(err.is_empty());
     out
 }
-fn index_json(
-    loader: &dyn SourceLoader,
-    cache: Option<&mut SyntaxCache>,
-) -> Vec<u8> {
+fn index_json(loader: &dyn SourceLoader, cache: Option<&mut SyntaxCache>) -> Vec<u8> {
     let indexed = match cache {
         Some(cache) => modules::resolve_indexed(
-            modules::load_with_syntax_cache(
-                "main.srp",
-                loader,
-                ModuleLimits::default(),
-                cache,
-            )
-            .unwrap(),
+            modules::load_with_syntax_cache("main.srp", loader, ModuleLimits::default(), cache)
+                .unwrap(),
             IndexLimits::default(),
         )
         .unwrap(),
@@ -134,12 +126,21 @@ fn unicode_crlf_prefix_edits_rebase_all_nested_expression_and_navigation_spans()
     let cold = modules::compile_with_loader("main.srp", &second, ModuleLimits::default()).unwrap();
     assert_eq!(syntax.stats().hits, 1);
     assert_eq!(syntax.stats().misses, 3);
-    assert_ne!(old.sources().files()[1].range(), new.sources().files()[1].range());
-    assert_eq!(new.sources().files()[1].range(), cold.sources().files()[1].range());
+    assert_ne!(
+        old.sources().files()[1].range(),
+        new.sources().files()[1].range()
+    );
+    assert_eq!(
+        new.sources().files()[1].range(),
+        cold.sources().files()[1].range()
+    );
     assert_eq!(new.imports(), cold.imports());
     assert_eq!(new.constant_dependencies(), cold.constant_dependencies());
     assert_eq!(run(&new), run(&cold));
-    assert_eq!(index_json(&second, Some(&mut syntax)), index_json(&second, None));
+    assert_eq!(
+        index_json(&second, Some(&mut syntax)),
+        index_json(&second, None)
+    );
     assert_eq!(syntax.stats().hits, 3); // current entry and unchanged lib
 }
 
@@ -167,7 +168,10 @@ fn source_discovery_reordering_rebases_symbols_by_new_source_id() {
     assert_eq!(run(&new), b"1 2\n");
     assert_eq!(syntax.stats().hits, 2);
     assert_eq!(syntax.stats().misses, 4);
-    assert_eq!(index_json(&after, Some(&mut syntax)), index_json(&after, None));
+    assert_eq!(
+        index_json(&after, Some(&mut syntax)),
+        index_json(&after, None)
+    );
 }
 
 #[test]
@@ -190,13 +194,12 @@ fn old_success_cannot_hide_syntax_loader_visibility_or_import_budget_failures() 
     ]);
     let mut syntax = SyntaxCache::new(SyntaxCacheLimits::default());
     assert_eq!(run(&warm(&valid, &mut syntax).unwrap()), b"7\n");
-    assert_eq!(warm(&private, &mut syntax).unwrap_err().diagnostic.kind, Kind::ModuleVisibility);
-    let cold_error = modules::compile_with_loader(
-        "main.srp",
-        &invalid,
-        ModuleLimits::default(),
-    )
-    .unwrap_err();
+    assert_eq!(
+        warm(&private, &mut syntax).unwrap_err().diagnostic.kind,
+        Kind::ModuleVisibility
+    );
+    let cold_error =
+        modules::compile_with_loader("main.srp", &invalid, ModuleLimits::default()).unwrap_err();
     for _ in 0..2 {
         let err = warm(&invalid, &mut syntax).unwrap_err();
         assert_eq!(err.diagnostic, cold_error.diagnostic);
@@ -214,13 +217,8 @@ fn old_success_cannot_hide_syntax_loader_visibility_or_import_budget_failures() 
         max_imports: 0,
         ..ModuleLimits::default()
     };
-    let err = modules::load_with_syntax_cache(
-        "main.srp",
-        &valid,
-        no_imports,
-        &mut syntax,
-    )
-    .unwrap_err();
+    let err =
+        modules::load_with_syntax_cache("main.srp", &valid, no_imports, &mut syntax).unwrap_err();
     assert_eq!(err.diagnostic.kind, Kind::ModuleLimit);
     let missing = loader(&[("main.srp", "import \"lib.srp\" as lib; print(lib.value);")]);
     assert_eq!(
@@ -267,8 +265,22 @@ fn loader_alias_retargeting_still_relinks_on_the_same_cached_syntax() {
         ("two.srp", "pub bind value=2;"),
     ]);
     let mut syntax = SyntaxCache::new(SyntaxCacheLimits::default());
-    let before = warm(&Redirect { memory: &files, b: "one.srp" }, &mut syntax).unwrap();
-    let after = warm(&Redirect { memory: &files, b: "two.srp" }, &mut syntax).unwrap();
+    let before = warm(
+        &Redirect {
+            memory: &files,
+            b: "one.srp",
+        },
+        &mut syntax,
+    )
+    .unwrap();
+    let after = warm(
+        &Redirect {
+            memory: &files,
+            b: "two.srp",
+        },
+        &mut syntax,
+    )
+    .unwrap();
     assert_eq!(run(&before), b"1 1 2\n");
     assert_eq!(run(&after), b"1 2 2\n");
     assert_eq!(syntax.stats().hits, 3);
@@ -332,7 +344,10 @@ fn token_syntax_and_semantics_caches_can_be_combined_without_stale_results() {
         ("lib.srp", "pub bind value=7;"),
     ]);
     let edited = loader(&[
-        ("main.srp", "// 👋\r\nimport \"lib.srp\" as lib; print(lib.value);"),
+        (
+            "main.srp",
+            "// 👋\r\nimport \"lib.srp\" as lib; print(lib.value);",
+        ),
         ("lib.srp", "pub bind value=7;"),
     ]);
     let mut tokens = TokenCache::new(TokenCacheLimits::default());
