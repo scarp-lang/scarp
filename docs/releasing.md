@@ -8,12 +8,13 @@ publication; changing a package version alone does not authorize a release.
 
 ## Build inputs and packages
 
-The current source prepares **v0.0.6-alpha.1**, an **unpublished candidate**.
-Its [notes](releases/v0.0.6-alpha.1.md) define navigation/RMS scope and exclusions.
-The verifier requires its new symbol/RMS guides, fixtures and examples in all
-three archives, plus inherited content and exact Git blobs. Candidate preparation
-does not authorize a tag, request, draft or publication; fresh exact-version and
-full source-SHA approval follows final-main CI and asset verification.
+**v0.0.6-alpha.1 was published as a GitHub prerelease on 5 November 2026.**
+Its [notes](releases/v0.0.6-alpha.1.md) define navigation/RMS scope and exclusions;
+the [publication record](releases/v0.0.6-alpha.1-validation.md) identifies the
+exact source, verified CI gates and seven public assets. The publisher's one-time
+release request has been retired. Future versions still require their own
+independent exact-version and exact-source authorization; changing Cargo alone
+does not authorize publication.
 
 The package version comes from `Cargo.toml`; use a three-part version.
 Version **0.0.5-alpha.5** was published as a GitHub prerelease on
