@@ -1,5 +1,13 @@
 # Measure performance before changing execution
 
+The alpha.2 **source candidate** extends the compiler benchmark with cold module
+compilation, warm source-relative token and AST caching, and combined
+whole-graph semantic reuse on identical four-file inputs. Each timed path
+checks the same expected compiled metadata. Timings are observations only,
+not cross-hardware speedup guarantees or resident-memory measurements.
+See [syntax cache](development/syntax-cache.md) and
+[alpha.2 candidate notes](releases/v0.0.6-alpha.2.md).
+
 ## Compiler and tooling workloads (unreleased)
 
 Run `cargo bench --locked --offline --bench compiler -- --quick` for smoke mode,
