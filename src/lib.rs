@@ -17,6 +17,7 @@ pub mod diagnostics;
 pub mod evaluator;
 pub mod interpreter;
 mod json;
+mod native_preflight;
 pub mod lexer;
 pub mod limits;
 pub mod modules;
