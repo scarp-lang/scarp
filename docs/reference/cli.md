@@ -1,15 +1,16 @@
 # Command-line reference
 
-## Scarp-first CLI (v0.0.6-alpha.2 source candidate)
+## Scarp-first CLI (published v0.0.6-alpha.2)
 
-The alpha.2 candidate does not add CLI commands: its new caches are opt-in
-Rust embedding APIs. The last **published** command set remains alpha.1.
+The published alpha.2 prerelease adds no CLI commands: its new cache and
+dependency-invalidation features are opt-in Rust embedding APIs. The command
+set remains the same as published alpha.1.
 
 Published v0.0.6-alpha.1 adds static `inspect symbols` and `inspect references`
 commands, which are absent from older alpha.5 packages.
 
 The latest published prerelease is
-[v0.0.6-alpha.1](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.1).
+[v0.0.6-alpha.2](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.2).
 It adds project-directory module inspection. The experimental C11 scalar
 source emitter is a Rust embedding API, **not** a Scarp CLI command;
 `scarp compile` still does not exist.
