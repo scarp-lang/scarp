@@ -187,6 +187,73 @@ class ReleaseAssets(unittest.TestCase):
                 f"{digest}  {archive.name}\n", encoding="utf-8"
             )
 
+    def test_alpha6_2_requires_cache_docs_and_inherited_approved_features(self):
+        version = "0.0.6-alpha.2"
+        self.build(version=version)
+        self.assertEqual(len(verifier.verify(self.directory, version, COMMIT).splitlines()), 3)
+        for member in (
+            "RELEASE-METADATA.json",
+            "docs/releases/v0.0.6-alpha.2.md",
+            "docs/development/incremental-invalidation.md",
+            "docs/development/semantic-cache.md",
+            "docs/development/token-cache.md",
+            "docs/development/syntax-cache.md",
+            "docs/releases/v0.0.6-alpha.1.md",
+            "docs/symbol-index.md", "docs/root-mean-square.md",
+            "examples/symbol_navigation.references.json",
+            "examples/root_mean_square.srp",
+            "examples/native_scalar_repeat.srp",
+            "docs/project-workflow.md",
+        ):
+            with self.subTest(member=member):
+                self.build(version=version, omit=member)
+                with self.assertRaisesRegex(ValueError, "missing " + member):
+                    verifier.verify(self.directory, version, COMMIT)
+
+    def test_alpha6_2_rejects_old_metadata_despite_valid_archive_checksums(self):
+        version = "0.0.6-alpha.2"
+        stale = json.dumps(dict(
+            schema_version=1, version="0.0.6-alpha.1",
+            documentation_repository=verifier.DOCUMENTATION_REPOSITORY,
+        )).encode()
+        self.build(version=version, extra_files={"RELEASE-METADATA.json": stale})
+        with self.assertRaisesRegex(ValueError, "invalid release metadata"):
+            verifier.verify(self.directory, version, COMMIT)
+
+    def test_alpha6_2_notes_and_cache_docs_use_exact_approved_source(self):
+        version = "0.0.6-alpha.2"
+        source, _, files = self.alpha2_source_fixture(version=version)
+        notes = f"docs/releases/v{version}.md"
+        syntax = "docs/development/syntax-cache.md"
+        for name, data in (
+            (notes, b"# Approved source-relative cache features\n"),
+            (syntax, b"# Verified source-relative syntax spans\n"),
+        ):
+            path = source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+            files[name] = data
+        subprocess.run(["git", "-C", str(source), "add", "--", notes, syntax], check=True)
+        subprocess.run([
+            "git", "-C", str(source), "-c", "user.name=Release Fixture",
+            "-c", "user.email=fixture@example.invalid",
+            "commit", "--quiet", "-m", "approved alpha6.2",
+        ], check=True)
+        commit = subprocess.check_output(
+            ["git", "-C", str(source), "rev-parse", "HEAD"], text=True
+        ).strip()
+        self.build(version=version, commit=commit, extra_files=files)
+        self.assertEqual(len(verifier.verify(self.directory, version, commit, source).splitlines()), 3)
+        expected = verifier.release_notes_at(source, commit, version)
+        self.assertIn("source-relative cache features", expected)
+        self.assertIn(commit, expected)
+        (source / notes).write_text("# Modified checkout notes\n", encoding="utf-8")
+        self.assertEqual(verifier.release_notes_at(source, commit, version), expected)
+        files[syntax] += b"tampered\n"
+        self.build(version=version, commit=commit, extra_files=files)
+        with self.assertRaisesRegex(ValueError, "source differs.*syntax-cache.md"):
+            verifier.verify(self.directory, version, commit, source)
+
     def test_alpha6_requires_navigation_rms_and_all_prior_feature_contents(self):
         version = "0.0.6-alpha.1"
         self.build(version=version)
