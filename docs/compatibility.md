@@ -9,7 +9,11 @@ See [RMS semantics and limits](root-mean-square.md). The opt-in
 and independent resource limits; it does not change the existing module or
 diagnostic JSON schema-v1 contracts.
 
-**Current source:** `0.0.6-alpha.1` is a published GitHub prerelease.
+**Current source:** `0.0.6-alpha.2` is a candidate, **not published**.
+The last public prerelease remains v0.0.6-alpha.1. Alpha.2 adds only optional
+Rust embedding cache APIs and source-level invalidation planning. For the
+compatibility contract and limitations, see the
+[alpha.2 candidate notes](releases/v0.0.6-alpha.2.md).
 Windows, Linux and macOS archives are available; features remain experimental
 and no general native executable compiler or stable ABI is implied.
 The opt-in C11 scalar source emitter does not add a native executable CLI;
