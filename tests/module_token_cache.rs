@@ -256,6 +256,7 @@ fn token_cache_budgets_fifo_and_clear_are_independent_of_semantic_cache() {
     let mut tokens = TokenCache::new(TokenCacheLimits {
         max_entries: 1,
         max_source_bytes: 1024,
+        max_identity_bytes: 1024,
         max_tokens: 256,
     });
     with_token_cache(&first, &mut tokens).unwrap();
@@ -268,6 +269,7 @@ fn token_cache_budgets_fifo_and_clear_are_independent_of_semantic_cache() {
     tokens.clear();
     assert_eq!(tokens.stats().entries, 0);
     assert_eq!(tokens.stats().retained_source_bytes, 0);
+    assert_eq!(tokens.stats().retained_identity_bytes, 0);
     assert_eq!(tokens.stats().retained_tokens, 0);
     assert_eq!(tokens.stats().evictions, 3);
 
@@ -282,6 +284,10 @@ fn token_cache_budgets_fifo_and_clear_are_independent_of_semantic_cache() {
         },
         TokenCacheLimits {
             max_tokens: 1,
+            ..TokenCacheLimits::default()
+        },
+        TokenCacheLimits {
+            max_identity_bytes: 1,
             ..TokenCacheLimits::default()
         },
     ] {
