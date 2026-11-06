@@ -45,7 +45,7 @@ pub fn byte_to_utf16(source: &str, offset: usize) -> Option<Utf16Position> {
                 if source.as_bytes().get(at + 1) == Some(&b'\n') {
                     // This boundary is not a valid editor position: one CRLF
                     // sequence is one line break, not two character positions.
-                    chars.next();
+                    let _ = chars.next();
                 }
                 line = line.checked_add(1)?;
                 character = 0;
