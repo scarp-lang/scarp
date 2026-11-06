@@ -100,6 +100,51 @@ notifications, incremental recompilation or cancellation; consumers must
 discard stale symbol snapshots after edits. Existing schema-v1 JSON remains
 unchanged: it still uses UTF-8 byte spans and one-based scalar columns.
 
+## Reusable, revision-guarded editor snapshots (development API)
+
+For repeated editor queries, the optional `EditorSnapshot` indexes line starts
+and content ends once, preserving the original immutable `SymbolIndex` and
+source text. Construct it with `EditorSnapshot::new(index, &versions,
+EditorLimits::default())`, where `versions` has exactly one caller-owned
+revision number per `SourceId` in the compiled graph. It returns a typed
+`EditorBuildError` on version-count mismatches, line-table limits, or failed
+reservations; no partial snapshot is published.
+
+`EditorSnapshot::utf16_to_byte`, `byte_to_utf16`, `goto_definition`,
+`utf16_range`, and `find_references` all require the **current version list**
+on each query. If *any* loaded source has changed since compilation, the query
+fails with `EditorQueryError::StaleVersion` rather than returning a plausible
+but outdated definition. Missing files, malformed coordinates and unknown
+symbol IDs have different errors. `goto_definition` returns `Ok(None)`
+only for a valid source location that does not select a symbol.
+
+The editor owns revision bookkeeping: increment the affected file's revision
+whenever its contents change, and recompile/rebuild the whole snapshot before
+continuing queries. The library cannot detect an edit if the caller reuses a
+revision number or omits a new/deleted module from its bookkeeping. The order of
+revisions is the *compiled graph's source discovery order*; IDs and revisions
+must not be mixed across snapshots. Use `symbols().sources().files()` to
+associate each `SourceId` with your editor document model.
+
+The line index stores a bounded total of at most 262,144 line records by
+default, independently of compiler/runtime `IndexLimits`. An empty file
+counts as one line, as does the final empty line after a trailing newline.
+Building the snapshot scans each loaded source once (O(total source bytes));
+UTF-16-to-byte conversion scans only one requested line, and byte-to-UTF-16
+conversion performs a binary search over line starts and scans one line.
+Checking every supplied revision is O(number of files) per query. Line
+metadata is logical indexing storage, not a process-memory measurement.
+Clones share read-only metadata; ordinary compiler execution and the JSON
+schema-v1 output are unchanged.
+
+These UTF-16 editor adapters are development embedding APIs, **not** features
+of the published alpha.6 binaries. Both the strict conversion helpers (merged
+after alpha.6) and this `EditorSnapshot` addition require a development checkout
+until a separately reviewed release. There is still no LSP protocol, change notification,
+cancellation service, incremental module cache or external editor deployment.
+See `tests/editor_snapshot.rs` and `examples/editor_snapshot.rs` for host
+integration and strict Unicode/CRLF regression coverage.
+
 ## Limits and measured quantities
 
 Ordinary compilation does not construct an index or enforce index limits. The

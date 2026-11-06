@@ -1,5 +1,11 @@
 # Test and validate changes
 
+For the post-alpha.6 version-guarded editor adapter (issue #116), run
+`cargo test --locked --offline --test editor_snapshot` and
+`cargo run --locked --offline --example editor_snapshot`. These cover strict
+UTF-8/UTF-16 boundaries, stale imports, multi-file queries and line-table
+limits. The new adapter is not part of the published alpha.6 archives.
+
 For the published v0.0.6-alpha.1 prerelease, include `--test symbol_navigation
 --test symbol_navigation_cli --test root_mean_square`. Run the independent
 `scripts/test_symbol_index_json.py` and `scripts/test_rms.py` against the built
