@@ -193,8 +193,9 @@ impl InvalidationSnapshot {
         if changed.len() > self.limits.max_changed_files {
             return Err(InvalidationError::EditLimit);
         }
+        // Check the complete input before resolving any identity: an unknown
+        // path still invalidates the graph, but must not bypass later quotas.
         let mut bytes = 0usize;
-        let mut roots = Vec::new();
         for identity in changed {
             bytes = bytes
                 .checked_add(identity.len())
@@ -202,6 +203,12 @@ impl InvalidationSnapshot {
             if bytes > self.limits.max_identity_bytes {
                 return Err(InvalidationError::IdentityLimit);
             }
+        }
+        let mut roots = Vec::new();
+        roots
+            .try_reserve(changed.len())
+            .map_err(|_| InvalidationError::Allocation)?;
+        for identity in changed {
             match self.id_for(identity) {
                 Some(id) => roots.push(id),
                 None => {
