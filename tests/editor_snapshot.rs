@@ -92,8 +92,7 @@ fn stale_import_revision_invalidates_entry_source_and_cross_file_ranges() {
         .references()
         .iter()
         .find(|r| {
-            r.location.source == 0
-                && &main[r.location.span.start..r.location.span.end] == "twice"
+            r.location.source == 0 && &main[r.location.span.start..r.location.span.end] == "twice"
         })
         .unwrap();
     let position = editor
@@ -133,7 +132,10 @@ fn stale_import_revision_invalidates_entry_source_and_cross_file_ranges() {
         Err(err)
     );
     assert_eq!(editor.byte_to_utf16(&stale, 0, 0), Err(err));
-    assert_eq!(editor.find_references(&stale, definition.id).err(), Some(err));
+    assert_eq!(
+        editor.find_references(&stale, definition.id).err(),
+        Some(err)
+    );
     assert_eq!(
         editor.goto_definition(&[12], 0, position),
         Err(EditorQueryError::VersionCount {
@@ -169,10 +171,7 @@ fn unknown_sources_and_invalid_offsets_do_not_silently_clamp() {
     let version = [0];
     let editor = EditorSnapshot::new(compiled.index(), &version, EditorLimits::default()).unwrap();
 
-    assert_eq!(
-        editor.goto_definition(&version, 0, P::new(0, 0)),
-        Ok(None)
-    );
+    assert_eq!(editor.goto_definition(&version, 0, P::new(0, 0)), Ok(None));
     assert_eq!(
         editor.goto_definition(&version, 50, P::new(0, 0)),
         Err(EditorQueryError::UnknownSource)
@@ -224,12 +223,8 @@ fn total_line_budget_and_revision_count_are_checked_before_retaining_a_snapshot(
             Err(EditorBuildError::LineLimit)
         ));
     }
-    let editor = EditorSnapshot::new(
-        compiled.index(),
-        &versions,
-        EditorLimits { max_lines: 4 },
-    )
-    .unwrap();
+    let editor =
+        EditorSnapshot::new(compiled.index(), &versions, EditorLimits { max_lines: 4 }).unwrap();
     assert_eq!(editor.total_lines(), 4);
     assert_eq!(editor.line_count(0), Some(3));
     assert_eq!(editor.line_count(1), Some(1));
