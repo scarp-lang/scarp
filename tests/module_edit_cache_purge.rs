@@ -169,7 +169,7 @@ fn known_diamond_edit_drops_semantics_but_preserves_unedited_syntax_and_other_ro
     assert_eq!(output(&old), b"7 7\n"); // returned Arc remains immutable
     assert_eq!(syntax.stats().hits, prior_syntax.hits + 3);
     assert_eq!(syntax.stats().misses, prior_syntax.misses + 1);
-    assert_eq!(
+    assert!(
         purge_reported_edits(
             &snapshot,
             &["missing.srp"],
@@ -179,8 +179,7 @@ fn known_diamond_edit_drops_semantics_but_preserves_unedited_syntax_and_other_ro
         )
         .unwrap()
         .impact
-        .unknown_identity,
-        true
+        .unknown_identity
     );
 }
 
