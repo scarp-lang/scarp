@@ -88,9 +88,7 @@ pub fn utf16_to_byte(source: &str, position: Utf16Position) -> Option<usize> {
         }
         let delimiter = delimiter?;
         let at = start + delimiter;
-        start = if source.as_bytes()[at] == b'\r'
-            && source.as_bytes().get(at + 1) == Some(&b'\n')
-        {
+        start = if source.as_bytes()[at] == b'\r' && source.as_bytes().get(at + 1) == Some(&b'\n') {
             at + 2
         } else {
             at + 1
