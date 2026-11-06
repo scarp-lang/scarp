@@ -52,21 +52,21 @@ class ReleaseAssets(unittest.TestCase):
                 "README.md", "CHANGELOG.md", "CONTRIBUTING.md",
                 f"docs/releases/v{version}.md", "examples/bindings.srp",
                 "examples/mutable.srp", "examples/scopes.srp", "examples/decisions.srp",
-            ) if name != omit and not (version in ("0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1") and name.startswith("docs/releases/"))}
-            if (version.startswith("0.0.3-") or version in ("0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1")):
+            ) if name != omit and not (version in ("0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2") and name.startswith("docs/releases/"))}
+            if (version.startswith("0.0.3-") or version in ("0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2")):
                 for name in ("loops", "repeat", "control_escapes"):
                     for extension in ("srp", "stdout"):
                         member = f"examples/{name}.{extension}"
                         if member != omit:
                             files[member] = b"fixture"
-            if version in ("0.0.3-beta.2", "0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1"):
+            if version in ("0.0.3-beta.2", "0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2"):
                 for member in (
                     "examples/output.srp", "examples/output.stdout",
                     "docs/output.md", "docs/syntax-migration.md",
                 ):
                     if member != omit:
                         files[member] = b"fixture"
-            if version in ("0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1"):
+            if version in ("0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2"):
                 for member in (
                     "docs/functions.md", "examples/functions.srp", "examples/functions.stdout",
                     "examples/function_contracts.srp", "examples/function_contracts.stdout",
@@ -75,14 +75,14 @@ class ReleaseAssets(unittest.TestCase):
                 ):
                     if member != omit:
                         files[member] = b"fixture"
-            if version in ("0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1"):
+            if version in ("0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2"):
                 for member in (
                     "docs/floats.md", "examples/float_refinement.srp", "examples/float_refinement.stdout",
                     "examples/float_smoothing.srp", "examples/float_smoothing.stdout",
                 ):
                     if member != omit:
                         files[member] = b"fixture"
-            if version in ("0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1"):
+            if version in ("0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2"):
                 for member in (
                     "docs/vectors.md", "examples/vectors.srp", "examples/vectors.stdout",
                     "examples/vector_probabilities.srp", "examples/vector_probabilities.stdout",
@@ -90,13 +90,13 @@ class ReleaseAssets(unittest.TestCase):
                 ):
                     if member != omit:
                         files[member] = b"fixture"
-            if version in ("0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1"):
+            if version in ("0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2"):
                 for name in ("scaled_norm", "terminal_recursion", "vector_allocation"):
                     for extension in ("srp", "stdout"):
                         member = f"examples/{name}.{extension}"
                         if member != omit:
                             files[member] = b"fixture"
-            if version in ("0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1"):
+            if version in ("0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2"):
                 for member in ("docs/tiles.md", "docs/memory-lifetimes.md", "docs/architecture.md", "docs/testing.md"):
                     if member != omit:
                         files[member] = b"fixture"
@@ -107,7 +107,7 @@ class ReleaseAssets(unittest.TestCase):
                         member = f"examples/{name}.{extension}"
                         if member != omit:
                             files[member] = b"fixture"
-            if version in ("0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1"):
+            if version in ("0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2"):
                 for member in (
                     "docs/modules.md", "docs/tutorials/modules.md", "docs/proposals/0029-source-modules.md",
                     "examples/module_demo.srp", "examples/module_demo.stdout",
@@ -115,7 +115,7 @@ class ReleaseAssets(unittest.TestCase):
                 ):
                     if member != omit:
                         files[member] = b"fixture"
-            if version in ("0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1"):
+            if version in ("0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2"):
                 for name in ("module_inspection", "constant_expressions", "typed_declarations", "scalar_conversions", "unicode_text", "inspection_json", "integer_collections", "bit_fields", "numerical_kernels", "collection_module"):
                     for extension in ("srp", "stdout"):
                         member = f"examples/{name}.{extension}"
@@ -126,17 +126,17 @@ class ReleaseAssets(unittest.TestCase):
                         files[member] = b"fixture"
                 if omit != "RELEASE-METADATA.json":
                     files["RELEASE-METADATA.json"] = json.dumps(dict(schema_version=1, version=version, documentation_repository="https://github.com/scarp-lang/scarp-docs")).encode()
-            if version in ("0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1"):
+            if version in ("0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2"):
                 for member in ("examples/interned_types.rs", "examples/text_construction.srp", "examples/text_construction.stdout", "examples/diagnostics/type_error.srp", "examples/diagnostics/type_error.diagnostic.json"):
                     if member != omit:
                         files[member] = b"fixture"
-            if version in ("0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1"):
+            if version in ("0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2"):
                 # Manifest-based projects and authored release notes are
                 # required for the new candidate across all three archives.
                 for member in ("docs/project-workflow.md", "docs/releases/v0.0.5-alpha.4.md"):
                     if member != omit:
                         files[member] = b"fixture"
-            if version in ("0.0.5-alpha.5", "0.0.6-alpha.1"):
+            if version in ("0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2"):
                 for member in (
                     "docs/releases/v0.0.5-alpha.5.md",
                     "docs/proposals/0035-native-scalar-c11.md",
@@ -145,7 +145,7 @@ class ReleaseAssets(unittest.TestCase):
                 ):
                     if member != omit:
                         files[member] = b"fixture"
-            if version == "0.0.6-alpha.1":
+            if version in ("0.0.6-alpha.1", "0.0.6-alpha.2"):
                 for member in (
                     "docs/releases/v0.0.6-alpha.1.md", "docs/symbol-index.md",
                     "docs/root-mean-square.md", "examples/symbol_index.rs",
@@ -153,6 +153,16 @@ class ReleaseAssets(unittest.TestCase):
                     "examples/modules/navigation_values.srp",
                     "examples/symbol_navigation.symbols.json", "examples/symbol_navigation.references.json",
                     "examples/root_mean_square.srp", "examples/root_mean_square.stdout",
+                ):
+                    if member != omit:
+                        files[member] = b"fixture"
+            if version == "0.0.6-alpha.2":
+                for member in (
+                    "docs/releases/v0.0.6-alpha.2.md",
+                    "docs/development/incremental-invalidation.md",
+                    "docs/development/semantic-cache.md",
+                    "docs/development/token-cache.md",
+                    "docs/development/syntax-cache.md",
                 ):
                     if member != omit:
                         files[member] = b"fixture"
