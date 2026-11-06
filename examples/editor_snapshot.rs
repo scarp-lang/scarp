@@ -33,7 +33,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let definition = editor
         .goto_definition(&versions, 0, position)?
         .expect("the call resolves to its declaration");
-    let target = definition.location.expect("user function has a source span");
+    let target = definition
+        .location
+        .expect("user function has a source span");
     assert_eq!(target.source, 1);
     assert_eq!(
         editor.utf16_range(&versions, target)?.start,
