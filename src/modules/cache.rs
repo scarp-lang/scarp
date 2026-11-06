@@ -316,13 +316,7 @@ impl CompilationCache {
         syntax: &mut SyntaxCache,
     ) -> Result<CachedProgram, CachedCompileError> {
         self.compile_graph(
-            load_with_frontend_caches(
-                entry,
-                loader,
-                options.module_limits,
-                tokens,
-                syntax,
-            )?,
+            load_with_frontend_caches(entry, loader, options.module_limits, tokens, syntax)?,
             options.module_limits,
             options.constant_limits,
             options.type_limits,
