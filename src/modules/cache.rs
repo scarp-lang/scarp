@@ -17,6 +17,25 @@ use std::{collections::VecDeque, error::Error, fmt, sync::Arc};
 mod tokens;
 pub use tokens::{TokenCache, TokenCacheLimits, TokenCacheStats};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CachedCompileOptions<'a> {
+    pub module_limits: ModuleLimits,
+    pub constant_limits: ConstantLimits,
+    pub type_limits: TypeLimits,
+    /// Revisions in freshly discovered SourceId order.
+    pub revisions: &'a [u64],
+}
+impl<'a> CachedCompileOptions<'a> {
+    pub fn new(revisions: &'a [u64]) -> Self {
+        Self {
+            module_limits: ModuleLimits::default(),
+            constant_limits: ConstantLimits::default(),
+            type_limits: TypeLimits::default(),
+            revisions,
+        }
+    }
+}
+
 /// A count bound and a cumulative bound on retained source text.
 ///
 /// The source-byte count is logical retained source payload including the
@@ -250,18 +269,15 @@ impl CompilationCache {
         &mut self,
         entry: &str,
         loader: &dyn SourceLoader,
-        module_limits: ModuleLimits,
-        constant_limits: ConstantLimits,
-        type_limits: TypeLimits,
-        revisions: &[u64],
+        options: CachedCompileOptions<'_>,
         tokens: &mut TokenCache,
     ) -> Result<CachedProgram, CachedCompileError> {
         self.compile_graph(
-            load_with_token_cache(entry, loader, module_limits, tokens)?,
-            module_limits,
-            constant_limits,
-            type_limits,
-            revisions,
+            load_with_token_cache(entry, loader, options.module_limits, tokens)?,
+            options.module_limits,
+            options.constant_limits,
+            options.type_limits,
+            options.revisions,
         )
     }
 
