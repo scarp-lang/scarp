@@ -16,7 +16,10 @@ fn mixed_line_endings_bom_and_supplementary_scalars_round_trip_strictly() {
 
     assert_eq!(byte_to_utf16(source, 0), Some(P::new(0, 0)));
     assert_eq!(byte_to_utf16(source, emoji), Some(P::new(0, 2)));
-    assert_eq!(byte_to_utf16(source, source.find('b').unwrap()), Some(P::new(0, 4)));
+    assert_eq!(
+        byte_to_utf16(source, source.find('b').unwrap()),
+        Some(P::new(0, 4))
+    );
     assert_eq!(byte_to_utf16(source, crlf), Some(P::new(0, 5)));
     assert_eq!(byte_to_utf16(source, crlf + 1), None);
     assert_eq!(byte_to_utf16(source, crlf + 2), Some(P::new(1, 0)));
