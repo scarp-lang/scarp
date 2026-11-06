@@ -22,9 +22,15 @@ Lexically invalid source is **not** cached. Lexically valid source with parser e
 | --- | ---: |
 | Cached file entries | 128 |
 | Cumulative original UTF-8 source bytes | 8 MiB |
+| Cumulative UTF-8 loader identity bytes | 1 MiB |
 | Cumulative lexer token count, including EOF tokens | 1,000,000 |
 
 These are **logical payload bounds**, not a verified heap-memory cap. Decoded token strings, vector capacities, allocator metadata and program memory may exceed the quotas. Do not claim bounded resident memory on this basis.
+
+The loader-identity budget limits retained path/key text independently of
+source content, avoiding unexpectedly large metadata allocations for
+custom loaders. An over-limit identity still compiles normally without
+being stored.
 
 Cache replacement is deterministic FIFO (hits do not refresh insertion order). Disabled or oversized caches return fresh lexer results normally; `TokenCacheStats` reports hits, misses, bypasses, evictions, stored entries, source bytes and tokens. `clear()` explicitly drops all retained entries. TokenCache and CompilationCache are independent owners with independent quotas, statistics and eviction.
 
