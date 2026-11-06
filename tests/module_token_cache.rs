@@ -208,7 +208,7 @@ fn cached_tokens_never_hide_parser_errors_or_lex_failures() {
         assert_eq!(err.diagnostic, cold.diagnostic);
         assert_eq!(err.render(), cold.render());
     }
-    assert_eq!(tokens.stats().hits, 1); // cached main on second attempt
+    assert_eq!(tokens.stats().hits, 2); // both files are re-parsed from cached tokens
     assert_eq!(tokens.stats().entries, 2); // parse failures can cache valid lexing
 
     let invalid_lexer = loader(&[
@@ -230,7 +230,7 @@ fn changed_import_graph_and_module_limits_still_run_all_checks() {
         ("lib.srp", "pub bind value=7;"),
     ]);
     let mut tokens = TokenCache::new(TokenCacheLimits::default());
-    let mut graph = modules::load_with_token_cache(
+    let graph = modules::load_with_token_cache(
         "main.srp",
         &good,
         ModuleLimits::default(),
