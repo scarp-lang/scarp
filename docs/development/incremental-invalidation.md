@@ -138,6 +138,12 @@ trusted-root symlinks, cycles, diagnostics, constant work limits and
 inspection identity. A later phase will need dedicated property-based and
 cold-vs-cached differential tests if actual reuse is introduced.
 
+The companion [preflighted edit-driven cache purge](cache-edit-planning.md)
+connects the old graph's bounded edit closure to existing caller-owned cache
+eviction. It preflights the entire edit list before any retention mutation,
+conservatively clears all caches on unknown identities, and never returns
+an old compiled program in place of a fresh semantic validation.
+
 The separate [semantic cache development API](semantic-cache.md) builds on
 this contract: it reuses whole-graph semantic resolution only after the full
 trusted loader and parser validate exact unchanged inputs. It does not yet
