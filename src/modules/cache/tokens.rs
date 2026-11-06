@@ -103,7 +103,7 @@ impl TokenCache {
     ///
     /// Lexical errors are NEVER cached. A syntactically invalid but lexically
     /// valid source may retain tokens, but still must run the parser anew.
-    pub(super) fn lex(
+    pub(crate) fn lex(
         &mut self,
         identity: &str,
         source: &str,
