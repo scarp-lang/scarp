@@ -93,6 +93,40 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
                 self.assertNotIn("unreleased v0.0.6", content.lower())
                 self.assertNotIn("unpublished v0.0.6", content.lower())
 
+    def test_release_link_labels_match_target_versions(self):
+        # The version family 0.0.6 starts at alpha.1, not "alpha.6".
+        # Match labels to their actual release-note targets so future edits
+        # cannot accidentally substitute the series number for the alpha.
+        documents = (
+            "README.md",
+            "CHANGELOG.md",
+            "docs/README.md",
+            "docs/compatibility.md",
+            "docs/testing.md",
+            "docs/releases/v0.0.6-alpha.1-validation.md",
+        )
+        links = re.compile(r"\[([^\]\r\n]+)\]\(([^)\r\n]+)\)")
+        release_target = re.compile(
+            r"v\d+\.\d+\.\d+-alpha\.(\d+)(?:-validation)?\.md(?:#[\w-]+)?$"
+        )
+        alpha_label = re.compile(r"\balpha\.(\d+)\b", re.IGNORECASE)
+        for filename in documents:
+            with self.subTest(file=filename):
+                content = (ROOT / filename).read_text(encoding="utf-8")
+                self.assertNotRegex(
+                    content, r"\balpha\.6\b",
+                    "use the full v0.0.6-alpha.1 label, not ambiguous alpha.6",
+                )
+                for link_label, href in links.findall(content):
+                    target = release_target.search(href)
+                    label = alpha_label.search(link_label)
+                    if target and label:
+                        with self.subTest(file=filename, link=href):
+                            self.assertEqual(
+                                label.group(1), target.group(1),
+                                f"{link_label!r} does not match {href!r}",
+                            )
+
     def test_candidate_metadata_lockfile_and_no_implicit_release_request(self):
         version = package_version()
         metadata = json.loads(

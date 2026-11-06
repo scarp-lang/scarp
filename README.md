@@ -12,7 +12,7 @@ remains **v0.0.6-alpha.1**; release artifacts are not yet available for alpha.2.
 
 **0.0.6-alpha.1** is the latest **published GitHub prerelease** (5 November
 2026), adding bounded cross-file symbol/reference navigation and finite root
-mean square. See [alpha.6 release notes](docs/releases/v0.0.6-alpha.1.md),
+mean square. See [v0.0.6-alpha.1 release notes](docs/releases/v0.0.6-alpha.1.md),
 [publication verification](docs/releases/v0.0.6-alpha.1-validation.md),
 [symbol APIs and JSON](docs/symbol-index.md) and [RMS](docs/root-mean-square.md).
 This is not a stable language or native compiler release.
@@ -160,7 +160,7 @@ The latest published prerelease is
 published 5 November 2026 from source commit
 `aa329a22cf2bf92d2c9814a26ff9c8b67a72e6e8`. It provides Windows x64,
 Linux x64 and macOS Apple Silicon archives with SHA-256 checksums.
-See the [alpha.6 release notes](docs/releases/v0.0.6-alpha.1.md),
+See the [v0.0.6-alpha.1 release notes](docs/releases/v0.0.6-alpha.1.md),
 [publication verification record](docs/releases/v0.0.6-alpha.1-validation.md)
 and [release engineering](docs/releasing.md) for publication gates.
 Earlier prerelease records remain historical snapshots.
@@ -171,7 +171,7 @@ history, release/download verification and updated clone instructions.
 
 ## Source navigation in published v0.0.6-alpha.1
 
-Published alpha.6 adds [symbol/reference navigation](docs/symbol-index.md) through
+Published v0.0.6-alpha.1 adds [symbol/reference navigation](docs/symbol-index.md) through
 `scarp inspect symbols --json FILE` and `scarp inspect references --json FILE`
 (or an explicit project directory). The Rust snapshot API provides go-to-definition
 and find-references without running statements, defaults or contracts. It retains
@@ -183,7 +183,7 @@ These commands are absent from published alpha.5 binaries.
 
 Binary archives and checksums are available through
 [GitHub Releases](https://github.com/scarp-lang/scarp/releases). See the
-[latest alpha.6 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.1)
+[latest v0.0.6-alpha.1 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.1)
 for its supported archives, checksums and source commit. The
 [changelog](CHANGELOG.md) records recent language and tooling changes.
 

@@ -96,7 +96,7 @@ Use this guide before copying an example into a different Scarp executable or
 updating a Rust embedding host. It compares the published v0.0.1, v0.0.2,
 v0.0.3-beta.1, beta.2, and beta.3 snapshots. Beta.3 uses the syntax described below;
 separate feature branches can differ from both main and downloaded binaries.
-The latest published prerelease is alpha.6 (v0.0.6-alpha.1). It retains
+The latest published prerelease is v0.0.6-alpha.1. It retains
 the alpha.5 project inspection and experimental scalar C11 emitter, and
 adds symbol/reference navigation plus finite root mean square. The emitter
 does not add a general `scarp compile` command.

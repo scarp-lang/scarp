@@ -64,7 +64,7 @@ experimental Rust-hosted C11 scalar emitter; see
 | [Import tutorial](tutorials/modules.md) | Run a three-file numerical program and repair private-member/cycle errors |
 | [Finite floats](floats.md) | Use the alpha's binary64 scalars, numeric diagnostics, and function integration |
 | [Numerical vectors](vectors.md) | Use immutable numerical data, pure kernels, typed vector calls and bounded allocation |
-| [Root mean square](root-mean-square.md) | Use the published alpha.6 finite RMS reduction, visible windows and exact work/allocation rules |
+| [Root mean square](root-mean-square.md) | Use the published v0.0.6-alpha.1 finite RMS reduction, visible windows and exact work/allocation rules |
 | [Your first numerical program](tutorials/numerical-program.md) | Build a small typed numerical calculation and compare probabilities safely |
 | [Numerical errors](reference/numerical-errors.md) | Repair type, shape, index, domain, overflow and quota failures |
 | [Functions](functions.md) | Learn typed calls, defaults, contracts, and bounded invocation resources |
@@ -157,7 +157,7 @@ If a guide disagrees with an executable, first confirm the version and branch.
 For a documentation bug, include the page, command, source, actual result, and
 version so the mismatch can be reproduced.
 
-## Published alpha.6 compiler navigation
+## Published v0.0.6-alpha.1 compiler navigation
 
 The [symbol/reference index](symbol-index.md) documents source navigation APIs,
 static inventories and versioned JSON contracts published in
