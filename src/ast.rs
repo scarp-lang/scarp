@@ -3,6 +3,9 @@
 use crate::diagnostics::Span;
 use crate::value::FiniteFloat;
 
+mod rebase;
+pub(crate) use rebase::relocate;
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Program {
     pub statements: Vec<Statement>,
