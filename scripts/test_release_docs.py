@@ -100,6 +100,36 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
                 for needle in expected:
                     self.assertIn(needle, text, f"update {filename} when changing the package release anchor")
 
+    def test_publication_notes_use_tag_stable_links_and_accurate_cache_scope(self):
+        # Release notes are rendered on the GitHub Release page, not inside
+        # docs/releases/. Relative Markdown paths there would be broken.
+        notes = (ROOT / "docs/releases/v0.0.6-alpha.2-publication.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("four new caches", notes.lower())
+        self.assertIn("three cache tiers", notes)
+        self.assertNotIn("](../development/", notes)
+        contracts = (
+            "incremental-invalidation.md",
+            "semantic-cache.md",
+            "token-cache.md",
+            "syntax-cache.md",
+            "cache-eviction.md",
+            "cache-edit-planning.md",
+        )
+        for name in contracts:
+            with self.subTest(contract=name):
+                path = ROOT / "docs/development" / name
+                self.assertTrue(path.is_file(), f"missing bundled contract: {name}")
+                self.assertIn(f"`docs/development/{name}`", notes)
+        for name in ("cache-eviction.md", "cache-edit-planning.md"):
+            with self.subTest(link=name):
+                self.assertIn(
+                    f"https://github.com/scarp-lang/scarp/blob/v{PACKAGE_VERSION}/"
+                    f"docs/development/{name}",
+                    notes,
+                )
+
     def test_latest_published_anchor_remains_separate_from_candidate(self):
         version = PUBLISHED_VERSION
         self.assertEqual(PACKAGE_VERSION, package_version())
