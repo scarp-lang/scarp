@@ -1,6 +1,6 @@
 # Test and validate changes
 
-For the **v0.0.6-alpha.2 source candidate** (not yet published), exercise
+For the **published v0.0.6-alpha.2 prerelease** (and continued source development), exercise
 `--test module_invalidation --test module_cache --test module_token_cache
 --test module_syntax_cache` and
 `cargo bench --locked --offline --bench compiler -- --quick`. The four
@@ -9,8 +9,9 @@ benchmark measures distinct cold, warm token, warm syntax, and combined cache
 workloads without claiming a portable speedup. Also run
 `python3 -m unittest scripts/test_release_assets.py scripts/test_release_docs.py`;
 missing alpha.2 cache docs and stale metadata must fail native package checks.
-The last released binary is still alpha.1. See
-[candidate gates](releases/v0.0.6-alpha.2-preparation.md).
+The current published binary is alpha.2. See
+[publication verification](releases/v0.0.6-alpha.2-validation.md)
+and the historical [candidate gates](releases/v0.0.6-alpha.2-preparation.md).
 
 For the post-v0.0.6-alpha.1 version-guarded editor adapter (issue #116), run
 `cargo test --locked --offline --test editor_snapshot` and
