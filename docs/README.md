@@ -1,5 +1,13 @@
 # Scarp documentation
 
+**0.0.6-alpha.2 prerelease** is a source candidate, **not yet published**.
+It includes optional [invalidation planning](development/incremental-invalidation.md),
+[source-relative token caching](development/token-cache.md),
+[parsed AST caching](development/syntax-cache.md), and
+[whole-graph semantic caching](development/semantic-cache.md).
+Read the [alpha.2 candidate notes](releases/v0.0.6-alpha.2.md) before testing.
+The last public prerelease is still v0.0.6-alpha.1.
+
 **0.0.6-alpha.1 prerelease** is published (5 November 2026), adding
 [bounded symbol navigation](symbol-index.md) and [RMS](root-mean-square.md);
 [release notes](releases/v0.0.6-alpha.1.md) describe the implementation and

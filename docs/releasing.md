@@ -8,6 +8,13 @@ publication; changing a package version alone does not authorize a release.
 
 ## Build inputs and packages
 
+**The 0.0.6-alpha.2 checkout is a prerelease source candidate**, not a public
+tag or published asset. Its [candidate notes](releases/v0.0.6-alpha.2.md)
+and cache documentation require exact-source archive verification before
+release authorization. The final source SHA must be fixed only after its
+candidate PR and all seven main-branch jobs pass. Do not create or leave a
+release-request.json during candidate preparation.
+
 **v0.0.6-alpha.1 was published as a GitHub prerelease on 5 November 2026.**
 Its [notes](releases/v0.0.6-alpha.1.md) define navigation/RMS scope and exclusions;
 the [publication record](releases/v0.0.6-alpha.1-validation.md) identifies the

@@ -1,6 +1,9 @@
 # Command-line reference
 
-## Scarp-first CLI (v0.0.6-alpha.1 prerelease)
+## Scarp-first CLI (v0.0.6-alpha.2 source candidate)
+
+The alpha.2 candidate does not add CLI commands: its new caches are opt-in
+Rust embedding APIs. The last **published** command set remains alpha.1.
 
 Published alpha.6 adds static `inspect symbols` and `inspect references`
 commands, which are absent from older alpha.5 packages.

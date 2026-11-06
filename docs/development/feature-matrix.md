@@ -1,10 +1,11 @@
 # Feature completeness and development roadmap
 
-Audit date: 2026-11-05. This inventory describes the tested development
-baseline; update a row when an implementation lands. No roadmap row implies
-a release or an available CLI command. Cargo declares 0.0.6-alpha.1, the
-latest **published GitHub prerelease** (5 November 2026). The published source
-is still experimental, not a stable language contract.
+Audit date: 2026-11-06. This inventory describes the development
+candidate; update a row when an implementation lands. No roadmap row implies
+a release or an available CLI command. Cargo declares 0.0.6-alpha.2, a
+**candidate not yet published**. The latest published GitHub prerelease remains
+v0.0.6-alpha.1 (5 November 2026). The language remains experimental, without
+a stable public contract.
 Future feature rows remain proposals.
 
 Current audit baseline: `1aff6cabf93f2e0bce6953b29e1abe7d00ebd5fb`.

@@ -2,6 +2,14 @@
 
 **Build Beyond Boundaries.**
 
+**0.0.6-alpha.2** is the next source candidate, **not a published release**.
+It adds optional dependency invalidation planning and caller-owned token, AST and
+whole-graph semantic caches for Rust embedding hosts. See the
+[alpha.2 candidate notes](docs/releases/v0.0.6-alpha.2.md) and
+[syntax cache contract](docs/development/syntax-cache.md). The CLI and general
+native compilation capabilities have not changed. The latest public release
+remains **v0.0.6-alpha.1**; release artifacts are not yet available for alpha.2.
+
 **0.0.6-alpha.1** is the latest **published GitHub prerelease** (5 November
 2026), adding bounded cross-file symbol/reference navigation and finite root
 mean square. See [alpha.6 release notes](docs/releases/v0.0.6-alpha.1.md),

@@ -1,5 +1,17 @@
 # Test and validate changes
 
+For the **v0.0.6-alpha.2 source candidate** (not yet published), exercise
+`--test module_invalidation --test module_cache --test module_token_cache
+--test module_syntax_cache` and
+`cargo bench --locked --offline --bench compiler -- --quick`. The four
+independent cache milestones must retain cold-build-equivalent outcomes; the
+benchmark measures distinct cold, warm token, warm syntax, and combined cache
+workloads without claiming a portable speedup. Also run
+`python3 -m unittest scripts/test_release_assets.py scripts/test_release_docs.py`;
+missing alpha.2 cache docs and stale metadata must fail native package checks.
+The last released binary is still alpha.1. See
+[candidate gates](releases/v0.0.6-alpha.2-preparation.md).
+
 For the post-alpha.6 version-guarded editor adapter (issue #116), run
 `cargo test --locked --offline --test editor_snapshot` and
 `cargo run --locked --offline --example editor_snapshot`. These cover strict
@@ -45,8 +57,10 @@ For the post-alpha.6 semantic cache (issue #117), also run
 `cargo test --locked --offline --test module_cache` to cover exact input hits,
 constant/type/module budgets, edit revisions, import retargets, Unicode labels,
 invalid or missing sources, FIFO eviction and caller-owned immutable reuse.
-This tests an opt-in whole-graph semantic resolution cache; the graph loader,
-lexer and parser still run on every request.
+The default whole-graph semantic cache still runs the graph loader, lexer and
+parser. The separately opt-in combined front-end caches can avoid lexing and
+parsing unchanged individual source files, but always reload and validate the
+graph and current semantics.
 
 For the post-alpha.6 invalidation planning API (issue #117), also run
 `cargo test --locked --offline --test module_invalidation` to exercise diamond
