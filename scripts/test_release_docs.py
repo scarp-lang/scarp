@@ -103,6 +103,11 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
             "docs/README.md",
             "docs/compatibility.md",
             "docs/testing.md",
+            "docs/reference/cli.md",
+            "docs/modules.md",
+            "docs/symbol-index.md",
+            "docs/development/feature-matrix.md",
+            "docs/development/incremental-invalidation.md",
             "docs/releases/v0.0.6-alpha.1-validation.md",
         )
         links = re.compile(r"\[([^\]\r\n]+)\]\(([^)\r\n]+)\)")
