@@ -14,6 +14,12 @@
   benchmark workloads that check correctness without asserting speedups.
 - Extend native archive requirements and damage-test the alpha.2 release
   metadata and cache contracts across all three supported targets.
+- Add approved-source public release-description notes that omit
+  unpublished-candidate wording, require them in each native package and
+  regression-test immutable source-note selection and tamper rejection.
+- Allow a separately reviewed, structurally valid release-request control PR
+  to satisfy the CI documentation checks; publication still requires exact
+  maintainer authorization and both revisions' seven passing jobs.
 - Refactor the experimental C11 scalar backend to reuse one typed
   compiler-owned acceptance and bounded workspace preflight, with parity
   regressions; no new CLI command, object writer, or stable native ABI.
