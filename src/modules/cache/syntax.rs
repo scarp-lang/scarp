@@ -3,7 +3,7 @@
 //! Import validation, cycle detection and semantic compilation are NOT cached.
 //! Original source bytes and trusted loader identity are compared exactly.
 
-use crate::{ast::{self, Program}, diagnostics::Span};
+use crate::ast::{self, Program};
 use std::collections::VecDeque;
 
 /// Logical quotas, not a process-heap bound (AST strings, allocations, and
