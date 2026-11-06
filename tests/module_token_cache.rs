@@ -2,9 +2,7 @@ use scarp::{
     diagnostics::DiagnosticKind as Kind,
     modules::{
         self,
-        cache::{
-            CacheLimits, CacheStatus, CompilationCache, TokenCache, TokenCacheLimits,
-        },
+        cache::{CacheLimits, CacheStatus, CompilationCache, TokenCache, TokenCacheLimits},
         symbols::IndexLimits,
         ConstantLimits, MemorySourceLoader, ModuleLimits, SourceLoadError, SourceLoader,
     },
@@ -67,10 +65,7 @@ fn repeated_compilation_reuses_module_tokens_not_loader_or_parser_validation() {
 
     let source = loader(&[
         ("main.srp", "import \"lib.srp\" as lib; print(lib.f());"),
-        (
-            "lib.srp",
-            "pub pure funcra f()->integer { return 42; }",
-        ),
+        ("lib.srp", "pub pure funcra f()->integer { return 42; }"),
     ]);
     let observed = Counting {
         source: &source,
@@ -121,21 +116,22 @@ fn changing_earlier_utf8_source_length_rebases_unchanged_imported_tokens_exactly
     assert_eq!(stat.hits, 1); // the unchanged imported source
     assert_eq!(stat.misses, 3); // first two files, then new entry content
 
-    assert_eq!(warm.sources().files()[1].range(), cold.sources().files()[1].range());
-    assert_ne!(original.sources().files()[1].range(), cold.sources().files()[1].range());
+    assert_eq!(
+        warm.sources().files()[1].range(),
+        cold.sources().files()[1].range()
+    );
+    assert_ne!(
+        original.sources().files()[1].range(),
+        cold.sources().files()[1].range()
+    );
     assert_eq!(warm.imports(), cold.imports());
     assert_eq!(warm.constant_dependencies(), cold.constant_dependencies());
     assert_eq!(run(&warm), run(&cold));
 
     // Navigation uses absolute graph spans built from the newest source bases.
     let cached_index = modules::resolve_indexed(
-        modules::load_with_token_cache(
-            "main.srp",
-            &b,
-            ModuleLimits::default(),
-            &mut tokens,
-        )
-        .unwrap(),
+        modules::load_with_token_cache("main.srp", &b, ModuleLimits::default(), &mut tokens)
+            .unwrap(),
         IndexLimits::default(),
     )
     .unwrap();
@@ -183,7 +179,11 @@ fn source_reorder_changes_discovery_ids_but_not_token_offsets() {
     assert_eq!(tokens.stats().hits, 2);
     assert_eq!(tokens.stats().misses, 4);
     assert_eq!(
-        warm.sources().files().iter().map(|file| file.name.as_str()).collect::<Vec<_>>(),
+        warm.sources()
+            .files()
+            .iter()
+            .map(|file| file.name.as_str())
+            .collect::<Vec<_>>(),
         ["main.srp", "b.srp", "a.srp"]
     );
     assert_eq!(warm.imports(), cold.imports());
@@ -197,12 +197,8 @@ fn cached_tokens_never_hide_parser_errors_or_lex_failures() {
         ("lib.srp", "pub bind value = ;"),
     ]);
     let mut tokens = TokenCache::new(TokenCacheLimits::default());
-    let cold = modules::compile_with_loader(
-        "main.srp",
-        &invalid_parser,
-        ModuleLimits::default(),
-    )
-    .unwrap_err();
+    let cold = modules::compile_with_loader("main.srp", &invalid_parser, ModuleLimits::default())
+        .unwrap_err();
     for _ in 0..2 {
         let err = with_token_cache(&invalid_parser, &mut tokens).unwrap_err();
         assert_eq!(err.diagnostic, cold.diagnostic);
@@ -230,13 +226,9 @@ fn changed_import_graph_and_module_limits_still_run_all_checks() {
         ("lib.srp", "pub bind value=7;"),
     ]);
     let mut tokens = TokenCache::new(TokenCacheLimits::default());
-    let graph = modules::load_with_token_cache(
-        "main.srp",
-        &good,
-        ModuleLimits::default(),
-        &mut tokens,
-    )
-    .unwrap();
+    let graph =
+        modules::load_with_token_cache("main.srp", &good, ModuleLimits::default(), &mut tokens)
+            .unwrap();
     assert_eq!(graph.file_count(), 2);
     let result = modules::resolve(graph).unwrap();
     assert_eq!(run(&result), b"7\n");
@@ -252,8 +244,7 @@ fn changed_import_graph_and_module_limits_still_run_all_checks() {
         max_imports: 0,
         ..ModuleLimits::default()
     };
-    let err = modules::load_with_token_cache("main.srp", &good, tight, &mut tokens)
-        .unwrap_err();
+    let err = modules::load_with_token_cache("main.srp", &good, tight, &mut tokens).unwrap_err();
     assert_eq!(err.diagnostic.kind, Kind::ModuleLimit);
     assert!(tokens.stats().hits >= 1);
 }
@@ -307,10 +298,7 @@ fn token_cache_budgets_fifo_and_clear_are_independent_of_semantic_cache() {
 fn token_cache_works_with_opt_in_whole_graph_semantic_reuse() {
     let source = loader(&[
         ("main.srp", "import \"lib.srp\" as lib; print(lib.f());"),
-        (
-            "lib.srp",
-            "pub pure funcra f()->integer {return 9;}",
-        ),
+        ("lib.srp", "pub pure funcra f()->integer {return 9;}"),
     ]);
     let mut tokens = TokenCache::new(TokenCacheLimits::default());
     let mut semantics = CompilationCache::new(CacheLimits::default());
