@@ -9,12 +9,12 @@
 //!
 //! This is deliberately not a parser cache or partial incremental compiler.
 
+use super::invalidation::{EditImpact, InvalidationError, InvalidationSnapshot};
 use super::{
     load, load_with_frontend_caches, load_with_syntax_cache, load_with_token_cache,
     resolve_with_compiler_limits, ConstantLimits, ModuleDiagnostic, ModuleGraph, ModuleLimits,
     ModuleProgram, SourceLoader,
 };
-use super::invalidation::{EditImpact, InvalidationError, InvalidationSnapshot};
 use crate::types::TypeLimits;
 use std::{collections::VecDeque, error::Error, fmt, sync::Arc};
 
