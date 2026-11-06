@@ -34,6 +34,13 @@ being stored.
 
 Cache replacement is deterministic FIFO (hits do not refresh insertion order). Disabled or oversized caches return fresh lexer results normally; `TokenCacheStats` reports hits, misses, bypasses, evictions, stored entries, source bytes and tokens. `clear()` explicitly drops all retained entries. TokenCache and CompilationCache are independent owners with independent quotas, statistics and eviction.
 
+For editor-driven retention cleanup, `TokenCache::evict_identity(identity)`
+drops all retained source versions matching an exact trusted loader identity;
+other files and their FIFO order remain intact. The
+[coordinated three-tier purge](cache-eviction.md) also evicts affected
+whole-graph semantic successes and the corresponding syntax entries.
+These are explicit retention actions, not a new validation shortcut.
+
 ## Example
 
 ```rust
