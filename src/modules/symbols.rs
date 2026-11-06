@@ -1,4 +1,5 @@
 //! Immutable source navigation over one successfully compiled module graph.
+pub mod editor;
 mod json;
 use super::*;
 use crate::{ast::FunctionDeclaration, diagnostics::LocationTracker};
