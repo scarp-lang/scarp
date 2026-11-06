@@ -67,7 +67,7 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                 }
                 Statement::Export { declaration, span: whole } => {
                     span(whole, base, to_local);
-                    statements(std::slice::from_mut(declaration), base, to_local, nodes);
+                    statements(std::slice::from_mut(declaration.as_mut()), base, to_local, nodes);
                 }
                 Statement::Function(FunctionDeclaration {
                     name_span, parameters, contracts, statements: body, span: whole, ..
