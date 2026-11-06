@@ -95,6 +95,31 @@ impl SyntaxCache {
         self.identities = 0;
         self.nodes = 0;
     }
+    /// Drop every parsed source version for an exact resolved loader identity
+    /// without disturbing the FIFO order of other successfully parsed files.
+    /// Counters remain lifetime cumulative; this is not secure memory erasure.
+    pub fn evict_identity(&mut self, identity: &str) -> usize {
+        let mut removed = 0usize;
+        let mut source_bytes = 0usize;
+        let mut identity_bytes = 0usize;
+        let mut nodes = 0usize;
+        self.entries.retain(|entry| {
+            if entry.identity == identity {
+                removed += 1;
+                source_bytes += entry.source.len();
+                identity_bytes += entry.identity.len();
+                nodes += entry.nodes;
+                false
+            } else {
+                true
+            }
+        });
+        self.bytes -= source_bytes;
+        self.identities -= identity_bytes;
+        self.nodes -= nodes;
+        self.evictions = self.evictions.saturating_add(removed as u64);
+        removed
+    }
     /// Return a cloned AST with all spans rebased, or record a miss.
     pub(crate) fn try_reuse(
         &mut self,
