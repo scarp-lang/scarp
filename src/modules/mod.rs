@@ -21,6 +21,7 @@ use crate::{
 };
 use std::{collections::HashMap, fmt, io, path::Path, sync::Arc};
 
+pub mod cache;
 mod constants;
 mod inspection;
 pub mod invalidation;
