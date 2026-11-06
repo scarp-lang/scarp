@@ -316,6 +316,78 @@ fn per_import_target_changes_are_detected_even_when_unique_dependencies_are_unch
 }
 
 #[test]
+fn changed_display_names_invalidate_diagnostics_even_with_identical_identities_and_text() {
+    use modules::{SourceLoadError, SourceLoader};
+
+    struct Display<'a> {
+        loader: &'a MemorySourceLoader,
+        prefix: &'a str,
+    }
+    impl SourceLoader for Display<'_> {
+        fn resolve(
+            &self,
+            importer: Option<&str>,
+            specifier: &str,
+        ) -> Result<String, SourceLoadError> {
+            self.loader.resolve(importer, specifier)
+        }
+        fn load(&self, identity: &str, max_bytes: usize) -> Result<String, SourceLoadError> {
+            self.loader.load(identity, max_bytes)
+        }
+        fn display_name(&self, identity: &str) -> String {
+            format!("{}/{identity}", self.prefix)
+        }
+    }
+
+    let mut loader = MemorySourceLoader::new();
+    loader
+        .insert("main.srp", "import \"lib/café.srp\" as lib; print(lib.value);")
+        .unwrap();
+    loader
+        .insert("lib/café.srp", "pub bind value=27;")
+        .unwrap();
+    let original = modules::compile_with_loader(
+        "main.srp",
+        &Display {
+            loader: &loader,
+            prefix: "old",
+        },
+        ModuleLimits::default(),
+    )
+    .unwrap();
+    let renamed = modules::compile_with_loader(
+        "main.srp",
+        &Display {
+            loader: &loader,
+            prefix: "new",
+        },
+        ModuleLimits::default(),
+    )
+    .unwrap();
+    assert_eq!(original.sources().files()[1].name, "old/lib/café.srp");
+    assert_eq!(renamed.sources().files()[1].name, "new/lib/café.srp");
+    assert_eq!(original.sources().source(1), renamed.sources().source(1));
+    let before = snapshot(&original);
+    let after = snapshot(&renamed);
+    assert_eq!(before.identity(1), after.identity(1));
+    assert_eq!(
+        names(&before, &before.plan_edits(&["lib/café.srp"]).unwrap().affected),
+        ["main.srp", "lib/café.srp"]
+    );
+    let impact = before.compare(&after);
+    assert_eq!(names(&before, &impact.modified_old), ["lib/café.srp"]);
+    assert_eq!(names(&after, &impact.modified_new), ["lib/café.srp"]);
+    assert_eq!(
+        names(&before, &impact.affected_old),
+        ["main.srp", "lib/café.srp"]
+    );
+    assert_eq!(
+        names(&after, &impact.affected_new),
+        ["main.srp", "lib/café.srp"]
+    );
+}
+
+#[test]
 fn malformed_new_graph_does_not_supply_a_partial_transition() {
     let current = build(&[
         ("main.srp", "import \"lib.srp\" as l; print(l.value);"),
