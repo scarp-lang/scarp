@@ -28,6 +28,13 @@ expressions/chains, and six `.srp`/`.stderr` fixtures exercised by the embedding
 and run/check/modules. The three-file `constant_expressions` example has exact
 stdout. Native package checks include invalid constant initializers.
 
+For the post-alpha.6 semantic cache (issue #117), also run
+`cargo test --locked --offline --test module_cache` to cover exact input hits,
+constant/type/module budgets, edit revisions, import retargets, Unicode labels,
+invalid or missing sources, FIFO eviction and caller-owned immutable reuse.
+This tests an opt-in whole-graph semantic resolution cache; the graph loader,
+lexer and parser still run on every request.
+
 For the post-alpha.6 invalidation planning API (issue #117), also run
 `cargo test --locked --offline --test module_invalidation` to exercise diamond
 closures, exact-content graph transitions, loader retargeting, unknown changes,
