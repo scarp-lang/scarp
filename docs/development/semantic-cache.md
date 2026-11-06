@@ -8,7 +8,7 @@ watcher, an LSP server or a persistent build cache.
 
 ## What is—and is not—reused
 
-Every cache request calls the compiler's existing trusted `load` pipeline:
+The default semantic cache request calls the compiler's existing trusted `load` pipeline:
 entry resolution, all source loads, lexical analysis, parsing, import
 validation, canonical resolved import graph construction and resource checks.
 An incomplete program, changed path, missing module, malformed import or
@@ -119,10 +119,12 @@ The `tests/module_cache.rs` suite checks:
 - FIFO eviction, explicit clear, small quotas, disabled caching and immutable
   shared program reads across threads.
 
-A separate [source-relative token cache](token-cache.md) can be supplied
-alongside this semantic cache. It allows unchanged individual source files to
-skip lexing, but the trusted source loader and full parser still run for every
-build. Token and semantic retention have independent budgets and counters.
+Separate [source-relative lexical](token-cache.md) and [parsed syntax](syntax-cache.md) caches can be supplied
+alongside this semantic cache. An exact parsed-syntax hit can skip both lexing
+and parsing of an unchanged individual file; token caching can help on syntax
+misses. The trusted source loader, import graph validation and semantic cache
+input checks still run for every build. All caches retain independent budgets
+and counters.
 
 The earlier [invalidation-planning API](incremental-invalidation.md) remains
 useful for discovering affected importers and comparing successful graphs.
@@ -131,8 +133,9 @@ unaffected module ASTs or resolve only dirty subgraphs.
 
 ## Future work, still open in #117
 
-- Build a verified per-module parse/link cache without duplicating parser or
-  resolver rules and with failure-safe transitive invalidation.
+- Extend existing per-module parsed AST caching to verified dependency-aware
+  semantic link/type/constant reuse without duplicating resolver rules and
+  with failure-safe transitive invalidation.
 - Prove cold/incremental equivalence for diagnostics, navigation metadata,
   exports/constants and runtime outcomes across edits, cycles, removals,
   symlink/loader changes and budget boundaries.
