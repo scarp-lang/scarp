@@ -320,7 +320,7 @@ impl ModuleGraph {
         identity: String,
         label: String,
         span: Span,
-        mut token_cache: Option<&mut cache::TokenCache>,
+        token_cache: Option<&mut cache::TokenCache>,
     ) -> Result<SourceId, Diagnostic> {
         if self.modules.len() >= self.limits.max_files {
             return Err(limit(span, "unique module file count"));
@@ -338,7 +338,7 @@ impl ModuleGraph {
         }
         self.source_bytes += source.len();
         let base = self.sources.add(label, &source)?;
-        let mut tokens = match token_cache.as_deref_mut() {
+        let mut tokens = match token_cache {
             Some(cache) => cache.lex(&identity, &source),
             None => lexer::lex(&source),
         }
