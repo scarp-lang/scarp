@@ -1,12 +1,14 @@
 # Scarp documentation
 
-**0.0.6-alpha.2 prerelease** is a source candidate, **not yet published**.
+**0.0.6-alpha.2 prerelease** is **published** (6 November 2026).
 It includes optional [invalidation planning](development/incremental-invalidation.md),
 [source-relative token caching](development/token-cache.md),
-[parsed AST caching](development/syntax-cache.md), and
-[whole-graph semantic caching](development/semantic-cache.md).
-Read the [alpha.2 candidate notes](releases/v0.0.6-alpha.2.md) before testing.
-The last public prerelease is still v0.0.6-alpha.1.
+[parsed AST caching](development/syntax-cache.md),
+[whole-graph semantic caching](development/semantic-cache.md), and
+[edit-driven cache eviction](development/cache-edit-planning.md).
+See the [public alpha.2 release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.2)
+and [publication verification](releases/v0.0.6-alpha.2-validation.md).
+These are opt-in Rust APIs, not new CLI commands.
 
 **0.0.6-alpha.1 prerelease** is published (5 November 2026), adding
 [bounded symbol navigation](symbol-index.md) and [RMS](root-mean-square.md);
@@ -23,11 +25,11 @@ see [alpha.5 release notes](releases/v0.0.5-alpha.5.md) and the
 Development declarations use `bind` and `var`; see the [migration guide](syntax-migration.md). Published tags retain their original syntax.
 
 Choose a guide by the task you want to complete. Current tutorials are
-updated for the **0.0.6-alpha.1 published prerelease**, retaining
+updated for the **0.0.6-alpha.2 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
 contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.6-alpha.1](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.1),
+[0.0.6-alpha.2](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.2),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)
