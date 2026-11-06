@@ -232,6 +232,90 @@ fn exact_loader_retarget_invalidates_even_if_source_bytes_match() {
 }
 
 #[test]
+fn per_import_target_changes_are_detected_even_when_unique_dependencies_are_unchanged() {
+    use modules::{SourceLoadError, SourceLoader};
+
+    struct Aliases<'a> {
+        loader: &'a MemorySourceLoader,
+        second_target: &'a str,
+    }
+    impl SourceLoader for Aliases<'_> {
+        fn resolve(
+            &self,
+            importer: Option<&str>,
+            specifier: &str,
+        ) -> Result<String, SourceLoadError> {
+            if importer.is_some() {
+                let target = match specifier {
+                    "a.srp" => Some("v1.srp"),
+                    "b.srp" => Some(self.second_target),
+                    "c.srp" => Some("v2.srp"),
+                    _ => None,
+                };
+                if let Some(target) = target {
+                    return Ok(target.to_owned());
+                }
+            }
+            self.loader.resolve(importer, specifier)
+        }
+        fn load(&self, identity: &str, max_bytes: usize) -> Result<String, SourceLoadError> {
+            self.loader.load(identity, max_bytes)
+        }
+    }
+    let mut loader = MemorySourceLoader::new();
+    loader
+        .insert(
+            "main.srp",
+            "import \"a.srp\" as a; import \"b.srp\" as b; import \"c.srp\" as c; print(a.value,b.value,c.value);",
+        )
+        .unwrap();
+    loader.insert("v1.srp", "pub bind value=1;").unwrap();
+    loader.insert("v2.srp", "pub bind value=2;").unwrap();
+
+    let old = modules::compile_with_loader(
+        "main.srp",
+        &Aliases {
+            loader: &loader,
+            second_target: "v1.srp",
+        },
+        ModuleLimits::default(),
+    )
+    .unwrap();
+    let new = modules::compile_with_loader(
+        "main.srp",
+        &Aliases {
+            loader: &loader,
+            second_target: "v2.srp",
+        },
+        ModuleLimits::default(),
+    )
+    .unwrap();
+    // Both successful graphs have the SAME source text, the same 3 file
+    // identities and the same deduplicated main dependencies [v1, v2].
+    assert_eq!(old.sources().source(0), new.sources().source(0));
+    assert_eq!(old.dependencies(0), new.dependencies(0));
+    assert_eq!(old.sources().files().len(), 3);
+    assert_eq!(new.sources().files().len(), 3);
+    let previous = snapshot(&old);
+    let current = snapshot(&new);
+    let impact = previous.compare(&current);
+    assert!(impact.added_new.is_empty() && impact.removed_old.is_empty());
+    assert_eq!(names(&previous, &impact.modified_old), ["main.srp"]);
+    assert_eq!(names(&current, &impact.modified_new), ["main.srp"]);
+    assert_eq!(names(&previous, &impact.affected_old), ["main.srp"]);
+    assert_eq!(names(&current, &impact.affected_new), ["main.srp"]);
+
+    let mut old_out = Vec::new();
+    let mut new_out = Vec::new();
+    old.execute(&mut old_out, &mut Vec::new(), ExecutionOptions::default())
+        .unwrap();
+    new.execute(&mut new_out, &mut Vec::new(), ExecutionOptions::default())
+        .unwrap();
+    assert_eq!(old_out, b"1 1 2\n");
+    assert_eq!(new_out, b"1 2 2\n");
+}
+
+#[test]
 fn malformed_new_graph_does_not_supply_a_partial_transition() {
     let current = build(&[
         ("main.srp", "import \"lib.srp\" as l; print(l.value);"),
