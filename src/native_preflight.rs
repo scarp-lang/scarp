@@ -144,7 +144,11 @@ mod tests {
         ] {
             let program = compile(source).unwrap();
             let diagnostic = inspect(&program).unwrap_err();
-            assert_eq!(diagnostic.kind, DiagnosticKind::NativeUnsupported, "{source}");
+            assert_eq!(
+                diagnostic.kind,
+                DiagnosticKind::NativeUnsupported,
+                "{source}"
+            );
         }
     }
 
