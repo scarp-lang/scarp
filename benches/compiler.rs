@@ -96,7 +96,13 @@ fn main() {
         &mut syntax_cache,
     )
     .unwrap();
-    assert_eq!(modules::resolve(warmed).unwrap().constant_dependencies().len(), 515);
+    assert_eq!(
+        modules::resolve(warmed)
+            .unwrap()
+            .constant_dependencies()
+            .len(),
+        515
+    );
     measure("module_syntax_warm_4files", input_bytes, iterations, || {
         let graph = modules::load_with_syntax_cache(
             "main.srp",
@@ -147,19 +153,24 @@ fn main() {
         .unwrap();
     assert_eq!(initial.status, CacheStatus::Stored);
     assert_eq!(initial.program.constant_dependencies().len(), 515);
-    measure("module_all_caches_warm_4files", input_bytes, iterations, || {
-        let compiled = semantic_cache
-            .compile_with_frontend_caches(
-                "main.srp",
-                &loader,
-                CachedCompileOptions::new(&[1, 1, 1, 1]),
-                &mut combined_tokens,
-                &mut combined_syntax,
-            )
-            .unwrap();
-        assert_eq!(compiled.status, CacheStatus::Hit);
-        black_box(compiled);
-    });
+    measure(
+        "module_all_caches_warm_4files",
+        input_bytes,
+        iterations,
+        || {
+            let compiled = semantic_cache
+                .compile_with_frontend_caches(
+                    "main.srp",
+                    &loader,
+                    CachedCompileOptions::new(&[1, 1, 1, 1]),
+                    &mut combined_tokens,
+                    &mut combined_syntax,
+                )
+                .unwrap();
+            assert_eq!(compiled.status, CacheStatus::Hit);
+            black_box(compiled);
+        },
+    );
     assert!(semantic_cache.stats().hits > 0);
     assert!(combined_syntax.stats().hits >= 4);
 
