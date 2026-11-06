@@ -427,6 +427,7 @@ fn cache_returns_shared_immutable_programs_across_reader_threads() {
     let cached = compile(&mut cache, &memory, &[1]).unwrap();
     let repeated = compile(&mut cache, &memory, &[1]).unwrap();
     assert_eq!(repeated.status, CacheStatus::Hit);
+    assert!(Arc::ptr_eq(&cached.program, &repeated.program));
     let handles: Vec<_> = (0..3)
         .map(|_| {
             let item = repeated.clone();
