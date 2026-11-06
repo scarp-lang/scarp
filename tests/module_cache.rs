@@ -131,10 +131,7 @@ fn loader_failures_and_semantic_errors_never_return_stale_cached_success() {
     let good_result = compile(&mut cache, &good, &[1, 1]).unwrap();
     assert_eq!(good_result.status, CacheStatus::Stored);
 
-    let missing = loader(&[(
-        "main.srp",
-        "import \"lib.srp\" as lib; print(lib.value);",
-    )]);
+    let missing = loader(&[("main.srp", "import \"lib.srp\" as lib; print(lib.value);")]);
     assert!(matches!(
         compile(&mut cache, &missing, &[1, 2]),
         Err(CachedCompileError::Module(_))
@@ -224,10 +221,7 @@ fn compiler_limit_changes_force_semantic_resolution() {
 
     let return_to_original = compile(&mut cache, &source, &versions).unwrap();
     assert_eq!(return_to_original.status, CacheStatus::Hit);
-    assert!(Arc::ptr_eq(
-        &first.program,
-        &return_to_original.program
-    ));
+    assert!(Arc::ptr_eq(&first.program, &return_to_original.program));
 }
 
 #[test]
@@ -289,7 +283,10 @@ fn exact_resolved_alias_retargeting_is_not_a_cache_hit() {
 
     // Same source bytes, same graph identities and same deduplicated import
     // target set, but the b alias is now bound to another declaration.
-    assert_eq!(first.program.sources().source(0), next.program.sources().source(0));
+    assert_eq!(
+        first.program.sources().source(0),
+        next.program.sources().source(0)
+    );
     assert_eq!(first.program.dependencies(0), next.program.dependencies(0));
     assert_eq!(first.status, CacheStatus::Stored);
     assert_eq!(next.status, CacheStatus::Stored);
@@ -320,7 +317,10 @@ fn diagnostic_source_labels_are_part_of_the_cache_key() {
         }
     }
     let memory = loader(&[
-        ("main.srp", "import \"lib/café.srp\" as lib; print(lib.value);"),
+        (
+            "main.srp",
+            "import \"lib/café.srp\" as lib; print(lib.value);",
+        ),
         ("lib/café.srp", "pub bind value=3;"),
     ]);
     let mut cache = CompilationCache::new(CacheLimits::default());
@@ -358,17 +358,29 @@ fn fifo_eviction_and_explicit_clear_have_deterministic_stats() {
     });
     let first = compile(&mut cache, &one, &[1]).unwrap();
     assert_eq!(first.status, CacheStatus::Stored);
-    assert_eq!(compile(&mut cache, &one, &[1]).unwrap().status, CacheStatus::Hit);
-    assert_eq!(compile(&mut cache, &two, &[2]).unwrap().status, CacheStatus::Stored);
+    assert_eq!(
+        compile(&mut cache, &one, &[1]).unwrap().status,
+        CacheStatus::Hit
+    );
+    assert_eq!(
+        compile(&mut cache, &two, &[2]).unwrap().status,
+        CacheStatus::Stored
+    );
     assert_eq!(cache.stats().entries, 1);
     assert_eq!(cache.stats().evictions, 1);
-    assert_eq!(compile(&mut cache, &one, &[1]).unwrap().status, CacheStatus::Stored);
+    assert_eq!(
+        compile(&mut cache, &one, &[1]).unwrap().status,
+        CacheStatus::Stored
+    );
     assert_eq!(cache.stats().evictions, 2);
     cache.clear();
     assert_eq!(cache.stats().entries, 0);
     assert_eq!(cache.stats().retained_source_bytes, 0);
     assert_eq!(cache.stats().evictions, 3);
-    assert_eq!(compile(&mut cache, &one, &[1]).unwrap().status, CacheStatus::Stored);
+    assert_eq!(
+        compile(&mut cache, &one, &[1]).unwrap().status,
+        CacheStatus::Stored
+    );
     assert_eq!(cache.stats().entries, 1);
 }
 
