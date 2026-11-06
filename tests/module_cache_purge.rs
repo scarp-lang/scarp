@@ -32,14 +32,8 @@ fn output(program: &scarp::modules::cache::CachedProgram) -> Vec<u8> {
 #[test]
 fn purge_evicts_dependency_across_all_three_tiers_but_keeps_unrelated_graphs() {
     let main_source = "import \"lib.srp\" as lib; print(lib.value);";
-    let first = loader(&[
-        ("main.srp", main_source),
-        ("lib.srp", "pub bind value=7;"),
-    ]);
-    let edited = loader(&[
-        ("main.srp", main_source),
-        ("lib.srp", "pub bind value=8;"),
-    ]);
+    let first = loader(&[("main.srp", main_source), ("lib.srp", "pub bind value=7;")]);
+    let edited = loader(&[("main.srp", main_source), ("lib.srp", "pub bind value=8;")]);
     let other = loader(&[("tool.srp", "print(99);")]);
     let mut semantic = CompilationCache::new(CacheLimits {
         max_entries: 5,
