@@ -8,6 +8,7 @@ use super::{ModuleProgram, SourceId, SourceMap};
 use std::{collections::HashSet, error::Error, fmt, sync::Arc};
 
 /// Independent limits for retained invalidation metadata and preflight edits.
+/// The edge limit counts import declarations, not distinct target files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InvalidationLimits {
     pub max_files: usize,
@@ -89,6 +90,7 @@ pub struct TransitionImpact {
 pub struct InvalidationSnapshot {
     identities: Vec<String>,
     sources: Arc<SourceMap>,
+    // Per-import target IDs, in original declaration order (duplicates kept).
     forward: Vec<Vec<SourceId>>,
     reverse: Vec<Vec<SourceId>>,
     limits: InvalidationLimits,
@@ -134,25 +136,28 @@ impl InvalidationSnapshot {
             if identity_bytes > limits.max_identity_bytes {
                 return Err(InvalidationError::IdentityLimit);
             }
-            let targets = program
-                .dependencies(id)
+            // Preserve EVERY resolved import occurrence, not only unique
+            // dependencies: aliases can retarget while the distinct target
+            // set stays identical (A,A,B -> A,B,B).
+            let imports = program
+                .imports_in(id)
                 .ok_or(InvalidationError::InvalidGraph)?;
             let importers = program
                 .dependents(id)
                 .ok_or(InvalidationError::InvalidGraph)?;
             total_edges = total_edges
-                .checked_add(targets.len())
+                .checked_add(imports.len())
                 .ok_or(InvalidationError::EdgeLimit)?;
             if total_edges > limits.max_edges {
                 return Err(InvalidationError::EdgeLimit);
             }
-            if targets.iter().any(|&target| target >= files)
+            if imports.iter().any(|import| import.target >= files)
                 || importers.iter().any(|&source| source >= files)
             {
                 return Err(InvalidationError::InvalidGraph);
             }
             identities.push(module.identity.clone());
-            forward.push(targets.to_vec());
+            forward.push(imports.iter().map(|import| import.target).collect());
             reverse.push(importers.to_vec());
         }
 
