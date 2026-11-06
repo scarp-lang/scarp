@@ -321,6 +321,7 @@ impl ModuleGraph {
         label: String,
         span: Span,
         token_cache: Option<&mut cache::TokenCache>,
+        mut syntax_cache: Option<&mut cache::SyntaxCache>,
     ) -> Result<SourceId, Diagnostic> {
         if self.modules.len() >= self.limits.max_files {
             return Err(limit(span, "unique module file count"));
@@ -338,18 +339,30 @@ impl ModuleGraph {
         }
         self.source_bytes += source.len();
         let base = self.sources.add(label, &source)?;
-        let mut tokens = match token_cache {
-            Some(cache) => cache.lex(&identity, &source),
-            None => lexer::lex(&source),
-        }
-        .map_err(|mut error| {
-            shift(&mut error.span, base);
-            error
-        })?;
-        for token in &mut tokens {
-            shift(&mut token.span, base);
-        }
-        let program = parser::parse(&tokens)?;
+        let reused = match &mut syntax_cache {
+            Some(cache) => cache.try_reuse(&identity, &source, base),
+            None => None,
+        };
+        let program = if let Some(program) = reused {
+            program
+        } else {
+            let mut tokens = match token_cache {
+                Some(cache) => cache.lex(&identity, &source),
+                None => lexer::lex(&source),
+            }
+            .map_err(|mut error| {
+                shift(&mut error.span, base);
+                error
+            })?;
+            for token in &mut tokens {
+                shift(&mut token.span, base);
+            }
+            let program = parser::parse(&tokens)?;
+            if let Some(cache) = syntax_cache {
+                cache.store(&identity, &source, base, &program);
+            }
+            program
+        };
         let imports = validate_imports(
             &program,
             self.limits.max_imports.saturating_sub(self.imports),
@@ -370,6 +383,7 @@ impl ModuleGraph {
         loader: &dyn SourceLoader,
         identity: Option<String>,
         mut token_cache: Option<&mut cache::TokenCache>,
+        mut syntax_cache: Option<&mut cache::SyntaxCache>,
     ) -> Result<(), Diagnostic> {
         let identity = match identity {
             Some(identity) => identity,
@@ -383,6 +397,7 @@ impl ModuleGraph {
             entry.to_string(),
             Span::default(),
             token_cache.as_deref_mut(),
+            syntax_cache.as_deref_mut(),
         )?;
         let mut known = HashMap::from([(identity, 0)]);
         let mut active = vec![true];
@@ -435,6 +450,7 @@ impl ModuleGraph {
                     loader.display_name(&identity),
                     import.span,
                     token_cache.as_deref_mut(),
+                    syntax_cache.as_deref_mut(),
                 )?;
                 known.insert(identity, child);
                 active.push(true);
@@ -538,7 +554,7 @@ pub fn load(
     loader: &dyn SourceLoader,
     limits: ModuleLimits,
 ) -> Result<ModuleGraph, ModuleDiagnostic> {
-    load_identity(entry, loader, limits, None, None)
+    load_identity(entry, loader, limits, None, None, None)
 }
 
 /// Discover and parse a complete source graph with optional lexical token reuse.
@@ -552,7 +568,30 @@ pub fn load_with_token_cache(
     limits: ModuleLimits,
     token_cache: &mut cache::TokenCache,
 ) -> Result<ModuleGraph, ModuleDiagnostic> {
-    load_identity(entry, loader, limits, None, Some(token_cache))
+    load_identity(entry, loader, limits, None, Some(token_cache), None)
+}
+
+/// Load with opt-in per-file parsed syntax tree reuse. Every source is still
+/// fetched and all import/graph/semantic validation is performed anew.
+pub fn load_with_syntax_cache(
+    entry: &str,
+    loader: &dyn SourceLoader,
+    limits: ModuleLimits,
+    syntax: &mut cache::SyntaxCache,
+) -> Result<ModuleGraph, ModuleDiagnostic> {
+    load_identity(entry, loader, limits, None, None, Some(syntax))
+}
+
+/// Supply both independent front-end caches. A parsed AST hit skips lexing
+/// and parsing; a syntax miss can still reuse source-relative lexical tokens.
+pub fn load_with_frontend_caches(
+    entry: &str,
+    loader: &dyn SourceLoader,
+    limits: ModuleLimits,
+    tokens: &mut cache::TokenCache,
+    syntax: &mut cache::SyntaxCache,
+) -> Result<ModuleGraph, ModuleDiagnostic> {
+    load_identity(entry, loader, limits, None, Some(tokens), Some(syntax))
 }
 fn load_identity(
     entry: &str,
@@ -560,6 +599,7 @@ fn load_identity(
     limits: ModuleLimits,
     identity: Option<String>,
     token_cache: Option<&mut cache::TokenCache>,
+    syntax_cache: Option<&mut cache::SyntaxCache>,
 ) -> Result<ModuleGraph, ModuleDiagnostic> {
     let mut graph = ModuleGraph {
         sources: SourceMap {
@@ -573,7 +613,7 @@ fn load_identity(
         imports: 0,
         completion_order: Vec::new(),
     };
-    match graph.discover(entry, loader, identity, token_cache) {
+    match graph.discover(entry, loader, identity, token_cache, syntax_cache) {
         Ok(()) => Ok(graph),
         Err(diagnostic) => Err(ModuleDiagnostic {
             diagnostic,
@@ -689,7 +729,7 @@ fn load_file(path: &Path, limits: ModuleLimits) -> Result<ModuleGraph, ModuleDia
             entry: label.clone(),
         }),
     })?;
-    load_identity(&label, &loader, limits, Some(identity), None)
+    load_identity(&label, &loader, limits, Some(identity), None, None)
 }
 fn shift(span: &mut Span, base: usize) {
     span.start += base;
