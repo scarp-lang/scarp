@@ -1,20 +1,25 @@
 //! Opt-in caller-owned cache of successful whole-graph semantic compilation.
 //!
-//! Every request still loads, lexes, parses, and validates the entire graph
-//! through the ordinary trusted SourceLoader. The expensive link/type/constant
+//! The default cache entry point still loads, lexes, parses and validates
+//! the entire graph through the trusted SourceLoader. Optional front-end
+//! caches can skip lexing/parsing on exact per-source hits, but the loader
+//! and graph validation always run. The expensive link/type/constant
 //! resolution result can be reused ONLY if every original byte, source label,
 //! resolved per-import target and caller-owned revision matches exactly.
 //!
 //! This is deliberately not a parser cache or partial incremental compiler.
 
 use super::{
-    load, load_with_token_cache, resolve_with_compiler_limits, ConstantLimits, ModuleDiagnostic,
-    ModuleGraph, ModuleLimits, ModuleProgram, SourceLoader,
+    load, load_with_frontend_caches, load_with_syntax_cache, load_with_token_cache,
+    resolve_with_compiler_limits, ConstantLimits, ModuleDiagnostic, ModuleGraph, ModuleLimits,
+    ModuleProgram, SourceLoader,
 };
 use crate::types::TypeLimits;
 use std::{collections::VecDeque, error::Error, fmt, sync::Arc};
 
+mod syntax;
 mod tokens;
+pub use syntax::{SyntaxCache, SyntaxCacheLimits, SyntaxCacheStats};
 pub use tokens::{TokenCache, TokenCacheLimits, TokenCacheStats};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -274,6 +279,50 @@ impl CompilationCache {
     ) -> Result<CachedProgram, CachedCompileError> {
         self.compile_graph(
             load_with_token_cache(entry, loader, options.module_limits, tokens)?,
+            options.module_limits,
+            options.constant_limits,
+            options.type_limits,
+            options.revisions,
+        )
+    }
+
+    /// Compile using source-relative parsed AST reuse and regular whole-graph
+    /// semantic caching. The source loader, import graph checks, and linker
+    /// validity gates still run on every request.
+    pub fn compile_with_syntax_cache(
+        &mut self,
+        entry: &str,
+        loader: &dyn SourceLoader,
+        options: CachedCompileOptions<'_>,
+        syntax: &mut SyntaxCache,
+    ) -> Result<CachedProgram, CachedCompileError> {
+        self.compile_graph(
+            load_with_syntax_cache(entry, loader, options.module_limits, syntax)?,
+            options.module_limits,
+            options.constant_limits,
+            options.type_limits,
+            options.revisions,
+        )
+    }
+
+    /// Combine independently bounded source-relative token, syntax, and
+    /// whole-graph semantic caches in the standard compiler path.
+    pub fn compile_with_frontend_caches(
+        &mut self,
+        entry: &str,
+        loader: &dyn SourceLoader,
+        options: CachedCompileOptions<'_>,
+        tokens: &mut TokenCache,
+        syntax: &mut SyntaxCache,
+    ) -> Result<CachedProgram, CachedCompileError> {
+        self.compile_graph(
+            load_with_frontend_caches(
+                entry,
+                loader,
+                options.module_limits,
+                tokens,
+                syntax,
+            )?,
             options.module_limits,
             options.constant_limits,
             options.type_limits,
