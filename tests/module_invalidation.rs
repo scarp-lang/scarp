@@ -341,11 +341,12 @@ fn changed_display_names_invalidate_diagnostics_even_with_identical_identities_a
 
     let mut loader = MemorySourceLoader::new();
     loader
-        .insert("main.srp", "import \"lib/café.srp\" as lib; print(lib.value);")
+        .insert(
+            "main.srp",
+            "import \"lib/café.srp\" as lib; print(lib.value);",
+        )
         .unwrap();
-    loader
-        .insert("lib/café.srp", "pub bind value=27;")
-        .unwrap();
+    loader.insert("lib/café.srp", "pub bind value=27;").unwrap();
     let original = modules::compile_with_loader(
         "main.srp",
         &Display {
@@ -371,7 +372,10 @@ fn changed_display_names_invalidate_diagnostics_even_with_identical_identities_a
     let after = snapshot(&renamed);
     assert_eq!(before.identity(1), after.identity(1));
     assert_eq!(
-        names(&before, &before.plan_edits(&["lib/café.srp"]).unwrap().affected),
+        names(
+            &before,
+            &before.plan_edits(&["lib/café.srp"]).unwrap().affected
+        ),
         ["main.srp", "lib/café.srp"]
     );
     let impact = before.compare(&after);
