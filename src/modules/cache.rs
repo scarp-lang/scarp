@@ -236,6 +236,33 @@ impl CompilationCache {
         self.retained_source_bytes = 0;
     }
 
+    /// Evict every cached *whole-graph* success containing this resolved
+    /// loader identity, including when it is an imported dependency.
+    ///
+    /// Only cache-owned references are removed. Already returned
+    /// `Arc<ModuleProgram>` values remain valid and may keep memory alive.
+    /// This is neither a filesystem operation nor secure memory erasure.
+    /// A miss has no effect on FIFO order or lifetime hit/miss counters.
+    pub fn evict_identity(&mut self, identity: &str) -> usize {
+        let mut removed = 0usize;
+        let mut freed_bytes = 0usize;
+        self.entries.retain(|entry| {
+            let affected = entry
+                .program
+                .modules()
+                .iter()
+                .any(|module| module.identity == identity);
+            if affected {
+                removed += 1;
+                freed_bytes += entry.source_bytes;
+            }
+            !affected
+        });
+        self.retained_source_bytes -= freed_bytes;
+        self.evictions = self.evictions.saturating_add(removed as u64);
+        removed
+    }
+
     /// Recompile with safe whole-graph reuse of a prior success.
     ///
     /// Revisions are supplied in the current graph's SourceId discovery order
@@ -413,5 +440,38 @@ impl CompilationCache {
             program: compiled,
             status: CacheStatus::Stored,
         })
+    }
+}
+
+/// Number of cache-owned entries evicted in each independent cache tier.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SourceCacheEvictions {
+    pub semantic_entries: usize,
+    pub token_entries: usize,
+    pub syntax_entries: usize,
+}
+
+/// Explicitly evict one trusted, resolved loader identity across all three
+/// cache tiers. Matching semantic entries are conservatively dropped when
+/// *any* module in their compiled graph has this identity; unrelated graphs
+/// and source-relative front-end results remain retained in FIFO order.
+///
+/// This is optional retention management, not an incremental compiler
+/// shortcut: every later compile still reloads sources and validates the
+/// current import graph. An absent identity is a no-op; human-facing display
+/// paths and unresolved import spellings are not cache identity keys.
+///
+/// Eviction does not revoke or erase already returned `Arc<ModuleProgram>`
+/// values, and it does not guarantee process memory is wiped or freed.
+pub fn purge_source_identity(
+    identity: &str,
+    semantic: &mut CompilationCache,
+    tokens: &mut TokenCache,
+    syntax: &mut SyntaxCache,
+) -> SourceCacheEvictions {
+    SourceCacheEvictions {
+        semantic_entries: semantic.evict_identity(identity),
+        token_entries: tokens.evict_identity(identity),
+        syntax_entries: syntax.evict_identity(identity),
     }
 }
