@@ -306,7 +306,7 @@ public diagnostics or adding valid-path error allocations. This preserves the
 independent 64 block/expression limits on small parser stacks; a 512 KiB
 regression covers grouped scalars/vectors and nested calls at the combined bounds.
 
-## Opt-in source navigation (unreleased v0.0.6)
+## Opt-in source navigation (published v0.0.6-alpha.1)
 
 `modules::symbols` captures definitions and references before linker name rewriting
 and scalar substitution erase their syntax. The linker's lexical maps retain
