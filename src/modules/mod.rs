@@ -320,6 +320,7 @@ impl ModuleGraph {
         identity: String,
         label: String,
         span: Span,
+        mut token_cache: Option<&mut cache::TokenCache>,
     ) -> Result<SourceId, Diagnostic> {
         if self.modules.len() >= self.limits.max_files {
             return Err(limit(span, "unique module file count"));
@@ -337,7 +338,11 @@ impl ModuleGraph {
         }
         self.source_bytes += source.len();
         let base = self.sources.add(label, &source)?;
-        let mut tokens = lexer::lex(&source).map_err(|mut error| {
+        let mut tokens = match token_cache.as_deref_mut() {
+            Some(cache) => cache.lex(&identity, &source),
+            None => lexer::lex(&source),
+        }
+        .map_err(|mut error| {
             shift(&mut error.span, base);
             error
         })?;
@@ -364,6 +369,7 @@ impl ModuleGraph {
         entry: &str,
         loader: &dyn SourceLoader,
         identity: Option<String>,
+        mut token_cache: Option<&mut cache::TokenCache>,
     ) -> Result<(), Diagnostic> {
         let identity = match identity {
             Some(identity) => identity,
@@ -371,7 +377,13 @@ impl ModuleGraph {
                 .resolve(None, entry)
                 .map_err(|e| load_error(e, Span::default()))?,
         };
-        self.load_one(loader, identity.clone(), entry.to_string(), Span::default())?;
+        self.load_one(
+            loader,
+            identity.clone(),
+            entry.to_string(),
+            Span::default(),
+            token_cache.as_deref_mut(),
+        )?;
         let mut known = HashMap::from([(identity, 0)]);
         let mut active = vec![true];
         let mut stack = vec![(0usize, 0usize)];
@@ -422,6 +434,7 @@ impl ModuleGraph {
                     identity.clone(),
                     loader.display_name(&identity),
                     import.span,
+                    token_cache.as_deref_mut(),
                 )?;
                 known.insert(identity, child);
                 active.push(true);
@@ -525,13 +538,28 @@ pub fn load(
     loader: &dyn SourceLoader,
     limits: ModuleLimits,
 ) -> Result<ModuleGraph, ModuleDiagnostic> {
-    load_identity(entry, loader, limits, None)
+    load_identity(entry, loader, limits, None, None)
+}
+
+/// Discover and parse a complete source graph with optional lexical token reuse.
+///
+/// The trusted loader, import resolver, parser, cycle checks and all module
+/// budgets still execute on EVERY call. Cached token spans are source-relative
+/// and shifted to the newly assigned source-map base before parsing.
+pub fn load_with_token_cache(
+    entry: &str,
+    loader: &dyn SourceLoader,
+    limits: ModuleLimits,
+    token_cache: &mut cache::TokenCache,
+) -> Result<ModuleGraph, ModuleDiagnostic> {
+    load_identity(entry, loader, limits, None, Some(token_cache))
 }
 fn load_identity(
     entry: &str,
     loader: &dyn SourceLoader,
     limits: ModuleLimits,
     identity: Option<String>,
+    token_cache: Option<&mut cache::TokenCache>,
 ) -> Result<ModuleGraph, ModuleDiagnostic> {
     let mut graph = ModuleGraph {
         sources: SourceMap {
@@ -545,7 +573,7 @@ fn load_identity(
         imports: 0,
         completion_order: Vec::new(),
     };
-    match graph.discover(entry, loader, identity) {
+    match graph.discover(entry, loader, identity, token_cache) {
         Ok(()) => Ok(graph),
         Err(diagnostic) => Err(ModuleDiagnostic {
             diagnostic,
@@ -661,7 +689,7 @@ fn load_file(path: &Path, limits: ModuleLimits) -> Result<ModuleGraph, ModuleDia
             entry: label.clone(),
         }),
     })?;
-    load_identity(&label, &loader, limits, Some(identity))
+    load_identity(&label, &loader, limits, Some(identity), None)
 }
 fn shift(span: &mut Span, base: usize) {
     span.start += base;
