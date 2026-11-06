@@ -36,7 +36,7 @@
   Four Rust and three native package checks passed on the exact source and
   separate authorization control revision. Seven checksum-referenced assets
   are available. See the
-  [alpha.6 publication record](docs/releases/v0.0.6-alpha.1-validation.md).
+  [v0.0.6-alpha.1 publication record](docs/releases/v0.0.6-alpha.1-validation.md).
 
 ## 0.0.5-alpha.5 — prerelease, 2026-11-04
 
