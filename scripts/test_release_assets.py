@@ -231,12 +231,12 @@ class ReleaseAssets(unittest.TestCase):
         publication = f"docs/releases/v{version}-publication.md"
         syntax = "docs/development/syntax-cache.md"
         for name, data in (
-            (candidate, b"# Internal release candidate, not a published GitHub release\\n"),
+            (candidate, b"# Internal release candidate, not a published GitHub release\n"),
             (publication, (
-                "# Scarp v0.0.6-alpha.2 — prerelease\\n\\n"
-                "Approved public release notes and cache features.\\n"
+                "# Scarp v0.0.6-alpha.2 — prerelease\n\n"
+                "Approved public release notes and cache features.\n"
             ).encode("utf-8")),
-            (syntax, b"# Verified source-relative syntax spans\\n"),
+            (syntax, b"# Verified source-relative syntax spans\n"),
         ):
             path = source / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -259,17 +259,17 @@ class ReleaseAssets(unittest.TestCase):
         self.assertIn(commit, expected)
 
         # A moving checkout must not change the already-approved Git source.
-        (source / publication).write_text("# Modified checkout notes\\n", encoding="utf-8")
+        (source / publication).write_text("# Modified checkout notes\n", encoding="utf-8")
         self.assertEqual(verifier.release_notes_at(source, commit, version), expected)
-        files[publication] += b"tampered\\n"
+        files[publication] += b"tampered\n"
         self.build(version=version, commit=commit, extra_files=files)
         with self.assertRaisesRegex(ValueError, "source differs.*publication.md"):
             verifier.verify(self.directory, version, commit, source)
         files[publication] = (
-            "# Scarp v0.0.6-alpha.2 — prerelease\\n\\n"
-            "Approved public release notes and cache features.\\n"
+            "# Scarp v0.0.6-alpha.2 — prerelease\n\n"
+            "Approved public release notes and cache features.\n"
         ).encode("utf-8")
-        files[syntax] += b"tampered\\n"
+        files[syntax] += b"tampered\n"
         self.build(version=version, commit=commit, extra_files=files)
         with self.assertRaisesRegex(ValueError, "source differs.*syntax-cache.md"):
             verifier.verify(self.directory, version, commit, source)
@@ -279,9 +279,9 @@ class ReleaseAssets(unittest.TestCase):
         publication = source / "docs/releases/v0.0.6-alpha.2-publication.md"
         publication.parent.mkdir(parents=True, exist_ok=True)
         for text in (
-            "# Scarp v0.0.6-alpha.2 — release candidate\\n",
-            "# Scarp v0.0.6-alpha.2 — prerelease\\n\\n"
-            "Status: source candidate under validation.\\n",
+            "# Scarp v0.0.6-alpha.2 — release candidate\n",
+            "# Scarp v0.0.6-alpha.2 — prerelease\n\n"
+            "Status: source candidate under validation.\n",
         ):
             publication.write_text(text, encoding="utf-8")
             subprocess.run(["git", "-C", str(source), "add", "--", str(publication)], check=True)
