@@ -149,8 +149,8 @@ If a guide disagrees with an executable, first confirm the version and branch.
 For a documentation bug, include the page, command, source, actual result, and
 version so the mismatch can be reproduced.
 
-## Unreleased compiler navigation
+## Published alpha.6 compiler navigation
 
 The [symbol/reference index](symbol-index.md) documents source navigation APIs,
-static inventories and the new versioned JSON contracts for development toward
-v0.0.6. Published alpha.5 remains the current downloadable prerelease.
+static inventories and versioned JSON contracts published in
+v0.0.6-alpha.1. Older alpha.5 binaries do not support these commands.
