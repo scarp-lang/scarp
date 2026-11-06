@@ -60,7 +60,8 @@ Compile the updated graph with the *same existing compiler pipeline* first.
 Then call `old_snapshot.compare(&new_snapshot)`. It compares:
 
 1. Present/absent identities in the old and new successfully compiled graphs.
-2. The **full original source bytes**, not modification timestamps or a
+2. The **full original source bytes** and loader-provided display labels
+   (which affect diagnostics), not modification timestamps or a
    lossy/hash-only approximation.
 3. Each importer's ordered **per-declaration resolved target identities**,
    rather than the numeric source IDs (which may be renumbered).
@@ -74,8 +75,9 @@ new snapshot, and therefore no transition.
 
 Import aliases are compared individually: a change from targets `[A, A, B]`
 to `[A, B, B]` invalidates the importer even though the deduplicated target
-set remains `[A, B]`. This prevents silently reusing a result when two
-aliases switch bindings to different modules.
+set remains `[A, B]`. A changed source display label also invalidates the
+file and its importers, even with identical canonical identity and text.
+These checks prevent stale source locations or alias bindings.
 
 The comparison does **not** verify compiler version, type/constant/index
 budgets, external runtime settings, edited document revisions, origin-root
@@ -121,7 +123,8 @@ assert_eq!(old.compare(&next).affected_new.len(), 2);
 The `tests/module_invalidation.rs` suite covers diamond reachability,
 specific-leaf invalidation, exact constant edits, unchanged graphs,
 added/removed imports, equal-source-content loader retargeting (including
-alias changes with identical unique dependency sets),
+alias changes with identical unique dependency sets), changed Unicode
+source labels,
 invalid visibility changes, resource caps, unknown identities and cloned
 read-only snapshots. Existing module tests still guard path traversal,
 trusted-root symlinks, cycles, diagnostics, constant work limits and
