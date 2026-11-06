@@ -5,7 +5,7 @@
 The alpha.2 candidate does not add CLI commands: its new caches are opt-in
 Rust embedding APIs. The last **published** command set remains alpha.1.
 
-Published alpha.6 adds static `inspect symbols` and `inspect references`
+Published v0.0.6-alpha.1 adds static `inspect symbols` and `inspect references`
 commands, which are absent from older alpha.5 packages.
 
 The latest published prerelease is
@@ -36,8 +36,8 @@ not alpha.3 packages. Confirm the exact release tag/commit and use
 | `scarp inspect tokens FILE` | List lexer tokens and real source locations |
 | `scarp inspect ast FILE` | Parse just the entry source and display its actual frontend syntax tree without execution |
 | `scarp inspect modules [--json] FILE` | Inspect statically checked modules; JSON retains schema version 1 |
-| `scarp inspect symbols [--json] FILE|DIRECTORY` | From alpha.6: show typed symbol definitions in a statically checked source graph |
-| `scarp inspect references [--json] FILE|DIRECTORY` | From alpha.6: show source references and matching definitions without running statements |
+| `scarp inspect symbols [--json] FILE|DIRECTORY` | From v0.0.6-alpha.1: show typed symbol definitions in a statically checked source graph |
+| `scarp inspect references [--json] FILE|DIRECTORY` | From v0.0.6-alpha.1: show source references and matching definitions without running statements |
 | `scarp explain E####` | Explain an existing compiler diagnostic |
 
 For the alpha.4 release, examples include:
@@ -298,7 +298,7 @@ the [diagnostic reference](diagnostics.md) for caret interpretation and the
 Development output statements can write to stdout or stderr; see the
 [output guide](../output.md). Successful `check` stays silent on both streams.
 
-## Published alpha.6 symbol and reference inspection
+## Published v0.0.6-alpha.1 symbol and reference inspection
 
 Current main supports `inspect symbols [--json] FILE_OR_PROJECT_DIRECTORY` and
 `inspect references [--json] FILE_OR_PROJECT_DIRECTORY`. Both are static complete-
