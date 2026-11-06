@@ -2,7 +2,7 @@
 
 This page specifies the **verified dependency invalidation foundation** added
 after v0.0.6-alpha.1. It is not a cache, a fast compiler, a file watcher, a
-language server or a published alpha.6 capability.
+language server or a capability in the published v0.0.6-alpha.1 prerelease.
 
 ## Scope and invariants
 
