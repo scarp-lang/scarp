@@ -131,13 +131,17 @@ trusted-root symlinks, cycles, diagnostics, constant work limits and
 inspection identity. A later phase will need dedicated property-based and
 cold-vs-cached differential tests if actual reuse is introduced.
 
+The separate [semantic cache development API](semantic-cache.md) builds on
+this contract: it reuses whole-graph semantic resolution only after the full
+trusted loader and parser validate exact unchanged inputs. It does not yet
+support incremental AST/link reuse, or a measured heap limit.
+
 Future work for [issue #117](https://github.com/scarp-lang/scarp/issues/117):
 
-- Define a complete cache identity: compiler version/settings, loader root,
-  resolved canonical identities, original bytes, module/constant/type/index
-  budgets, schema version, and caller document revisions.
-- Implement caller-owned bounded cache entries with explicit capacity,
-  deterministic eviction, no mutable globals, no mtime-only validation.
+- Extend the exact-input cache to per-module AST/link reuse, preserving
+  parser/linker authority, compiler budgets and revision-aware editor safety.
+- Design and measure an actual cache-owned heap budget beyond the existing
+  entry-count and logical retained source-byte limits.
 - Build equivalent cold and incremental outputs across full and failing
   graphs, changed/deleted dependencies, transitive constants, renamed files
   and Unicode/source-coordinate cases. Preserve all diagnostics.
