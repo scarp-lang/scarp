@@ -173,7 +173,7 @@ fn known_diamond_edit_drops_semantics_but_preserves_unedited_syntax_and_other_ro
         .compile_with_frontend_caches(
             "main.srp",
             &changed,
-            CachedCompileOptions::new(&[1, 1, 1, 2]),
+            CachedCompileOptions::new(&[1, 1, 2, 1]),
             &mut tokens,
             &mut syntax,
         )
