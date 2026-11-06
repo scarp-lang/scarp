@@ -8,16 +8,11 @@
 //! This is deliberately not a parser cache or partial incremental compiler.
 
 use super::{
-    load, resolve_with_compiler_limits, ConstantLimits, ModuleDiagnostic, ModuleGraph, ModuleLimits,
-    ModuleProgram, SourceLoader,
+    load, resolve_with_compiler_limits, ConstantLimits, ModuleDiagnostic, ModuleGraph,
+    ModuleLimits, ModuleProgram, SourceLoader,
 };
 use crate::types::TypeLimits;
-use std::{
-    collections::VecDeque,
-    error::Error,
-    fmt,
-    sync::Arc,
-};
+use std::{collections::VecDeque, error::Error, fmt, sync::Arc};
 
 /// A count bound and a cumulative bound on retained source text.
 ///
@@ -72,10 +67,7 @@ impl fmt::Display for CachedCompileError {
         match self {
             Self::Module(error) => error.fmt(f),
             Self::RevisionCount { expected, actual } => {
-                write!(
-                    f,
-                    "expected {expected} source revisions; received {actual}"
-                )
+                write!(f, "expected {expected} source revisions; received {actual}")
             }
         }
     }
@@ -159,9 +151,7 @@ impl Entry {
             if old_imports.len() != module.dependencies.len() {
                 return false;
             }
-            for (old_import, (_, new_target)) in
-                old_imports.iter().zip(&module.dependencies)
-            {
+            for (old_import, (_, new_target)) in old_imports.iter().zip(&module.dependencies) {
                 if old_import.target != *new_target {
                     return false;
                 }
@@ -272,9 +262,7 @@ impl CompilationCache {
         )?);
         self.misses = self.misses.saturating_add(1);
 
-        if self.limits.max_entries == 0
-            || source_bytes > self.limits.max_retained_source_bytes
-        {
+        if self.limits.max_entries == 0 || source_bytes > self.limits.max_retained_source_bytes {
             self.bypasses = self.bypasses.saturating_add(1);
             return Ok(CachedProgram {
                 program: compiled,
@@ -285,7 +273,9 @@ impl CompilationCache {
         // Reserving only the tiny version vector can fail. A valid compile
         // must still be returned, just without storage.
         let mut retained_versions = Vec::new();
-        if retained_versions.try_reserve_exact(revisions.len()).is_err()
+        if retained_versions
+            .try_reserve_exact(revisions.len())
+            .is_err()
             || self.entries.try_reserve(1).is_err()
         {
             self.bypasses = self.bypasses.saturating_add(1);
@@ -297,8 +287,7 @@ impl CompilationCache {
         retained_versions.extend_from_slice(revisions);
 
         while self.entries.len() >= self.limits.max_entries
-            || self.retained_source_bytes
-                > self.limits.max_retained_source_bytes - source_bytes
+            || self.retained_source_bytes > self.limits.max_retained_source_bytes - source_bytes
         {
             let previous = self
                 .entries
