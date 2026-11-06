@@ -35,7 +35,7 @@ use its exact tag and archive names throughout the process. An unpublished
 development identifier is not evidence that a public release exists.
 `v0.0.0.1` is not a three-part version.
 
-Alpha.1, alpha.2, alpha.3, alpha.4 and alpha.5 are published; fulfilled
+Alpha.1, alpha.2, alpha.3, alpha.4, alpha.5 and v0.0.6-alpha.1 are published; fulfilled
 requests are retired after publication verification. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve
 the original candidate contract. Every new release needs fresh exact-version
 and full source-commit approval after all gates. The verifier requires nested module libraries/guides
