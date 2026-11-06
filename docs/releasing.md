@@ -8,17 +8,17 @@ publication; changing a package version alone does not authorize a release.
 
 ## Build inputs and packages
 
-**The 0.0.6-alpha.2 checkout is a prerelease source candidate**, not a public
-tag or published asset. Its [candidate notes](releases/v0.0.6-alpha.2.md)
-and cache documentation require exact-source archive verification before
-release authorization. The candidate source notes intentionally say that
-alpha.2 is unpublished. The publisher reads the separate
-[public-facing alpha.2 notes](releases/v0.0.6-alpha.2-publication.md) from the
-**same approved source commit**, so the GitHub Release description never
-repeats a candidate-only status. Both note files ship in the native archives
-and are verified against exact Git blobs. The final source SHA must be fixed
-only after its candidate PR and all seven main-branch jobs pass. Do not
-create or leave a release-request.json during candidate preparation.
+**v0.0.6-alpha.2 was published as a GitHub prerelease on 6 November 2026.**
+See its [public release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.2)
+and [post-publication verification](releases/v0.0.6-alpha.2-validation.md)
+for the approved full source SHA, both seven-job CI gates, annotated tag and
+all seven asset digests. The [candidate notes](releases/v0.0.6-alpha.2.md)
+are an intentional historical snapshot of the **pre-publication** state.
+The publisher read the separate
+[public-facing notes](releases/v0.0.6-alpha.2-publication.md) from the
+exact approved source, preserving immutability and excluding candidate-only
+status. Its completed one-time request is retired in a separate maintenance
+PR; future versions require their own approval and checked source.
 
 **v0.0.6-alpha.1 was published as a GitHub prerelease on 5 November 2026.**
 Its [notes](releases/v0.0.6-alpha.1.md) define navigation/RMS scope and exclusions;
@@ -47,7 +47,7 @@ use its exact tag and archive names throughout the process. An unpublished
 development identifier is not evidence that a public release exists.
 `v0.0.0.1` is not a three-part version.
 
-Alpha.1, alpha.2, alpha.3, alpha.4, alpha.5 and v0.0.6-alpha.1 are published; fulfilled
+Alpha.1, alpha.2, alpha.3, alpha.4, alpha.5, v0.0.6-alpha.1 and v0.0.6-alpha.2 are published; fulfilled
 requests are retired after publication verification. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve
 the original candidate contract. Every new release needs fresh exact-version
 and full source-commit approval after all gates. The verifier requires nested module libraries/guides
