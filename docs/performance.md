@@ -17,7 +17,7 @@ iteration. These exploratory measurements are not CPU instruction counts, memory
 profiles, interpreter/native speedup claims or a statistically controlled comparison.
 Record toolchain, host and raw samples when assessing a later optimization.
 
-The v0.0.6 candidate adds `indexed_module_constants_4files` on the same four-file
+The published v0.0.6-alpha.1 source adds `indexed_module_constants_4files` on the same four-file
 graph. Before timing, every reference is checked against go-to-definition.
 This case includes ordinary compilation **and** optional index construction,
 unlike `module_constants_4files`, which retains no navigation snapshot. Compare

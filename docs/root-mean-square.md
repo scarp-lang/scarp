@@ -1,8 +1,8 @@
-# Root mean square (unreleased v0.0.6 work)
+# Root mean square (published v0.0.6-alpha.1)
 
 `rms(values: vector) -> float` measures the magnitude of a nonempty finite
 binary64 vector: `sqrt(sum(x * x) / len(values))`. This is a pure positional
-builtin, available in the development source and absent from published
+builtin, first published in v0.0.6-alpha.1 and absent from older
 v0.0.5-alpha.5 binaries. It composes with functions, defaults, contracts and
 module calls. No implicit integer-collection conversion is performed.
 

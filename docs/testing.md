@@ -1,6 +1,6 @@
 # Test and validate changes
 
-For the unpublished v0.0.6-alpha.1 candidate, include `--test symbol_navigation
+For the published v0.0.6-alpha.1 prerelease, include `--test symbol_navigation
 --test symbol_navigation_cli --test root_mean_square`. Run the independent
 `scripts/test_symbol_index_json.py` and `scripts/test_rms.py` against the built
 executable. The former validates original UTF-8 locations and schema fixtures;

@@ -1,10 +1,11 @@
 # Scarp documentation
 
-**0.0.6-alpha.1 candidate** is unpublished. Development source adds
+**0.0.6-alpha.1 prerelease** is published (5 November 2026), adding
 [bounded symbol navigation](symbol-index.md) and [RMS](root-mean-square.md);
-[candidate notes](releases/v0.0.6-alpha.1.md) distinguish implemented work,
-experimental APIs and deferred features. Published availability below remains
-v0.0.5-alpha.5 until separate publication approval and verification.
+[release notes](releases/v0.0.6-alpha.1.md) describe the implementation and
+deferred features. See the
+[publication verification record](releases/v0.0.6-alpha.1-validation.md)
+for exact source, CI and public archive digests.
 
 **0.0.5-alpha.5 prerelease** is published with project-directory module
 inspection and an opt-in experimental C11 scalar backend for Rust hosts;
@@ -14,11 +15,11 @@ see [alpha.5 release notes](releases/v0.0.5-alpha.5.md) and the
 Development declarations use `bind` and `var`; see the [migration guide](syntax-migration.md). Published tags retain their original syntax.
 
 Choose a guide by the task you want to complete. Current tutorials are
-updated for the **0.0.5-alpha.5 published prerelease**, retaining
+updated for the **0.0.6-alpha.1 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
 contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.5-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.5),
+[0.0.6-alpha.1](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.1),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)
@@ -55,7 +56,7 @@ experimental Rust-hosted C11 scalar emitter; see
 | [Import tutorial](tutorials/modules.md) | Run a three-file numerical program and repair private-member/cycle errors |
 | [Finite floats](floats.md) | Use the alpha's binary64 scalars, numeric diagnostics, and function integration |
 | [Numerical vectors](vectors.md) | Use immutable numerical data, pure kernels, typed vector calls and bounded allocation |
-| [Root mean square](root-mean-square.md) | Use the unreleased finite RMS reduction, visible windows and exact work/allocation rules |
+| [Root mean square](root-mean-square.md) | Use the published alpha.6 finite RMS reduction, visible windows and exact work/allocation rules |
 | [Your first numerical program](tutorials/numerical-program.md) | Build a small typed numerical calculation and compare probabilities safely |
 | [Numerical errors](reference/numerical-errors.md) | Repair type, shape, index, domain, overflow and quota failures |
 | [Functions](functions.md) | Learn typed calls, defaults, contracts, and bounded invocation resources |
@@ -148,8 +149,8 @@ If a guide disagrees with an executable, first confirm the version and branch.
 For a documentation bug, include the page, command, source, actual result, and
 version so the mismatch can be reproduced.
 
-## Unreleased compiler navigation
+## Published alpha.6 compiler navigation
 
 The [symbol/reference index](symbol-index.md) documents source navigation APIs,
-static inventories and the new versioned JSON contracts for development toward
-v0.0.6. Published alpha.5 remains the current downloadable prerelease.
+static inventories and versioned JSON contracts published in
+v0.0.6-alpha.1. Older alpha.5 binaries do not support these commands.

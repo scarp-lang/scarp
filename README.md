@@ -2,21 +2,22 @@
 
 **Build Beyond Boundaries.**
 
-**0.0.6-alpha.1** is the current **unpublished candidate**, adding bounded
-cross-file symbol/reference navigation and finite root mean square. See
-[candidate notes](docs/releases/v0.0.6-alpha.1.md), [symbol APIs and JSON](docs/symbol-index.md)
-and [RMS](docs/root-mean-square.md). Exact-main CI and archive validation precede
-a separate exact-version/source-SHA publication approval.
+**0.0.6-alpha.1** is the latest **published GitHub prerelease** (5 November
+2026), adding bounded cross-file symbol/reference navigation and finite root
+mean square. See [alpha.6 release notes](docs/releases/v0.0.6-alpha.1.md),
+[publication verification](docs/releases/v0.0.6-alpha.1-validation.md),
+[symbol APIs and JSON](docs/symbol-index.md) and [RMS](docs/root-mean-square.md).
+This is not a stable language or native compiler release.
 
-**0.0.5-alpha.5** is a [published GitHub prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.5)
+**0.0.5-alpha.5** is an [earlier published GitHub prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.5)
 for Windows x64, Linux x64 and macOS Apple Silicon. It adds project-aware
 module inspection and an opt-in experimental C11 scalar emitter for Rust hosts.
 See [alpha.5 release notes](docs/releases/v0.0.5-alpha.5.md) and the
 [publication record](docs/releases/v0.0.5-alpha.5-validation.md).
 
 Scarp is an experimental programming language implemented in Rust. The latest published
-**0.0.5-alpha.5** prerelease was published on 4 November 2026 from exact source
-`2eeed0aa52ccb59523307841ad8ffbd83f8911a8`. The compiler provides a lexer,
+**0.0.6-alpha.1** prerelease was published on 5 November 2026 from exact source
+`aa329a22cf2bf92d2c9814a26ff9c8b67a72e6e8`. The compiler provides a lexer,
 parser, typed resolver, interpreter, source modules, finite binary64 numerics
 and a Scarp-first CLI. The bounded `create`, `launch` and project-directory
 `verify` workflow remains available. Syntax and APIs are not stable.
@@ -147,12 +148,12 @@ one-hot targets and explicit loss gradients. See [vectors](docs/vectors.md),
 [error repairs](docs/reference/numerical-errors.md).
 
 The latest published prerelease is
-[0.0.5-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.5),
-published 4 November 2026 from source commit
-`2eeed0aa52ccb59523307841ad8ffbd83f8911a8`. It provides Windows x64,
+[0.0.6-alpha.1](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.1),
+published 5 November 2026 from source commit
+`aa329a22cf2bf92d2c9814a26ff9c8b67a72e6e8`. It provides Windows x64,
 Linux x64 and macOS Apple Silicon archives with SHA-256 checksums.
-See the [alpha.5 release notes](docs/releases/v0.0.5-alpha.5.md),
-[publication verification record](docs/releases/v0.0.5-alpha.5-validation.md)
+See the [alpha.6 release notes](docs/releases/v0.0.6-alpha.1.md),
+[publication verification record](docs/releases/v0.0.6-alpha.1-validation.md)
 and [release engineering](docs/releasing.md) for publication gates.
 Earlier prerelease records remain historical snapshots.
 
@@ -160,9 +161,9 @@ The maintainer transferred this repository to **scarp-lang/scarp**. The
 [migration record](docs/migrations/scarp-lang-Scarp.md) documents identity,
 history, release/download verification and updated clone instructions.
 
-## Unreleased source navigation toward v0.0.6
+## Source navigation in published v0.0.6-alpha.1
 
-Current main adds [symbol/reference navigation](docs/symbol-index.md) through
+Published alpha.6 adds [symbol/reference navigation](docs/symbol-index.md) through
 `scarp inspect symbols --json FILE` and `scarp inspect references --json FILE`
 (or an explicit project directory). The Rust snapshot API provides go-to-definition
 and find-references without running statements, defaults or contracts. It retains
@@ -174,7 +175,7 @@ These commands are absent from published alpha.5 binaries.
 
 Binary archives and checksums are available through
 [GitHub Releases](https://github.com/scarp-lang/scarp/releases). See the
-[latest alpha.5 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.5)
+[latest alpha.6 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.1)
 for its supported archives, checksums and source commit. The
 [changelog](CHANGELOG.md) records recent language and tooling changes.
 

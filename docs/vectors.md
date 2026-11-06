@@ -50,7 +50,7 @@ integer. Each returned vector owns a new buffer; inputs are borrowed unchanged.
 | `clamp(v, low, high)` | vector | Float low <= high, also for empty input |
 | `fill(value, count)` | vector | Float value then integer count in 0..65536 |
 | `softmax(v)` | vector | Nonempty; maximum-shifted normalized exponentials |
-| `rms(v)` | float | Nonempty; scaled root mean square; unreleased v0.0.6 work |
+| `rms(v)` | float | Nonempty; scaled root mean square; published v0.0.6-alpha.1 |
 
 The unreleased old #18 used the opposite fill order. This milestone follows
 `fill(value, count)` from the current specification; there is no overload.
