@@ -14,6 +14,9 @@
   benchmark workloads that check correctness without asserting speedups.
 - Extend native archive requirements and damage-test the alpha.2 release
   metadata and cache contracts across all three supported targets.
+- Refactor the experimental C11 scalar backend to reuse one typed
+  compiler-owned acceptance and bounded workspace preflight, with parity
+  regressions; no new CLI command, object writer, or stable native ABI.
 - **Candidate source only:** not tagged, not a GitHub prerelease, not stable.
   Publication requires exact-main CI and separately approved source SHA.
   The latest public prerelease remains v0.0.6-alpha.1.
