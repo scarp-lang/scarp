@@ -76,12 +76,20 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
             "docs/compatibility.md",
             "docs/reference/cli.md",
             "docs/releases/v0.0.6-alpha.1.md",
+            "docs/modules.md",
+            "docs/testing.md",
+            "docs/architecture.md",
+            "docs/performance.md",
+            "docs/vectors.md",
+            "docs/releasing.md",
             "CHANGELOG.md",
         ):
             with self.subTest(file=filename):
                 content = (ROOT / filename).read_text(encoding="utf-8")
                 self.assertNotIn("unpublished candidate", content.lower())
                 self.assertNotIn("latest published prerelease remains v0.0.5-alpha.5", content.lower())
+                self.assertNotIn("unreleased v0.0.6", content.lower())
+                self.assertNotIn("unpublished v0.0.6", content.lower())
 
     def test_published_version_metadata_and_lockfile(self):
         version = package_version()
