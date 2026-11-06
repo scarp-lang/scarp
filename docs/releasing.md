@@ -11,9 +11,14 @@ publication; changing a package version alone does not authorize a release.
 **The 0.0.6-alpha.2 checkout is a prerelease source candidate**, not a public
 tag or published asset. Its [candidate notes](releases/v0.0.6-alpha.2.md)
 and cache documentation require exact-source archive verification before
-release authorization. The final source SHA must be fixed only after its
-candidate PR and all seven main-branch jobs pass. Do not create or leave a
-release-request.json during candidate preparation.
+release authorization. The candidate source notes intentionally say that
+alpha.2 is unpublished. The publisher reads the separate
+[public-facing alpha.2 notes](releases/v0.0.6-alpha.2-publication.md) from the
+**same approved source commit**, so the GitHub Release description never
+repeats a candidate-only status. Both note files ship in the native archives
+and are verified against exact Git blobs. The final source SHA must be fixed
+only after its candidate PR and all seven main-branch jobs pass. Do not
+create or leave a release-request.json during candidate preparation.
 
 **v0.0.6-alpha.1 was published as a GitHub prerelease on 5 November 2026.**
 Its [notes](releases/v0.0.6-alpha.1.md) define navigation/RMS scope and exclusions;
@@ -151,7 +156,12 @@ See GitHub's [schedule documentation](https://docs.github.com/en/actions/referen
 
 Without a request the publisher exits before any Git/API action. A request PR
 changes main and must pass all seven fresh checks and package verification for
-its control revision and the approved source. Preparation or a package version is not approval.
+its control revision and the approved source. The offline documentation test
+allows a **well-formed** reviewed request so the authorization-control CI gate
+is reachable; it validates version, full source SHA (or exact draft recovery
+identity), tagger identity and any paired UTC window, but neither this test
+nor request presence provides maintainer approval. Preparation or a package
+version is not approval.
 An already published release is left unchanged. A draft requires an explicit
 `resume_release_id` and full `resume_commit` in the reviewed request. An orphaned
 tag or unmatched draft stops the job for inspection.
