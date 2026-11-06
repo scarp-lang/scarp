@@ -4,14 +4,10 @@ use scarp::{
         self,
         cache::{
             purge_reported_edits, CacheLimits, CacheStatus, CachedCompileError,
-            CachedCompileOptions, CompilationCache, PlannedCachePurge,
-            SourceCacheEvictions, SyntaxCache, SyntaxCacheLimits, TokenCache,
-            TokenCacheLimits,
+            CachedCompileOptions, CompilationCache, PlannedCachePurge, SourceCacheEvictions,
+            SyntaxCache, SyntaxCacheLimits, TokenCache, TokenCacheLimits,
         },
-        invalidation::{
-            EditImpact, InvalidationError, InvalidationLimits,
-            InvalidationSnapshot,
-        },
+        invalidation::{EditImpact, InvalidationError, InvalidationLimits, InvalidationSnapshot},
         MemorySourceLoader, ModuleLimits,
     },
     ExecutionOptions,
@@ -103,19 +99,9 @@ fn known_diamond_edit_drops_semantics_but_preserves_unedited_syntax_and_other_ro
     assert_eq!(tokens.stats().entries, 5);
     assert_eq!(syntax.stats().entries, 5);
 
-    let snapshot = InvalidationSnapshot::new(
-        &old.program,
-        InvalidationLimits::default(),
-    )
-    .unwrap();
-    let empty = purge_reported_edits(
-        &snapshot,
-        &[],
-        &mut semantic,
-        &mut tokens,
-        &mut syntax,
-    )
-    .unwrap();
+    let snapshot = InvalidationSnapshot::new(&old.program, InvalidationLimits::default()).unwrap();
+    let empty =
+        purge_reported_edits(&snapshot, &[], &mut semantic, &mut tokens, &mut syntax).unwrap();
     assert_eq!(
         empty,
         PlannedCachePurge {
@@ -231,10 +217,7 @@ fn complete_input_preflight_is_transactional_even_for_unknown_paths() {
         &mut syntax,
     );
     assert!(matches!(too_many, Err(InvalidationError::EditLimit)));
-    assert_eq!(
-        (semantic.stats(), tokens.stats(), syntax.stats()),
-        expected
-    );
+    assert_eq!((semantic.stats(), tokens.stats(), syntax.stats()), expected);
 
     let limited = InvalidationSnapshot::new(
         &old.program,
@@ -254,10 +237,7 @@ fn complete_input_preflight_is_transactional_even_for_unknown_paths() {
         ),
         Err(InvalidationError::IdentityLimit)
     ));
-    assert_eq!(
-        (semantic.stats(), tokens.stats(), syntax.stats()),
-        expected
-    );
+    assert_eq!((semantic.stats(), tokens.stats(), syntax.stats()), expected);
 
     // Once the entire input is valid, an unknown loader identity invalidates
     // all caches, even unrelated roots outside the old snapshot.
@@ -296,9 +276,18 @@ fn complete_input_preflight_is_transactional_even_for_unknown_paths() {
     assert_eq!(semantic.stats().retained_source_bytes, 0);
     assert_eq!(tokens.stats().retained_source_bytes, 0);
     assert_eq!(syntax.stats().retained_ast_nodes, 0);
-    assert_eq!(semantic.stats().evictions, old_counts.0.evictions + old_counts.0.entries as u64);
-    assert_eq!(tokens.stats().evictions, old_counts.1.evictions + old_counts.1.entries as u64);
-    assert_eq!(syntax.stats().evictions, old_counts.2.evictions + old_counts.2.entries as u64);
+    assert_eq!(
+        semantic.stats().evictions,
+        old_counts.0.evictions + old_counts.0.entries as u64
+    );
+    assert_eq!(
+        tokens.stats().evictions,
+        old_counts.1.evictions + old_counts.1.entries as u64
+    );
+    assert_eq!(
+        syntax.stats().evictions,
+        old_counts.2.evictions + old_counts.2.entries as u64
+    );
     assert_eq!(output(&old), b"42\n");
 }
 
@@ -322,11 +311,8 @@ fn planned_purge_does_not_rescue_semantically_invalid_edits() {
             &mut syntax,
         )
         .unwrap();
-    let snapshot = InvalidationSnapshot::new(
-        &saved.program,
-        InvalidationLimits::default(),
-    )
-    .unwrap();
+    let snapshot =
+        InvalidationSnapshot::new(&saved.program, InvalidationLimits::default()).unwrap();
     let impact = purge_reported_edits(
         &snapshot,
         &["café.srp"],
@@ -349,12 +335,8 @@ fn planned_purge_does_not_rescue_semantically_invalid_edits() {
             &mut syntax,
         )
         .unwrap_err();
-    let cold = modules::compile_with_loader(
-        "main.srp",
-        &private,
-        ModuleLimits::default(),
-    )
-    .unwrap_err();
+    let cold =
+        modules::compile_with_loader("main.srp", &private, ModuleLimits::default()).unwrap_err();
     match actual {
         CachedCompileError::Module(diagnostic) => {
             assert_eq!(diagnostic.diagnostic.kind, Kind::ModuleVisibility);
