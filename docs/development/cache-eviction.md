@@ -82,6 +82,12 @@ entry roots, multiple versions of one imported source, surviving hits,
 retained `Arc` programs, Unicode identity accounting, idempotence, per-tier
 eviction, FIFO survivors and disabled caches.
 
+The related [preflighted edit-driven cache purge](cache-edit-planning.md)
+connects the bounded dependency-impact planner to these manual eviction
+methods. It rejects over-budget edit batches without changing any caches
+and clears all tiers conservatively if the old graph cannot identify a path.
+It never treats eviction as permission to bypass fresh compilation.
+
 The default compiler/CLI path is unchanged. Dependency-aware *semantic*
 subgraph reuse, exact process-heap accounting and broader differential
 diagnostic coverage are still unresolved in
