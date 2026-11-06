@@ -10,7 +10,8 @@ language server or a published alpha.6 capability.
 successful, linked and type-checked `ModuleProgram`:
 
 - It retains the compiler's **original loader-resolved identity** for every
-  source, deduplicated dependencies and reverse import edges, and a shared
+  source, per-declaration resolved import targets and deduplicated reverse
+  importer edges, and a shared
   reference to the original immutable `SourceMap`. It never parses new
   source, re-resolves a path, performs I/O or invents a separate dependency
   analyzer.
@@ -23,7 +24,7 @@ successful, linked and type-checked `ModuleProgram`:
   discovery order. Neither `SymbolId` nor module IDs nor absolute byte spans
   are permitted to survive a rebuild.
 - Default `InvalidationLimits` caps the recorded graph at 128 files, 1,024
-  distinct dependency edges, 1 MiB total identity text, and 128 changed-file
+  import declarations, 1 MiB total identity text, and 128 changed-file
   inputs. Failures are typed and no partial snapshot is exposed. This is an
   **additional** metadata budget, not a replacement for the compiler's module,
   constant, type, editor or runtime limits.
@@ -61,7 +62,7 @@ Then call `old_snapshot.compare(&new_snapshot)`. It compares:
 1. Present/absent identities in the old and new successfully compiled graphs.
 2. The **full original source bytes**, not modification timestamps or a
    lossy/hash-only approximation.
-3. Each importer's deduplicated, ordered, **resolved target identities**,
+3. Each importer's ordered **per-declaration resolved target identities**,
    rather than the numeric source IDs (which may be renumbered).
 
 The result identifies `removed_old`, `added_new`,
@@ -70,6 +71,11 @@ The result identifies `removed_old`, `added_new`,
 graph's discovery order. A source with identical original text but a new
 loader target is correctly treated as changed. A failed recompile yields no
 new snapshot, and therefore no transition.
+
+Import aliases are compared individually: a change from targets `[A, A, B]`
+to `[A, B, B]` invalidates the importer even though the deduplicated target
+set remains `[A, B]`. This prevents silently reusing a result when two
+aliases switch bindings to different modules.
 
 The comparison does **not** verify compiler version, type/constant/index
 budgets, external runtime settings, edited document revisions, origin-root
@@ -114,7 +120,8 @@ assert_eq!(old.compare(&next).affected_new.len(), 2);
 
 The `tests/module_invalidation.rs` suite covers diamond reachability,
 specific-leaf invalidation, exact constant edits, unchanged graphs,
-added/removed imports, equal-source-content loader retargeting,
+added/removed imports, equal-source-content loader retargeting (including
+alias changes with identical unique dependency sets),
 invalid visibility changes, resource caps, unknown identities and cloned
 read-only snapshots. Existing module tests still guard path traversal,
 trusted-root symlinks, cycles, diagnostics, constant work limits and
