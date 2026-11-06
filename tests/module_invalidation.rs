@@ -11,9 +11,7 @@ use scarp::{
     ExecutionOptions,
 };
 
-fn build(
-    sources: &[(&str, &str)],
-) -> Result<ModuleProgram, modules::ModuleDiagnostic> {
+fn build(sources: &[(&str, &str)]) -> Result<ModuleProgram, modules::ModuleDiagnostic> {
     let mut loader = MemorySourceLoader::new();
     for &(identity, text) in sources {
         loader.insert(identity, text).unwrap();
@@ -158,10 +156,7 @@ fn removal_reorders_source_ids_without_leaking_old_identities() {
 fn adding_an_import_tracks_added_file_and_affected_importers() {
     let old = build(&[("main.srp", "print(1);")]).unwrap();
     let new = build(&[
-        (
-            "main.srp",
-            "import \"math.srp\" as m; print(m.value);",
-        ),
+        ("main.srp", "import \"math.srp\" as m; print(m.value);"),
         ("math.srp", "pub bind value=1;"),
     ])
     .unwrap();
@@ -232,14 +227,8 @@ fn exact_loader_retarget_invalidates_even_if_source_bytes_match() {
     assert_eq!(names(&after, &impact.added_new), ["v2.srp"]);
     assert_eq!(names(&before, &impact.modified_old), ["main.srp"]);
     assert_eq!(names(&after, &impact.modified_new), ["main.srp"]);
-    assert_eq!(
-        names(&before, &impact.affected_old),
-        ["main.srp", "v1.srp"]
-    );
-    assert_eq!(
-        names(&after, &impact.affected_new),
-        ["main.srp", "v2.srp"]
-    );
+    assert_eq!(names(&before, &impact.affected_old), ["main.srp", "v1.srp"]);
+    assert_eq!(names(&after, &impact.affected_new), ["main.srp", "v2.srp"]);
 }
 
 #[test]
