@@ -1,8 +1,10 @@
-# Source symbol navigation (unreleased v0.0.6 development)
+# Source symbol navigation (v0.0.6-alpha.1 prerelease)
 
-The navigation index is implemented on the development branch. Published
-v0.0.5-alpha.5 binaries do not provide these commands. This is a reusable compiler
-API and static CLI inventory, not an LSP, rename engine or incremental cache.
+The navigation index is available in the published
+[v0.0.6-alpha.1 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.1).
+It is a reusable compiler API and static CLI inventory, not an LSP server,
+rename engine or incremental cache. Older v0.0.5-alpha.5 binaries lack
+the symbol/reference commands.
 
 ## Commands and failure behavior
 
@@ -70,6 +72,33 @@ no process-global cache or dependency invalidation protocol. IDE/Playground
 clients can translate editor coordinates using the byte spans and original text,
 then discard old snapshots when documents change. No integration in those
 separate products is implied.
+
+## UTF-16 editor adapter (development API)
+
+IDE/LSP clients use zero-based line numbers and **UTF-16 code-unit** columns,
+which are different from the index's file-local UTF-8 byte offsets and the
+one-based Unicode-scalar columns emitted in JSON. The additive dependency-free
+Rust adapter in `modules::symbols::editor` provides:
+
+- `Utf16Position::new(line, character)` and half-open `Utf16Range`.
+- `utf16_to_byte(source, position)` and `byte_to_utf16(source, byte)` for
+  strict conversions against an original immutable source string.
+- `SymbolIndex::goto_definition_utf16(source_id, position)`,
+  `utf16_position(source_id, byte)`, and `utf16_range(source_location)`.
+
+The adapter treats LF, CRLF and lone CR as line separators; each CRLF is one
+line break. It accepts valid end-of-line and EOF positions, including a final
+empty line, and rejects missing lines, beyond-line columns, offsets inside
+UTF-8 characters, positions splitting UTF-16 surrogate pairs, and the byte
+boundary between CR and LF. It never silently clamps a bad position.
+
+These conversions read existing source text, with no hidden process-wide state
+or cache; a query may scan the source and thus costs O(source length) worst
+case. Editors needing repeated low-latency conversion can maintain their own
+versioned line index. The adapter does not implement LSP transport, change
+notifications, incremental recompilation or cancellation; consumers must
+discard stale symbol snapshots after edits. Existing schema-v1 JSON remains
+unchanged: it still uses UTF-8 byte spans and one-based scalar columns.
 
 ## Limits and measured quantities
 
