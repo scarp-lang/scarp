@@ -138,8 +138,8 @@ Clones share read-only metadata; ordinary compiler execution and the JSON
 schema-v1 output are unchanged.
 
 These UTF-16 editor adapters are development embedding APIs, **not** features
-of the published alpha.6 binaries. Both the strict conversion helpers (merged
-after alpha.6) and this `EditorSnapshot` addition require a development checkout
+of the published v0.0.6-alpha.1 binaries. Both the strict conversion helpers (merged
+after v0.0.6-alpha.1) and this `EditorSnapshot` addition require a development checkout
 until a separately reviewed release. There is still no LSP protocol, change notification,
 cancellation service, incremental module cache or external editor deployment.
 See `tests/editor_snapshot.rs` and `examples/editor_snapshot.rs` for host
