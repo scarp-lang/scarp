@@ -23,6 +23,7 @@ use std::{collections::HashMap, fmt, io, path::Path, sync::Arc};
 
 mod constants;
 mod inspection;
+pub mod invalidation;
 mod json;
 pub mod symbols;
 pub use constants::{ConstantDependency, ConstantLimits};
