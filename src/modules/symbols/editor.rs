@@ -6,6 +6,9 @@
 
 use super::{SourceId, SourceLocation, SymbolDefinition, SymbolIndex};
 
+mod snapshot;
+pub use snapshot::{EditorBuildError, EditorLimits, EditorQueryError, EditorSnapshot};
+
 /// Zero-based line and UTF-16 code-unit column, as used by LSP editors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Utf16Position {
