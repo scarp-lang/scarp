@@ -24,9 +24,6 @@ const MAX_LITERAL_BYTES: usize = 65536;
 pub(crate) struct ScalarRequirements {
     pub(crate) slot_count: usize,
     pub(crate) temporary_count: usize,
-    pub(crate) operation_count: usize,
-    pub(crate) expression_nodes: usize,
-    pub(crate) literal_bytes: usize,
 }
 
 fn unsupported(span: Span) -> Diagnostic {
@@ -120,9 +117,6 @@ pub(crate) fn inspect(program: &ResolvedProgram) -> Result<ScalarRequirements, D
     Ok(ScalarRequirements {
         slot_count: program.binding_count().max(1),
         temporary_count,
-        operation_count: program.statements.len(),
-        expression_nodes,
-        literal_bytes,
     })
 }
 
@@ -137,9 +131,6 @@ mod tests {
         let requirements = inspect(&program).unwrap();
         assert_eq!(requirements.slot_count, 1);
         assert_eq!(requirements.temporary_count, 3);
-        assert_eq!(requirements.operation_count, program.statements.len());
-        assert_eq!(requirements.expression_nodes, 4);
-        assert_eq!(requirements.literal_bytes, 2);
     }
 
     #[test]
@@ -163,6 +154,5 @@ mod tests {
         let requirements = inspect(&program).unwrap();
         assert_eq!(requirements.slot_count, 1);
         assert_eq!(requirements.temporary_count, 1);
-        assert_eq!(requirements.literal_bytes, 0);
     }
 }
