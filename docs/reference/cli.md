@@ -1,12 +1,12 @@
 # Command-line reference
 
-## Scarp-first CLI (v0.0.6-alpha.1 candidate)
+## Scarp-first CLI (v0.0.6-alpha.1 prerelease)
 
-The candidate is unpublished. `inspect symbols` and `inspect references` are
-new static inspection commands; published alpha.5 binaries do not have them.
+Published alpha.6 adds static `inspect symbols` and `inspect references`
+commands, which are absent from older alpha.5 packages.
 
 The latest published prerelease is
-[v0.0.5-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.5).
+[v0.0.6-alpha.1](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.1).
 It adds project-directory module inspection. The experimental C11 scalar
 source emitter is a Rust embedding API, **not** a Scarp CLI command;
 `scarp compile` still does not exist.
@@ -33,6 +33,8 @@ not alpha.3 packages. Confirm the exact release tag/commit and use
 | `scarp inspect tokens FILE` | List lexer tokens and real source locations |
 | `scarp inspect ast FILE` | Parse just the entry source and display its actual frontend syntax tree without execution |
 | `scarp inspect modules [--json] FILE` | Inspect statically checked modules; JSON retains schema version 1 |
+| `scarp inspect symbols [--json] FILE|DIRECTORY` | From alpha.6: show typed symbol definitions in a statically checked source graph |
+| `scarp inspect references [--json] FILE|DIRECTORY` | From alpha.6: show source references and matching definitions without running statements |
 | `scarp explain E####` | Explain an existing compiler diagnostic |
 
 For the alpha.4 release, examples include:
@@ -54,8 +56,9 @@ scarp guide inspect modules
 dash-leading filename. **It does not forward program arguments**; project-mode
 execution via `launch` is supported from alpha.4 using an explicit
 `Scarp.project`; standalone `exec` does not forward program arguments. The
-`inspect` command accepts `tokens`, `ast`, and `modules` in this branch;
-`--json` is supported only for modules. Missing/unsupported topics and options
+`inspect` command accepts `tokens`, `ast`, `modules`, `symbols`, and
+`references`. The latter three support schema-v1 `--json` output; the AST
+debug view is not JSON. Missing/unsupported topics and options
 return exit 2.
 
 **Legacy migration window:** Existing `run`, `check`, `tokens`, and
