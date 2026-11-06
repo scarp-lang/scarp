@@ -167,7 +167,10 @@ can reuse successful **whole-graph semantic resolution only after reloading
 and parsing all source files** and verifying exact bytes, resolved imports,
 compiler budgets, diagnostic labels and caller document revisions. Its
 source-byte quota is not a heap-memory bound. See the
-[semantic cache contract](development/semantic-cache.md).
+[semantic cache contract](development/semantic-cache.md). For repeated
+source edits, embedders may also opt into
+[bounded source-relative lexer reuse](development/token-cache.md): all imports
+are re-resolved and all source files are re-parsed on every call.
 
 This foundation is not a partial incremental compiler, LSP integration or
 released alpha.6 capability. See the detailed
