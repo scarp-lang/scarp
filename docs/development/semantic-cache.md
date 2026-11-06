@@ -119,6 +119,11 @@ The `tests/module_cache.rs` suite checks:
 - FIFO eviction, explicit clear, small quotas, disabled caching and immutable
   shared program reads across threads.
 
+A separate [source-relative token cache](token-cache.md) can be supplied
+alongside this semantic cache. It allows unchanged individual source files to
+skip lexing, but the trusted source loader and full parser still run for every
+build. Token and semantic retention have independent budgets and counters.
+
 The earlier [invalidation-planning API](incremental-invalidation.md) remains
 useful for discovering affected importers and comparing successful graphs.
 This cache is a separate opt-in interface; it does **not** yet reuse
