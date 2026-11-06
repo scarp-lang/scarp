@@ -6,7 +6,7 @@ Earlier 0.0.4-alpha.4 packages have no imports. See the
 Start with the [import tutorial](tutorials/modules.md) for a complete example.
 The [design contract](proposals/0029-source-modules.md) records the grammar.
 
-The unpublished v0.0.6-alpha.1 candidate adds opt-in
+The published v0.0.6-alpha.1 prerelease adds opt-in
 [symbol navigation](symbol-index.md): declarations, original cross-file use
 sites, go-to-definition and find-references. It follows the same module loader,
 visibility and validation rules without running statements. Module inventory
