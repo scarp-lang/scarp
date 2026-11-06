@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.6-alpha.1 — candidate, unpublished
+## 0.0.6-alpha.1 — prerelease, 2026-11-05
 
 - Add opt-in, bounded source symbol/reference snapshots with go-to-definition and
   find-references Rust APIs; retain original cross-file and folded constant sites.
@@ -13,6 +13,12 @@
   Cover windows, modules, contracts, empty domains and a high-precision oracle.
 - Require GCC and Clang UBSan differential checks on Linux; make the C host
   fixture's size formatting portable to Windows GCC without weakening warnings.
+- Published as a **GitHub prerelease**, not stable, on 5 November 2026 from
+  source `aa329a22cf2bf92d2c9814a26ff9c8b67a72e6e8`.
+  Four Rust and three native package checks passed on the exact source and
+  separate authorization control revision. Seven checksum-referenced assets
+  are available. See the
+  [alpha.6 publication record](docs/releases/v0.0.6-alpha.1-validation.md).
 
 ## 0.0.5-alpha.5 — prerelease, 2026-11-04
 
