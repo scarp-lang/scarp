@@ -33,10 +33,15 @@ impl fmt::Display for EditorBuildError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::VersionCount { expected, actual } => {
-                write!(f, "expected {expected} document revisions; received {actual}")
+                write!(
+                    f,
+                    "expected {expected} document revisions; received {actual}"
+                )
             }
             Self::LineLimit => f.write_str("editor line index limit exceeded"),
-            Self::LineNumberLimit => f.write_str("editor line number exceeds UTF-16 protocol range"),
+            Self::LineNumberLimit => {
+                f.write_str("editor line number exceeds UTF-16 protocol range")
+            }
             Self::Allocation => f.write_str("could not reserve editor line index"),
         }
     }
@@ -130,12 +135,7 @@ fn index_lines(
     while offset < bytes.len() {
         let byte = bytes[offset];
         if byte == b'\n' || byte == b'\r' {
-            append_line(
-                &mut lines,
-                total,
-                limits,
-                Line { start, end: offset },
-            )?;
+            append_line(&mut lines, total, limits, Line { start, end: offset })?;
             if byte == b'\r' && bytes.get(offset + 1) == Some(&b'\n') {
                 offset += 1;
             }
@@ -249,13 +249,7 @@ impl EditorSnapshot {
                 actual: versions.len(),
             });
         }
-        for (source, (&indexed, &current)) in self
-            .data
-            .versions
-            .iter()
-            .zip(versions)
-            .enumerate()
-        {
+        for (source, (&indexed, &current)) in self.data.versions.iter().zip(versions).enumerate() {
             if indexed != current {
                 return Err(EditorQueryError::StaleVersion {
                     source,
