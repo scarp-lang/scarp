@@ -161,7 +161,15 @@ conservatively invalidate the entire old graph. After a **full** successful
 recompile, comparing old and new graph snapshots uses exact source text and
 resolved import targets instead of timestamps or unstable source IDs.
 
-This foundation is not a compiler cache, partial evaluator, LSP integration or
+The invalidation planning foundation itself performs no compilation reuse.
+A separate post-alpha.6 development API, `modules::cache::CompilationCache`,
+can reuse successful **whole-graph semantic resolution only after reloading
+and parsing all source files** and verifying exact bytes, resolved imports,
+compiler budgets, diagnostic labels and caller document revisions. Its
+source-byte quota is not a heap-memory bound. See the
+[semantic cache contract](development/semantic-cache.md).
+
+This foundation is not a partial incremental compiler, LSP integration or
 released alpha.6 capability. See the detailed
 [invalidation contract](development/incremental-invalidation.md) for limits,
 caller responsibilities, examples and deferred correctness gates.
