@@ -84,7 +84,7 @@ selects error output only. `exec` retains program stdout/stderr behavior.
 The nested `inspect` command forwards diagnostic flags to the same real
 lexer and module compiler without changing the error schema.
 
-**Alpha.5 development-candidate extension (not in published alpha.4 packages):**
+**Alpha.5 published extension (not in older alpha.4 packages):**
 `scarp inspect modules [--json] PROJECT_DIRECTORY` also accepts an explicit
 project directory, resolving its `Scarp.project` to
 the same contained entrypoint used by `launch` and `verify`. Source and project
@@ -295,7 +295,7 @@ the [diagnostic reference](diagnostics.md) for caret interpretation and the
 Development output statements can write to stdout or stderr; see the
 [output guide](../output.md). Successful `check` stays silent on both streams.
 
-## Unreleased symbol and reference inspection
+## Published alpha.6 symbol and reference inspection
 
 Current main supports `inspect symbols [--json] FILE_OR_PROJECT_DIRECTORY` and
 `inspect references [--json] FILE_OR_PROJECT_DIRECTORY`. Both are static complete-
