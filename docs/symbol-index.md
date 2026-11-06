@@ -137,10 +137,10 @@ metadata is logical indexing storage, not a process-memory measurement.
 Clones share read-only metadata; ordinary compiler execution and the JSON
 schema-v1 output are unchanged.
 
-The adapter remains an embedding API, not a published alpha.6 feature: the
-original unindexed helpers are available in the published source, while this
-`EditorSnapshot` addition requires a development checkout until a separately
-reviewed release. There is still no LSP protocol, change notification,
+These UTF-16 editor adapters are development embedding APIs, **not** features
+of the published alpha.6 binaries. Both the strict conversion helpers (merged
+after alpha.6) and this `EditorSnapshot` addition require a development checkout
+until a separately reviewed release. There is still no LSP protocol, change notification,
 cancellation service, incremental module cache or external editor deployment.
 See `tests/editor_snapshot.rs` and `examples/editor_snapshot.rs` for host
 integration and strict Unicode/CRLF regression coverage.
