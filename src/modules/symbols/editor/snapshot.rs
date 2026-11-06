@@ -24,10 +24,7 @@ impl Default for EditorLimits {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditorBuildError {
-    VersionCount {
-        expected: usize,
-        actual: usize,
-    },
+    VersionCount { expected: usize, actual: usize },
     LineLimit,
     LineNumberLimit,
     Allocation,
@@ -54,7 +51,10 @@ impl Error for EditorBuildError {}
 /// A stale graph is distinct from invalid coordinates and a valid non-symbol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditorQueryError {
-    VersionCount { expected: usize, actual: usize },
+    VersionCount {
+        expected: usize,
+        actual: usize,
+    },
     StaleVersion {
         source: SourceId,
         indexed: u64,
