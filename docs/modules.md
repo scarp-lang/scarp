@@ -162,7 +162,7 @@ recompile, comparing old and new graph snapshots uses exact source text and
 resolved import targets instead of timestamps or unstable source IDs.
 
 The invalidation planning foundation itself performs no compilation reuse.
-A separate post-alpha.6 development API, `modules::cache::CompilationCache`,
+A separate post-v0.0.6-alpha.1 development API, `modules::cache::CompilationCache`,
 can reuse successful **whole-graph semantic resolution only after reloading
 and parsing all source files** and verifying exact bytes, resolved imports,
 compiler budgets, diagnostic labels and caller document revisions. Its
@@ -175,6 +175,6 @@ skips lexing and parsing only for exact per-file matches; all imports are
 re-resolved and all files reloaded, while linking and validation still run.
 
 This foundation is not a partial incremental compiler, LSP integration or
-released alpha.6 capability. See the detailed
+a capability of the published v0.0.6-alpha.1 prerelease. See the detailed
 [invalidation contract](development/incremental-invalidation.md) for limits,
 caller responsibilities, examples and deferred correctness gates.
