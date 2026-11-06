@@ -1,11 +1,12 @@
 # Feature completeness and development roadmap
 
-Audit date: 2026-11-06. This inventory describes the development
-candidate; update a row when an implementation lands. No roadmap row implies
-a release or an available CLI command. Cargo declares 0.0.6-alpha.2, a
-**candidate not yet published**. The latest published GitHub prerelease remains
-v0.0.6-alpha.1 (5 November 2026). The language remains experimental, without
-a stable public contract.
+Audit date: 2026-11-06. This inventory describes the published
+**v0.0.6-alpha.2 prerelease** and development work remaining; update a row
+when an implementation lands. No roadmap row implies a new CLI command.
+Cargo declares 0.0.6-alpha.2, published 6 November 2026 from exact source
+`398b8ff705154a02423fe458ce3a427401e81e31`;
+see the [publication record](../releases/v0.0.6-alpha.2-validation.md).
+The language remains experimental, without a stable public contract.
 Future feature rows remain proposals.
 
 Current audit baseline: `1aff6cabf93f2e0bce6953b29e1abe7d00ebd5fb`.
@@ -74,7 +75,7 @@ requires separate architecture and multiple implementation phases.
 | Formatting/JSON/serialization | Versioned module metadata JSON implemented | Language value JSON, general formatting and serialization | Error/composite values; bounded parsing | P1 | L | Escaping, schemas, invalid data, limits | Format/version policy |
 | Filesystem/network/process I/O | Explicit source loader only | External capability model and structured errors | Effects, permissions, errors | P2 | XL | Denied access, roots, no ambient authority | Security model |
 | Dates/time/random/environment | Missing | Explicit nondeterministic host capabilities | Effects/host interfaces | P3 | L | Seed/replay, denied host calls | Capability APIs |
-| Numerical AI kernels | Vectors/tiles, stable softmax/loss/gradients; candidate RMS | Generalized tensors/broadcasting and shape types (proposal 0036) | Composite numeric type/shape design | P1 | XL | Reference models, shapes, budgets, precision | Tensor proposal |
+| Numerical AI kernels | Vectors/tiles, stable softmax/loss/gradients; published RMS | Generalized tensors/broadcasting and shape types (proposal 0036) | Composite numeric type/shape design | P1 | XL | Reference models, shapes, budgets, precision | Tensor proposal |
 | CPU training/inference | Small classification examples implemented | Parameter/layer APIs and general models | Tensor/shape and serialization design | P2 | XL | Numerical oracles, convergence, reproducibility | AI tutorials |
 | Automatic differentiation | Loss gradient kernels only | Graph/tape and chain-rule architecture | Tensor representation and lifetime budgets | P2 | XL | Finite differences, graph reuse, memory | AD design |
 | GPU/backend abstraction | Missing | Explicit devices, transfer and backend contracts | General tensors and stable IR | P3 | XL | CPU differential, deterministic error rules | No GPU-support claim |
