@@ -1,6 +1,13 @@
 //! Correctness-checked frontend/metadata workloads; timings are not runtime speedups.
 use scarp::{
-    modules::{self, MemorySourceLoader, ModuleLimits},
+    modules::{
+        self,
+        cache::{
+            CacheLimits, CacheStatus, CachedCompileOptions, CompilationCache, SyntaxCache,
+            SyntaxCacheLimits, TokenCache, TokenCacheLimits,
+        },
+        MemorySourceLoader, ModuleLimits,
+    },
     types::{FunctionEffect, PrimitiveType, TypeKind, TypeLimits, TypeRegistryBuilder},
     ExecutionOptions,
 };
@@ -77,6 +84,85 @@ fn main() {
             black_box(compile());
         },
     );
+    // Warm front-end parses and whole-graph semantic cache checks use the
+    // same exact source graph and expected output as the cold benchmark.
+    // Report timings without assuming a universal speedup.
+    let input_bytes: usize = files.iter().map(|(_, text)| text.len()).sum();
+    let mut syntax_cache = SyntaxCache::new(SyntaxCacheLimits::default());
+    let warmed = modules::load_with_syntax_cache(
+        "main.srp",
+        &loader,
+        ModuleLimits::default(),
+        &mut syntax_cache,
+    )
+    .unwrap();
+    assert_eq!(modules::resolve(warmed).unwrap().constant_dependencies().len(), 515);
+    measure("module_syntax_warm_4files", input_bytes, iterations, || {
+        let graph = modules::load_with_syntax_cache(
+            "main.srp",
+            &loader,
+            ModuleLimits::default(),
+            &mut syntax_cache,
+        )
+        .unwrap();
+        let resolved = modules::resolve(graph).unwrap();
+        assert_eq!(resolved.constant_dependencies().len(), 515);
+        black_box(resolved);
+    });
+    assert!(syntax_cache.stats().hits >= 4);
+
+    let mut token_cache = TokenCache::new(TokenCacheLimits::default());
+    modules::load_with_token_cache(
+        "main.srp",
+        &loader,
+        ModuleLimits::default(),
+        &mut token_cache,
+    )
+    .unwrap();
+    measure("module_tokens_warm_4files", input_bytes, iterations, || {
+        let graph = modules::load_with_token_cache(
+            "main.srp",
+            &loader,
+            ModuleLimits::default(),
+            &mut token_cache,
+        )
+        .unwrap();
+        let resolved = modules::resolve(graph).unwrap();
+        assert_eq!(resolved.constant_dependencies().len(), 515);
+        black_box(resolved);
+    });
+    assert!(token_cache.stats().hits >= 4);
+
+    let mut semantic_cache = CompilationCache::new(CacheLimits::default());
+    let mut combined_tokens = TokenCache::new(TokenCacheLimits::default());
+    let mut combined_syntax = SyntaxCache::new(SyntaxCacheLimits::default());
+    let initial = semantic_cache
+        .compile_with_frontend_caches(
+            "main.srp",
+            &loader,
+            CachedCompileOptions::new(&[1, 1, 1, 1]),
+            &mut combined_tokens,
+            &mut combined_syntax,
+        )
+        .unwrap();
+    assert_eq!(initial.status, CacheStatus::Stored);
+    assert_eq!(initial.program.constant_dependencies().len(), 515);
+    measure("module_all_caches_warm_4files", input_bytes, iterations, || {
+        let compiled = semantic_cache
+            .compile_with_frontend_caches(
+                "main.srp",
+                &loader,
+                CachedCompileOptions::new(&[1, 1, 1, 1]),
+                &mut combined_tokens,
+                &mut combined_syntax,
+            )
+            .unwrap();
+        assert_eq!(compiled.status, CacheStatus::Hit);
+        black_box(compiled);
+    });
+    assert!(semantic_cache.stats().hits > 0);
+    assert!(combined_syntax.stats().hits >= 4);
+
     let compile_indexed = || {
         modules::compile_indexed_with_loader(
             "main.srp",
