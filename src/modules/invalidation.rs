@@ -239,12 +239,16 @@ impl InvalidationSnapshot {
                 continue;
             };
             let changed_text = self.sources.source(old) != next.sources.source(new);
+            // A loader may retain its canonical identity while changing the
+            // human-facing source label; diagnostics and tooling locations
+            // must not silently keep that old display name.
+            let changed_label = self.sources.files()[old].name != next.sources.files()[new].name;
             let targets_changed = self.forward[old].len() != next.forward[new].len()
                 || self.forward[old]
                     .iter()
                     .zip(&next.forward[new])
                     .any(|(&left, &right)| self.identities[left] != next.identities[right]);
-            if changed_text || targets_changed {
+            if changed_text || changed_label || targets_changed {
                 modified_old.push(old);
                 modified_new.push(new);
             }
