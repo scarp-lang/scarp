@@ -151,3 +151,17 @@ To break `a.srp -> b.srp -> a.srp`, move the shared declarations into `common.sr
 and have both files import it. Local mutual function recursion remains supported;
 cross-module cyclic dependencies are deferred. Runtime globals, vector/tile
 exports, re-exports, packages and a standard library require separate designs.
+
+## Dependency invalidation for editor embedders (development only)
+
+The opt-in `modules::invalidation::InvalidationSnapshot` records trusted loader
+identities and dependency/importer edges from a successful compilation. Its
+preflight edit impact includes transitively dependent modules; unknown identities
+conservatively invalidate the entire old graph. After a **full** successful
+recompile, comparing old and new graph snapshots uses exact source text and
+resolved import targets instead of timestamps or unstable source IDs.
+
+This foundation is not a compiler cache, partial evaluator, LSP integration or
+released alpha.6 capability. See the detailed
+[invalidation contract](development/incremental-invalidation.md) for limits,
+caller responsibilities, examples and deferred correctness gates.

@@ -28,6 +28,12 @@ expressions/chains, and six `.srp`/`.stderr` fixtures exercised by the embedding
 and run/check/modules. The three-file `constant_expressions` example has exact
 stdout. Native package checks include invalid constant initializers.
 
+For the post-alpha.6 invalidation planning API (issue #117), also run
+`cargo test --locked --offline --test module_invalidation` to exercise diamond
+closures, exact-content graph transitions, loader retargeting, unknown changes,
+rejected compilation, bounded input metadata and read-only sharing. This is a
+planning API; no incremental caching/reuse performance claim is made.
+
 For unreleased module tooling, include `--test module_tooling --test module_files`.
 The suites cover validation before dependency I/O, precise cycle edges and limit
 spans, visibility-safe typo repairs, metadata/UTF-8 locations, direct/reverse/
