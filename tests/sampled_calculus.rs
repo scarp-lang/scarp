@@ -91,27 +91,24 @@ fn extreme_finite_data_preserves_subnormal_areas_and_finite_large_slopes() {
     );
     // Halving the subnormal readings first would round away a nonzero
     // physical integral. The wide-interval branch retains that product.
-    close(
+    assert_eq!(
         call(Builtin::SampleArea, &[0.0, 1.0e308], &[tiny, 0.0])
             .unwrap()
-            .as_float()
-            .unwrap(),
-        (1.0e308 * tiny) * 0.5,
+            .as_float(),
+        Some((1.0e308 * tiny) * 0.5)
     );
-    close(
+    assert_eq!(
         call(Builtin::SampleArea, &[0.0, 1.0e308], &[tiny, 2.0 * tiny])
             .unwrap()
-            .as_float()
-            .unwrap(),
-        (1.0e308 * tiny) * 1.5,
+            .as_float(),
+        Some((1.0e308 * tiny) * 1.5)
     );
     // For narrow intervals the opposite order preserves the product.
-    close(
+    assert_eq!(
         call(Builtin::SampleArea, &[0.0, tiny], &[f64::MAX, 0.0])
             .unwrap()
-            .as_float()
-            .unwrap(),
-        (f64::MAX * tiny) * 0.5,
+            .as_float(),
+        Some((f64::MAX * tiny) * 0.5)
     );
     let slope = call(
         Builtin::SampleSlopes,
