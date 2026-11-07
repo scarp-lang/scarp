@@ -26,12 +26,17 @@ def source_call(name, x, y):
 def exact_integral(x, y):
     with localcontext() as context:
         context.prec = 200
-        result = Decimal(0)
+        contributions = []
         for i in range(len(x) - 1):
             width = Decimal.from_float(x[i + 1]) - Decimal.from_float(x[i])
             pair = Decimal.from_float(y[i]) + Decimal.from_float(y[i + 1])
-            result += width * pair / 2
-        return float(result)
+            contributions.append(width * pair / 2)
+        result = sum(contributions, Decimal(0))
+        # A fixed ULP count of the *final* result is unsound when signed
+        # interval areas nearly cancel: rounding of their widths/products
+        # is conditioned on the sum of absolute contributions.
+        variation = sum((abs(v) for v in contributions), Decimal(0))
+        return float(result), float(variation)
 
 
 def exact_slopes(x, y):
@@ -88,13 +93,20 @@ class SampledCalculusTests(unittest.TestCase):
                 cases.append((x, y))
         for x, y in cases:
             with self.subTest(x=x, y=y):
-                expected = exact_integral(x, y)
+                expected, variation = exact_integral(x, y)
                 actual = self.run_source(source_call('sample_area', x, y))
                 self.assertEqual(actual.returncode, 0, actual.stderr.decode())
                 self.assertEqual(actual.stderr, b'')
+                observed = float(actual.stdout)
+                # Scarp compensates the accumulated contributions; its
+                # per-interval binary64 widths and products still round.
+                bound = max(
+                    12 * math.ulp(expected),
+                    4 * sys.float_info.epsilon * variation,
+                )
                 self.assertTrue(
-                    almost_ulp(float(actual.stdout), expected),
-                    (actual.stdout, expected),
+                    math.isfinite(observed) and abs(observed - expected) <= bound,
+                    (observed, expected, bound),
                 )
 
     def test_interval_derivatives_against_independent_decimal(self):
