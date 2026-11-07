@@ -94,33 +94,18 @@ fn grid_length_domain_and_nonfinite_arithmetic_are_checked() {
 fn exact_work_and_payload_budget_boundaries() {
     let values = args(&[0.0, 1.0, 3.0], &[0.0, 2.0, 6.0]);
     assert_eq!(
-        numeric::evaluate_with_vector_limit(
-            Builtin::SampleCumulativeArea,
-            &values,
-            8,
-            24,
-        )
+        numeric::evaluate_with_vector_limit(Builtin::SampleCumulativeArea, &values, 8, 24)
         .unwrap(),
         vector(&[0.0, 1.0, 9.0])
     );
     assert_eq!(
-        numeric::evaluate_with_vector_limit(
-            Builtin::SampleCumulativeArea,
-            &values,
-            7,
-            24,
-        )
+        numeric::evaluate_with_vector_limit(Builtin::SampleCumulativeArea, &values, 7, 24)
         .unwrap_err()
         .kind,
         Kind::ExecutionLimit
     );
     assert_eq!(
-        numeric::evaluate_with_vector_limit(
-            Builtin::SampleCumulativeArea,
-            &values,
-            8,
-            23,
-        )
+        numeric::evaluate_with_vector_limit(Builtin::SampleCumulativeArea, &values, 8, 23)
         .unwrap_err()
         .kind,
         Kind::VectorBudget
@@ -145,7 +130,10 @@ fn shared_visible_windows_and_max_length_work_without_mutation() {
     let result = output.as_vector().unwrap().as_slice();
     assert_eq!(result.len(), MAX_VECTOR_LENGTH);
     assert_eq!(result[0].get(), 0.0);
-    assert_eq!(result[MAX_VECTOR_LENGTH - 1].get(), 2.0 * (MAX_VECTOR_LENGTH - 1) as f64);
+    assert_eq!(
+        result[MAX_VECTOR_LENGTH - 1].get(),
+        2.0 * (MAX_VECTOR_LENGTH - 1) as f64
+    );
     assert_eq!(values[0], Value::Vector(full_x.window(1, 3).unwrap()));
 }
 
