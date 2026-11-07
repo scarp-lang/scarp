@@ -20,6 +20,7 @@ pub fn emit_c(source: &str) -> Result<String, Diagnostic> {
 /// resolved plan. All unsupported forms are rejected before emission.
 pub fn emit_program(program: &ResolvedProgram) -> Result<String, Diagnostic> {
     let requirements = crate::native_preflight::inspect(program)?;
+    crate::scalar_ir::verify_program(program)?;
     let mut out = format!(
         "/* Scarp freestanding C11 unit. Caller supplies workspace and output. */\n#define SCARP_SLOT_COUNT {}\n#define SCARP_TEMP_COUNT {}\n",
         requirements.slot_count,
