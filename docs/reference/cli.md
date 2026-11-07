@@ -1,9 +1,9 @@
 # Command-line reference
 
-The source candidate `v0.0.6-alpha.3` adds numerical built-ins but
+The **published `v0.0.6-alpha.3` prerelease** adds numerical built-ins but
 **no new CLI commands**. The interpreter-backed command vocabulary
-remains that of the published `v0.0.6-alpha.2` release.
-A source candidate is not evidence of a public binary release.
+remains compatible with published `v0.0.6-alpha.2`. See
+[alpha.3 publication verification](../releases/v0.0.6-alpha.3-validation.md).
 
 ## Scarp-first CLI (published v0.0.6-alpha.2)
 
@@ -15,7 +15,7 @@ Published v0.0.6-alpha.1 adds static `inspect symbols` and `inspect references`
 commands, which are absent from older alpha.5 packages.
 
 The latest published prerelease is
-[v0.0.6-alpha.2](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.2).
+[v0.0.6-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3).
 It adds project-directory module inspection. The experimental C11 scalar
 source emitter is a Rust embedding API, **not** a Scarp CLI command;
 `scarp compile` still does not exist.
