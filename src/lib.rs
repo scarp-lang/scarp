@@ -24,6 +24,7 @@ mod native_preflight;
 pub mod numeric;
 pub mod parser;
 pub mod resolver;
+mod scalar_ir;
 pub mod types;
 pub mod value;
 
