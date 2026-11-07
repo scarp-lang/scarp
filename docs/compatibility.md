@@ -9,18 +9,19 @@ See [RMS semantics and limits](root-mean-square.md). The opt-in
 and independent resource limits; it does not change the existing module or
 diagnostic JSON schema-v1 contracts.
 
-**Current source:** `0.0.6-alpha.2` is a candidate, **not published**.
-The last public prerelease remains v0.0.6-alpha.1. Alpha.2 adds only optional
-Rust embedding cache APIs and source-level invalidation planning. For the
-compatibility contract and limitations, see the
-[alpha.2 candidate notes](releases/v0.0.6-alpha.2.md).
+**Current source:** `0.0.6-alpha.2` is published as a **GitHub prerelease**.
+Alpha.2 adds optional Rust embedding cache APIs, source-level invalidation
+planning and scoped retention control without changing the existing CLI
+language or adding native executable compilation. See the
+[public release notes](releases/v0.0.6-alpha.2-publication.md) and
+[exact-source publication record](releases/v0.0.6-alpha.2-validation.md).
 Windows, Linux and macOS archives are available; features remain experimental
 and no general native executable compiler or stable ABI is implied.
 The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.6-alpha.1](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.1).
+[0.0.6-alpha.2](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.2).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a
@@ -96,9 +97,10 @@ Use this guide before copying an example into a different Scarp executable or
 updating a Rust embedding host. It compares the published v0.0.1, v0.0.2,
 v0.0.3-beta.1, beta.2, and beta.3 snapshots. Beta.3 uses the syntax described below;
 separate feature branches can differ from both main and downloaded binaries.
-The latest published prerelease is v0.0.6-alpha.1. It retains
-the alpha.5 project inspection and experimental scalar C11 emitter, and
-adds symbol/reference navigation plus finite root mean square. The emitter
+The latest published prerelease is v0.0.6-alpha.2. It retains
+the alpha.5 project inspection and experimental scalar C11 emitter and
+alpha.1 symbol/reference navigation and finite root mean square, and
+adds opt-in incremental compiler cache foundations. The emitter
 does not add a general `scarp compile` command.
 [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) remain a historical
 snapshot, not an alpha.3 status report.

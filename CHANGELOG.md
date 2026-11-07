@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.6-alpha.2 — prerelease candidate, 2026-11-06
+## 0.0.6-alpha.2 — prerelease, 2026-11-06
 
 - Add conservative, bounded module-graph invalidation planning and exact
   source-graph comparisons for trusted loaders and import retargeting (#121).
@@ -29,9 +29,12 @@
 - Refactor the experimental C11 scalar backend to reuse one typed
   compiler-owned acceptance and bounded workspace preflight, with parity
   regressions; no new CLI command, object writer, or stable native ABI.
-- **Candidate source only:** not tagged, not a GitHub prerelease, not stable.
-  Publication requires exact-main CI and separately approved source SHA.
-  The latest public prerelease remains v0.0.6-alpha.1.
+- **Published GitHub prerelease (not stable)** from exact source
+  `398b8ff705154a02423fe458ce3a427401e81e31` after both seven-job
+  source/control checks. See the
+  [publication verification record](docs/releases/v0.0.6-alpha.2-validation.md)
+  and [GitHub release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.2).
+  No general native compiler, language server or package-registry release.
 
 ## 0.0.6-alpha.1 — prerelease, 2026-11-05
 

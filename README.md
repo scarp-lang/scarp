@@ -2,15 +2,17 @@
 
 **Build Beyond Boundaries.**
 
-**0.0.6-alpha.2** is the next source candidate, **not a published release**.
-It adds optional dependency invalidation planning and caller-owned token, AST and
-whole-graph semantic caches for Rust embedding hosts. See the
-[alpha.2 candidate notes](docs/releases/v0.0.6-alpha.2.md) and
-[syntax cache contract](docs/development/syntax-cache.md). The CLI and general
-native compilation capabilities have not changed. The latest public release
-remains **v0.0.6-alpha.1**; release artifacts are not yet available for alpha.2.
+**0.0.6-alpha.2** is the latest **published GitHub prerelease** (6 November
+2026), available for Windows x64, Linux x64 and macOS Apple Silicon. It adds
+optional dependency invalidation, bounded semantic/token/AST caches, and
+scoped cache eviction for Rust embedding hosts. See the
+[public alpha.2 release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.2),
+[source-scoped cache contract](docs/development/cache-eviction.md), and
+[publication verification](docs/releases/v0.0.6-alpha.2-validation.md).
+The interpreter-backed CLI remains experimental and general native
+executable compilation is not included.
 
-**0.0.6-alpha.1** is the latest **published GitHub prerelease** (5 November
+**0.0.6-alpha.1** is an **earlier published GitHub prerelease** (5 November
 2026), adding bounded cross-file symbol/reference navigation and finite root
 mean square. See [v0.0.6-alpha.1 release notes](docs/releases/v0.0.6-alpha.1.md),
 [publication verification](docs/releases/v0.0.6-alpha.1-validation.md),
@@ -23,9 +25,9 @@ module inspection and an opt-in experimental C11 scalar emitter for Rust hosts.
 See [alpha.5 release notes](docs/releases/v0.0.5-alpha.5.md) and the
 [publication record](docs/releases/v0.0.5-alpha.5-validation.md).
 
-Scarp is an experimental programming language implemented in Rust. The latest published
-**0.0.6-alpha.1** prerelease was published on 5 November 2026 from exact source
-`aa329a22cf2bf92d2c9814a26ff9c8b67a72e6e8`. The compiler provides a lexer,
+Scarp is an experimental programming language implemented in Rust. The latest
+published **0.0.6-alpha.2** prerelease was published on 6 November 2026 from
+exact source `398b8ff705154a02423fe458ce3a427401e81e31`. The compiler provides a lexer,
 parser, typed resolver, interpreter, source modules, finite binary64 numerics
 and a Scarp-first CLI. The bounded `create`, `launch` and project-directory
 `verify` workflow remains available. Syntax and APIs are not stable.
@@ -156,12 +158,12 @@ one-hot targets and explicit loss gradients. See [vectors](docs/vectors.md),
 [error repairs](docs/reference/numerical-errors.md).
 
 The latest published prerelease is
-[0.0.6-alpha.1](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.1),
-published 5 November 2026 from source commit
-`aa329a22cf2bf92d2c9814a26ff9c8b67a72e6e8`. It provides Windows x64,
+[0.0.6-alpha.2](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.2),
+published 6 November 2026 from source commit
+`398b8ff705154a02423fe458ce3a427401e81e31`. It provides Windows x64,
 Linux x64 and macOS Apple Silicon archives with SHA-256 checksums.
-See the [v0.0.6-alpha.1 release notes](docs/releases/v0.0.6-alpha.1.md),
-[publication verification record](docs/releases/v0.0.6-alpha.1-validation.md)
+See the [public release notes](docs/releases/v0.0.6-alpha.2-publication.md),
+[publication verification record](docs/releases/v0.0.6-alpha.2-validation.md)
 and [release engineering](docs/releasing.md) for publication gates.
 Earlier prerelease records remain historical snapshots.
 
@@ -183,7 +185,7 @@ These commands are absent from published alpha.5 binaries.
 
 Binary archives and checksums are available through
 [GitHub Releases](https://github.com/scarp-lang/scarp/releases). See the
-[latest v0.0.6-alpha.1 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.1)
+[latest v0.0.6-alpha.2 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.2)
 for its supported archives, checksums and source commit. The
 [changelog](CHANGELOG.md) records recent language and tooling changes.
 
