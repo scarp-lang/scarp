@@ -1,0 +1,5 @@
+// Temperature controls softmax concentration without random sampling.
+print(softmax_temp([2.0, 2.0], 0.5));
+print(logsoftmax_temp([5.0], 2.0));
+bind logits = [1.0, 4.0, 4.0, 2.0];
+print(topk(softmax_temp(logits, 0.5), 3));

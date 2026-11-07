@@ -9,6 +9,7 @@ use crate::{
 mod integers;
 mod kernels;
 mod scalar_text;
+mod temperature;
 mod text;
 mod tiles;
 mod topk;
@@ -50,6 +51,8 @@ pub enum Builtin {
     Clamp,
     Fill,
     Softmax,
+    SoftmaxTemp,
+    LogSoftmaxTemp,
     Norm,
     Rms,
     Normalize,
@@ -132,6 +135,8 @@ impl Builtin {
             "clamp" => Self::Clamp,
             "fill" => Self::Fill,
             "softmax" => Self::Softmax,
+            "softmax_temp" => Self::SoftmaxTemp,
+            "logsoftmax_temp" => Self::LogSoftmaxTemp,
             "norm" => Self::Norm,
             "rms" => Self::Rms,
             "normalize" => Self::Normalize,
@@ -203,6 +208,7 @@ impl Builtin {
             Self::LogProb | Self::CrossEntropy | Self::LossGrad | Self::TopK | Self::TopKValues => {
                 &[Vector, Integer]
             }
+            Self::SoftmaxTemp | Self::LogSoftmaxTemp => &[Vector, Float],
             Self::OneHot => &[Integer, Integer],
             Self::Tile => &[Vector, Integer, Integer],
             Self::Height | Self::Width | Self::Unroll | Self::Turn => &[Tile],
@@ -573,6 +579,9 @@ pub(crate) fn evaluate_with_spans(
     if matches!(function, Builtin::TopK | Builtin::TopKValues) {
         return topk::evaluate(function, args, budget, span, argument_span);
     }
+    if matches!(function, Builtin::SoftmaxTemp | Builtin::LogSoftmaxTemp) {
+        return temperature::evaluate(function, args, budget, span, argument_span);
+    }
     if function == Builtin::Fill {
         let count = usize::try_from(args[1].require_integer(span)?)
             .ok()
@@ -903,6 +912,8 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::OneHot
         | Builtin::TopK
         | Builtin::TopKValues
+        | Builtin::SoftmaxTemp
+        | Builtin::LogSoftmaxTemp
         | Builtin::Window
         | Builtin::Stitch
         | Builtin::Tile

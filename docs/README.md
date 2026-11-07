@@ -67,6 +67,7 @@ experimental Rust-hosted C11 scalar emitter; see
 | [Finite floats](floats.md) | Use the alpha's binary64 scalars, numeric diagnostics, and function integration |
 | [Numerical vectors](vectors.md) | Use immutable numerical data, pure kernels, typed vector calls and bounded allocation |
 | [Top-K inference ranking](topk-selection.md) | Select deterministic ranked model candidates and original scores using two development-only typed built-ins |
+| [Temperature softmax](temperature-softmax.md) | Adjust finite logit probabilities and log probabilities without randomness or nonfinite values |
 | [Root mean square](root-mean-square.md) | Use the published v0.0.6-alpha.1 finite RMS reduction, visible windows and exact work/allocation rules |
 | [Your first numerical program](tutorials/numerical-program.md) | Build a small typed numerical calculation and compare probabilities safely |
 | [Numerical errors](reference/numerical-errors.md) | Repair type, shape, index, domain, overflow and quota failures |
