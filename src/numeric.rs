@@ -11,6 +11,7 @@ mod kernels;
 mod scalar_text;
 mod text;
 mod tiles;
+mod topk;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Builtin {
@@ -56,6 +57,8 @@ pub enum Builtin {
     LogSoftmax,
     ArgMax,
     ArgMin,
+    TopK,
+    TopKValues,
     MaxValue,
     MinValue,
     LogProb,
@@ -136,6 +139,8 @@ impl Builtin {
             "logsoftmax" => Self::LogSoftmax,
             "argmax" => Self::ArgMax,
             "argmin" => Self::ArgMin,
+            "topk" => Self::TopK,
+            "topk_values" => Self::TopKValues,
             "maxval" => Self::MaxValue,
             "minval" => Self::MinValue,
             "logprob" => Self::LogProb,
@@ -195,7 +200,9 @@ impl Builtin {
             Self::Scale => &[Vector, Float],
             Self::Clamp => &[Vector, Float, Float],
             Self::Fill => &[Float, Integer],
-            Self::LogProb | Self::CrossEntropy | Self::LossGrad => &[Vector, Integer],
+            Self::LogProb | Self::CrossEntropy | Self::LossGrad | Self::TopK | Self::TopKValues => {
+                &[Vector, Integer]
+            }
             Self::OneHot => &[Integer, Integer],
             Self::Tile => &[Vector, Integer, Integer],
             Self::Height | Self::Width | Self::Unroll | Self::Turn => &[Tile],
@@ -215,7 +222,8 @@ impl Builtin {
             | Self::IntsJoin
             | Self::IntsSet
             | Self::IntsRange
-            | Self::IntsFromVector => ValueType::Integers,
+            | Self::IntsFromVector
+            | Self::TopK => ValueType::Integers,
             Self::ToInteger
             | Self::TextLength
             | Self::TextBytes
@@ -562,6 +570,9 @@ pub(crate) fn evaluate_with_spans(
     if function.is_tile() {
         return tiles::evaluate(function, args, budget, span, argument_span);
     }
+    if matches!(function, Builtin::TopK | Builtin::TopKValues) {
+        return topk::evaluate(function, args, budget, span, argument_span);
+    }
     if function == Builtin::Fill {
         let count = usize::try_from(args[1].require_integer(span)?)
             .ok()
@@ -890,6 +901,8 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::TextEndsWith
         | Builtin::Fill
         | Builtin::OneHot
+        | Builtin::TopK
+        | Builtin::TopKValues
         | Builtin::Window
         | Builtin::Stitch
         | Builtin::Tile
