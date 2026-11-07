@@ -42,7 +42,7 @@ fn native(workload: Native) -> Value {
             let y = call(Builtin::Scale, &[x.clone(), float(2.0)]);
             let slopes = call(Builtin::SampleSlopes, &[x, y]);
             call(Builtin::Sum, &[slopes])
-        },
+        }
         Native::Statistics(count) => {
             let values = call(
                 Builtin::Stitch,
