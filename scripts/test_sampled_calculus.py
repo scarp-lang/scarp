@@ -78,6 +78,9 @@ class SampledCalculusTests(unittest.TestCase):
         cases = [
             ([0.0, 1.0], [maximum, maximum]),
             ([0.0, 1.0], [tiny, tiny]),
+            ([0.0, 1.0e308], [tiny, 0.0]),
+            ([0.0, 1.0e308], [tiny, 2.0 * tiny]),
+            ([0.0, tiny], [maximum, 0.0]),
             ([0.0, 1.0e308], [-maximum, maximum]),
             ([0.0, 1.0, 3.0], [0.0, 2.0, 6.0]),
             ([0.0, 1.0, 2.0], [1.0, 0.0, -1.0]),
