@@ -63,7 +63,7 @@ fn compensated_cancellation_and_subnormal_areas_are_retained() {
     assert_eq!(values[3].get(), 1.0);
     let tiny = f64::from_bits(1);
     let extreme = prefix(&[0.0, 1.0e308], &[tiny, 0.0]).unwrap();
-    let expected = ((1.0e308 * 0.5) * tiny);
+    let expected = (1.0e308 * 0.5) * tiny;
     assert_eq!(extreme.as_vector().unwrap().as_slice()[1].get(), expected);
 }
 
