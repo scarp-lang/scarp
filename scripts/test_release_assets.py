@@ -446,7 +446,7 @@ class ReleaseAssets(unittest.TestCase):
                 ["git", "-C", str(source), "rev-parse", "HEAD"], text=True
             ).strip()
             with self.assertRaisesRegex(ValueError, "candidate-only status"):
-                verifier.release_notes_at(source, commit, "0.0.6-alpha.2", "0.0.6-alpha.3")
+                verifier.release_notes_at(source, commit, "0.0.6-alpha.2")
 
     def test_alpha6_requires_navigation_rms_and_all_prior_feature_contents(self):
         version = "0.0.6-alpha.1"
