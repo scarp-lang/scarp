@@ -220,6 +220,19 @@ See the complete [Top-K guide](topk-selection.md) and
 [executable example](../examples/topk_scores.srp). These features are on
 **development main only**, not in the published v0.0.6-alpha.2 prerelease.
 
+## Development-only temperature-controlled probabilities
+
+The pure typed `softmax_temp(scores, temperature) -> vector` and
+`logsoftmax_temp(scores, temperature) -> vector` functions adjust probability
+concentration using a strictly positive finite float temperature. They use
+maximum-shifted, compensated normalization, with a recovery path for
+subtractions of extreme opposite-sign finite scores. Invalid temperature and
+empty scores fail with E0034, and unrepresentable log outputs with E0031.
+Both functions prepay `4n` work and `8n` new vector payload bytes.
+See the [temperature guide](temperature-softmax.md) and
+[executable example](../examples/temperature_softmax.srp).
+These are **development-only**, not included in published v0.0.6-alpha.2.
+
 ## Development-only categorical logit loss
 
 Two new pure, typed scalar kernels operate on a finite logit vector
