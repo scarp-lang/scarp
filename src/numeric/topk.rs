@@ -87,13 +87,15 @@ pub(super) fn evaluate(
     // This is the only auxiliary heap. Each element is the final integer
     // index, so topk does not allocate and copy a second index buffer.
     let mut heap = buffer::<i64>(count, budget, span)?;
-    for index in 0..scores.len() {
-        if heap.len() < count {
-            heap.push(index as i64);
-            sift_up(&mut heap, scores);
-        } else if count > 0 && better(scores, index as i64, heap[0]) {
-            heap[0] = index as i64;
-            sift_down(&mut heap, scores);
+    if count > 0 {
+        for index in 0..scores.len() {
+            if heap.len() < count {
+                heap.push(index as i64);
+                sift_up(&mut heap, scores);
+            } else if better(scores, index as i64, heap[0]) {
+                heap[0] = index as i64;
+                sift_down(&mut heap, scores);
+            }
         }
     }
 
