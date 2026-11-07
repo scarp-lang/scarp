@@ -14,8 +14,10 @@ for model inference and log-probability evaluation:
 `temperature` is a finite **strictly positive float**. At `1.0`, these
 correspond to existing `softmax` and `logsoftmax`. Smaller positive values
 concentrate probability on higher scores; larger values flatten the
-distribution. These are deterministic transformations, **not** RNG sampling,
-nucleus/top-p decoding or a model runtime.
+distribution. These are deterministic transformations, **not** RNG sampling
+or a model runtime. A separate future-development
+[Top-P nucleus selection API](nucleus-selection.md) can rank candidates
+by cumulative probability but is not part of the pinned alpha.3 release.
 
 ## Runnable example
 

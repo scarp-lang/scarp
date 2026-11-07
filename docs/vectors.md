@@ -233,6 +233,17 @@ See the [temperature guide](temperature-softmax.md) and
 [executable example](../examples/temperature_softmax.srp).
 These are **development-only**, not included in published v0.0.6-alpha.2.
 
+## Post-alpha.3 deterministic nucleus selection
+
+Development-only `top_p(probabilities, mass) -> integers` and
+`top_p_values(probabilities, mass) -> vector` select the smallest
+highest-first prefix with cumulative probability at least `mass`.
+Probabilities must be nonnegative and normalized, and mass must lie
+in (0, 1]; equal scores choose the earliest visible index. These
+functions are **not in the pinned v0.0.6-alpha.3 source candidate**.
+See the [nucleus selection contract](nucleus-selection.md) and
+[executable example](../examples/nucleus_selection.srp).
+
 ## Development-only categorical logit loss
 
 Two new pure, typed scalar kernels operate on a finite logit vector

@@ -57,6 +57,10 @@ The ranked candidates can be composed with
 [temperature-controlled softmax](temperature-softmax.md) to change probability
 concentration before selecting a fixed number of candidates.
 
+For a *probability-mass* threshold rather than a fixed number of candidates,
+see the post-alpha.3 [Top-P nucleus selection proposal](nucleus-selection.md).
+It is not included in the pinned alpha.3 release candidate.
+
 The implementation uses only finite binary64 values, bounded Scarp vectors,
-and safe Rust. It does not add a sampling/RNG API, top-p/nucleus decoding,
+and safe Rust. It does not add a random sampling/RNG API,
 automatic differentiation, or a native object compiler.

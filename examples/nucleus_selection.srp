@@ -1,0 +1,9 @@
+// Deterministic nucleus selection: rank the smallest probability prefix
+// covering the specified cumulative mass without random sampling.
+bind probabilities = [0.5, 0.25, 0.25];
+print(top_p(probabilities, 0.75));
+print(top_p_values(probabilities, 0.75));
+print(top_p(probabilities, 1.0));
+
+bind logits = [1.0, 4.0, 4.0, 2.0];
+print(top_p(softmax_temp(logits, 0.5), 0.9));
