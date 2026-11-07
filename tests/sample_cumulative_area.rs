@@ -94,20 +94,19 @@ fn grid_length_domain_and_nonfinite_arithmetic_are_checked() {
 fn exact_work_and_payload_budget_boundaries() {
     let values = args(&[0.0, 1.0, 3.0], &[0.0, 2.0, 6.0]);
     assert_eq!(
-        numeric::evaluate_with_vector_limit(Builtin::SampleCumulativeArea, &values, 8, 24)
-        .unwrap(),
+        numeric::evaluate_with_vector_limit(Builtin::SampleCumulativeArea, &values, 8, 24).unwrap(),
         vector(&[0.0, 1.0, 9.0])
     );
     assert_eq!(
         numeric::evaluate_with_vector_limit(Builtin::SampleCumulativeArea, &values, 7, 24)
-        .unwrap_err()
-        .kind,
+            .unwrap_err()
+            .kind,
         Kind::ExecutionLimit
     );
     assert_eq!(
         numeric::evaluate_with_vector_limit(Builtin::SampleCumulativeArea, &values, 8, 23)
-        .unwrap_err()
-        .kind,
+            .unwrap_err()
+            .kind,
         Kind::VectorBudget
     );
 }
