@@ -138,6 +138,39 @@ class SampledCalculusTests(unittest.TestCase):
                     self.assertTrue(almost_ulp(value, reference),
                                     (value, reference))
 
+    def test_cumulative_areas_against_independent_decimal(self):
+        tiny = math.ulp(0.0)
+        cases = [
+            ([0.0, 1.0, 3.0], [0.0, 2.0, 6.0]),
+            ([0.0, 1.0, 2.0, 3.0], [2.0e16, 0.0, 2.0, -2.0e16]),
+            ([0.0, 1.0e308], [tiny, 0.0]),
+        ]
+        rng = random.Random(20261108)
+        for count in [2, 3, 8, 16]:
+            x = [0.0]
+            for _ in range(count - 1):
+                x.append(x[-1] + rng.uniform(0.5, 6.0))
+            y = [rng.uniform(-30.0, 30.0) for _ in range(count)]
+            cases.append((x, y))
+        for x, y in cases:
+            with self.subTest(x=x, y=y):
+                actual = self.run_source(source_call('sample_cumulative_area', x, y))
+                self.assertEqual(actual.returncode, 0, actual.stderr.decode())
+                self.assertEqual(actual.stderr, b'')
+                values = ast.literal_eval(actual.stdout.decode())
+                self.assertEqual(len(values), len(x))
+                self.assertEqual(values[0], 0.0)
+                for i, observed in enumerate(values[1:], start=1):
+                    expected, variation = exact_integral(x[:i + 1], y[:i + 1])
+                    bound = max(
+                        12 * math.ulp(expected),
+                        4 * sys.float_info.epsilon * variation,
+                    )
+                    self.assertTrue(
+                        math.isfinite(observed) and abs(observed - expected) <= bound,
+                        (i, observed, expected, bound),
+                    )
+
     def test_domain_diagnostic_is_atomic_but_static_verify_is_inert(self):
         source = 'print("hidden"); print(sample_area([0.0,0.0],[1.0,2.0]));'
         result = self.run_source(source, '--diagnostic-format=json')
