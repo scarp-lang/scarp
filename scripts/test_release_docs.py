@@ -195,7 +195,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
     def test_current_release_is_public_and_request_retired(self):
         current = (ROOT / "docs/releases/v0.0.6-alpha.3-validation.md").read_text(encoding="utf-8")
         self.assertIn("Published as an experimental GitHub prerelease", current)
-        self.assertIn("seven public assets", current)
+        self.assertIn("Seven public assets", current)
         self.assertIn("PR #149", current)
         self.assertFalse((ROOT / ".github/release-request.json").exists())
         for filename in (
