@@ -72,7 +72,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
             "docs/README.md": (f"**{version} prerelease**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/compatibility.md": (f"`{version}` was **published", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/reference/cli.md": (f"v{version}",),
-            "docs/development/feature-matrix.md": (f"Cargo declares {version}",),
+            "docs/development/feature-matrix.md": (f"Cargo declares `{version}`",),
             "CHANGELOG.md": (f"## {version} — prerelease, 2026-11-07",),
             "docs/releases/v0.0.6-alpha.3.md": (f"Scarp v{version}", "Not a published GitHub prerelease", "Release process"),
             "docs/releases/v0.0.6-alpha.3-publication.md": (
