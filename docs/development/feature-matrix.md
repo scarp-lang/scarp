@@ -1,19 +1,19 @@
 # Feature completeness and development roadmap
 
-Cargo declares 0.0.6-alpha.3 as an **unpublished source candidate**.
+Cargo declares `0.0.6-alpha.3`, **published on 7 November 2026**.
 Its typed built-ins `topk`, `topk_values`, `softmax_temp` and
-`logsoftmax_temp` have landed on development main; source-only private
-scalar IR verifies typed control flow, slot lifetimes and differential
-execution without a general native object writer. The latest published
-prerelease is still v0.0.6-alpha.2. For tested candidate contents and
-release gates, see [alpha.3 preparation](../releases/v0.0.6-alpha.3-preparation.md).
+`logsoftmax_temp` are now publicly available in the GitHub prerelease.
+Private scalar IR verifies typed control flow, slot lifetimes and differential
+execution without a general native object writer. See the
+[exact-source alpha.3 validation](../releases/v0.0.6-alpha.3-validation.md).
+Future Top-P nucleus work remains in draft PR #149 and outside this release.
 
-Audit date: 2026-11-06. This inventory describes the published
-**v0.0.6-alpha.2 prerelease** and development work remaining; update a row
+Audit date: 2026-11-07. This inventory describes the published
+**v0.0.6-alpha.3 prerelease** and development work remaining; update a row
 when an implementation lands. No roadmap row implies a new CLI command.
-Cargo declares 0.0.6-alpha.2, published 6 November 2026 from exact source
+The earlier 0.0.6-alpha.2 was published on 6 November 2026 from exact source
 `398b8ff705154a02423fe458ce3a427401e81e31`;
-see the [publication record](../releases/v0.0.6-alpha.2-validation.md).
+see its [historical publication record](../releases/v0.0.6-alpha.2-validation.md).
 The language remains experimental, without a stable public contract.
 Future feature rows remain proposals.
 
