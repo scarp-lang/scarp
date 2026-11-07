@@ -56,15 +56,22 @@ pub(super) fn evaluate(
                 let width = x[1].get() - x[0].get();
                 let first = y[0].get();
                 let second = y[1].get();
-                // Summing and then halving preserves tiny subnormals. When the
-                // sum overflows, halving first avoids a spurious infinity.
+                // The order of scaling matters at binary64 extremes.
+                // For wide intervals, halve the width first: halving a
+                // subnormal ordinate sum could erase a representable area.
+                // For narrow intervals, halve the ordinates first: halving
+                // an extremely small width could erase a representable area.
+                // An overflowing ordinate sum is recovered by halving each
+                // finite ordinate before adding them.
                 let sum = first + second;
-                let average = if sum.is_finite() {
-                    sum * 0.5
+                let area = if !sum.is_finite() {
+                    width * (first * 0.5 + second * 0.5)
+                } else if width >= 1.0 {
+                    (width * 0.5) * sum
                 } else {
-                    first * 0.5 + second * 0.5
+                    width * (sum * 0.5)
                 };
-                finite_number(width * average, span).map(FiniteFloat::get)
+                finite_number(area, span).map(FiniteFloat::get)
             });
             compensated(areas, span)
                 .and_then(|result| finite_number(result, span))
