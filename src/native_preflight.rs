@@ -101,8 +101,7 @@ fn verify_expression_shape(
     for (index, node) in nodes.iter().enumerate() {
         if node.span.start > node.span.end
             || expression.calls[index].is_some()
-            || (!matches!(node.kind, ExpressionKind::Name(_))
-                && expression.slots[index].is_some())
+            || (!matches!(node.kind, ExpressionKind::Name(_)) && expression.slots[index].is_some())
         {
             return Err(unsupported(node.span));
         }
