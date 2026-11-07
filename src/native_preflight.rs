@@ -37,7 +37,6 @@ fn unsupported(span: Span) -> Diagnostic {
     )
 }
 
-
 fn verify_plan_shape(program: &ResolvedProgram) -> Result<(), Diagnostic> {
     let slot_count = program.binding_count();
     let operation_count = program.statements.len();
@@ -46,8 +45,9 @@ fn verify_plan_shape(program: &ResolvedProgram) -> Result<(), Diagnostic> {
             return Err(unsupported(operation.span));
         }
         let valid = match &operation.kind {
-            ResolvedStatement::Store { slot, .. }
-            | ResolvedStatement::Update { slot, .. } => *slot < slot_count,
+            ResolvedStatement::Store { slot, .. } | ResolvedStatement::Update { slot, .. } => {
+                *slot < slot_count
+            }
             ResolvedStatement::RepeatInit {
                 count_slot,
                 index_slot,
@@ -57,20 +57,15 @@ fn verify_plan_shape(program: &ResolvedProgram) -> Result<(), Diagnostic> {
                 count_slot,
                 index_slot,
                 target,
-            } => {
-                *count_slot < slot_count
-                    && *index_slot < slot_count
-                    && *target <= operation_count
-            }
+            } => *count_slot < slot_count && *index_slot < slot_count && *target <= operation_count,
             ResolvedStatement::RepeatNext { index_slot } => *index_slot < slot_count,
-            ResolvedStatement::JumpIfFalse { target, .. }
-            | ResolvedStatement::Jump { target } => *target <= operation_count,
+            ResolvedStatement::JumpIfFalse { target, .. } | ResolvedStatement::Jump { target } => {
+                *target <= operation_count
+            }
             ResolvedStatement::LoopControl { target, retire } => {
                 *target <= operation_count && retire.iter().all(|slot| *slot < slot_count)
             }
-            ResolvedStatement::Retire { slots } => {
-                slots.iter().all(|slot| *slot < slot_count)
-            }
+            ResolvedStatement::Retire { slots } => slots.iter().all(|slot| *slot < slot_count),
             _ => true,
         };
         if !valid {
@@ -233,7 +228,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn corrupted_jump_and_store_slots_fail_before_c_emission() {
         use crate::resolver::ResolvedStatement;
@@ -248,7 +242,10 @@ mod tests {
         if let ResolvedStatement::Jump { target } = &mut jump.kind {
             *target = beyond_end;
         }
-        assert_eq!(inspect(&program).unwrap_err().kind, DiagnosticKind::NativeUnsupported);
+        assert_eq!(
+            inspect(&program).unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
         assert_eq!(
             crate::c_backend::emit_program(&program).unwrap_err().kind,
             DiagnosticKind::NativeUnsupported
@@ -264,7 +261,10 @@ mod tests {
         if let ResolvedStatement::Store { slot, .. } = &mut store.kind {
             *slot = out_of_bounds;
         }
-        assert_eq!(inspect(&program).unwrap_err().kind, DiagnosticKind::NativeUnsupported);
+        assert_eq!(
+            inspect(&program).unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
     }
 
     #[test]
