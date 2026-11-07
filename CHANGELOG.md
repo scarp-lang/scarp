@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.0.6-alpha.3 — source candidate (not published)
+
+- Add deterministic, bounded Top-K model score selection:
+  `topk(scores, count)` and `topk_values(scores, count)`, stable
+  first-index tie resolution, finite value preservation and explicit
+  work/vector-allocation budgets ([#146](https://github.com/scarp-lang/scarp/pull/146)).
+- Add typed temperature-controlled probability and log-probability
+  functions, with strictly positive finite temperatures, compensated
+  normalization, large-magnitude handling and checked finite outputs
+  ([#147](https://github.com/scarp-lang/scarp/pull/147)).
+- Harden native scalar preflight, add bounded compiler-owned typed
+  expression/statement IR, test-only differential execution, and
+  path-safe slot-initialization verification
+  ([#141](https://github.com/scarp-lang/scarp/pull/141)–[#145](https://github.com/scarp-lang/scarp/pull/145)).
+- Add runnable inference examples and a strict alpha.3 archive
+  verification contract. No general native code generator or new CLI
+  commands are included.
+- This is a development candidate, not a GitHub tag or public release.
+  See [candidate notes](docs/releases/v0.0.6-alpha.3.md) and
+  [release prerequisites](docs/releases/v0.0.6-alpha.3-preparation.md).
+
 ## 0.0.6-alpha.2 — prerelease, 2026-11-06
 
 - Add conservative, bounded module-graph invalidation planning and exact
