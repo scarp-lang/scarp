@@ -37,6 +37,84 @@ fn unsupported(span: Span) -> Diagnostic {
     )
 }
 
+
+fn verify_plan_shape(program: &ResolvedProgram) -> Result<(), Diagnostic> {
+    let slot_count = program.binding_count();
+    let operation_count = program.statements.len();
+    for operation in &program.statements {
+        if operation.span.start > operation.span.end {
+            return Err(unsupported(operation.span));
+        }
+        let valid = match &operation.kind {
+            ResolvedStatement::Store { slot, .. }
+            | ResolvedStatement::Update { slot, .. } => *slot < slot_count,
+            ResolvedStatement::RepeatInit {
+                count_slot,
+                index_slot,
+                ..
+            } => *count_slot < slot_count && *index_slot < slot_count,
+            ResolvedStatement::RepeatGuard {
+                count_slot,
+                index_slot,
+                target,
+            } => {
+                *count_slot < slot_count
+                    && *index_slot < slot_count
+                    && *target <= operation_count
+            }
+            ResolvedStatement::RepeatNext { index_slot } => *index_slot < slot_count,
+            ResolvedStatement::JumpIfFalse { target, .. }
+            | ResolvedStatement::Jump { target } => *target <= operation_count,
+            ResolvedStatement::LoopControl { target, retire } => {
+                *target <= operation_count && retire.iter().all(|slot| *slot < slot_count)
+            }
+            ResolvedStatement::Retire { slots } => {
+                slots.iter().all(|slot| *slot < slot_count)
+            }
+            _ => true,
+        };
+        if !valid {
+            return Err(unsupported(operation.span));
+        }
+    }
+    Ok(())
+}
+
+/// A resolved expression is an immutable postorder tree. Verify the indices
+/// used by the existing C emitter before it can index or unwrap them.
+fn verify_expression_shape(
+    expression: &crate::resolver::ResolvedExpression,
+    slot_count: usize,
+) -> Result<(), Diagnostic> {
+    let nodes = expression.syntax.nodes();
+    if expression.syntax.root() >= nodes.len() {
+        return Err(unsupported(Span::default()));
+    }
+    for (index, node) in nodes.iter().enumerate() {
+        if node.span.start > node.span.end {
+            return Err(unsupported(node.span));
+        }
+        let valid = match &node.kind {
+            ExpressionKind::Name(_) => expression
+                .slots
+                .get(index)
+                .and_then(|slot| *slot)
+                .is_some_and(|slot| slot < slot_count),
+            ExpressionKind::Negate { operand, .. }
+            | ExpressionKind::BitNot { operand, .. }
+            | ExpressionKind::Not { operand, .. } => *operand < index,
+            ExpressionKind::Group { expression, .. } => *expression < index,
+            ExpressionKind::Binary { left, right, .. }
+            | ExpressionKind::Logical { left, right, .. } => *left < index && *right < index,
+            _ => true,
+        };
+        if !valid {
+            return Err(unsupported(node.span));
+        }
+    }
+    Ok(())
+}
+
 /// Reject unsupported constructs and bound native scalar workspace BEFORE
 /// generating any code. This consumes only the current typed resolver plan:
 /// no separate lexer, parser, type checker, loader or runtime evaluation.
@@ -51,6 +129,8 @@ pub(crate) fn inspect(program: &ResolvedProgram) -> Result<ScalarRequirements, D
     {
         return Err(unsupported(Span::default()));
     }
+
+    verify_plan_shape(program)?;
 
     let mut temporary_count = 1usize;
     let mut expression_nodes = 0usize;
@@ -82,6 +162,7 @@ pub(crate) fn inspect(program: &ResolvedProgram) -> Result<ScalarRequirements, D
             _ => return Err(unsupported(operation.span)),
         };
         if let Some(expression) = expression {
+            verify_expression_shape(expression, program.binding_count())?;
             if !matches!(expression.kind, ValueType::Integer | ValueType::Boolean) {
                 return Err(unsupported(operation.span));
             }
@@ -150,6 +231,90 @@ mod tests {
                 "{source}"
             );
         }
+    }
+
+
+    #[test]
+    fn corrupted_jump_and_store_slots_fail_before_c_emission() {
+        use crate::resolver::ResolvedStatement;
+
+        let mut program = compile("var count=0; while(count<2) { count+=1; }").unwrap();
+        let beyond_end = program.statements.len() + 1;
+        let jump = program
+            .statements
+            .iter_mut()
+            .find(|operation| matches!(operation.kind, ResolvedStatement::Jump { .. }))
+            .expect("while loop must contain a jump");
+        if let ResolvedStatement::Jump { target } = &mut jump.kind {
+            *target = beyond_end;
+        }
+        assert_eq!(inspect(&program).unwrap_err().kind, DiagnosticKind::NativeUnsupported);
+        assert_eq!(
+            crate::c_backend::emit_program(&program).unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
+
+        let mut program = compile("bind count=1; print(count);").unwrap();
+        let out_of_bounds = program.binding_count();
+        let store = program
+            .statements
+            .iter_mut()
+            .find(|operation| matches!(operation.kind, ResolvedStatement::Store { .. }))
+            .expect("binding must be stored");
+        if let ResolvedStatement::Store { slot, .. } = &mut store.kind {
+            *slot = out_of_bounds;
+        }
+        assert_eq!(inspect(&program).unwrap_err().kind, DiagnosticKind::NativeUnsupported);
+    }
+
+    #[test]
+    fn corrupted_expression_references_fail_before_c_emission() {
+        use crate::{
+            ast::ExpressionKind,
+            resolver::{ResolvedArgument, ResolvedStatement},
+        };
+
+        let mut program = compile("bind count=1; print(count);").unwrap();
+        let invalid_slot = program.binding_count();
+        for operation in &mut program.statements {
+            if let ResolvedStatement::Output { arguments, .. } = &mut operation.kind {
+                if let ResolvedArgument::Expression(expression) = &mut arguments[0] {
+                    let name = expression
+                        .syntax
+                        .nodes()
+                        .iter()
+                        .position(|node| matches!(node.kind, ExpressionKind::Name(_)))
+                        .expect("output reads a binding");
+                    expression.slots[name] = Some(invalid_slot);
+                }
+            }
+        }
+        assert_eq!(
+            crate::c_backend::emit_program(&program).unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
+
+        let mut program = compile("print(1+2);").unwrap();
+        for operation in &mut program.statements {
+            if let ResolvedStatement::Output { arguments, .. } = &mut operation.kind {
+                if let ResolvedArgument::Expression(expression) = &mut arguments[0] {
+                    let bad_index = expression.syntax.nodes().len();
+                    let binary = expression
+                        .syntax
+                        .nodes
+                        .iter_mut()
+                        .find(|node| matches!(node.kind, ExpressionKind::Binary { .. }))
+                        .expect("output has a binary expression");
+                    if let ExpressionKind::Binary { left, .. } = &mut binary.kind {
+                        *left = bad_index;
+                    }
+                }
+            }
+        }
+        assert_eq!(
+            crate::c_backend::emit_program(&program).unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
     }
 
     #[test]
