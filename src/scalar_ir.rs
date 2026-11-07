@@ -9,7 +9,7 @@ mod program;
 use crate::{
     ast::{BinaryOperator, ExpressionKind, LogicalOperator},
     diagnostics::{Diagnostic, DiagnosticKind, Span},
-    resolver::{ResolvedArgument, ResolvedExpression, ResolvedProgram, ResolvedStatement},
+    resolver::{ResolvedExpression, ResolvedProgram},
     value::ValueType,
 };
 
@@ -479,7 +479,10 @@ pub(crate) fn verify_program(program: &ResolvedProgram) -> Result<(), Diagnostic
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compile;
+    use crate::{
+        compile,
+        resolver::{ResolvedArgument, ResolvedStatement},
+    };
 
     fn lower(source: &str) -> ScalarExpressionIr {
         let program = compile(source).unwrap();
