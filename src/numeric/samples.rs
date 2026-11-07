@@ -20,8 +20,9 @@ pub(super) fn evaluate(
     let coordinates = args[0].require_vector(at(0))?;
     let readings = args[1].require_vector(at(1))?;
     if coordinates.len() != readings.len() {
-        return Err(length_error(at(1))
-            .with_help("provide one reading for every sample coordinate"));
+        return Err(
+            length_error(at(1)).with_help("provide one reading for every sample coordinate")
+        );
     }
     if coordinates.len() < 2 {
         return Err(domain(
