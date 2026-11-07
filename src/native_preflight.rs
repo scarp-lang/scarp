@@ -106,7 +106,9 @@ fn verify_expression_shape(
             ExpressionKind::Boolean(_) => ValueType::Boolean,
             ExpressionKind::Name(_) => {
                 let slot = expression.slots[index].ok_or_else(|| unsupported(node.span))?;
-                *binding_types.get(slot).ok_or_else(|| unsupported(node.span))?
+                *binding_types
+                    .get(slot)
+                    .ok_or_else(|| unsupported(node.span))?
             }
             ExpressionKind::Group { expression: child } => {
                 operand_type(&inferred, *child, node.span)?
@@ -491,11 +493,7 @@ mod tests {
 
     #[test]
     fn corrupted_scalar_statement_types_fail_closed() {
-        use crate::{
-            ast::BinaryOperator,
-            resolver::ResolvedStatement,
-            value::ValueType,
-        };
+        use crate::{ast::BinaryOperator, resolver::ResolvedStatement, value::ValueType};
 
         let mut program = compile("var count=1; count+=2;").unwrap();
         for operation in &mut program.statements {
