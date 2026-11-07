@@ -1,9 +1,11 @@
-# Sampled calculus (development branch only)
+# Sampled calculus (merged into main, unreleased)
 
-**Status:** implementation proposed for Scarp after the published
-`v0.0.6-alpha.3` prerelease. These functions are **not** available in the
-published alpha.3 binaries. They become available only when this compiler
-change is merged and a compatible build is used.
+**Status:** merged into `main` in
+[compiler PR #153](https://github.com/scarp-lang/scarp/pull/153), after
+the published `v0.0.6-alpha.3` prerelease. The Rust code and verified
+`.srp` example are in source checkout `main`; they are **not** available
+in the existing alpha.3 release binaries. A newer compatible compiler
+build is required.
 
 Scarp currently represents finite binary64 measurements as immutable
 one-dimensional `vector` values. Until named standard-library namespaces are

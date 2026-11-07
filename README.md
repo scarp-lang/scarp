@@ -13,10 +13,12 @@ prepublication snapshot; this is not a stable or general native compiler release
 
 **Build Beyond Boundaries.**
 
-**Unreleased development proposal:** [sampled calculus](docs/sampled-calculus.md)
+**Merged but unreleased:** [sampled calculus](docs/sampled-calculus.md)
 adds bounded `sample_area(x, y)` integration and `sample_slopes(x, y)`
-interval derivatives in a feature branch. These functions are **not** in
-published alpha.3 binaries and are pending review and cross-platform CI.
+interval derivatives to current `main` via [PR #153](https://github.com/scarp-lang/scarp/pull/153).
+Both were validated on Linux, Windows, macOS and Rust 1.74. These functions
+are **not** in the published alpha.3 binaries; compile from current source
+to use them before a later compatible prerelease.
 
 
 **0.0.6-alpha.2** is an **earlier published GitHub prerelease** (6 November
