@@ -75,36 +75,165 @@ fn verify_plan_shape(program: &ResolvedProgram) -> Result<(), Diagnostic> {
     Ok(())
 }
 
-/// A resolved expression is an immutable postorder tree. Verify the indices
-/// used by the existing C emitter before it can index or unwrap them.
+/// A resolved expression is an immutable postorder tree. The native backend
+/// must not trust a plan whose scalar types, indices or side tables disagree.
+/// This is a defensive verifier for an already type-checked plan, not a second
+/// source-language resolver.
+fn operand_type(types: &[ValueType], child: usize, span: Span) -> Result<ValueType, Diagnostic> {
+    types.get(child).copied().ok_or_else(|| unsupported(span))
+}
+
 fn verify_expression_shape(
     expression: &crate::resolver::ResolvedExpression,
-    slot_count: usize,
+    binding_types: &[ValueType],
 ) -> Result<(), Diagnostic> {
     let nodes = expression.syntax.nodes();
-    if expression.syntax.root() >= nodes.len() {
+    if expression.syntax.root() >= nodes.len()
+        || expression.slots.len() != nodes.len()
+        || expression.types.len() != nodes.len()
+        || expression.calls.len() != nodes.len()
+    {
         return Err(unsupported(Span::default()));
     }
+
+    let mut inferred = Vec::with_capacity(nodes.len());
     for (index, node) in nodes.iter().enumerate() {
-        if node.span.start > node.span.end {
+        if node.span.start > node.span.end || expression.calls[index].is_some() {
             return Err(unsupported(node.span));
         }
-        let valid = match &node.kind {
-            ExpressionKind::Name(_) => expression
-                .slots
-                .get(index)
-                .and_then(|slot| *slot)
-                .is_some_and(|slot| slot < slot_count),
-            ExpressionKind::Negate { operand, .. }
-            | ExpressionKind::BitNot { operand, .. }
-            | ExpressionKind::Not { operand, .. } => *operand < index,
-            ExpressionKind::Group { expression, .. } => *expression < index,
-            ExpressionKind::Binary { left, right, .. }
-            | ExpressionKind::Logical { left, right, .. } => *left < index && *right < index,
+        let kind = match &node.kind {
+            ExpressionKind::Integer(_) => ValueType::Integer,
+            ExpressionKind::Boolean(_) => ValueType::Boolean,
+            ExpressionKind::Name(_) => {
+                let slot = expression.slots[index].ok_or_else(|| unsupported(node.span))?;
+                *binding_types.get(slot).ok_or_else(|| unsupported(node.span))?
+            }
+            ExpressionKind::Group { expression: child } => {
+                operand_type(&inferred, *child, node.span)?
+            }
+            ExpressionKind::Negate {
+                operand,
+                operator_span,
+            }
+            | ExpressionKind::BitNot {
+                operand,
+                operator_span,
+            } => {
+                if operator_span.start > operator_span.end
+                    || operand_type(&inferred, *operand, node.span)? != ValueType::Integer
+                {
+                    return Err(unsupported(node.span));
+                }
+                ValueType::Integer
+            }
+            ExpressionKind::Not {
+                operand,
+                operator_span,
+            } => {
+                if operator_span.start > operator_span.end
+                    || operand_type(&inferred, *operand, node.span)? != ValueType::Boolean
+                {
+                    return Err(unsupported(node.span));
+                }
+                ValueType::Boolean
+            }
+            ExpressionKind::Logical {
+                left,
+                right,
+                operator_span,
+                ..
+            } => {
+                if operator_span.start > operator_span.end
+                    || operand_type(&inferred, *left, node.span)? != ValueType::Boolean
+                    || operand_type(&inferred, *right, node.span)? != ValueType::Boolean
+                {
+                    return Err(unsupported(node.span));
+                }
+                ValueType::Boolean
+            }
+            ExpressionKind::Binary {
+                left,
+                right,
+                operator,
+                operator_span,
+            } => {
+                if operator_span.start > operator_span.end {
+                    return Err(unsupported(node.span));
+                }
+                let left_kind = operand_type(&inferred, *left, node.span)?;
+                let right_kind = operand_type(&inferred, *right, node.span)?;
+                if left_kind != right_kind
+                    || (!matches!(
+                        operator,
+                        crate::ast::BinaryOperator::Equal | crate::ast::BinaryOperator::NotEqual
+                    ) && left_kind != ValueType::Integer)
+                {
+                    return Err(unsupported(node.span));
+                }
+                if operator.is_comparison() {
+                    ValueType::Boolean
+                } else {
+                    ValueType::Integer
+                }
+            }
+            _ => return Err(unsupported(node.span)),
+        };
+        if expression.types[index] != kind.id() {
+            return Err(unsupported(node.span));
+        }
+        inferred.push(kind);
+    }
+    if inferred.get(expression.syntax.root()).copied() != Some(expression.kind) {
+        return Err(unsupported(Span::default()));
+    }
+    Ok(())
+}
+
+/// The resolver already checked statements, but a native backend must reject
+/// corrupted expression-to-slot and guard types before producing any output.
+fn verify_operation_types(program: &ResolvedProgram) -> Result<(), Diagnostic> {
+    let slots = program.binding_types();
+    for operation in &program.statements {
+        let valid = match &operation.kind {
+            ResolvedStatement::Store { slot, value } => slots.get(*slot) == Some(&value.kind),
+            ResolvedStatement::Update {
+                slot,
+                value,
+                operator,
+                operator_span,
+            } => {
+                slots.get(*slot) == Some(&ValueType::Integer)
+                    && value.kind == ValueType::Integer
+                    && !operator.is_comparison()
+                    && operator_span.start <= operator_span.end
+            }
+            ResolvedStatement::RepeatInit {
+                count,
+                count_slot,
+                index_slot,
+            } => {
+                count.kind == ValueType::Integer
+                    && slots.get(*count_slot) == Some(&ValueType::Integer)
+                    && slots.get(*index_slot) == Some(&ValueType::Integer)
+            }
+            ResolvedStatement::RepeatGuard {
+                count_slot,
+                index_slot,
+                ..
+            } => {
+                slots.get(*count_slot) == Some(&ValueType::Integer)
+                    && slots.get(*index_slot) == Some(&ValueType::Integer)
+            }
+            ResolvedStatement::RepeatNext { index_slot } => {
+                slots.get(*index_slot) == Some(&ValueType::Integer)
+            }
+            ResolvedStatement::JumpIfFalse { condition, .. } => {
+                condition.kind == ValueType::Boolean
+            }
             _ => true,
         };
         if !valid {
-            return Err(unsupported(node.span));
+            return Err(unsupported(operation.span));
         }
     }
     Ok(())
@@ -126,6 +255,7 @@ pub(crate) fn inspect(program: &ResolvedProgram) -> Result<ScalarRequirements, D
     }
 
     verify_plan_shape(program)?;
+    verify_operation_types(program)?;
 
     let mut temporary_count = 1usize;
     let mut expression_nodes = 0usize;
@@ -157,7 +287,7 @@ pub(crate) fn inspect(program: &ResolvedProgram) -> Result<ScalarRequirements, D
             _ => return Err(unsupported(operation.span)),
         };
         if let Some(expression) = expression {
-            verify_expression_shape(expression, program.binding_count())?;
+            verify_expression_shape(expression, program.binding_types())?;
             if !matches!(expression.kind, ValueType::Integer | ValueType::Boolean) {
                 return Err(unsupported(operation.span));
             }
@@ -315,6 +445,106 @@ mod tests {
             crate::c_backend::emit_program(&program).unwrap_err().kind,
             DiagnosticKind::NativeUnsupported
         );
+    }
+
+    #[test]
+    fn corrupted_expression_type_metadata_is_rejected_before_emission() {
+        use crate::{
+            resolver::{ResolvedArgument, ResolvedStatement},
+            value::ValueType,
+        };
+
+        for corruption in 0..5 {
+            let mut program = compile("bind value=1; print(value + 2);").unwrap();
+            let expression = program
+                .statements
+                .iter_mut()
+                .find_map(|operation| match &mut operation.kind {
+                    ResolvedStatement::Output { arguments, .. } => match &mut arguments[0] {
+                        ResolvedArgument::Expression(value) => Some(value),
+                        _ => None,
+                    },
+                    _ => None,
+                })
+                .unwrap();
+            match corruption {
+                0 => expression.kind = ValueType::Boolean,
+                1 => expression.types[0] = ValueType::Boolean.id(),
+                2 => {
+                    expression.slots.clear();
+                }
+                3 => {
+                    expression.calls.pop();
+                }
+                4 => {
+                    expression.syntax.root = expression.syntax.nodes().len();
+                }
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                crate::c_backend::emit_program(&program).unwrap_err().kind,
+                DiagnosticKind::NativeUnsupported,
+                "corruption {corruption}"
+            );
+        }
+    }
+
+    #[test]
+    fn corrupted_scalar_statement_types_fail_closed() {
+        use crate::{
+            ast::BinaryOperator,
+            resolver::ResolvedStatement,
+            value::ValueType,
+        };
+
+        let mut program = compile("var count=1; count+=2;").unwrap();
+        for operation in &mut program.statements {
+            if let ResolvedStatement::Update { operator, .. } = &mut operation.kind {
+                *operator = BinaryOperator::Equal;
+            }
+        }
+        assert_eq!(
+            inspect(&program).unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
+
+        let mut program = compile("if true { print(1); }").unwrap();
+        for operation in &mut program.statements {
+            if let ResolvedStatement::JumpIfFalse { condition, .. } = &mut operation.kind {
+                condition.kind = ValueType::Integer;
+            }
+        }
+        assert_eq!(
+            inspect(&program).unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
+
+        let mut program = compile("repeat 2 as index { print(index); }").unwrap();
+        for operation in &mut program.statements {
+            if let ResolvedStatement::RepeatInit { count, .. } = &mut operation.kind {
+                count.kind = ValueType::Boolean;
+            }
+        }
+        assert_eq!(
+            inspect(&program).unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
+    }
+
+    #[test]
+    fn scalar_boolean_comparisons_and_short_circuit_remain_accepted() {
+        for source in [
+            "print(true == false);",
+            "print(1 < 2);",
+            "print(not false and (true or false));",
+            "print(false and (1 / 0 == 1));",
+            "print(4 & 3); print(5 >> 1);",
+            "repeat 2 as i { print(i == 1); }",
+        ] {
+            let program = compile(source).unwrap();
+            inspect(&program).unwrap();
+            crate::c_backend::emit_program(&program).unwrap();
+        }
     }
 
     #[test]
