@@ -36,8 +36,8 @@ fn inputs(scores: &[f64], count: i64) -> Vec<Value> {
 }
 
 fn indexes(scores: &[f64], count: usize) -> Vec<i64> {
-    let result = numeric::evaluate(Builtin::TopK, &inputs(scores, count as i64), 1_000_000)
-        .unwrap();
+    let result =
+        numeric::evaluate(Builtin::TopK, &inputs(scores, count as i64), 1_000_000).unwrap();
     result.as_integers().unwrap().as_slice().to_vec()
 }
 
@@ -60,10 +60,7 @@ fn topk_and_topk_values_are_typed_and_work_in_user_functions() {
         "[integer:]\n[]\n[integer:]\n"
     );
     // User declarations still take priority over similarly named intrinsics.
-    assert_eq!(
-        output("bind topk=7; print(topk);"),
-        "7\n"
-    );
+    assert_eq!(output("bind topk=7; print(topk);"), "7\n");
 }
 
 #[test]
@@ -73,8 +70,7 @@ fn topk_is_stable_on_equal_scores_signed_zero_and_subnormals() {
     let tiny = f64::from_bits(1);
     assert_eq!(indexes(&[-tiny, tiny, 0.0, tiny], 3), vec![1, 3, 2]);
     let original = inputs(&[-0.0, 0.0, -0.0], 3);
-    let selected = numeric::evaluate(Builtin::TopKValues, &original, 100)
-        .unwrap();
+    let selected = numeric::evaluate(Builtin::TopKValues, &original, 100).unwrap();
     let bits: Vec<u64> = selected
         .as_vector()
         .unwrap()
@@ -114,18 +110,9 @@ fn topk_rejects_bad_counts_types_and_arity_without_output_leaks() {
             &format!("print({name}([1.0,2.0],1.0));"),
             Kind::TypeMismatch,
         );
-        fails_atomically(
-            &format!("print({name}([1,2],1));"),
-            Kind::TypeMismatch,
-        );
-        fails_atomically(
-            &format!("print({name}([1.0]));"),
-            Kind::CallArguments,
-        );
-        fails_atomically(
-            &format!("print({name}([1.0],1,2));"),
-            Kind::CallArguments,
-        );
+        fails_atomically(&format!("print({name}([1,2],1));"), Kind::TypeMismatch);
+        fails_atomically(&format!("print({name}([1.0]));"), Kind::CallArguments);
+        fails_atomically(&format!("print({name}([1.0],1,2));"), Kind::CallArguments);
     }
 }
 
@@ -204,7 +191,11 @@ fn topk_matches_full_sort_reference_across_many_small_inputs() {
                         .then_with(|| a.cmp(&b))
                 });
                 reference.truncate(count);
-                assert_eq!(indexes(&scores, count), reference, "scores={scores:?} k={count}");
+                assert_eq!(
+                    indexes(&scores, count),
+                    reference,
+                    "scores={scores:?} k={count}"
+                );
             }
         }
     }
@@ -223,5 +214,8 @@ fn large_equal_input_has_bounded_ranked_results() {
     let selected = selected.as_integers().unwrap().as_slice();
     assert_eq!(selected.len(), MAX_VECTOR_LENGTH);
     assert_eq!(selected[0], 0);
-    assert_eq!(selected[MAX_VECTOR_LENGTH - 1], MAX_VECTOR_LENGTH as i64 - 1);
+    assert_eq!(
+        selected[MAX_VECTOR_LENGTH - 1],
+        MAX_VECTOR_LENGTH as i64 - 1
+    );
 }
