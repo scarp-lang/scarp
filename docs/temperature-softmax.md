@@ -1,7 +1,9 @@
 # Stable temperature-controlled softmax
 
-> **Development main only.** These functions are not part of the published
-> `v0.0.6-alpha.2` prerelease. Build Scarp from current source to use them.
+> **Published in Scarp `v0.0.6-alpha.3`.** Download the verified
+> [GitHub prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3)
+> for Windows, Linux and macOS. These functions are absent from earlier
+> `v0.0.6-alpha.2` binaries.
 
 Two pure, fully typed built-ins extend Scarp's finite numerical vector support
 for model inference and log-probability evaluation:

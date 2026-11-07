@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.6-alpha.3 — source candidate (not published)
+## 0.0.6-alpha.3 — prerelease, 2026-11-07
 
 - Add deterministic, bounded Top-K model score selection:
   `topk(scores, count)` and `topk_values(scores, count)`, stable
@@ -17,9 +17,13 @@
 - Add runnable inference examples and a strict alpha.3 archive
   verification contract. No general native code generator or new CLI
   commands are included.
-- This is a development candidate, not a GitHub tag or public release.
-  See [candidate notes](docs/releases/v0.0.6-alpha.3.md) and
-  [release prerequisites](docs/releases/v0.0.6-alpha.3-preparation.md).
+- Published as an experimental GitHub prerelease on 7 November 2026 from
+  exact source `ceff07d9014f466974e0c9e02fc5d23573f55777`, with
+  seven verified native assets and two passing seven-job CI gates.
+  See the [public release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3),
+  [release notes](docs/releases/v0.0.6-alpha.3-publication.md) and
+  [verification record](docs/releases/v0.0.6-alpha.3-validation.md).
+  [Candidate notes](docs/releases/v0.0.6-alpha.3.md) remain historical.
 
 ## 0.0.6-alpha.2 — prerelease, 2026-11-06
 

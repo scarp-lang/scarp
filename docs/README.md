@@ -1,12 +1,12 @@
 # Scarp documentation
 
-**0.0.6-alpha.3 prerelease** is a prepared **source candidate only**;
-it has not been published. Candidate features include
-[Top-K ranking](topk-selection.md),
+**0.0.6-alpha.3 prerelease** was **published on 7 November 2026**.
+It includes [Top-K ranking](topk-selection.md),
 [temperature softmax](temperature-softmax.md), and verified private
-scalar IR. See [candidate notes](releases/v0.0.6-alpha.3.md)
-and [publication gates](releases/v0.0.6-alpha.3-preparation.md).
-The latest publicly available prerelease remains v0.0.6-alpha.2.
+scalar IR. The [public release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3)
+and [exact-source verification record](releases/v0.0.6-alpha.3-validation.md)
+identify the annotated tag and seven verified assets. The
+[candidate notes](releases/v0.0.6-alpha.3.md) remain a historical snapshot.
 
 **0.0.6-alpha.2 prerelease** is **published** (6 November 2026).
 It includes optional [invalidation planning](development/incremental-invalidation.md),
@@ -33,11 +33,11 @@ see [alpha.5 release notes](releases/v0.0.5-alpha.5.md) and the
 Development declarations use `bind` and `var`; see the [migration guide](syntax-migration.md). Published tags retain their original syntax.
 
 Choose a guide by the task you want to complete. Current tutorials are
-updated for the **0.0.6-alpha.2 published prerelease**, retaining
+updated for the **0.0.6-alpha.3 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
 contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.6-alpha.2](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.2),
+[0.0.6-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)

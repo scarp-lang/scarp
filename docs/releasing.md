@@ -8,6 +8,19 @@ publication; changing a package version alone does not authorize a release.
 
 ## Build inputs and packages
 
+**v0.0.6-alpha.3 was published as a GitHub prerelease on 7 November 2026.**
+The [public release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3)
+and [postpublication verification record](releases/v0.0.6-alpha.3-validation.md)
+identify the exact approved source, annotated tag, two independently passing
+seven-job CI matrices, one-time release-control PR, guarded publisher and all
+seven public uploaded asset digests. The earlier
+[candidate notes](releases/v0.0.6-alpha.3.md) are deliberately immutable
+prepublication history; the publisher used the separate
+[public-facing notes](releases/v0.0.6-alpha.3-publication.md) from the
+exact tagged source. The fulfilled authorization is retired by a separate
+postpublication maintenance PR; a new prerelease requires fresh explicit
+source approval and fresh validation.
+
 **v0.0.6-alpha.2 was published as a GitHub prerelease on 6 November 2026.**
 See its [public release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.2)
 and [post-publication verification](releases/v0.0.6-alpha.2-validation.md)
@@ -47,7 +60,8 @@ use its exact tag and archive names throughout the process. An unpublished
 development identifier is not evidence that a public release exists.
 `v0.0.0.1` is not a three-part version.
 
-Alpha.1, alpha.2, alpha.3, alpha.4, alpha.5, v0.0.6-alpha.1 and v0.0.6-alpha.2 are published; fulfilled
+Alpha.1, alpha.2, alpha.3, alpha.4, alpha.5, v0.0.6-alpha.1,
+v0.0.6-alpha.2 and v0.0.6-alpha.3 are published; fulfilled
 requests are retired after publication verification. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve
 the original candidate contract. Every new release needs fresh exact-version
 and full source-commit approval after all gates. The verifier requires nested module libraries/guides
