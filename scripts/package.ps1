@@ -79,7 +79,7 @@ try {
     foreach ($directory in @('examples', 'docs')) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $directory) -Destination $packageRoot -Recurse
     }
-    if ($version -in @('0.0.5-alpha.2', '0.0.5-alpha.3', '0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2')) {
+    if ($version -in @('0.0.5-alpha.2', '0.0.5-alpha.3', '0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3')) {
         $releaseMetadataPath = Join-Path $projectRoot '.github/release-metadata.json'
         $releaseMetadata = Get-Content -LiteralPath $releaseMetadataPath -Raw | ConvertFrom-Json
         if ($releaseMetadata.schema_version -cne 1 -or $releaseMetadata.version -cne $version -or $releaseMetadata.documentation_repository -cne 'https://github.com/scarp-lang/scarp-docs') {
@@ -142,7 +142,7 @@ try {
         if ($staticNavigation.ExitCode -ne 0 -or $staticNavigation.Stderr.Length -ne 0) { throw 'Packaged navigation must not evaluate runtime arithmetic' }
     }
 
-    if ($version -in @('0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2')) {
+    if ($version -in @('0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3')) {
         # Exercise the actual extracted distributable, not a development binary.
         $projectPath = Join-Path $stagingRoot 'alpha4-project-smoke'
         $created = Invoke-ScarpProcess -Executable $executable -Arguments @('create', $projectPath)
@@ -153,7 +153,7 @@ try {
         if ($projectVerify.ExitCode -ne 0 -or $projectVerify.Stdout.Length -ne 0 -or $projectVerify.Stderr.Length -ne 0) {
             throw 'Packaged Scarp project static verification failed'
         }
-        if ($version -in @('0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2')) {
+        if ($version -in @('0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3')) {
             $projectModules = Invoke-ScarpProcess -Executable $executable -Arguments @('inspect', 'modules', '--json', $projectPath)
             if ($projectModules.ExitCode -ne 0 -or $projectModules.Stderr.Length -ne 0) {
                 throw 'Packaged project directory module inspection failed'

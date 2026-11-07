@@ -1,5 +1,13 @@
 # Feature completeness and development roadmap
 
+Cargo declares 0.0.6-alpha.3 as an **unpublished source candidate**.
+Its typed built-ins `topk`, `topk_values`, `softmax_temp` and
+`logsoftmax_temp` have landed on development main; source-only private
+scalar IR verifies typed control flow, slot lifetimes and differential
+execution without a general native object writer. The latest published
+prerelease is still v0.0.6-alpha.2. For tested candidate contents and
+release gates, see [alpha.3 preparation](../releases/v0.0.6-alpha.3-preparation.md).
+
 Audit date: 2026-11-06. This inventory describes the published
 **v0.0.6-alpha.2 prerelease** and development work remaining; update a row
 when an implementation lands. No roadmap row implies a new CLI command.

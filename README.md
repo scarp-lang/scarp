@@ -1,5 +1,14 @@
 # Scarp
 
+**0.0.6-alpha.3** is the next **source candidate**, not a published
+GitHub prerelease. Candidate scope includes [deterministic Top-K ranking](docs/topk-selection.md),
+[temperature-controlled softmax](docs/temperature-softmax.md) and
+private scalar IR compiler safeguards. Its versioned
+[candidate notes](docs/releases/v0.0.6-alpha.3.md),
+[public-facing notes](docs/releases/v0.0.6-alpha.3-publication.md) and
+[release gates](docs/releases/v0.0.6-alpha.3-preparation.md) are under
+review. No tag or release authorization is implied.
+
 **Build Beyond Boundaries.**
 
 **0.0.6-alpha.2** is the latest **published GitHub prerelease** (6 November
