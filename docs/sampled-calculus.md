@@ -51,7 +51,7 @@ It rejects a slope that cannot be represented as a finite float.
 The kernels reject:
 
 - Incompatible vector lengths: **E0032**, not silent truncation.
-- Fewer than two samples or duplicate/descending coordinates: **E0030**.
+- Fewer than two samples or duplicate/descending coordinates: **E0034**.
 - Non-finite coordinate widths, contributions, slopes, or running sum:
   **E0031**. All input elements themselves must already be finite.
 
