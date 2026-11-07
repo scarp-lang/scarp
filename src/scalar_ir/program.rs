@@ -1,6 +1,8 @@
 //! Private, bounded scalar program IR lowered from the canonical resolved plan.
 //! No interpreter fallback, target ABI, public commands, or native object output.
 
+mod definite_slots;
+
 #[cfg(test)]
 mod execute;
 
@@ -325,33 +327,10 @@ impl ScalarProgramIr {
             }
         }
 
-        // A branch may skip the next operation, and loops may jump backward.
-        // The walk is bounded by number of distinct PCs, not runtime steps.
-        let mut visited = vec![false; len + 1];
-        let mut pending = vec![0usize];
-        while let Some(pc) = pending.pop() {
-            if visited[pc] {
-                continue;
-            }
-            visited[pc] = true;
-            if pc == len {
-                continue;
-            }
-            let mut next = Some(pc + 1);
-            match &self.steps[pc].kind {
-                ProgramOp::Jump { target } | ProgramOp::LoopControl { target, .. } => {
-                    next = None;
-                    pending.push(*target);
-                }
-                ProgramOp::JumpIfFalse { target, .. } | ProgramOp::RepeatGuard { target, .. } => {
-                    pending.push(*target)
-                }
-                _ => {}
-            }
-            if let Some(next) = next {
-                pending.push(next);
-            }
-        }
+        // The definite-slot dataflow performs bounded CFG reachability,
+        // intersects all predecessors, and rejects reads that can bypass a
+        // Store/RepeatInit or follow binding retirement.
+        self.verify_definite_slots()?;
         Ok(())
     }
 }
