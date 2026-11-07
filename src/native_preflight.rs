@@ -88,7 +88,8 @@ fn verify_expression_shape(
     binding_types: &[ValueType],
 ) -> Result<(), Diagnostic> {
     let nodes = expression.syntax.nodes();
-    if expression.syntax.root() >= nodes.len()
+    if nodes.len() > MAX_EXPRESSION_NODES
+        || expression.syntax.root() >= nodes.len()
         || expression.slots.len() != nodes.len()
         || expression.types.len() != nodes.len()
         || expression.calls.len() != nodes.len()
@@ -98,7 +99,11 @@ fn verify_expression_shape(
 
     let mut inferred = Vec::with_capacity(nodes.len());
     for (index, node) in nodes.iter().enumerate() {
-        if node.span.start > node.span.end || expression.calls[index].is_some() {
+        if node.span.start > node.span.end
+            || expression.calls[index].is_some()
+            || (!matches!(node.kind, ExpressionKind::Name(_))
+                && expression.slots[index].is_some())
+        {
             return Err(unsupported(node.span));
         }
         let kind = match &node.kind {
@@ -456,7 +461,7 @@ mod tests {
             value::ValueType,
         };
 
-        for corruption in 0..5 {
+        for corruption in 0..6 {
             let mut program = compile("bind value=1; print(value + 2);").unwrap();
             let expression = program
                 .statements
@@ -480,6 +485,9 @@ mod tests {
                 }
                 4 => {
                     expression.syntax.root = expression.syntax.nodes().len();
+                }
+                5 => {
+                    expression.slots[1] = Some(0);
                 }
                 _ => unreachable!(),
             }
