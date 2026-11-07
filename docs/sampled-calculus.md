@@ -1,29 +1,29 @@
 # Sampled calculus (merged into main, unreleased)
 
-**Status:** merged into `main` in
-[compiler PR #153](https://github.com/scarp-lang/scarp/pull/153), after
-the published `v0.0.6-alpha.3` prerelease. The Rust code and verified
-`.srp` example are in source checkout `main`; they are **not** available
-in the existing alpha.3 release binaries. A newer compatible compiler
-build is required.
+**Status:** merged into `main` through
+[compiler PR #153](https://github.com/scarp-lang/scarp/pull/153) and
+[compiler PR #155](https://github.com/scarp-lang/scarp/pull/155), after
+the published `v0.0.6-alpha.3` prerelease. Rust kernels, regression
+tests and runnable `.srp` fixtures are in the current source.
+**None of these three functions is in the published alpha.3 binaries.**
+A newer compatible compiler build is required.
 
 Scarp currently represents finite binary64 measurements as immutable
 one-dimensional `vector` values. Until named standard-library namespaces are
-supported, the numerical runtime exposes two pure, typed calls:
+supported, the numerical runtime exposes three pure, typed calls:
 
 | Function | Type | Meaning |
 | --- | --- | --- |
 | `sample_area(x, y)` | `(vector, vector) -> float` | Composite trapezoidal integral of values `y` sampled at coordinates `x` |
 | `sample_slopes(x, y)` | `(vector, vector) -> vector` | Secant derivative on each consecutive interval |
+| `sample_cumulative_area(x, y)` | `(vector, vector) -> vector` | Trapezoidal integral from the initial sample to every coordinate |
 
-**Additional work in progress (not yet merged or released):**
-`sample_cumulative_area(x, y) -> vector` returns trapezoid integration
-at every sample: the first element is `0.0` and the last equals
-`sample_area(x, y)` (for finite, representable results). The output length
-equals the input length and is a fresh allocation charged at 8 bytes per
-sample; grid, shape, error and work requirements are shared with the existing
-calculus functions. This is a proposed post-alpha.3 API, not a feature of
-published binaries.
+`sample_cumulative_area` returns exactly N elements: the first is `0.0`,
+and the last matches `sample_area(x, y)` when finite and representable.
+It allocates a fresh vector of 8 × N logical payload bytes and prepays
+4 × (N − 1) work steps, as do the other sample kernels.
+It uses the same ordered compensated accumulation and validated grid;
+an unrepresentable intermediate prefix fails rather than becoming infinity.
 
 Both inputs must have the same length of **2–65,536** and coordinate values
 must be **strictly increasing**. Readings may be negative. The output of
