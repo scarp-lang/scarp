@@ -9,10 +9,10 @@ use crate::{
 mod integers;
 mod kernels;
 mod scalar_text;
+mod temperature;
 mod text;
 mod tiles;
 mod topk;
-mod temperature;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Builtin {
