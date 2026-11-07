@@ -1,0 +1,7 @@
+// Deterministic candidate ranking for finite model scores.
+bind scores = [1.0, 5.0, 5.0, -2.0, 3.0];
+print(topk(scores, 3));
+print(topk_values(scores, 3));
+// Candidate ranking also works on probabilities.
+print(topk(softmax(scores), 2));
+print(topk([], 0));
