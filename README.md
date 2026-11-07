@@ -13,6 +13,12 @@ prepublication snapshot; this is not a stable or general native compiler release
 
 **Build Beyond Boundaries.**
 
+**Unreleased development proposal:** [sampled calculus](docs/sampled-calculus.md)
+adds bounded `sample_area(x, y)` integration and `sample_slopes(x, y)`
+interval derivatives in a feature branch. These functions are **not** in
+published alpha.3 binaries and are pending review and cross-platform CI.
+
+
 **0.0.6-alpha.2** is an **earlier published GitHub prerelease** (6 November
 2026), available for Windows x64, Linux x64 and macOS Apple Silicon. It adds
 optional dependency invalidation, bounded semantic/token/AST caches, and
