@@ -368,13 +368,17 @@ mod tests {
             "var x=1; print(x);",
         ] {
             for bytes in [0, 63, 64, 65, 71, 72, 73, 100, 144, 1024] {
-                let mut options = ExecutionOptions::default();
-                options.max_capture_bytes = bytes;
+                let options = ExecutionOptions {
+                    max_capture_bytes: bytes,
+                    ..ExecutionOptions::default()
+                };
                 same(source, options);
             }
             for slots in [0, 1, 2, 256] {
-                let mut options = ExecutionOptions::default();
-                options.max_live_slots = slots;
+                let options = ExecutionOptions {
+                    max_live_slots: slots,
+                    ..ExecutionOptions::default()
+                };
                 same(source, options);
             }
         }
@@ -408,10 +412,12 @@ mod tests {
 
     #[test]
     fn exact_print_count_is_enforced_for_repeat_runs() {
-        let mut options = ExecutionOptions::default();
-        options.limits = ExecutionLimits {
-            max_steps: 1_000_000,
-            max_prints: 3,
+        let mut options = ExecutionOptions {
+            limits: ExecutionLimits {
+                max_steps: 1_000_000,
+                max_prints: 3,
+            },
+            ..ExecutionOptions::default()
         };
         same("repeat 3 as i { print(i); }", options);
         options.limits.max_prints = 2;
