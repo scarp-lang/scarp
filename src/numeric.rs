@@ -8,6 +8,7 @@ use crate::{
 
 mod integers;
 mod kernels;
+mod nucleus;
 mod scalar_text;
 mod temperature;
 mod text;
@@ -62,6 +63,8 @@ pub enum Builtin {
     ArgMin,
     TopK,
     TopKValues,
+    TopP,
+    TopPValues,
     MaxValue,
     MinValue,
     LogProb,
@@ -146,6 +149,8 @@ impl Builtin {
             "argmin" => Self::ArgMin,
             "topk" => Self::TopK,
             "topk_values" => Self::TopKValues,
+            "top_p" => Self::TopP,
+            "top_p_values" => Self::TopPValues,
             "maxval" => Self::MaxValue,
             "minval" => Self::MinValue,
             "logprob" => Self::LogProb,
@@ -208,7 +213,9 @@ impl Builtin {
             Self::LogProb | Self::CrossEntropy | Self::LossGrad | Self::TopK | Self::TopKValues => {
                 &[Vector, Integer]
             }
-            Self::SoftmaxTemp | Self::LogSoftmaxTemp => &[Vector, Float],
+            Self::SoftmaxTemp | Self::LogSoftmaxTemp | Self::TopP | Self::TopPValues => {
+                &[Vector, Float]
+            }
             Self::OneHot => &[Integer, Integer],
             Self::Tile => &[Vector, Integer, Integer],
             Self::Height | Self::Width | Self::Unroll | Self::Turn => &[Tile],
@@ -229,7 +236,8 @@ impl Builtin {
             | Self::IntsSet
             | Self::IntsRange
             | Self::IntsFromVector
-            | Self::TopK => ValueType::Integers,
+            | Self::TopK
+            | Self::TopP => ValueType::Integers,
             Self::ToInteger
             | Self::TextLength
             | Self::TextBytes
@@ -579,6 +587,9 @@ pub(crate) fn evaluate_with_spans(
     if matches!(function, Builtin::TopK | Builtin::TopKValues) {
         return topk::evaluate(function, args, budget, span, argument_span);
     }
+    if matches!(function, Builtin::TopP | Builtin::TopPValues) {
+        return nucleus::evaluate(function, args, budget, span, argument_span);
+    }
     if matches!(function, Builtin::SoftmaxTemp | Builtin::LogSoftmaxTemp) {
         return temperature::evaluate(function, args, budget, span, argument_span);
     }
@@ -912,6 +923,8 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::OneHot
         | Builtin::TopK
         | Builtin::TopKValues
+        | Builtin::TopP
+        | Builtin::TopPValues
         | Builtin::SoftmaxTemp
         | Builtin::LogSoftmaxTemp
         | Builtin::Window
