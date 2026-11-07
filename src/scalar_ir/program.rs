@@ -340,8 +340,9 @@ impl ScalarProgramIr {
                     next = None;
                     pending.push(*target);
                 }
-                ProgramOp::JumpIfFalse { target, .. }
-                | ProgramOp::RepeatGuard { target, .. } => pending.push(*target),
+                ProgramOp::JumpIfFalse { target, .. } | ProgramOp::RepeatGuard { target, .. } => {
+                    pending.push(*target)
+                }
                 _ => {}
             }
             if let Some(next) = next {
@@ -365,11 +366,18 @@ mod tests {
 
     #[test]
     fn deterministic_control_flow_and_utf8_literals() {
-        let source = "var n=0; while n<3 { n+=1; if n==2 { continue; } print(n); } print(\"नमस्ते\");";
+        let source =
+            "var n=0; while n<3 { n+=1; if n==2 { continue; } print(n); } print(\"नमस्ते\");";
         let a = program(source);
         assert_eq!(a, program(source));
-        assert!(a.steps.iter().any(|step| matches!(step.kind, ProgramOp::JumpIfFalse { .. })));
-        assert!(a.steps.iter().any(|step| matches!(step.kind, ProgramOp::LoopControl { .. })));
+        assert!(a
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, ProgramOp::JumpIfFalse { .. })));
+        assert!(a
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, ProgramOp::LoopControl { .. })));
         assert!(a.steps.iter().any(|step| matches!(
             &step.kind,
             ProgramOp::PrintLiteral { text } if text == "नमस्ते".as_bytes()
@@ -380,14 +388,22 @@ mod tests {
     #[test]
     fn counted_repeat_and_scope_retirement_keep_explicit_charges() {
         let ir = program("repeat 4 as i { bind copy=i; print(copy); }");
-        assert!(ir.steps.iter().any(|step| matches!(step.kind, ProgramOp::RepeatGuard { .. })));
-        assert!(ir.steps.iter().any(|step| matches!(step.kind, ProgramOp::RepeatNext { .. })));
-        assert!(ir.steps.iter().any(|step| {
-            matches!(step.kind, ProgramOp::Retire { .. }) && !step.charge_work
-        }));
-        assert!(ir.steps.iter().all(|step| {
-            step.charge_work == !matches!(step.kind, ProgramOp::Retire { .. })
-        }));
+        assert!(ir
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, ProgramOp::RepeatGuard { .. })));
+        assert!(ir
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, ProgramOp::RepeatNext { .. })));
+        assert!(ir
+            .steps
+            .iter()
+            .any(|step| { matches!(step.kind, ProgramOp::Retire { .. }) && !step.charge_work }));
+        assert!(ir
+            .steps
+            .iter()
+            .all(|step| { step.charge_work == !matches!(step.kind, ProgramOp::Retire { .. }) }));
     }
 
     #[test]
@@ -400,7 +416,10 @@ mod tests {
                 break;
             }
         }
-        assert_eq!(ir.verify().unwrap_err().kind, DiagnosticKind::NativeUnsupported);
+        assert_eq!(
+            ir.verify().unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
 
         let mut ir = program("{ bind x=1; }");
         for step in &mut ir.steps {
@@ -408,11 +427,17 @@ mod tests {
                 slots.push(usize::MAX);
             }
         }
-        assert_eq!(ir.verify().unwrap_err().kind, DiagnosticKind::NativeUnsupported);
+        assert_eq!(
+            ir.verify().unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
 
         let mut ir = program("print(1);");
         ir.steps[0].charge_work = false;
-        assert_eq!(ir.verify().unwrap_err().kind, DiagnosticKind::NativeUnsupported);
+        assert_eq!(
+            ir.verify().unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
     }
 
     #[test]
@@ -423,13 +448,19 @@ mod tests {
                 text[0] = 0xff;
             }
         }
-        assert_eq!(ir.verify().unwrap_err().kind, DiagnosticKind::NativeUnsupported);
+        assert_eq!(
+            ir.verify().unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
 
         let mut ir = program("print(true and false);");
         if let ProgramOp::PrintValue { value } = &mut ir.steps[0].kind {
             value.root = usize::MAX;
         }
-        assert_eq!(ir.verify().unwrap_err().kind, DiagnosticKind::NativeUnsupported);
+        assert_eq!(
+            ir.verify().unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
     }
 
     #[test]
