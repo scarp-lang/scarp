@@ -4,6 +4,8 @@
 //! source, and does not emit machine code or introduce a public ABI. Future
 //! statement and object lowering will build on its checked control-flow form.
 
+mod program;
+
 use crate::{
     ast::{BinaryOperator, ExpressionKind, LogicalOperator},
     diagnostics::{Diagnostic, DiagnosticKind, Span},
@@ -467,29 +469,11 @@ impl ScalarExpressionIr {
     }
 }
 
-/// First production integration: independently verify the lowered expression
-/// CFG before the existing experimental C emitter consumes the resolved plan.
-/// No native object, new CLI mode, or public IR API is introduced here.
+/// Verify a private whole-program scalar IR, including all lowered expression
+/// CFGs and the resolved operation/jump/retirement plan. The public C11 API is
+/// unchanged; object emission and a native compile CLI are out of scope.
 pub(crate) fn verify_program(program: &ResolvedProgram) -> Result<(), Diagnostic> {
-    for operation in &program.statements {
-        let expression = match &operation.kind {
-            ResolvedStatement::Store { value, .. }
-            | ResolvedStatement::Update { value, .. }
-            | ResolvedStatement::RepeatInit { count: value, .. } => Some(value),
-            ResolvedStatement::JumpIfFalse { condition, .. } => Some(condition),
-            ResolvedStatement::Output { arguments, .. } => {
-                arguments.iter().find_map(|arg| match arg {
-                    ResolvedArgument::Expression(value) => Some(value),
-                    ResolvedArgument::String(_) => None,
-                })
-            }
-            _ => None,
-        };
-        if let Some(expression) = expression {
-            ScalarExpressionIr::lower(expression, program.binding_types())?;
-        }
-    }
-    Ok(())
+    program::ScalarProgramIr::lower(program).map(|_| ())
 }
 
 #[cfg(test)]
