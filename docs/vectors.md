@@ -207,6 +207,19 @@ it does not charge additional `--max-vector-bytes`. They are useful
 for deterministic score decoding, but are **not in published alpha.3**.
 See [proposal 0025](proposals/0025-stable-vector-selection.md).
 
+## Development-only Top-K inference ranking
+
+Two pure typed built-ins extend `argmax` to multiple candidates:
+`topk(scores, count) -> integers` returns original zero-based indices in
+highest-score-first order and `topk_values(scores, count) -> vector` returns
+their corresponding finite values. Tied scores keep the earliest original
+index, including signed-zero ties. A count of zero works on empty vectors;
+negative and oversized counts fail with E0033. Both operations use a
+bounded heap and charge deterministic work plus explicit vector allocation.
+See the complete [Top-K guide](topk-selection.md) and
+[executable example](../examples/topk_scores.srp). These features are on
+**development main only**, not in the published v0.0.6-alpha.2 prerelease.
+
 ## Development-only categorical logit loss
 
 Two new pure, typed scalar kernels operate on a finite logit vector
