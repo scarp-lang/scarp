@@ -1,5 +1,10 @@
 # Command-line reference
 
+The source candidate `v0.0.6-alpha.3` adds numerical built-ins but
+**no new CLI commands**. The interpreter-backed command vocabulary
+remains that of the published `v0.0.6-alpha.2` release.
+A source candidate is not evidence of a public binary release.
+
 ## Scarp-first CLI (published v0.0.6-alpha.2)
 
 The published alpha.2 prerelease adds no CLI commands: its new cache and
