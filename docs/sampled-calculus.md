@@ -36,12 +36,16 @@ example is `examples/sampled_calculus.srp` with an exact `.stdout` fixture.
 ## Numerical and resource contract
 
 For consecutive pairs `(x[i], y[i])`, the integration contribution is
-`(x[i+1] - x[i]) * (y[i] + y[i+1]) / 2`. Scarp computes the midpoint
-of ordinates without overflowing on a finite pair with an overflowing
-sum, and combines contributions with ordered Neumaier compensation.
-A representable subnormal average is not lost merely because halving
-both inputs individually would round to zero. This is **not** exact
-integration and does not guarantee correct rounding.
+`(x[i+1] - x[i]) * (y[i] + y[i+1]) / 2`. When the interval width is at least one, Scarp halves the width before
+multiplication; for smaller widths it halves the ordinate sum. This
+preserves finite integrals that would otherwise underflow from halving
+a subnormal reading or coordinate width too early. If the ordinate sum
+overflows, it halves both finite ordinates individually before adding.
+Contributions are combined with ordered Neumaier compensation. This
+is **not** exact integration and does not guarantee correct rounding.
+Cancellation can amplify the relative error of rounded individual
+interval contributions; independent reference tolerances must account
+for their absolute magnitudes, not only the final answer's ULP.
 
 The slope on each interval is `(y[i+1] - y[i]) / (x[i+1] - x[i])`.
 If the ordinate subtraction overflows, the kernel tries dividing each
