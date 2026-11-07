@@ -53,6 +53,10 @@ vector allocation shortfall reports **E0036**. Input literals also incur
 their normal separate work and allocation charges. All checks run before
 publishing output, and no partially selected values escape on failure.
 
+The ranked candidates can be composed with
+[temperature-controlled softmax](temperature-softmax.md) to change probability
+concentration before selecting a fixed number of candidates.
+
 The implementation uses only finite binary64 values, bounded Scarp vectors,
 and safe Rust. It does not add a sampling/RNG API, top-p/nucleus decoding,
 automatic differentiation, or a native object compiler.
