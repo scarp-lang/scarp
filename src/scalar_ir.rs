@@ -41,11 +41,27 @@ struct Instruction {
 enum Operation {
     /// One deterministic interpreter-equivalent work charge.
     Work,
-    Integer { dst: usize, value: i64 },
-    Boolean { dst: usize, value: bool },
-    Load { dst: usize, slot: usize },
-    Move { dst: usize, src: usize },
-    Unary { dst: usize, src: usize, op: Unary },
+    Integer {
+        dst: usize,
+        value: i64,
+    },
+    Boolean {
+        dst: usize,
+        value: bool,
+    },
+    Load {
+        dst: usize,
+        slot: usize,
+    },
+    Move {
+        dst: usize,
+        src: usize,
+    },
+    Unary {
+        dst: usize,
+        src: usize,
+        op: Unary,
+    },
     Binary {
         dst: usize,
         left: usize,
@@ -76,7 +92,12 @@ enum Task {
     CloseLogical { node: usize, branch: usize },
 }
 
-fn register_type(types: &[ValueType], index: usize, expected: ValueType, span: Span) -> Result<(), Diagnostic> {
+fn register_type(
+    types: &[ValueType],
+    index: usize,
+    expected: ValueType,
+    span: Span,
+) -> Result<(), Diagnostic> {
     if types.get(index) == Some(&expected) {
         Ok(())
     } else {
@@ -155,10 +176,22 @@ impl ScalarExpressionIr {
                     ir.emit(node.span, Operation::Work)?;
                     match &node.kind {
                         ExpressionKind::Integer(value) => {
-                            ir.emit(node.span, Operation::Integer { dst: index, value: *value })?;
+                            ir.emit(
+                                node.span,
+                                Operation::Integer {
+                                    dst: index,
+                                    value: *value,
+                                },
+                            )?;
                         }
                         ExpressionKind::Boolean(value) => {
-                            ir.emit(node.span, Operation::Boolean { dst: index, value: *value })?;
+                            ir.emit(
+                                node.span,
+                                Operation::Boolean {
+                                    dst: index,
+                                    value: *value,
+                                },
+                            )?;
                         }
                         ExpressionKind::Name(_) => {
                             let slot = expression.slots[index].ok_or_else(|| invalid(node.span))?;
@@ -187,60 +220,133 @@ impl ScalarExpressionIr {
                     let node = &nodes[index];
                     match &node.kind {
                         ExpressionKind::Group { expression: child } => {
-                            ir.emit(node.span, Operation::Move { dst: index, src: *child })?;
+                            ir.emit(
+                                node.span,
+                                Operation::Move {
+                                    dst: index,
+                                    src: *child,
+                                },
+                            )?;
                         }
-                        ExpressionKind::Negate { operand, operator_span } => {
+                        ExpressionKind::Negate {
+                            operand,
+                            operator_span,
+                        } => {
                             ir.emit(*operator_span, Operation::Work)?;
-                            ir.emit(*operator_span, Operation::Unary {
-                                dst: index, src: *operand, op: Unary::Negate,
-                            })?;
+                            ir.emit(
+                                *operator_span,
+                                Operation::Unary {
+                                    dst: index,
+                                    src: *operand,
+                                    op: Unary::Negate,
+                                },
+                            )?;
                         }
-                        ExpressionKind::BitNot { operand, operator_span } => {
+                        ExpressionKind::BitNot {
+                            operand,
+                            operator_span,
+                        } => {
                             ir.emit(*operator_span, Operation::Work)?;
-                            ir.emit(*operator_span, Operation::Unary {
-                                dst: index, src: *operand, op: Unary::BitNot,
-                            })?;
+                            ir.emit(
+                                *operator_span,
+                                Operation::Unary {
+                                    dst: index,
+                                    src: *operand,
+                                    op: Unary::BitNot,
+                                },
+                            )?;
                         }
-                        ExpressionKind::Not { operand, operator_span } => {
+                        ExpressionKind::Not {
+                            operand,
+                            operator_span,
+                        } => {
                             ir.emit(*operator_span, Operation::Work)?;
-                            ir.emit(*operator_span, Operation::Unary {
-                                dst: index, src: *operand, op: Unary::Not,
-                            })?;
+                            ir.emit(
+                                *operator_span,
+                                Operation::Unary {
+                                    dst: index,
+                                    src: *operand,
+                                    op: Unary::Not,
+                                },
+                            )?;
                         }
-                        ExpressionKind::Binary { left, right, operator, operator_span } => {
+                        ExpressionKind::Binary {
+                            left,
+                            right,
+                            operator,
+                            operator_span,
+                        } => {
                             ir.emit(*operator_span, Operation::Work)?;
-                            ir.emit(*operator_span, Operation::Binary {
-                                dst: index, left: *left, right: *right, op: *operator,
-                            })?;
+                            ir.emit(
+                                *operator_span,
+                                Operation::Binary {
+                                    dst: index,
+                                    left: *left,
+                                    right: *right,
+                                    op: *operator,
+                                },
+                            )?;
                         }
                         _ => return Err(invalid(node.span)),
                     }
                 }
                 Task::Logical(index) => {
                     let node = &nodes[index];
-                    let ExpressionKind::Logical { left, right, operator, operator_span } = &node.kind else {
+                    let ExpressionKind::Logical {
+                        left,
+                        right,
+                        operator,
+                        operator_span,
+                    } = &node.kind
+                    else {
                         return Err(invalid(node.span));
                     };
                     // Charge the first logical operator evaluation after its left
                     // operand, then initialize the result for the skipped path.
                     ir.emit(*operator_span, Operation::Work)?;
-                    ir.emit(*operator_span, Operation::Move { dst: index, src: *left })?;
-                    let branch = ir.emit(*operator_span, Operation::Branch {
-                        condition: *left,
-                        when_true: *operator == LogicalOperator::Or,
-                        target: usize::MAX,
-                    })?;
-                    tasks.push(Task::CloseLogical { node: index, branch });
+                    ir.emit(
+                        *operator_span,
+                        Operation::Move {
+                            dst: index,
+                            src: *left,
+                        },
+                    )?;
+                    let branch = ir.emit(
+                        *operator_span,
+                        Operation::Branch {
+                            condition: *left,
+                            when_true: *operator == LogicalOperator::Or,
+                            target: usize::MAX,
+                        },
+                    )?;
+                    tasks.push(Task::CloseLogical {
+                        node: index,
+                        branch,
+                    });
                     tasks.push(Task::Visit(*right));
                 }
-                Task::CloseLogical { node: index, branch } => {
+                Task::CloseLogical {
+                    node: index,
+                    branch,
+                } => {
                     let node = &nodes[index];
-                    let ExpressionKind::Logical { right, operator_span, .. } = &node.kind else {
+                    let ExpressionKind::Logical {
+                        right,
+                        operator_span,
+                        ..
+                    } = &node.kind
+                    else {
                         return Err(invalid(node.span));
                     };
                     // This charge is reachable only if the right side executed.
                     ir.emit(*operator_span, Operation::Work)?;
-                    ir.emit(*operator_span, Operation::Move { dst: index, src: *right })?;
+                    ir.emit(
+                        *operator_span,
+                        Operation::Move {
+                            dst: index,
+                            src: *right,
+                        },
+                    )?;
                     let end = ir.steps.len();
                     if let Operation::Branch { target, .. } = &mut ir.steps[branch].kind {
                         *target = end;
@@ -262,9 +368,11 @@ impl ScalarExpressionIr {
             || self.steps.len() > MAX_IR_STEPS
             || self.root >= self.registers.len()
             || self.slots.len() > 256
-            || self.registers.iter().chain(self.slots.iter()).any(|kind| {
-                !matches!(kind, ValueType::Integer | ValueType::Boolean)
-            })
+            || self
+                .registers
+                .iter()
+                .chain(self.slots.iter())
+                .any(|kind| !matches!(kind, ValueType::Integer | ValueType::Boolean))
         {
             return Err(invalid(Span::default()));
         }
@@ -310,7 +418,12 @@ impl ScalarExpressionIr {
                     require_read(&initialized, types, *src, kind, span)?;
                     initialized[*dst] = true;
                 }
-                Operation::Binary { dst, left, right, op } => {
+                Operation::Binary {
+                    dst,
+                    left,
+                    right,
+                    op,
+                } => {
                     let kind = *types.get(*left).ok_or_else(|| invalid(span))?;
                     if !matches!(op, BinaryOperator::Equal | BinaryOperator::NotEqual)
                         && kind != ValueType::Integer
@@ -327,7 +440,9 @@ impl ScalarExpressionIr {
                     register_type(types, *dst, result_kind, span)?;
                     initialized[*dst] = true;
                 }
-                Operation::Branch { condition, target, .. } => {
+                Operation::Branch {
+                    condition, target, ..
+                } => {
                     require_read(&initialized, types, *condition, ValueType::Boolean, span)?;
                     if *target <= pc || *target > self.steps.len() {
                         return Err(invalid(span));
@@ -343,7 +458,8 @@ impl ScalarExpressionIr {
         if incoming[self.steps.len()]
             .as_ref()
             .and_then(|known| known.get(self.root))
-            .copied() != Some(true)
+            .copied()
+            != Some(true)
         {
             return Err(invalid(Span::default()));
         }
@@ -384,15 +500,19 @@ mod tests {
     fn lower(source: &str) -> ScalarExpressionIr {
         let program = compile(source).unwrap();
         crate::native_preflight::inspect(&program).unwrap();
-        let expression = program.statements.iter().find_map(|statement| match &statement.kind {
-            ResolvedStatement::Output { arguments, .. } => {
-                arguments.iter().find_map(|arg| match arg {
-                    ResolvedArgument::Expression(value) => Some(value),
-                    _ => None,
-                })
-            }
-            _ => None,
-        }).expect("source must contain a scalar output expression");
+        let expression = program
+            .statements
+            .iter()
+            .find_map(|statement| match &statement.kind {
+                ResolvedStatement::Output { arguments, .. } => {
+                    arguments.iter().find_map(|arg| match arg {
+                        ResolvedArgument::Expression(value) => Some(value),
+                        _ => None,
+                    })
+                }
+                _ => None,
+            })
+            .expect("source must contain a scalar output expression");
         ScalarExpressionIr::lower(expression, program.binding_types()).unwrap()
     }
 
@@ -403,7 +523,11 @@ mod tests {
         let b = lower(source);
         assert_eq!(a, b);
         assert!(a.steps.iter().any(|instruction| matches!(
-            instruction.kind, Operation::Binary { op: BinaryOperator::Multiply, .. }
+            instruction.kind,
+            Operation::Binary {
+                op: BinaryOperator::Multiply,
+                ..
+            }
         )));
         assert!(a.steps[0].span.start > "print(\"नमस्ते\"); ".len() - 1);
         a.verify().unwrap();
@@ -418,9 +542,12 @@ mod tests {
             "print(not false and (2 << 3 == 16));",
         ] {
             let ir = lower(source);
-            assert!(ir.steps.iter().any(|step| matches!(
-                step.kind, Operation::Branch { .. }
-            )), "{source}");
+            assert!(
+                ir.steps
+                    .iter()
+                    .any(|step| matches!(step.kind, Operation::Branch { .. })),
+                "{source}"
+            );
             ir.verify().unwrap();
         }
     }
@@ -428,14 +555,19 @@ mod tests {
     #[test]
     fn standalone_verifier_rejects_mutated_targets_and_registers() {
         let mut ir = lower("print(false and (1 + 2 == 3));");
-        let branch = ir.steps.iter_mut().find_map(|instruction| {
-            match &mut instruction.kind {
+        let branch = ir
+            .steps
+            .iter_mut()
+            .find_map(|instruction| match &mut instruction.kind {
                 Operation::Branch { target, .. } => Some(target),
                 _ => None,
-            }
-        }).unwrap();
+            })
+            .unwrap();
         *branch = 0;
-        assert_eq!(ir.verify().unwrap_err().kind, DiagnosticKind::NativeUnsupported);
+        assert_eq!(
+            ir.verify().unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
 
         let mut ir = lower("print(1 + 2);");
         let root = ir.root;
@@ -444,11 +576,17 @@ mod tests {
                 *left = root;
             }
         }
-        assert_eq!(ir.verify().unwrap_err().kind, DiagnosticKind::NativeUnsupported);
+        assert_eq!(
+            ir.verify().unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
 
         let mut ir = lower("print(1 + 2);");
         ir.registers[ir.root] = ValueType::Boolean;
-        assert_eq!(ir.verify().unwrap_err().kind, DiagnosticKind::NativeUnsupported);
+        assert_eq!(
+            ir.verify().unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
     }
 
     #[test]
