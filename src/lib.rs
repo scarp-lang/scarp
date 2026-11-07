@@ -21,10 +21,10 @@ pub mod lexer;
 pub mod limits;
 pub mod modules;
 mod native_preflight;
-mod scalar_ir;
 pub mod numeric;
 pub mod parser;
 pub mod resolver;
+mod scalar_ir;
 pub mod types;
 pub mod value;
 
