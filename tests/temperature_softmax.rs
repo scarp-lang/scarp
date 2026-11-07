@@ -127,7 +127,7 @@ fn tiny_temperatures_allow_softmax_underflow_but_reject_nonfinite_log_output() {
         numeric::evaluate(Builtin::LogSoftmaxTemp, &args, 8)
             .unwrap_err()
             .kind,
-        Kind::NonFinite
+        Kind::NonFiniteNumber
     );
 }
 
