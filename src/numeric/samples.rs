@@ -31,6 +31,11 @@ pub(super) fn evaluate(
         ));
     }
 
+    let intervals = coordinates.len() - 1;
+    // Prepay for both grid validation and computation. An invalid sample grid
+    // must not allow an unbounded scan under an exhausted work budget.
+    budget.charge(intervals as u64 * 4, span)?;
+
     let xs = coordinates.as_slice();
     let ys = readings.as_slice();
     // Check coordinates before any output allocation. Difference overflow is
@@ -44,11 +49,6 @@ pub(super) fn evaluate(
         }
         finite_number(pair[1].get() - pair[0].get(), at(0))?;
     }
-
-    let intervals = coordinates.len() - 1;
-    // Both algorithms are linear; charge for validation and computation before
-    // allocation or arithmetic. The maximum length is bounded by NumericVector.
-    budget.charge(intervals as u64 * 4, span)?;
 
     match function {
         Builtin::SampleArea => {
