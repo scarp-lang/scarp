@@ -1,13 +1,13 @@
 # Version and API compatibility
 
-`0.0.6-alpha.3` candidate source is **not published**.
-It adds four typed pure numerical built-ins: `topk`,
-`topk_values`, `softmax_temp`, and `logsoftmax_temp`.
+`0.0.6-alpha.3` was **published as an experimental GitHub prerelease on
+7 November 2026**. It adds four typed pure numerical built-ins:
+`topk`, `topk_values`, `softmax_temp` and `logsoftmax_temp`.
 Rust embedders with exhaustive `numeric::Builtin` matches must handle
 the new variants. The experimental scalar IR remains private, and no
 general native compiler or stable ABI is added. See
-[alpha.3 candidate notes](releases/v0.0.6-alpha.3.md).
-The latest published prerelease remains v0.0.6-alpha.2.
+[alpha.3 release notes](releases/v0.0.6-alpha.3-publication.md) and
+[exact-source verification](releases/v0.0.6-alpha.3-validation.md).
 
 Published v0.0.6-alpha.1 adds the pure `rms` builtin and public
 `numeric::Builtin::Rms` variant. Exhaustive Rust host matches need an arm;
@@ -18,19 +18,20 @@ See [RMS semantics and limits](root-mean-square.md). The opt-in
 and independent resource limits; it does not change the existing module or
 diagnostic JSON schema-v1 contracts.
 
-**Current source:** `0.0.6-alpha.2` is published as a **GitHub prerelease**.
-Alpha.2 adds optional Rust embedding cache APIs, source-level invalidation
-planning and scoped retention control without changing the existing CLI
-language or adding native executable compilation. See the
-[public release notes](releases/v0.0.6-alpha.2-publication.md) and
-[exact-source publication record](releases/v0.0.6-alpha.2-validation.md).
+**Current published package:** `0.0.6-alpha.3` is a GitHub prerelease.
+It builds on alpha.2's optional Rust embedding caches and dependency
+invalidation, adding bounded AI-oriented score operations and internal
+compiler verification without changing CLI syntax or enabling a general
+native executable compiler. See the
+[public release notes](releases/v0.0.6-alpha.3-publication.md) and
+[exact-source publication record](releases/v0.0.6-alpha.3-validation.md).
 Windows, Linux and macOS archives are available; features remain experimental
 and no general native executable compiler or stable ABI is implied.
 The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.6-alpha.2](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.2).
+[0.0.6-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a
