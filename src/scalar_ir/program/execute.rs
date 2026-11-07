@@ -35,10 +35,7 @@ impl ScalarExpressionIr {
                     values[*dst] = Value::Boolean(*value);
                 }
                 super::super::Operation::Load { dst, slot } => {
-                    values[*dst] = storage
-                        .get(*slot)
-                        .cloned()
-                        .ok_or_else(|| invalid(span))?;
+                    values[*dst] = storage.get(*slot).cloned().ok_or_else(|| invalid(span))?;
                 }
                 super::super::Operation::Move { dst, src } => {
                     values[*dst] = register(&values, *src, span)?;
@@ -60,9 +57,7 @@ impl ScalarExpressionIr {
                         super::super::Unary::BitNot => {
                             Value::Integer(!input.require_integer(span)?)
                         }
-                        super::super::Unary::Not => {
-                            Value::Boolean(!input.require_boolean(span)?)
-                        }
+                        super::super::Unary::Not => Value::Boolean(!input.require_boolean(span)?),
                     };
                 }
                 super::super::Operation::Binary {
@@ -131,16 +126,17 @@ impl ScalarProgramIr {
                 } => {
                     let previous = storage[*slot].clone();
                     let next = value.execute(&storage, &mut budget)?;
-                    storage[*slot] = evaluator::apply_binary(
-                        *operator, &previous, &next, *operator_span,
-                    )?;
+                    storage[*slot] =
+                        evaluator::apply_binary(*operator, &previous, &next, *operator_span)?;
                 }
                 ProgramOp::RepeatInit {
                     count,
                     count_slot,
                     index_slot,
                 } => {
-                    let count = count.execute(&storage, &mut budget)?.require_integer(span)?;
+                    let count = count
+                        .execute(&storage, &mut budget)?
+                        .require_integer(span)?;
                     if count < 0 {
                         return Err(Diagnostic::new(
                             DiagnosticKind::RepeatCount,
@@ -175,7 +171,10 @@ impl ScalarProgramIr {
                     storage[*index_slot] = Value::Integer(next);
                 }
                 ProgramOp::JumpIfFalse { condition, target } => {
-                    if !condition.execute(&storage, &mut budget)?.require_boolean(span)? {
+                    if !condition
+                        .execute(&storage, &mut budget)?
+                        .require_boolean(span)?
+                    {
                         pc = *target;
                     }
                 }
@@ -254,12 +253,7 @@ fn charge_snapshot(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        compile, interpreter,
-        limits::ExecutionLimits,
-        native_preflight,
-        RunError,
-    };
+    use crate::{compile, interpreter, limits::ExecutionLimits, native_preflight, RunError};
 
     fn outcomes(
         source: &str,
@@ -392,7 +386,8 @@ mod tests {
         let mut ir = ScalarProgramIr::lower(&resolved).unwrap();
         if let ProgramOp::PrintValue { value } = &mut ir.steps[0].kind {
             for instruction in &mut value.steps {
-                if let super::super::super::Operation::Branch { target, .. } = &mut instruction.kind {
+                if let super::super::super::Operation::Branch { target, .. } = &mut instruction.kind
+                {
                     *target = 0;
                     break;
                 }
