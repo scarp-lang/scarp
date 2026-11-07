@@ -5,6 +5,26 @@
 
 use super::*;
 
+// Use the same checked interval arithmetic for the total and prefix
+// integrals so their last values have consistent rounding and diagnostics.
+fn interval_area(x: &[FiniteFloat], y: &[FiniteFloat], span: Span) -> Result<f64, Diagnostic> {
+    let width = x[1].get() - x[0].get();
+    let first = y[0].get();
+    let second = y[1].get();
+    // Multiplication order matters at binary64 extremes: large widths must
+    // be halved before subnormal ordinates; tiny widths are multiplied after
+    // halving the ordinate sum. Avoid overflow in a finite pair's sum.
+    let sum = first + second;
+    let area = if !sum.is_finite() {
+        width * (first * 0.5 + second * 0.5)
+    } else if width >= 1.0 {
+        (width * 0.5) * sum
+    } else {
+        width * (sum * 0.5)
+    };
+    finite_number(area, span).map(FiniteFloat::get)
+}
+
 /// A midpoint-free trapezoidal rule and interval (secant) derivatives.
 ///
 /// Strictly increasing sample coordinates are intentional: they reject
@@ -52,30 +72,36 @@ pub(super) fn evaluate(
 
     match function {
         Builtin::SampleArea => {
-            let areas = xs.windows(2).zip(ys.windows(2)).map(|(x, y)| {
-                let width = x[1].get() - x[0].get();
-                let first = y[0].get();
-                let second = y[1].get();
-                // The order of scaling matters at binary64 extremes.
-                // For wide intervals, halve the width first: halving a
-                // subnormal ordinate sum could erase a representable area.
-                // For narrow intervals, halve the ordinates first: halving
-                // an extremely small width could erase a representable area.
-                // An overflowing ordinate sum is recovered by halving each
-                // finite ordinate before adding them.
-                let sum = first + second;
-                let area = if !sum.is_finite() {
-                    width * (first * 0.5 + second * 0.5)
-                } else if width >= 1.0 {
-                    (width * 0.5) * sum
-                } else {
-                    width * (sum * 0.5)
-                };
-                finite_number(area, span).map(FiniteFloat::get)
-            });
+            let areas = xs
+                .windows(2)
+                .zip(ys.windows(2))
+                .map(|(x, y)| interval_area(x, y, span));
             compensated(areas, span)
                 .and_then(|result| finite_number(result, span))
                 .map(Value::Float)
+        }
+        Builtin::SampleCumulativeArea => {
+            // Every output i is the trapezoidal area from x[0] through x[i].
+            // A fresh bounded vector is required, including the initial zero.
+            let mut output = buffer(coordinates.len(), budget, span)?;
+            output.push(finite_number(0.0, span)?);
+            let mut sum = 0.0_f64;
+            let mut correction = 0.0_f64;
+            for (x, y) in xs.windows(2).zip(ys.windows(2)) {
+                let area = interval_area(x, y, span)?;
+                // Ordered Neumaier compensation, identical to the total-area
+                // reduction. Fail closed if a running prefix is nonfinite.
+                let next = finite_number(sum + area, span)?.get();
+                let delta = if sum.abs() >= area.abs() {
+                    (sum - next) + area
+                } else {
+                    (area - next) + sum
+                };
+                correction = finite_number(correction + delta, span)?.get();
+                sum = next;
+                output.push(finite_number(sum + correction, span)?);
+            }
+            vector(output, span)
         }
         Builtin::SampleSlopes => {
             let mut slopes = buffer(intervals, budget, span)?;
