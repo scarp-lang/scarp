@@ -159,16 +159,16 @@ fn nucleus_has_exact_deterministic_work_and_payload_charges() {
 #[test]
 fn nucleus_matches_integer_mass_oracle_for_seeded_tie_heavy_inputs() {
     let mut seed = 0x533d_5aa5_u64;
-    // All integer weights are <=4 and total <=256. The four odd numerator
-    // thresholds are >256 and prime to 1000, so the oracle never falls on
-    // a rounding-sensitive exact rational threshold boundary.
+    // All integer weights are <=4 and total <=256. Each threshold's
+    // numerator is coprime to 1000, so no prefix can land on an exactly
+    // representable rational threshold boundary for this sample size.
     let thresholds = [(173u64, 0.173), (313, 0.313), (613, 0.613), (833, 0.833)];
     for len in [1usize, 2, 3, 7, 16, 64] {
         for _ in 0..32 {
             let weights: Vec<u64> = (0..len)
                 .map(|_| {
                     seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-                    ((seed >> 32) % 5) as u64
+                    (seed >> 32) % 5
                 })
                 .collect();
             let sum: u64 = weights.iter().sum();
