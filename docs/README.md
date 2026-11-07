@@ -1,5 +1,13 @@
 # Scarp documentation
 
+**0.0.6-alpha.3 prerelease** is a prepared **source candidate only**;
+it has not been published. Candidate features include
+[Top-K ranking](topk-selection.md),
+[temperature softmax](temperature-softmax.md), and verified private
+scalar IR. See [candidate notes](releases/v0.0.6-alpha.3.md)
+and [publication gates](releases/v0.0.6-alpha.3-preparation.md).
+The latest publicly available prerelease remains v0.0.6-alpha.2.
+
 **0.0.6-alpha.2 prerelease** is **published** (6 November 2026).
 It includes optional [invalidation planning](development/incremental-invalidation.md),
 [source-relative token caching](development/token-cache.md),
