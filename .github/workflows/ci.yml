@@ -75,6 +75,7 @@ jobs:
           python3 scripts/test_diagnostic_json.py target/debug/scarp
           python3 scripts/test_symbol_index_json.py target/debug/scarp
           python3 scripts/test_rms.py target/debug/scarp
+          python3 scripts/test_sampled_calculus.py target/debug/scarp
           python3 -m unittest discover -s scripts -p 'test_*release*.py'
           python3 -m unittest discover -s scripts -p 'test_prune_branches.py'
       - name: Validate PowerShell check script

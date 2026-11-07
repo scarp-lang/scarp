@@ -8,6 +8,7 @@ use crate::{
 
 mod integers;
 mod kernels;
+mod samples;
 mod scalar_text;
 mod temperature;
 mod text;
@@ -18,6 +19,8 @@ mod topk;
 pub enum Builtin {
     Variance,
     StdDev,
+    SampleArea,
+    SampleSlopes,
     Sigmoid,
     Relu,
     Tanh,
@@ -102,6 +105,8 @@ impl Builtin {
         Some(match name {
             "variance" => Self::Variance,
             "stddev" => Self::StdDev,
+            "sample_area" => Self::SampleArea,
+            "sample_slopes" => Self::SampleSlopes,
             "sigmoid" => Self::Sigmoid,
             "relu" => Self::Relu,
             "tanh" => Self::Tanh,
@@ -173,6 +178,7 @@ impl Builtin {
         use ValueType::{Float, Integer, Integers, String, Tile, Vector};
         match self {
             Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
+            Self::SampleArea | Self::SampleSlopes => &[Vector, Vector],
             Self::IntsLength | Self::IntsSum | Self::IntsToVector => &[Integers],
             Self::IntsWindow | Self::IntsSet => &[Integers, Integer, Integer],
             Self::IntsJoin => &[Integers, Integers],
@@ -222,7 +228,7 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
-            Self::Variance | Self::StdDev => ValueType::Float,
+            Self::Variance | Self::StdDev | Self::SampleArea => ValueType::Float,
             Self::IntsLength | Self::IntsSum => ValueType::Integer,
             Self::IntsWindow
             | Self::IntsJoin
@@ -573,6 +579,9 @@ pub(crate) fn evaluate_with_spans(
     ) {
         return kernels::evaluate(function, args, budget, span, argument_span);
     }
+    if matches!(function, Builtin::SampleArea | Builtin::SampleSlopes) {
+        return samples::evaluate(function, args, budget, span, argument_span);
+    }
     if function.is_tile() {
         return tiles::evaluate(function, args, budget, span, argument_span);
     }
@@ -885,6 +894,8 @@ pub(crate) fn evaluate_with_spans(
         Builtin::Length
         | Builtin::Variance
         | Builtin::StdDev
+        | Builtin::SampleArea
+        | Builtin::SampleSlopes
         | Builtin::Sigmoid
         | Builtin::Relu
         | Builtin::Tanh

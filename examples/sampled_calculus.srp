@@ -1,0 +1,5 @@
+// Sampled scientific calculations are pure, finite and bounded.
+bind time = [0.0, 1.0, 3.0];
+bind velocity = [0.0, 2.0, 6.0];
+print(sample_area(time, velocity));
+print(sample_slopes(time, velocity));

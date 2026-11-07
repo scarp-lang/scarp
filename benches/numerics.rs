@@ -14,6 +14,8 @@ enum Native {
     Statistics(usize),
     Activations(usize),
     Rms(usize),
+    SampleArea(usize),
+    SampleSlopes(usize),
 }
 
 fn call(kernel: Builtin, args: &[Value]) -> Value {
@@ -29,6 +31,18 @@ fn fill(value: f64, count: usize) -> Value {
 fn native(workload: Native) -> Value {
     match workload {
         Native::Rms(count) => call(Builtin::Rms, &[fill(3.0, count)]),
+        Native::SampleArea(count) => {
+            let x: Vec<f64> = (0..count).map(|i| i as f64).collect();
+            let x = Value::Vector(scarp::value::NumericVector::new(&x).unwrap());
+            call(Builtin::SampleArea, &[x, fill(2.0, count)])
+        }
+        Native::SampleSlopes(count) => {
+            let x: Vec<f64> = (0..count).map(|i| i as f64).collect();
+            let x = Value::Vector(scarp::value::NumericVector::new(&x).unwrap());
+            let y = call(Builtin::Scale, &[x.clone(), float(2.0)]);
+            let slopes = call(Builtin::SampleSlopes, &[x, y]);
+            call(Builtin::Sum, &[slopes])
+        }
         Native::Statistics(count) => {
             let values = call(
                 Builtin::Stitch,
@@ -117,6 +131,30 @@ fn main() {
     );
     let mut cases = Vec::new();
     for count in [16, 32_768] {
+        for (name, source, workload) in [
+            (
+                "sample_area",
+                format!(
+                    "bind x=ints_to_vector(ints_range(0,{count},1)); print(sample_area(x,fill(2.0,{count})));"
+                ),
+                Native::SampleArea(count),
+            ),
+            (
+                "sample_slopes",
+                format!(
+                    "bind x=ints_to_vector(ints_range(0,{count},1)); print(sum(sample_slopes(x,scale(x,2.0))));"
+                ),
+                Native::SampleSlopes(count),
+            ),
+        ] {
+            cases.push((
+                format!("{name}_{count}"),
+                source,
+                2.0 * (count - 1) as f64,
+                workload,
+                count,
+            ));
+        }
         cases.push((
             format!("root_mean_square_{count}"),
             format!("print(rms(fill(3.0,{count})));"),
