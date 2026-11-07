@@ -19,14 +19,20 @@ fn call(function: Builtin, x: &[f64], y: &[f64]) -> Result<Value, scarp::diagnos
 
 fn close(actual: f64, expected: f64) {
     let scale = expected.abs().max(1.0);
-    assert!((actual - expected).abs() <= 2.0e-14 * scale, "{actual} != {expected}");
+    assert!(
+        (actual - expected).abs() <= 2.0e-14 * scale,
+        "{actual} != {expected}"
+    );
 }
 
 #[test]
 fn sampled_area_and_slopes_integrate_linear_data_on_nonuniform_grid() {
     let x = [0.0, 1.0, 3.0, 4.0];
     let y = [0.0, 2.0, 6.0, 8.0];
-    assert_eq!(call(Builtin::SampleArea, &x, &y).unwrap().as_float(), Some(16.0));
+    assert_eq!(
+        call(Builtin::SampleArea, &x, &y).unwrap().as_float(),
+        Some(16.0)
+    );
     assert_eq!(
         call(Builtin::SampleSlopes, &x, &y).unwrap(),
         vector(&[2.0, 2.0, 2.0])
@@ -94,13 +100,9 @@ fn extreme_finite_data_preserves_subnormal_areas_and_finite_large_slopes() {
         (f64::MAX / 1.0e308) * 2.0,
     );
     assert_eq!(
-        call(
-            Builtin::SampleArea,
-            &[0.0, 1.0e308],
-            &[-f64::MAX, f64::MAX]
-        )
-        .unwrap()
-        .as_float(),
+        call(Builtin::SampleArea, &[0.0, 1.0e308], &[-f64::MAX, f64::MAX])
+            .unwrap()
+            .as_float(),
         Some(0.0)
     );
 }
