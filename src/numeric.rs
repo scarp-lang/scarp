@@ -21,6 +21,7 @@ pub enum Builtin {
     StdDev,
     SampleArea,
     SampleSlopes,
+    SampleCumulativeArea,
     Sigmoid,
     Relu,
     Tanh,
@@ -107,6 +108,7 @@ impl Builtin {
             "stddev" => Self::StdDev,
             "sample_area" => Self::SampleArea,
             "sample_slopes" => Self::SampleSlopes,
+            "sample_cumulative_area" => Self::SampleCumulativeArea,
             "sigmoid" => Self::Sigmoid,
             "relu" => Self::Relu,
             "tanh" => Self::Tanh,
@@ -178,7 +180,7 @@ impl Builtin {
         use ValueType::{Float, Integer, Integers, String, Tile, Vector};
         match self {
             Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
-            Self::SampleArea | Self::SampleSlopes => &[Vector, Vector],
+            Self::SampleArea | Self::SampleSlopes | Self::SampleCumulativeArea => &[Vector, Vector],
             Self::IntsLength | Self::IntsSum | Self::IntsToVector => &[Integers],
             Self::IntsWindow | Self::IntsSet => &[Integers, Integer, Integer],
             Self::IntsJoin => &[Integers, Integers],
@@ -579,7 +581,10 @@ pub(crate) fn evaluate_with_spans(
     ) {
         return kernels::evaluate(function, args, budget, span, argument_span);
     }
-    if matches!(function, Builtin::SampleArea | Builtin::SampleSlopes) {
+    if matches!(
+        function,
+        Builtin::SampleArea | Builtin::SampleSlopes | Builtin::SampleCumulativeArea
+    ) {
         return samples::evaluate(function, args, budget, span, argument_span);
     }
     if function.is_tile() {
@@ -896,6 +901,7 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::StdDev
         | Builtin::SampleArea
         | Builtin::SampleSlopes
+        | Builtin::SampleCumulativeArea
         | Builtin::Sigmoid
         | Builtin::Relu
         | Builtin::Tanh

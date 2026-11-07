@@ -16,6 +16,15 @@ supported, the numerical runtime exposes two pure, typed calls:
 | `sample_area(x, y)` | `(vector, vector) -> float` | Composite trapezoidal integral of values `y` sampled at coordinates `x` |
 | `sample_slopes(x, y)` | `(vector, vector) -> vector` | Secant derivative on each consecutive interval |
 
+**Additional work in progress (not yet merged or released):**
+`sample_cumulative_area(x, y) -> vector` returns trapezoid integration
+at every sample: the first element is `0.0` and the last equals
+`sample_area(x, y)` (for finite, representable results). The output length
+equals the input length and is a fresh allocation charged at 8 bytes per
+sample; grid, shape, error and work requirements are shared with the existing
+calculus functions. This is a proposed post-alpha.3 API, not a feature of
+published binaries.
+
 Both inputs must have the same length of **2–65,536** and coordinate values
 must be **strictly increasing**. Readings may be negative. The output of
 `sample_slopes` has one fewer element than its inputs; each result is attached

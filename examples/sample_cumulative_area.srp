@@ -1,0 +1,5 @@
+// Track displacement at each time sample from measured velocity.
+bind time = [0.0, 1.0, 3.0, 4.0];
+bind speed = [0.0, 2.0, 6.0, 8.0];
+print(sample_cumulative_area(time, speed));
+print(sample_area(time, speed));

@@ -16,6 +16,7 @@ enum Native {
     Rms(usize),
     SampleArea(usize),
     SampleSlopes(usize),
+    SampleCumulativeArea(usize),
 }
 
 fn call(kernel: Builtin, args: &[Value]) -> Value {
@@ -35,6 +36,12 @@ fn native(workload: Native) -> Value {
             let x: Vec<f64> = (0..count).map(|i| i as f64).collect();
             let x = Value::Vector(scarp::value::NumericVector::new(&x).unwrap());
             call(Builtin::SampleArea, &[x, fill(2.0, count)])
+        }
+        Native::SampleCumulativeArea(count) => {
+            let x: Vec<f64> = (0..count).map(|i| i as f64).collect();
+            let x = Value::Vector(scarp::value::NumericVector::new(&x).unwrap());
+            let trajectory = call(Builtin::SampleCumulativeArea, &[x, fill(2.0, count)]);
+            call(Builtin::Sum, &[trajectory])
         }
         Native::SampleSlopes(count) => {
             let x: Vec<f64> = (0..count).map(|i| i as f64).collect();
@@ -140,6 +147,13 @@ fn main() {
                 Native::SampleArea(count),
             ),
             (
+                "sample_cumulative_area",
+                format!(
+                    "bind x=ints_to_vector(ints_range(0,{count},1)); print(sum(sample_cumulative_area(x,fill(2.0,{count}))));"
+                ),
+                Native::SampleCumulativeArea(count),
+            ),
+            (
                 "sample_slopes",
                 format!(
                     "bind x=ints_to_vector(ints_range(0,{count},1)); print(sum(sample_slopes(x,scale(x,2.0))));"
@@ -150,7 +164,11 @@ fn main() {
             cases.push((
                 format!("{name}_{count}"),
                 source,
-                2.0 * (count - 1) as f64,
+                if name == "sample_cumulative_area" {
+                    (count * (count - 1)) as f64
+                } else {
+                    2.0 * (count - 1) as f64
+                },
                 workload,
                 count,
             ));

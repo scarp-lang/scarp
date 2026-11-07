@@ -54,7 +54,7 @@ cargo run --locked -- modules examples/module_inspection.srp
 cargo run --locked -- modules examples/constant_expressions.srp
 cargo run --locked -- run examples/typed_declarations.srp
 cargo run --locked -- check examples/typed_declarations.srp
-for example in scalar_conversions unicode_text symbol_navigation text_construction integer_collections bit_fields numerical_kernels root_mean_square collection_module topk_scores temperature_softmax sampled_calculus; do
+for example in scalar_conversions unicode_text symbol_navigation text_construction integer_collections bit_fields numerical_kernels root_mean_square collection_module topk_scores temperature_softmax sampled_calculus sample_cumulative_area; do
     cargo run --locked -- run "examples/$example.srp"
     cargo run --locked -- check "examples/$example.srp"
 done
