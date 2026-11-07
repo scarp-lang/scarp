@@ -1,5 +1,14 @@
 # Version and API compatibility
 
+`0.0.6-alpha.3` candidate source is **not published**.
+It adds four typed pure numerical built-ins: `topk`,
+`topk_values`, `softmax_temp`, and `logsoftmax_temp`.
+Rust embedders with exhaustive `numeric::Builtin` matches must handle
+the new variants. The experimental scalar IR remains private, and no
+general native compiler or stable ABI is added. See
+[alpha.3 candidate notes](releases/v0.0.6-alpha.3.md).
+The latest published prerelease remains v0.0.6-alpha.2.
+
 Published v0.0.6-alpha.1 adds the pure `rms` builtin and public
 `numeric::Builtin::Rms` variant. Exhaustive Rust host matches need an arm;
 user function declarations named `rms` retain precedence. Existing primitive
