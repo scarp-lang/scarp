@@ -1,6 +1,9 @@
 //! Private, bounded scalar program IR lowered from the canonical resolved plan.
 //! No interpreter fallback, target ABI, public commands, or native object output.
 
+#[cfg(test)]
+mod execute;
+
 use super::{invalid, ScalarExpressionIr};
 use crate::{
     ast::{BinaryOperator, OutputTarget},
