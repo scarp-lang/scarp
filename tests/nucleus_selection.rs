@@ -13,8 +13,7 @@ fn inputs(probabilities: &[f64], mass: f64) -> Vec<Value> {
 }
 
 fn indices(probabilities: &[f64], mass: f64) -> Vec<i64> {
-    let result = numeric::evaluate(Builtin::TopP, &inputs(probabilities, mass), 2_500_000)
-        .unwrap();
+    let result = numeric::evaluate(Builtin::TopP, &inputs(probabilities, mass), 2_500_000).unwrap();
     result.as_integers().unwrap().as_slice().to_vec()
 }
 
@@ -55,9 +54,7 @@ fn nucleus_builtins_are_typed_and_composable_with_softmax() {
         "[integer: 0]\n"
     );
     assert_eq!(
-        output(
-            "bind scores=[1.0,4.0,4.0,2.0]; print(top_p(softmax_temp(scores,0.5),0.9));"
-        ),
+        output("bind scores=[1.0,4.0,4.0,2.0]; print(top_p(softmax_temp(scores,0.5),0.9));"),
         "[integer: 1, 2]\n"
     );
     assert_eq!(output("bind top_p=7; print(top_p);"), "7\n");
@@ -71,8 +68,7 @@ fn nucleus_is_stable_on_ties_and_preserves_signed_zero_payloads() {
     assert_eq!(indices(&[0.0, 1.0, 0.0], 1.0), vec![1, 0, 2]);
 
     let result =
-        numeric::evaluate(Builtin::TopPValues, &inputs(&[1.0, -0.0, 0.0], 1.0), 100)
-            .unwrap();
+        numeric::evaluate(Builtin::TopPValues, &inputs(&[1.0, -0.0, 0.0], 1.0), 100).unwrap();
     let bits: Vec<u64> = result
         .as_vector()
         .unwrap()
@@ -82,11 +78,7 @@ fn nucleus_is_stable_on_ties_and_preserves_signed_zero_payloads() {
         .collect();
     assert_eq!(
         bits,
-        vec![
-            1.0_f64.to_bits(),
-            (-0.0_f64).to_bits(),
-            0.0_f64.to_bits()
-        ]
+        vec![1.0_f64.to_bits(), (-0.0_f64).to_bits(), 0.0_f64.to_bits()]
     );
 }
 
@@ -147,8 +139,7 @@ fn nucleus_has_exact_deterministic_work_and_payload_charges() {
             .kind,
         Kind::VectorBudget
     );
-    let values = numeric::evaluate_with_vector_limit(Builtin::TopPValues, &args, 18, 40)
-        .unwrap();
+    let values = numeric::evaluate_with_vector_limit(Builtin::TopPValues, &args, 18, 40).unwrap();
     let selected: Vec<f64> = values
         .as_vector()
         .unwrap()
@@ -184,8 +175,7 @@ fn nucleus_matches_integer_mass_oracle_for_seeded_tie_heavy_inputs() {
             if sum == 0 {
                 continue;
             }
-            let probabilities: Vec<f64> =
-                weights.iter().map(|&w| w as f64 / sum as f64).collect();
+            let probabilities: Vec<f64> = weights.iter().map(|&w| w as f64 / sum as f64).collect();
             let mut ranked: Vec<i64> = (0..len as i64).collect();
             ranked.sort_unstable_by(|&left, &right| {
                 weights[right as usize]
@@ -218,12 +208,7 @@ fn maximum_vector_remains_bounded_and_deterministic() {
     let mut probabilities = vec![0.0; MAX_VECTOR_LENGTH];
     probabilities[0] = 1.0;
     assert_eq!(indices(&probabilities, 0.99), vec![0]);
-    let result = numeric::evaluate(
-        Builtin::TopP,
-        &inputs(&probabilities, 1.0),
-        2_000_000,
-    )
-    .unwrap();
+    let result = numeric::evaluate(Builtin::TopP, &inputs(&probabilities, 1.0), 2_000_000).unwrap();
     let full = result.as_integers().unwrap().as_slice();
     assert_eq!(full.len(), MAX_VECTOR_LENGTH);
     assert_eq!(full[0], 0);
