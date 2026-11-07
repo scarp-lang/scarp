@@ -72,6 +72,8 @@ algorithm uses recursion, threads, GPU execution or external dependencies.
 ```sh
 cargo test --locked --offline --test sampled_calculus
 cargo test --locked --offline --test examples
+python3 scripts/test_sampled_calculus.py target/debug/scarp
+cargo bench --locked --offline --bench numerics -- --quick
 sh scripts/check.sh --offline
 ```
 
