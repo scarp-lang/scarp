@@ -1,7 +1,9 @@
 # Deterministic Top-K score selection
 
-> **Development main only:** these features are not included in the published
-> `v0.0.6-alpha.2` prerelease. Build current Scarp source to try them.
+> **Published in Scarp `v0.0.6-alpha.3`.** Download the verified
+> [GitHub prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3)
+> for Windows, Linux and macOS. These functions are absent from earlier
+> `v0.0.6-alpha.2` binaries.
 
 Scarp's pure numerical built-ins now support selecting several candidates
 from a finite numerical score vector, without a general tensor runtime or
