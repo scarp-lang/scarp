@@ -15,7 +15,7 @@ PUBLISHED_VERSION = "0.0.6-alpha.2"
 HISTORICAL_ALPHA1 = "0.0.6-alpha.1"
 HISTORICAL_ALPHA4 = "0.0.5-alpha.4"
 HISTORICAL_ALPHA5 = "0.0.5-alpha.5"
-PACKAGE_VERSION = "0.0.6-alpha.2"
+PACKAGE_VERSION = "0.0.6-alpha.3"
 
 
 def package_version():
@@ -69,15 +69,16 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         needles = {
             "README.md": (f"**{version}**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/README.md": (f"**{version} prerelease**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
-            "docs/compatibility.md": (f"`{version}` is published", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
+            "docs/compatibility.md": (f"`{version}` candidate", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/reference/cli.md": (f"v{version}",),
             "docs/development/feature-matrix.md": (f"Cargo declares {version}",),
-            "CHANGELOG.md": (f"## {version} — prerelease, 2026-11-06",),
-            "docs/releases/v0.0.6-alpha.2.md": (f"Scarp v{version}", "not a published GitHub release", "release engineering"),
-            "docs/releases/v0.0.6-alpha.2-publication.md": (
+            "CHANGELOG.md": (f"## {version} — source candidate",),
+            "docs/releases/v0.0.6-alpha.3.md": (f"Scarp v{version}", "Not a published GitHub prerelease", "Release process"),
+            "docs/releases/v0.0.6-alpha.3-publication.md": (
                 f"Scarp v{version} — prerelease", "## New in",
                 "## Compatibility and limits",
             ),
+            "docs/releases/v0.0.6-alpha.2.md": (f"Scarp v{PUBLISHED_VERSION}", "not a published GitHub release", "release engineering"),
             "docs/releases/v0.0.6-alpha.1.md": (f"Scarp v{HISTORICAL_ALPHA1}", "published GitHub prerelease", "post-publication verification record"),
             "docs/releases/v0.0.6-alpha.1-validation.md": (
                 f"Scarp v{HISTORICAL_ALPHA1}", "aa329a22cf2bf92d2c9814a26ff9c8b67a72e6e8",
@@ -107,6 +108,28 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
                 for needle in expected:
                     self.assertIn(needle, text, f"update {filename} when changing the package release anchor")
 
+    def test_alpha3_public_notes_are_source_stable_and_candidate_is_not_published(self):
+        candidate = (ROOT / "docs/releases/v0.0.6-alpha.3.md").read_text(encoding="utf-8")
+        public = (ROOT / "docs/releases/v0.0.6-alpha.3-publication.md").read_text(encoding="utf-8")
+        checklist = (ROOT / "docs/releases/v0.0.6-alpha.3-preparation.md").read_text(encoding="utf-8")
+        self.assertIn("Not a published GitHub prerelease", candidate)
+        self.assertIn(".github/release-request.json", checklist)
+        self.assertIn("# Scarp v0.0.6-alpha.3 — prerelease", public)
+        self.assertIn("## Compatibility and limits", public)
+        for phrase in (
+            "not a published github release", "source candidate under validation",
+            "do not authorize a tag", "status: preparation only",
+        ):
+            self.assertNotIn(phrase, public.lower())
+        for member in (
+            "docs/topk-selection.md", "docs/temperature-softmax.md",
+            "examples/topk_scores.srp", "examples/topk_scores.stdout",
+            "examples/temperature_softmax.srp", "examples/temperature_softmax.stdout",
+        ):
+            with self.subTest(member=member):
+                self.assertTrue((ROOT / member).is_file())
+                self.assertIn(member, public + checklist)
+
     def test_publication_notes_use_tag_stable_links_and_accurate_cache_scope(self):
         # Release notes are rendered on the GitHub Release page, not inside
         # docs/releases/. Relative Markdown paths there would be broken.
@@ -132,7 +155,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         for name in ("cache-eviction.md", "cache-edit-planning.md"):
             with self.subTest(link=name):
                 self.assertIn(
-                    f"https://github.com/scarp-lang/scarp/blob/v{PACKAGE_VERSION}/"
+                    f"https://github.com/scarp-lang/scarp/blob/v{PUBLISHED_VERSION}/"
                     f"docs/development/{name}",
                     notes,
                 )
@@ -140,7 +163,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
     def test_latest_published_anchor_and_immutable_candidate_snapshot(self):
         version = PUBLISHED_VERSION
         self.assertEqual(PACKAGE_VERSION, package_version())
-        self.assertEqual(version, PACKAGE_VERSION)
+        self.assertNotEqual(version, PACKAGE_VERSION)
         for filename in ("README.md", "docs/README.md", "docs/compatibility.md"):
             with self.subTest(file=filename):
                 text = (ROOT / filename).read_text(encoding="utf-8")
