@@ -143,7 +143,10 @@ fn empty_input_invalid_temperature_type_and_arity_are_atomic() {
         failure(&format!("print({name}([1.0],1));"), Kind::TypeMismatch);
         failure(&format!("print({name}([1],1.0));"), Kind::TypeMismatch);
         failure(&format!("print({name}([1.0]));"), Kind::CallArguments);
-        failure(&format!("print({name}([1.0],1.0,1.0));"), Kind::CallArguments);
+        failure(
+            &format!("print({name}([1.0],1.0,1.0));"),
+            Kind::CallArguments,
+        );
     }
 }
 
