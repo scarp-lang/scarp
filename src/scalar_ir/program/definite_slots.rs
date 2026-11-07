@@ -77,10 +77,7 @@ fn needs_slot(known: SlotSet, slot: usize, span: Span) -> Result<(), Diagnostic>
     }
 }
 
-fn needs_expression(
-    known: SlotSet,
-    expression: &ScalarExpressionIr,
-) -> Result<(), Diagnostic> {
+fn needs_expression(known: SlotSet, expression: &ScalarExpressionIr) -> Result<(), Diagnostic> {
     for instruction in &expression.steps {
         if let Operation::Load { slot, .. } = instruction.kind {
             needs_slot(known, slot, instruction.span)?;
@@ -147,8 +144,9 @@ impl ScalarProgramIr {
                     join(*target, next, &mut states, &mut queued, &mut pending);
                     continue;
                 }
-                ProgramOp::JumpIfFalse { target, .. }
-                | ProgramOp::RepeatGuard { target, .. } => Some(*target),
+                ProgramOp::JumpIfFalse { target, .. } | ProgramOp::RepeatGuard { target, .. } => {
+                    Some(*target)
+                }
                 _ => None,
             };
             if let Some(target) = branch {
