@@ -1,9 +1,10 @@
 # Numerical vectors
 
-Published v0.0.5-alpha.5 includes immutable, one-dimensional finite binary64
-vectors and the previously introduced vector kernels below. Development source
-additionally includes [root mean square](root-mean-square.md), unreleased work
-for v0.0.6. Older alpha-specific sections retain the introduction history; see
+Published v0.0.5-alpha.5 introduced immutable, one-dimensional finite binary64
+vectors and earlier kernels. The published **v0.0.6-alpha.3** additionally
+includes [root mean square](root-mean-square.md), deterministic Top-K ranking
+and temperature-controlled softmax; see their versioned feature sections below.
+Older alpha-specific sections retain the historical introduction context; see
 the [integration audit](development/numerical-vectors-audit.md).
 
 ## Construct, inspect and replace
@@ -207,7 +208,7 @@ it does not charge additional `--max-vector-bytes`. They are useful
 for deterministic score decoding, but are **not in published alpha.3**.
 See [proposal 0025](proposals/0025-stable-vector-selection.md).
 
-## Development-only Top-K inference ranking
+## Published v0.0.6-alpha.3 Top-K inference ranking
 
 Two pure typed built-ins extend `argmax` to multiple candidates:
 `topk(scores, count) -> integers` returns original zero-based indices in
@@ -217,10 +218,10 @@ index, including signed-zero ties. A count of zero works on empty vectors;
 negative and oversized counts fail with E0033. Both operations use a
 bounded heap and charge deterministic work plus explicit vector allocation.
 See the complete [Top-K guide](topk-selection.md) and
-[executable example](../examples/topk_scores.srp). These features are on
-**development main only**, not in the published v0.0.6-alpha.2 prerelease.
+[executable example](../examples/topk_scores.srp). These features are
+**published in v0.0.6-alpha.3**, not in the earlier v0.0.6-alpha.2 prerelease.
 
-## Development-only temperature-controlled probabilities
+## Published v0.0.6-alpha.3 temperature-controlled probabilities
 
 The pure typed `softmax_temp(scores, temperature) -> vector` and
 `logsoftmax_temp(scores, temperature) -> vector` functions adjust probability
@@ -231,7 +232,7 @@ empty scores fail with E0034, and unrepresentable log outputs with E0031.
 Both functions prepay `4n` work and `8n` new vector payload bytes.
 See the [temperature guide](temperature-softmax.md) and
 [executable example](../examples/temperature_softmax.srp).
-These are **development-only**, not included in published v0.0.6-alpha.2.
+These are **published in v0.0.6-alpha.3**, not the earlier v0.0.6-alpha.2.
 
 ## Development-only categorical logit loss
 
