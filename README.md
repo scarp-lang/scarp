@@ -1,17 +1,19 @@
 # Scarp
 
-**0.0.6-alpha.3** is the next **source candidate**, not a published
-GitHub prerelease. Candidate scope includes [deterministic Top-K ranking](docs/topk-selection.md),
-[temperature-controlled softmax](docs/temperature-softmax.md) and
-private scalar IR compiler safeguards. Its versioned
-[candidate notes](docs/releases/v0.0.6-alpha.3.md),
-[public-facing notes](docs/releases/v0.0.6-alpha.3-publication.md) and
-[release gates](docs/releases/v0.0.6-alpha.3-preparation.md) are under
-review. No tag or release authorization is implied.
+**0.0.6-alpha.3** is the latest **published GitHub prerelease** (7 November
+2026). It adds pure deterministic [Top-K ranking](docs/topk-selection.md),
+[temperature-controlled softmax](docs/temperature-softmax.md), and
+private scalar IR compiler verification. Download verified Windows x64, Linux
+x64 and macOS Apple Silicon archives from the
+[public release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3).
+See [public release notes](docs/releases/v0.0.6-alpha.3-publication.md)
+and the [exact-source verification record](docs/releases/v0.0.6-alpha.3-validation.md).
+The [candidate notes](docs/releases/v0.0.6-alpha.3.md) remain a historical
+prepublication snapshot; this is not a stable or general native compiler release.
 
 **Build Beyond Boundaries.**
 
-**0.0.6-alpha.2** is the latest **published GitHub prerelease** (6 November
+**0.0.6-alpha.2** is an **earlier published GitHub prerelease** (6 November
 2026), available for Windows x64, Linux x64 and macOS Apple Silicon. It adds
 optional dependency invalidation, bounded semantic/token/AST caches, and
 scoped cache eviction for Rust embedding hosts. See the
@@ -35,8 +37,8 @@ See [alpha.5 release notes](docs/releases/v0.0.5-alpha.5.md) and the
 [publication record](docs/releases/v0.0.5-alpha.5-validation.md).
 
 Scarp is an experimental programming language implemented in Rust. The latest
-published **0.0.6-alpha.2** prerelease was published on 6 November 2026 from
-exact source `398b8ff705154a02423fe458ce3a427401e81e31`. The compiler provides a lexer,
+published **0.0.6-alpha.3** prerelease was published on 7 November 2026 from
+exact source `ceff07d9014f466974e0c9e02fc5d23573f55777`. The compiler provides a lexer,
 parser, typed resolver, interpreter, source modules, finite binary64 numerics
 and a Scarp-first CLI. The bounded `create`, `launch` and project-directory
 `verify` workflow remains available. Syntax and APIs are not stable.
@@ -167,12 +169,12 @@ one-hot targets and explicit loss gradients. See [vectors](docs/vectors.md),
 [error repairs](docs/reference/numerical-errors.md).
 
 The latest published prerelease is
-[0.0.6-alpha.2](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.2),
-published 6 November 2026 from source commit
-`398b8ff705154a02423fe458ce3a427401e81e31`. It provides Windows x64,
+[0.0.6-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3),
+published 7 November 2026 from source commit
+`ceff07d9014f466974e0c9e02fc5d23573f55777`. It provides Windows x64,
 Linux x64 and macOS Apple Silicon archives with SHA-256 checksums.
-See the [public release notes](docs/releases/v0.0.6-alpha.2-publication.md),
-[publication verification record](docs/releases/v0.0.6-alpha.2-validation.md)
+See the [public release notes](docs/releases/v0.0.6-alpha.3-publication.md),
+[publication verification record](docs/releases/v0.0.6-alpha.3-validation.md)
 and [release engineering](docs/releasing.md) for publication gates.
 Earlier prerelease records remain historical snapshots.
 
@@ -194,7 +196,7 @@ These commands are absent from published alpha.5 binaries.
 
 Binary archives and checksums are available through
 [GitHub Releases](https://github.com/scarp-lang/scarp/releases). See the
-[latest v0.0.6-alpha.2 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.2)
+[latest v0.0.6-alpha.3 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3)
 for its supported archives, checksums and source commit. The
 [changelog](CHANGELOG.md) records recent language and tooling changes.
 
