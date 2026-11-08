@@ -15,9 +15,7 @@ pub(super) fn evaluate(
     let left = args[0].require_vector(at(0))?;
     let right = args[1].require_vector(at(1))?;
     if left.len() != right.len() {
-        return Err(
-            length_error(at(1)).with_help("provide vectors of equal visible length")
-        );
+        return Err(length_error(at(1)).with_help("provide vectors of equal visible length"));
     }
     if left.is_empty() {
         return Err(domain(at(0), "cosine_similarity requires nonempty vectors"));
@@ -30,19 +28,26 @@ pub(super) fn evaluate(
 
     let (left_scale, left_norm) = scaled_l2(left, span)?;
     if left_scale == 0.0 {
-        return Err(domain(at(0), "cosine_similarity requires a nonzero left vector"));
+        return Err(domain(
+            at(0),
+            "cosine_similarity requires a nonzero left vector",
+        ));
     }
     let (right_scale, right_norm) = scaled_l2(right, span)?;
     if right_scale == 0.0 {
-        return Err(domain(at(1), "cosine_similarity requires a nonzero right vector"));
+        return Err(domain(
+            at(1),
+            "cosine_similarity requires a nonzero right vector",
+        ));
     }
 
     // Each product is in [-1,1] and the compensated sum is at most N in
     // magnitude, even when the unscaled dot product cannot be represented.
     let dot = compensated(
-        left.as_slice().iter().zip(right.as_slice()).map(|(a, b)| {
-            Ok((a.get() / left_scale) * (b.get() / right_scale))
-        }),
+        left.as_slice()
+            .iter()
+            .zip(right.as_slice())
+            .map(|(a, b)| Ok((a.get() / left_scale) * (b.get() / right_scale))),
         span,
     )?;
     // The normalized lengths are <= sqrt(N); their product is bounded by N.

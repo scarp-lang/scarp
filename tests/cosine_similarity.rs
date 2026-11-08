@@ -43,10 +43,7 @@ fn independently_scaled_extreme_vectors_remain_finite() {
     close(cosine(&[tiny, tiny], &[tiny, tiny]), 1.0);
     close(cosine(&[tiny, tiny], &[-tiny, -tiny]), -1.0);
     close(cosine(&[f64::MAX, f64::MAX], &[f64::MAX, f64::MAX]), 1.0);
-    close(
-        cosine(&[f64::MAX, f64::MAX], &[-f64::MAX, f64::MAX]),
-        0.0,
-    );
+    close(cosine(&[f64::MAX, f64::MAX], &[-f64::MAX, f64::MAX]), 0.0);
     close(cosine(&[1e308, 1e-308], &[1e308, 1e-308]), 1.0);
 }
 

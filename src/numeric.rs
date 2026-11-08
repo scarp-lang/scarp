@@ -8,9 +8,9 @@ use crate::{
 
 mod integers;
 mod kernels;
-mod similarity;
 mod samples;
 mod scalar_text;
+mod similarity;
 mod temperature;
 mod text;
 mod tiles;
