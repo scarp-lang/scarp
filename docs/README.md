@@ -1,16 +1,20 @@
 # Scarp documentation
 
-**0.0.6-alpha.4 prerelease** is an **unpublished source candidate**,
-not a tagged public release. See [alpha.4 source notes](releases/v0.0.6-alpha.4.md)
-and [release gates](releases/v0.0.6-alpha.4-preparation.md).
+**0.0.6-alpha.4 prerelease** is **published on 8 November 2026**.
+The [public GitHub release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4)
+and [exact-source verification](releases/v0.0.6-alpha.4-validation.md)
+record the annotated tag, all seven public assets and successful CI.
+The [alpha.4 candidate notes](releases/v0.0.6-alpha.4.md) remain an
+immutable prepublication snapshot.
 
-**Next prerelease preparation:** [alpha.4 checklist](releases/v0.0.6-alpha.4-preparation.md)
-and [proposed scope](releases/v0.0.6-alpha.4.md) are planning only,
-not a version change, release, or publication authorization.
+**Next prerelease preparation:** [alpha.5 development plan](releases/v0.0.6-alpha.5-development-plan.md)
+is a separately staged development review, **not** a published release
+or automatic source authorization.
 
-**Merged, unreleased native experiment:** [the first ELF64 integer-kernel
-object writer](native-elf64.md) uses the verified private scalar IR. It does
-not implement a general native compile command, executable linker or stable ABI.
+**Published experimental native feature:** [the first ELF64 integer-kernel
+object writer](native-elf64.md) uses the verified private scalar IR.
+It does not implement a general native compile command, executable linker
+or stable ABI.
 
 **0.0.6-alpha.3 prerelease** was **published on 7 November 2026**.
 It includes [Top-K ranking](topk-selection.md),
@@ -45,11 +49,11 @@ see [alpha.5 release notes](releases/v0.0.5-alpha.5.md) and the
 Development declarations use `bind` and `var`; see the [migration guide](syntax-migration.md). Published tags retain their original syntax.
 
 Choose a guide by the task you want to complete. Current tutorials are
-updated for the **0.0.6-alpha.3 published prerelease**, retaining
+updated for the **0.0.6-alpha.4 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
 contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.6-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3),
+[0.0.6-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)

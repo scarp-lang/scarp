@@ -1,19 +1,19 @@
 # Feature completeness and development roadmap
 
-Cargo declares `0.0.6-alpha.4` as an **unpublished source candidate**.
-The latest public prerelease is v0.0.6-alpha.3 (7 November 2026).
-Its typed built-ins `topk`, `topk_values`, `softmax_temp` and
-`logsoftmax_temp` are now publicly available in the GitHub prerelease.
-Private scalar IR verifies typed control flow, slot lifetimes and differential
-execution without a general native object writer. Newer **unreleased main**
-adds the first narrowly scoped compiler-owned ELF64 integer-kernel object writer
-(#158) and scalar cosine similarity (#157); neither is in the alpha.3 tag,
-and neither introduces general executable compilation. See the
-[exact-source alpha.3 validation](../releases/v0.0.6-alpha.3-validation.md).
-Future Top-P nucleus work remains in draft PR #149 and outside this release.
+Cargo declares `0.0.6-alpha.4` as the **published GitHub prerelease**.
+The latest public prerelease is v0.0.6-alpha.4 (8 November 2026).
+Earlier alpha.3 introduced `topk`, `topk_values`, `softmax_temp`
+and `logsoftmax_temp` and compiler-owned checked scalar IR.
+Alpha.4 adds bounded sampled calculus, finite cosine similarity and
+the first narrowly scoped compiler-owned x86-64 ELF64 integer-kernel
+relocatable-object Rust API (one pure initializer). No general native
+executable compiler or new CLI command is implied.
+See the [alpha.4 public verification](../releases/v0.0.6-alpha.4-validation.md).
+Top-P, Pearson correlation and multi-binding native dependencies are in
+**post-alpha.4 draft PRs**, not in this published version.
 
-Audit date: 2026-11-07. This inventory describes the published
-**v0.0.6-alpha.3 prerelease** and development work remaining; update a row
+Audit date: 2026-11-08. This inventory describes the published
+**v0.0.6-alpha.4 prerelease** and development work remaining; update a row
 when an implementation lands. No roadmap row implies a new CLI command.
 The earlier 0.0.6-alpha.2 was published on 6 November 2026 from exact source
 `398b8ff705154a02423fe458ce3a427401e81e31`;

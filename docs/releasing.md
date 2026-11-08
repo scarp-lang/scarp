@@ -1,10 +1,14 @@
 # Preparing a prerelease
 
-**Unpublished source candidate:** v0.0.6-alpha.4 requires separate
-authorization of the complete exact-main source SHA before any tag,
-release-control request or publication. The latest published prerelease
-remains v0.0.6-alpha.3. See
-[alpha.4 readiness](releases/v0.0.6-alpha.4-preparation.md).
+**Latest published prerelease:** v0.0.6-alpha.4 was published on
+8 November 2026 from exact approved source
+`f04be0758cbce405ddcdb229699b0ff83c09d207`.
+See the [public release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4),
+[postpublication verification](releases/v0.0.6-alpha.4-validation.md),
+and immutable historical [candidate notes](releases/v0.0.6-alpha.4.md).
+Its fulfilled one-time authorization was retired in a separate maintenance
+PR. A different version, including alpha.5, requires its **own** complete
+source-SHA approval, reviewed control request and new seven-job gates.
 
 The package workflow builds and verifies archives. It has read-only repository
 permissions and never creates tags or GitHub Releases. A separate publisher
