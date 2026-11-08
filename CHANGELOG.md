@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.0.6-alpha.5 — source candidate (unpublished), 2026-11-08
+
+- Add deterministic CPU-only nucleus selection `top_p(vector, mass) -> integers`
+  and `top_p_values(vector, mass) -> vector`, with a normalized finite
+  probability domain, original-index stable ties, compensated cumulative
+  mass and bounded work/allocations (proposed development PR #161).
+- Extend the experimental safe-Rust x86-64 ELF64 relocatable-object kernel
+  from a standalone pure integer initializer to a verified bounded series
+  of integer `bind` statements referencing earlier integer bindings
+  (proposed development PR #162). Not a general compiler or public CLI.
+- Add scientifically centered `pearson_correlation(left, right) -> float`
+  with independent finite scaling, compensated moments, constant-input
+  errors, argument spans and deterministic budgets (PR #163).
+- Exercise the combined numerical/native/compiler changes together on
+  Linux, Windows, macOS, Rust 1.74 and all three native package targets
+  (integration draft #165).
+- **Candidate only:** prior alpha.4 publication and release-control retirement,
+  final integrated main CI and independent artifact validation are prerequisites.
+  Alpha.5 needs its own separate, exact-version + full-source authorization
+  and one-time release request. No alpha.5 tag or GitHub Release is implied.
+
 ## 0.0.6-alpha.4 — source candidate (unpublished), 2026-11-08
 
 - Merge pure sampled numerical kernels (`sample_area`, `sample_slopes`,
