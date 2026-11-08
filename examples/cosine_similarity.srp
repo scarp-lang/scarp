@@ -1,0 +1,5 @@
+// Similarity between finite vectors, without allocating a new vector.
+bind direction = [3.0, 4.0];
+print(cosine_similarity(direction, [6.0, 8.0]));
+print(cosine_similarity([1.0, 0.0], [0.0, 1.0]));
+print(cosine_similarity([3.0], [-4.0]));

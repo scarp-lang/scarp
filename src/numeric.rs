@@ -8,6 +8,7 @@ use crate::{
 
 mod integers;
 mod kernels;
+mod similarity;
 mod samples;
 mod scalar_text;
 mod temperature;
@@ -19,6 +20,7 @@ mod topk;
 pub enum Builtin {
     Variance,
     StdDev,
+    CosineSimilarity,
     SampleArea,
     SampleSlopes,
     SampleCumulativeArea,
@@ -106,6 +108,7 @@ impl Builtin {
         Some(match name {
             "variance" => Self::Variance,
             "stddev" => Self::StdDev,
+            "cosine_similarity" => Self::CosineSimilarity,
             "sample_area" => Self::SampleArea,
             "sample_slopes" => Self::SampleSlopes,
             "sample_cumulative_area" => Self::SampleCumulativeArea,
@@ -208,7 +211,9 @@ impl Builtin {
             | Self::ArgMin
             | Self::MaxValue
             | Self::MinValue => &[Vector],
-            Self::Dot | Self::Mse | Self::Add | Self::Stitch => &[Vector, Vector],
+            Self::Dot | Self::Mse | Self::Add | Self::Stitch | Self::CosineSimilarity => {
+                &[Vector, Vector]
+            }
             Self::Window => &[Vector, Integer, Integer],
             Self::Scale => &[Vector, Float],
             Self::Clamp => &[Vector, Float, Float],
@@ -230,7 +235,9 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
-            Self::Variance | Self::StdDev | Self::SampleArea => ValueType::Float,
+            Self::Variance | Self::StdDev | Self::SampleArea | Self::CosineSimilarity => {
+                ValueType::Float
+            }
             Self::IntsLength | Self::IntsSum => ValueType::Integer,
             Self::IntsWindow
             | Self::IntsJoin
@@ -581,6 +588,9 @@ pub(crate) fn evaluate_with_spans(
     ) {
         return kernels::evaluate(function, args, budget, span, argument_span);
     }
+    if function == Builtin::CosineSimilarity {
+        return similarity::evaluate(args, budget, span, argument_span);
+    }
     if matches!(
         function,
         Builtin::SampleArea | Builtin::SampleSlopes | Builtin::SampleCumulativeArea
@@ -899,6 +909,7 @@ pub(crate) fn evaluate_with_spans(
         Builtin::Length
         | Builtin::Variance
         | Builtin::StdDev
+        | Builtin::CosineSimilarity
         | Builtin::SampleArea
         | Builtin::SampleSlopes
         | Builtin::SampleCumulativeArea
