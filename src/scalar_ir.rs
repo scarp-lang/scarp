@@ -470,14 +470,14 @@ impl ScalarExpressionIr {
     }
 }
 
-/// Compile a strictly restricted pure integer initializer to a self-contained
+/// Compile a strictly restricted linear sequence of integer initializers to a self-contained
 /// x86-64 ELF64 relocatable kernel. The ABI is experimental and is not the
 /// observable Scarp stdout/program-execution contract.
 pub(crate) fn emit_integer_kernel(source: &str) -> Result<Vec<u8>, Diagnostic> {
     let program = crate::compile(source)?;
     crate::native_preflight::inspect(&program)?;
     let ir = program::ScalarProgramIr::lower(&program)?;
-    elf64::emit(ir.single_integer_kernel()?)
+    elf64::emit(ir.integer_kernel()?)
 }
 
 /// Verify a private whole-program scalar IR, including all lowered expression
