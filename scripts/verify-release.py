@@ -9,7 +9,7 @@ import subprocess
 import tarfile
 import zipfile
 
-EXTERNAL_DOCS_VERSIONS = {"0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4"}
+EXTERNAL_DOCS_VERSIONS = {"0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5"}
 DOCUMENTATION_REPOSITORY = "https://github.com/scarp-lang/scarp-docs"
 METADATA_SOURCE = ".github/release-metadata.json"
 METADATA_MEMBER = "RELEASE-METADATA.json"
@@ -34,7 +34,7 @@ def release_notes_at(source_directory, commit, version):
     if version not in EXTERNAL_DOCS_VERSIONS:
         return data
     metadata = validate_release_metadata(data, version)
-    if version in ("0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4"):
+    if version in ("0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5"):
         # Read the reviewed notes from the exact approved source commit. Unlike
         # earlier metadata-only releases, alpha.4 carries a real feature/limit
         # inventory and must not render notes from a moving checkout.
@@ -43,14 +43,14 @@ def release_notes_at(source_directory, commit, version):
         # immutable source commit, never from a moving checkout.
         notes_path = (
             f"docs/releases/v{version}-publication.md"
-            if version in ("0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4")
+            if version in ("0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5")
             else f"docs/releases/v{version}.md"
         )
         notes = subprocess.check_output(
             ["git", "-C", str(source_directory), "show", f"{commit}:{notes_path}"],
             text=True, encoding="utf-8",
         ).rstrip()
-        if version in ("0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4"):
+        if version in ("0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5"):
             if (
                 not notes.startswith(f"# Scarp v{version} — prerelease\n")
                 or any(phrase in notes.lower() for phrase in (
@@ -160,31 +160,31 @@ def verify(directory, version, commit, source_directory=None):
             "examples/loops.srp", "examples/loops.stdout",
             "examples/repeat.srp", "examples/repeat.stdout",
             "examples/control_escapes.srp", "examples/control_escapes.stdout",
-        ) if (version.startswith("0.0.3-") or version in ("0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4")) else ()
+        ) if (version.startswith("0.0.3-") or version in ("0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5")) else ()
         syntax_migration_files = (
             "examples/output.srp", "examples/output.stdout",
             "docs/output.md", "docs/syntax-migration.md",
-        ) if version in ("0.0.3-beta.2", "0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4") else ()
+        ) if version in ("0.0.3-beta.2", "0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5") else ()
         function_files = (
             "docs/functions.md", "examples/functions.srp", "examples/functions.stdout",
             "examples/function_contracts.srp", "examples/function_contracts.stdout",
             "examples/function_recursion.srp", "examples/function_recursion.stdout",
             "docs/budgets.md", "docs/reference/cli.md", "docs/embedding.md",
-        ) if version in ("0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4") else ()
+        ) if version in ("0.0.3-beta.3", "0.0.4-dev", "0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5") else ()
         float_files = (
             "docs/floats.md", "examples/float_refinement.srp", "examples/float_refinement.stdout",
             "examples/float_smoothing.srp", "examples/float_smoothing.stdout",
-        ) if version in ("0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4") else ()
+        ) if version in ("0.0.4-alpha.1", "0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5") else ()
         vector_files = (
             "docs/vectors.md", "examples/vectors.srp", "examples/vectors.stdout",
             "examples/vector_probabilities.srp", "examples/vector_probabilities.stdout",
             "examples/coefficient_fit.srp", "examples/coefficient_fit.stdout",
-        ) if version in ("0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4") else ()
+        ) if version in ("0.0.4-alpha.2", "0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5") else ()
         alpha3_files = (
             "examples/scaled_norm.srp", "examples/scaled_norm.stdout",
             "examples/terminal_recursion.srp", "examples/terminal_recursion.stdout",
             "examples/vector_allocation.srp", "examples/vector_allocation.stdout",
-        ) if version in ("0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4") else ()
+        ) if version in ("0.0.4-alpha.3", "0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5") else ()
         alpha4_files = (
             "docs/tiles.md", "docs/memory-lifetimes.md",
             "docs/architecture.md", "docs/testing.md",
@@ -193,12 +193,12 @@ def verify(directory, version, commit, source_directory=None):
                 "matrix_probabilities", "matrix_targets", "matrix_forward", "tile_windows",
                 "vector_windows", "classification_training", "logit_loss", "log_space", "score_selection",
             ) for extension in ("srp", "stdout")),
-        ) if version in ("0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4") else ()
+        ) if version in ("0.0.4-alpha.4", "0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5") else ()
         module_files = (
             "docs/modules.md", "docs/tutorials/modules.md", "docs/proposals/0029-source-modules.md",
             "examples/module_demo.srp", "examples/module_demo.stdout",
             "examples/modules/linear.srp", "examples/modules/settings.srp",
-        ) if version in ("0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4") else ()
+        ) if version in ("0.0.5-alpha.1", "0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5") else ()
         alpha2_files = (
             *(f"examples/{example}.{extension}" for example in (
                 "module_inspection", "constant_expressions", "typed_declarations",
@@ -211,13 +211,13 @@ def verify(directory, version, commit, source_directory=None):
             "examples/interned_types.rs", "examples/text_construction.srp",
             "examples/text_construction.stdout", "examples/diagnostics/type_error.srp",
             "examples/diagnostics/type_error.diagnostic.json",
-        ) if version in ("0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4") else ()
-        project_files = ("docs/project-workflow.md", "docs/releases/v0.0.5-alpha.4.md") if version in ("0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4") else ()
+        ) if version in ("0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5") else ()
+        project_files = ("docs/project-workflow.md", "docs/releases/v0.0.5-alpha.4.md") if version in ("0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5") else ()
         alpha5_files = (
             "examples/native_scalar_repeat.srp", "examples/native_scalar_repeat.stdout",
             "docs/proposals/0035-native-scalar-c11.md",
             "docs/releases/v0.0.5-alpha.5.md",
-        ) if version in ("0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4") else ()
+        ) if version in ("0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5") else ()
         alpha6_files = (
             "docs/releases/v0.0.6-alpha.1.md", "docs/symbol-index.md",
             "docs/root-mean-square.md",
@@ -225,7 +225,7 @@ def verify(directory, version, commit, source_directory=None):
             "examples/symbol_navigation.stdout", "examples/modules/navigation_values.srp",
             "examples/symbol_navigation.symbols.json", "examples/symbol_navigation.references.json",
             "examples/root_mean_square.srp", "examples/root_mean_square.stdout",
-        ) if version in ("0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4") else ()
+        ) if version in ("0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5") else ()
         alpha6_2_files = (
             "docs/releases/v0.0.6-alpha.2.md",
             "docs/releases/v0.0.6-alpha.2-publication.md",
@@ -236,7 +236,7 @@ def verify(directory, version, commit, source_directory=None):
             "docs/development/syntax-cache.md",
             "docs/development/cache-eviction.md",
             "docs/development/cache-edit-planning.md",
-        ) if version in ("0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4") else ()
+        ) if version in ("0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5") else ()
         alpha6_3_files = (
             "docs/releases/v0.0.6-alpha.3.md",
             "docs/releases/v0.0.6-alpha.3-publication.md",
@@ -247,7 +247,7 @@ def verify(directory, version, commit, source_directory=None):
             "examples/topk_scores.stdout",
             "examples/temperature_softmax.srp",
             "examples/temperature_softmax.stdout",
-        ) if version in ("0.0.6-alpha.3", "0.0.6-alpha.4") else ()
+        ) if version in ("0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5") else ()
         alpha6_4_files = (
             "docs/releases/v0.0.6-alpha.4.md",
             "docs/releases/v0.0.6-alpha.4-publication.md",
@@ -257,7 +257,18 @@ def verify(directory, version, commit, source_directory=None):
             "examples/sampled_calculus.srp", "examples/sampled_calculus.stdout",
             "examples/sample_cumulative_area.srp", "examples/sample_cumulative_area.stdout",
             "examples/cosine_similarity.srp", "examples/cosine_similarity.stdout",
-        ) if version == "0.0.6-alpha.4" else ()
+        ) if version in ("0.0.6-alpha.4", "0.0.6-alpha.5") else ()
+        alpha6_5_files = (
+            "docs/releases/v0.0.6-alpha.5.md",
+            "docs/releases/v0.0.6-alpha.5-publication.md",
+            "docs/releases/v0.0.6-alpha.5-development-plan.md",
+            "docs/nucleus-selection.md", "docs/pearson-correlation.md",
+            "docs/native-elf64.md",
+            "examples/nucleus_selection.srp",
+            "examples/nucleus_selection.stdout",
+            "examples/pearson_correlation.srp",
+            "examples/pearson_correlation.stdout",
+        ) if version == "0.0.6-alpha.5" else ()
         release_files = (METADATA_MEMBER,) if version in EXTERNAL_DOCS_VERSIONS else (f"docs/releases/v{version}.md",)
         for member in (
             executable, "LICENSE", "README.md", "CHANGELOG.md", "CONTRIBUTING.md",
@@ -265,7 +276,7 @@ def verify(directory, version, commit, source_directory=None):
             "examples/mutable.srp", "examples/scopes.srp", "examples/decisions.srp",
             *iteration_examples, *syntax_migration_files, *function_files, *float_files, *vector_files,
             *alpha3_files, *alpha4_files, *module_files, *alpha2_files, *type_tooling_files,
-            *project_files, *alpha5_files, *alpha6_files, *alpha6_2_files, *alpha6_3_files, *alpha6_4_files,
+            *project_files, *alpha5_files, *alpha6_files, *alpha6_2_files, *alpha6_3_files, *alpha6_4_files, *alpha6_5_files,
         ):
             if root + "/" + member not in paths:
                 raise ValueError(f"{name}: missing {member}")

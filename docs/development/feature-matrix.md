@@ -1,5 +1,7 @@
 # Feature completeness and development roadmap
 
+Cargo declares `0.0.6-alpha.5` as an **unpublished source candidate**. New development-only work includes deterministic Top-P selection, centered Pearson correlation and ELF64 integer initializer dependencies. The latest published prerelease is **v0.0.6-alpha.4**. See [candidate notes](../releases/v0.0.6-alpha.5.md).
+
 Cargo declares `0.0.6-alpha.4` as the **published GitHub prerelease**.
 The latest public prerelease is v0.0.6-alpha.4 (8 November 2026).
 Earlier v0.0.6-alpha.3 introduced `topk`, `topk_values`, `softmax_temp`

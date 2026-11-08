@@ -1,11 +1,10 @@
 //! Self-contained x86-64 SysV integer-kernel code and ELF64 ET_REL encoding.
 //! Production emission uses only safe Rust, no external compiler or linker.
 
-use super::{invalid, Operation, ScalarExpressionIr, Unary};
+use super::{invalid, program::ScalarProgramIr, Operation, Unary};
 use crate::{
     ast::BinaryOperator,
     diagnostics::{Diagnostic, Span},
-    value::ValueType,
 };
 
 const MAX_TEXT_BYTES: usize = 200_000;
@@ -41,7 +40,7 @@ impl Code {
         {
             return Err(failure());
         }
-        // The initial reservation covers every possible supported instruction.
+        // Bounded growth is fallible: an estimated capacity need not be exact.
         self.data.try_reserve(bytes.len()).map_err(|_| failure())?;
         self.data.extend_from_slice(bytes);
         Ok(())
@@ -71,66 +70,89 @@ impl Code {
     }
 }
 
-fn text(ir: &ScalarExpressionIr) -> Result<Vec<u8>, Diagnostic> {
-    ir.verify()?;
-    if ir.registers.get(ir.root) != Some(&ValueType::Integer) {
-        return Err(failure());
+fn temporary(base: usize, register: usize) -> Result<usize, Diagnostic> {
+    base.checked_add(register).ok_or_else(failure)
+}
+
+/// Keep final user bindings in a separate stack region from the ephemeral
+/// registers reused for each initializer. The verified IR guarantees
+/// definite initialization before any Load; no native input pointer exists.
+fn text(program: &ScalarProgramIr) -> Result<Vec<u8>, Diagnostic> {
+    let slot_count = program.integer_slot_count();
+    let mut max_registers = 0usize;
+    let mut total_steps = 0usize;
+    for (_, expr) in program.integer_stores() {
+        expr.verify()?;
+        max_registers = max_registers.max(expr.registers.len());
+        total_steps = total_steps
+            .checked_add(expr.steps.len())
+            .ok_or_else(failure)?;
     }
-    let stack_size = ir
-        .registers
-        .len()
-        .checked_mul(8)
-        .and_then(|x| u32::try_from(x).ok())
+    let stack_size = slot_count
+        .checked_add(max_registers)
+        .and_then(|n| n.checked_mul(8))
+        .and_then(|n| u32::try_from(n).ok())
         .ok_or_else(failure)?;
-    let mut code = Code::new(ir.steps.len())?;
-    // sub rsp, imm32; no calls are made and all temporaries live on our stack.
+    let mut code = Code::new(total_steps)?;
+    // sub rsp, imm32: no calls, all integer slots and temporaries are local.
     code.push(&[0x48, 0x81, 0xec])?;
     code.push(&stack_size.to_le_bytes())?;
-    for step in &ir.steps {
-        match &step.kind {
-            Operation::Work => {}
-            Operation::Integer { dst, value } => {
-                code.push(&[0x48, 0xb8])?; // movabs rax, imm64
-                code.push(&value.to_le_bytes())?;
-                code.store_rax(*dst)?;
+
+    for (slot, expr) in program.integer_stores() {
+        for step in &expr.steps {
+            match &step.kind {
+                Operation::Work => {}
+                Operation::Integer { dst, value } => {
+                    code.push(&[0x48, 0xb8])?; // movabs rax, imm64
+                    code.push(&value.to_le_bytes())?;
+                    code.store_rax(temporary(slot_count, *dst)?)?;
+                }
+                Operation::Load { dst, slot } => {
+                    code.load_rax(*slot)?;
+                    code.store_rax(temporary(slot_count, *dst)?)?;
+                }
+                Operation::Move { dst, src } => {
+                    code.load_rax(temporary(slot_count, *src)?)?;
+                    code.store_rax(temporary(slot_count, *dst)?)?;
+                }
+                Operation::Unary {
+                    dst,
+                    src,
+                    op: Unary::BitNot,
+                } => {
+                    code.load_rax(temporary(slot_count, *src)?)?;
+                    code.push(&[0x48, 0xf7, 0xd0])?; // not rax
+                    code.store_rax(temporary(slot_count, *dst)?)?;
+                }
+                Operation::Binary {
+                    dst,
+                    left,
+                    right,
+                    op,
+                } => {
+                    code.load_rax(temporary(slot_count, *left)?)?;
+                    code.load_rcx(temporary(slot_count, *right)?)?;
+                    let instruction = match op {
+                        BinaryOperator::BitAnd => [0x48, 0x21, 0xc8],
+                        BinaryOperator::BitOr => [0x48, 0x09, 0xc8],
+                        BinaryOperator::BitXor => [0x48, 0x31, 0xc8],
+                        _ => return Err(invalid(step.span)),
+                    };
+                    code.push(&instruction)?;
+                    code.store_rax(temporary(slot_count, *dst)?)?;
+                }
+                _ => return Err(invalid(step.span)),
             }
-            Operation::Move { dst, src } => {
-                code.load_rax(*src)?;
-                code.store_rax(*dst)?;
-            }
-            Operation::Unary {
-                dst,
-                src,
-                op: Unary::BitNot,
-            } => {
-                code.load_rax(*src)?;
-                code.push(&[0x48, 0xf7, 0xd0])?; // not rax
-                code.store_rax(*dst)?;
-            }
-            Operation::Binary {
-                dst,
-                left,
-                right,
-                op,
-            } => {
-                code.load_rax(*left)?;
-                code.load_rcx(*right)?;
-                let instruction = match op {
-                    BinaryOperator::BitAnd => [0x48, 0x21, 0xc8],
-                    BinaryOperator::BitOr => [0x48, 0x09, 0xc8],
-                    BinaryOperator::BitXor => [0x48, 0x31, 0xc8],
-                    _ => return Err(invalid(step.span)),
-                };
-                code.push(&instruction)?;
-                code.store_rax(*dst)?;
-            }
-            _ => return Err(invalid(step.span)),
         }
+        code.load_rax(temporary(slot_count, expr.root)?)?;
+        code.store_rax(slot)?;
     }
-    code.load_rax(ir.root)?;
-    code.push(&[0x48, 0x81, 0xc4])?; // add rsp, imm32
+
+    // RAX still contains the LAST store value, which is the experimental
+    // kernel result. Restore our stack and preserve all callee-save registers.
+    code.push(&[0x48, 0x81, 0xc4])?;
     code.push(&stack_size.to_le_bytes())?;
-    code.push(&[0xc3])?; // ret
+    code.push(&[0xc3])?;
     Ok(code.data)
 }
 
@@ -193,8 +215,8 @@ fn section(
     )
 }
 
-pub(super) fn emit(ir: &ScalarExpressionIr) -> Result<Vec<u8>, Diagnostic> {
-    let machine = text(ir)?;
+pub(super) fn emit(program: &ScalarProgramIr) -> Result<Vec<u8>, Diagnostic> {
+    let machine = text(program)?;
     // Offsets are into shstrtab, starting with the required NUL name.
     const SHSTR: &[u8] = b"\0.text\0.symtab\0.strtab\0.shstrtab\0.note.GNU-stack\0";
     const STR: &[u8] = b"\0scarp_scalar_kernel\0";

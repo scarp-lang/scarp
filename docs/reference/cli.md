@@ -1,5 +1,7 @@
 # Command-line reference
 
+**v0.0.6-alpha.5** is an unpublished development source. Top-P and Pearson are pure built-ins; ELF64 multi-binding generation is experimental Rust-hosted code only. No new CLI command, executable linker or `scarp compile` is available.
+
 **v0.0.6-alpha.4** is a published experimental GitHub prerelease.
 It adds scientific numerical functions and the first native ELF64 object
 writer exposed only as an experimental Rust library API.

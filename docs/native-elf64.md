@@ -13,21 +13,30 @@ request is performed during production emission.
 
 ## Exact accepted source
 
-A single top-level integer binding with an initializer built only from integer
-literals, groups, bitwise NOT (`~`), AND (`&`), OR (`|`), and XOR (`^`):
+**Post-alpha.4 development extension:** a bounded linear sequence of integer
+bindings, where initializers use integer literals, groups, references to
+earlier initialized integer bindings, bitwise NOT (`~`), AND (`&`),
+OR (`|`) or XOR (`^`):
 
 ```scarp
-bind result = (42 & 15) ^ (~0 & 8);
+bind input = 42;
+bind mask = 15;
+bind result = (input & mask) ^ (~0 & 8);
 ```
 
-Every other construct, including dynamic name loads, mathematical arithmetic,
-checked shifts, branches, functions, print statements and multiple declarations,
-is rejected before producing bytes with E0049. This is intentionally stricter
+The kernel returns the **last binding's value** (2 above). Binding loads are
+resolved through the verified scalar IR, not source-variable name lookup in the
+encoder. A separate contiguous region of 8-byte stack slots stores each
+binding; another region holds reusable per-expression temporaries. The
+private dataflow verifier proves every native load has been initialized.
+
+Other statements, including checked arithmetic, shifts, loops, branches,
+functions, calls, output, updates, floats and modules, remain rejected with
+E0049 before any object bytes are returned. This is intentionally stricter
 than the existing full private scalar IR and C11 emitter.
 
 The generated symbol `scarp_scalar_kernel` has the **experimental** SysV AMD64
-`extern "C" fn() -> i64` calling convention. It returns the initializer
-value (2 in the example). This is a *kernel result ABI*, not the side effects
+`extern "C" fn() -> i64` calling convention. It returns the last initializer value (2 in the example). This is a *kernel result ABI*, not the side effects
 or stdout behavior of executing the original Scarp file.
 
 The emitted object has deterministic sections: null, `.text`, `.symtab`,
@@ -35,14 +44,15 @@ The emitted object has deterministic sections: null, `.text`, `.symtab`,
 Its only non-null symbol is the global function in `.text`; it has **no
 external references and therefore no relocations**. Full relocations,
 host output callbacks and checked runtime-error ABI remain future work.
-Stack temporaries are 8-byte slots owned by the callee; only caller-scratch
-RAX and RCX registers are modified, and no external function calls occur.
+Binding slots and reusable expression temporaries are 8-byte stack cells owned
+by the callee. Only caller-scratch RAX and RCX are modified, and no external
+function calls occur. No native work-budget or runtime-error ABI is claimed.
 
 ## Rust host example
 
 ```rust
 let object = scarp::native_object::emit_elf64_integer_kernel(
-    "bind result = (42 & 15) ^ (~0 & 8);",
+    "bind input = 42; bind mask = 15; bind result = (input & mask) ^ (~0 & 8);",
 )?;
 // Keep ownership of the returned byte buffer. Use OpenOptions::create_new(true)
 // if writing it to a file, so existing paths cannot be overwritten.
@@ -58,15 +68,16 @@ current API has no cross-platform executable linking or target-selector flag.
 
 The input must pass the existing preflight: at most 256 scalar slots, 4096
 resolved statements, 1024 nodes per expression and 16,384 total nodes.
-The accepted one-declaration kernel is smaller still. Native code has at most
-200,000 bytes, the complete ELF object at most 262,144 bytes; all sections are
+The accepted binding-only sequence is stricter than general programs.
+Native code has at most 200,000 bytes, the complete ELF object at most 262,144 bytes; all sections are
 checked before allocation, with fallible reserves and deterministic offsets.
 No source path, timestamp, username, environment variable, or build identity
 is embedded in output. Unsupported input yields no object or partial file.
 
 Regression coverage validates stable identical bytes, section-table offsets,
 ELF header sizes, global symbol metadata, source-subset rejection, and an
-**independent Linux x86-64 C host link-and-execute comparison**.
+**independent Linux x86-64 C host link-and-execute comparisons**, including
+multi-binding alias, mask and bitwise dependency chains.
 The encoding still needs security review and broader arithmetic/error ABI work
 before being promoted beyond this narrow development API.
 

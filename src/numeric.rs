@@ -6,8 +6,10 @@ use crate::{
     value::{finite_number, FiniteFloat, NumericVector, Value, ValueType, MAX_VECTOR_LENGTH},
 };
 
+mod correlation;
 mod integers;
 mod kernels;
+mod nucleus;
 mod samples;
 mod scalar_text;
 mod similarity;
@@ -21,6 +23,7 @@ pub enum Builtin {
     Variance,
     StdDev,
     CosineSimilarity,
+    PearsonCorrelation,
     SampleArea,
     SampleSlopes,
     SampleCumulativeArea,
@@ -68,6 +71,8 @@ pub enum Builtin {
     ArgMin,
     TopK,
     TopKValues,
+    TopP,
+    TopPValues,
     MaxValue,
     MinValue,
     LogProb,
@@ -109,6 +114,7 @@ impl Builtin {
             "variance" => Self::Variance,
             "stddev" => Self::StdDev,
             "cosine_similarity" => Self::CosineSimilarity,
+            "pearson_correlation" => Self::PearsonCorrelation,
             "sample_area" => Self::SampleArea,
             "sample_slopes" => Self::SampleSlopes,
             "sample_cumulative_area" => Self::SampleCumulativeArea,
@@ -156,6 +162,8 @@ impl Builtin {
             "argmin" => Self::ArgMin,
             "topk" => Self::TopK,
             "topk_values" => Self::TopKValues,
+            "top_p" => Self::TopP,
+            "top_p_values" => Self::TopPValues,
             "maxval" => Self::MaxValue,
             "minval" => Self::MinValue,
             "logprob" => Self::LogProb,
@@ -211,9 +219,12 @@ impl Builtin {
             | Self::ArgMin
             | Self::MaxValue
             | Self::MinValue => &[Vector],
-            Self::Dot | Self::Mse | Self::Add | Self::Stitch | Self::CosineSimilarity => {
-                &[Vector, Vector]
-            }
+            Self::Dot
+            | Self::Mse
+            | Self::Add
+            | Self::Stitch
+            | Self::CosineSimilarity
+            | Self::PearsonCorrelation => &[Vector, Vector],
             Self::Window => &[Vector, Integer, Integer],
             Self::Scale => &[Vector, Float],
             Self::Clamp => &[Vector, Float, Float],
@@ -221,7 +232,9 @@ impl Builtin {
             Self::LogProb | Self::CrossEntropy | Self::LossGrad | Self::TopK | Self::TopKValues => {
                 &[Vector, Integer]
             }
-            Self::SoftmaxTemp | Self::LogSoftmaxTemp => &[Vector, Float],
+            Self::SoftmaxTemp | Self::LogSoftmaxTemp | Self::TopP | Self::TopPValues => {
+                &[Vector, Float]
+            }
             Self::OneHot => &[Integer, Integer],
             Self::Tile => &[Vector, Integer, Integer],
             Self::Height | Self::Width | Self::Unroll | Self::Turn => &[Tile],
@@ -235,16 +248,19 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
-            Self::Variance | Self::StdDev | Self::SampleArea | Self::CosineSimilarity => {
-                ValueType::Float
-            }
+            Self::Variance
+            | Self::StdDev
+            | Self::SampleArea
+            | Self::CosineSimilarity
+            | Self::PearsonCorrelation => ValueType::Float,
             Self::IntsLength | Self::IntsSum => ValueType::Integer,
             Self::IntsWindow
             | Self::IntsJoin
             | Self::IntsSet
             | Self::IntsRange
             | Self::IntsFromVector
-            | Self::TopK => ValueType::Integers,
+            | Self::TopK
+            | Self::TopP => ValueType::Integers,
             Self::ToInteger
             | Self::TextLength
             | Self::TextBytes
@@ -591,6 +607,9 @@ pub(crate) fn evaluate_with_spans(
     if function == Builtin::CosineSimilarity {
         return similarity::evaluate(args, budget, span, argument_span);
     }
+    if function == Builtin::PearsonCorrelation {
+        return correlation::evaluate(args, budget, span, argument_span);
+    }
     if matches!(
         function,
         Builtin::SampleArea | Builtin::SampleSlopes | Builtin::SampleCumulativeArea
@@ -602,6 +621,9 @@ pub(crate) fn evaluate_with_spans(
     }
     if matches!(function, Builtin::TopK | Builtin::TopKValues) {
         return topk::evaluate(function, args, budget, span, argument_span);
+    }
+    if matches!(function, Builtin::TopP | Builtin::TopPValues) {
+        return nucleus::evaluate(function, args, budget, span, argument_span);
     }
     if matches!(function, Builtin::SoftmaxTemp | Builtin::LogSoftmaxTemp) {
         return temperature::evaluate(function, args, budget, span, argument_span);
@@ -910,6 +932,7 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::Variance
         | Builtin::StdDev
         | Builtin::CosineSimilarity
+        | Builtin::PearsonCorrelation
         | Builtin::SampleArea
         | Builtin::SampleSlopes
         | Builtin::SampleCumulativeArea
@@ -940,6 +963,8 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::OneHot
         | Builtin::TopK
         | Builtin::TopKValues
+        | Builtin::TopP
+        | Builtin::TopPValues
         | Builtin::SoftmaxTemp
         | Builtin::LogSoftmaxTemp
         | Builtin::Window

@@ -63,6 +63,22 @@ fn supported_bitwise_forms_have_checked_lowering() {
 }
 
 #[test]
+fn multiple_bindings_reuse_checked_integer_slots() {
+    for source in [
+        "bind a=1; bind b=2;",
+        "bind input=42; bind mask=15; bind result=(input & mask) ^ (~0 & 8);",
+        "bind first=1; bind alias=first; bind final=alias;",
+        "bind a=1; bind b=a | 17; bind c=b ^ 9;",
+    ] {
+        let a = emit_elf64_integer_kernel(source).unwrap();
+        let b = emit_elf64_integer_kernel(source).unwrap();
+        assert_eq!(a, b, "{source}");
+        assert!(a.len() <= 262_144, "{source}");
+        assert_eq!(&a[0..4], b"\x7fELF", "{source}");
+    }
+}
+
+#[test]
 fn unsupported_programs_fail_without_an_artifact() {
     for source in [
         "",
@@ -72,8 +88,10 @@ fn unsupported_programs_fail_without_an_artifact() {
         "bind value = 1 / 0;",
         "bind value = 1 << 3;",
         "bind value = 2.0;",
-        "bind x = 1; bind y = 2;",
         "bind x = 1; print(x);",
+        "bind x = 1; bind y = x + 2;",
+        "bind x = 1; bind y = x << 2;",
+        "bind x = 1; bind y = x == 1;",
     ] {
         let result = emit_elf64_integer_kernel(source).unwrap_err();
         assert_eq!(result.kind, DiagnosticKind::NativeUnsupported, "{source}");
@@ -133,6 +151,60 @@ fn independent_host_link_and_execution_matches_integer_oracle() {
         let out = String::from_utf8(view.stdout).unwrap();
         assert!(out.contains("REL (Relocatable file)"));
         assert!(out.contains("scarp_scalar_kernel"));
+    }
+    fs::remove_dir_all(directory).unwrap();
+}
+
+// Cross-check native multi-binding semantics with an unrelated C linker and
+// processor. This is strictly test-only; object emission stays first-party.
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[test]
+fn independent_host_executes_multiple_checked_binding_dependencies() {
+    use std::{fs, process::Command};
+    let cc = std::env::var("SCARP_CC").unwrap_or_else(|_| "cc".to_owned());
+    if Command::new(&cc).arg("--version").output().is_err() {
+        assert!(
+            std::env::var_os("SCARP_REQUIRE_C").is_none(),
+            "CI requires a C compiler for independent ELF host validation"
+        );
+        return;
+    }
+    let directory =
+        std::env::temp_dir().join(format!("scarp-multibinding-native-{}", std::process::id()));
+    fs::create_dir(&directory).unwrap();
+    let object_path = directory.join("bindings.o");
+    let source_path = directory.join("harness.c");
+    let executable = directory.join("harness");
+    for (source, expected) in [
+        (
+            "bind seed=42; bind mask=15; bind result=(seed & mask) ^ (~0 & 8);",
+            2i64,
+        ),
+        ("bind a=0; bind b=a | 17; bind c=b ^ 9;", 24),
+        ("bind first=1; bind second=first;", 1),
+        ("bind a=0; bind b=~a; bind c=b & 63;", 63),
+    ] {
+        fs::write(&object_path, emit_elf64_integer_kernel(source).unwrap()).unwrap();
+        let harness = format!(
+            "extern long long scarp_scalar_kernel(void);\nint main(void) {{ return scarp_scalar_kernel() == {expected}LL ? 0 : 1; }}\n"
+        );
+        fs::write(&source_path, harness).unwrap();
+        let status = Command::new(&cc)
+            .arg("-std=c11")
+            .arg("-Wall")
+            .arg("-Wextra")
+            .arg("-Werror")
+            .arg(&source_path)
+            .arg(&object_path)
+            .arg("-o")
+            .arg(&executable)
+            .status()
+            .unwrap();
+        assert!(status.success(), "native linker failed for {source}");
+        assert!(
+            Command::new(&executable).status().unwrap().success(),
+            "native result differs for {source}"
+        );
     }
     fs::remove_dir_all(directory).unwrap();
 }

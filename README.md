@@ -1,5 +1,7 @@
 # Scarp
 
+**0.0.6-alpha.5** is an **unpublished source candidate** with [Top-P nucleus ranking](docs/nucleus-selection.md), [Pearson correlation](docs/pearson-correlation.md), and experimental [multi-binding ELF64 integer kernels](docs/native-elf64.md). These features are **not** in published alpha.4 binaries. See [alpha.5 candidate notes](docs/releases/v0.0.6-alpha.5.md) and [release gates](docs/releases/v0.0.6-alpha.5-development-plan.md). No alpha.5 source approval or publication is implied.
+
 **0.0.6-alpha.4** is a **published experimental GitHub prerelease**
 (8 November 2026) from exact source
 `f04be0758cbce405ddcdb229699b0ff83c09d207`.

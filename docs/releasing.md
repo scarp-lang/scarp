@@ -1,5 +1,7 @@
 # Preparing a prerelease
 
+**The v0.0.6-alpha.5 source candidate is not approved or published.** It combines Top-P, Pearson and a limited dependent-integer ELF64 kernel emitter. Publication requires an independently verified exact-main source and an entirely new maintainer approval naming the full alpha.5 source SHA, then a reviewed one-time control request. See [alpha.5 gates](releases/v0.0.6-alpha.5-development-plan.md).
+
 **Latest published prerelease:** v0.0.6-alpha.4 was published on
 8 November 2026 from exact approved source
 `f04be0758cbce405ddcdb229699b0ff83c09d207`.

@@ -19,6 +19,10 @@ concentrate probability on higher scores; larger values flatten the
 distribution. These are deterministic transformations, **not** RNG sampling,
 nucleus/top-p decoding or a model runtime.
 
+A separate [Top-P nucleus selection](nucleus-selection.md) development API
+accepts normalized probabilities produced by this kernel, returning a stable
+candidate prefix without random sampling. It is not part of alpha.4.
+
 ## Runnable example
 
 ```scarp

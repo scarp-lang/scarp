@@ -1,6 +1,6 @@
 //! Experimental compiler-owned ELF64 object emission.
 //!
-//! A single resolved scalar declaration initializer is compiled into a
+//! A bounded sequence of pure integer binding initializers is compiled into a
 //! freestanding, side-effect-free SysV AMD64 `scarp_scalar_kernel() -> i64`
 //! symbol. The API returns complete bytes; it never opens or overwrites files.
 //! This is NOT Scarp's general program execution/printing semantics, a
@@ -8,12 +8,14 @@
 
 use crate::diagnostics::Diagnostic;
 
-/// Emit a deterministic ELF64 relocatable object from one integer initializer.
+/// Emit a deterministic ELF64 relocatable object from integer bindings.
 ///
-/// Supported operators are only literals, grouping, bitwise NOT, AND, OR and
-/// XOR. Loads, runtime-failing arithmetic, calls, modules, loops, output,
-/// floats and other source statements return E0049. This API is experimental:
-/// the ABI and accepted syntax are not stable.
+/// Every source operation must be a scalar integer binding initialized by
+/// literals, grouping, earlier resolved integer names, bitwise NOT, AND, OR
+/// or XOR. The returned i64 is the last binding's value, NOT Scarp's program
+/// exit status or printed output. Runtime-failing arithmetic, calls, modules,
+/// loops, updates, output and floats reject with E0049. This API remains
+/// experimental and has no stable ABI or user-facing native CLI command.
 pub fn emit_elf64_integer_kernel(source: &str) -> Result<Vec<u8>, Diagnostic> {
     crate::scalar_ir::emit_integer_kernel(source)
 }

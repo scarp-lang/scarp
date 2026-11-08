@@ -17,7 +17,7 @@ HISTORICAL_ALPHA2 = "0.0.6-alpha.2"
 HISTORICAL_ALPHA1 = "0.0.6-alpha.1"
 HISTORICAL_ALPHA4 = "0.0.5-alpha.4"
 HISTORICAL_ALPHA5 = "0.0.5-alpha.5"
-PACKAGE_VERSION = "0.0.6-alpha.4"
+PACKAGE_VERSION = "0.0.6-alpha.5"
 
 
 def package_version():
@@ -65,19 +65,18 @@ def validate_release_request_document(request, version):
 
 
 class ReleaseDocConsistencyTests(unittest.TestCase):
-    def assert_absent_or_explicitly_approved_alpha4_request(self):
-        """Allow only the reviewed alpha.4 request; absence remains safe."""
+    def assert_no_reused_alpha4_authorization(self):
+        """A reviewed future request must match its new version and source."""
         request_path = ROOT / ".github/release-request.json"
         if not request_path.exists():
             return
         request = json.loads(request_path.read_text(encoding="utf-8"))
         validate_release_request_document(request, PACKAGE_VERSION)
-        self.assertEqual(request, {
-            "version": "0.0.6-alpha.4",
-            "source_commit": "f04be0758cbce405ddcdb229699b0ff83c09d207",
-            "tagger_name": "Sanskar",
-            "tagger_email": "sanskarin@outlook.in",
-        })
+        self.assertNotEqual(
+            request.get("source_commit"),
+            "f04be0758cbce405ddcdb229699b0ff83c09d207",
+            "alpha.4 source approval cannot authorize alpha.5",
+        )
 
     def test_current_release_anchors(self):
         version = package_version()
@@ -85,12 +84,12 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         needles = {
             "README.md": (f"**{version}**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/README.md": (f"**{version} prerelease**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
-            "docs/compatibility.md": (f"`{version}` is **a published GitHub prerelease**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
+            "docs/compatibility.md": (f"`{version}` is **an unpublished source candidate**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/reference/cli.md": (f"v{version}",),
             "docs/development/feature-matrix.md": (f"Cargo declares `{version}`",),
-            "CHANGELOG.md": (f"## {version} — prerelease, 2026-11-08",),
-            "docs/releases/v0.0.6-alpha.4.md": (f"Scarp v{version}", "source candidate", "Publication boundary"),
-            "docs/releases/v0.0.6-alpha.4-publication.md": (
+            "CHANGELOG.md": (f"## {version} — source candidate (unpublished), 2026-11-08",),
+            "docs/releases/v0.0.6-alpha.5.md": (f"Scarp v{version}", "source candidate", "Publication gates"),
+            "docs/releases/v0.0.6-alpha.5-publication.md": (
                 f"Scarp v{version} — prerelease", "## New in",
                 "## Compatibility and limits",
             ),
@@ -136,21 +135,24 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
                 for needle in expected:
                     self.assertIn(needle, text, f"update {filename} when changing the package release anchor")
 
-    def test_alpha4_candidate_snapshot_is_separate_from_published_notes(self):
+    def test_alpha5_candidate_is_separate_from_published_alpha4(self):
         self.assertEqual(PACKAGE_VERSION, package_version())
-        self.assertEqual(PUBLISHED_VERSION, PACKAGE_VERSION)
-        candidate = (ROOT / "docs/releases/v0.0.6-alpha.4.md").read_text(encoding="utf-8")
-        public = (ROOT / "docs/releases/v0.0.6-alpha.4-publication.md").read_text(encoding="utf-8")
-        self.assertIn("Versioned source candidate only", candidate)
-        self.assertIn("# Scarp v0.0.6-alpha.4 — prerelease", public)
+        self.assertNotEqual(PUBLISHED_VERSION, PACKAGE_VERSION)
+        candidate = (ROOT / "docs/releases/v0.0.6-alpha.5.md").read_text(encoding="utf-8")
+        public = (ROOT / "docs/releases/v0.0.6-alpha.5-publication.md").read_text(encoding="utf-8")
+        self.assertIn("Versioned development source candidate", candidate)
+        self.assertIn("# Scarp v0.0.6-alpha.5 — prerelease", public)
         self.assertNotIn("source candidate", public.lower())
-        self.assert_absent_or_explicitly_approved_alpha4_request()
+        self.assert_no_reused_alpha4_authorization()
         for filename in (
             "docs/native-elf64.md", "docs/cosine-similarity.md",
             "docs/sampled-calculus.md",
             "examples/sampled_calculus.srp", "examples/sampled_calculus.stdout",
             "examples/sample_cumulative_area.srp", "examples/sample_cumulative_area.stdout",
             "examples/cosine_similarity.srp", "examples/cosine_similarity.stdout",
+            "docs/nucleus-selection.md", "docs/pearson-correlation.md",
+            "examples/nucleus_selection.srp", "examples/nucleus_selection.stdout",
+            "examples/pearson_correlation.srp", "examples/pearson_correlation.stdout",
         ):
             with self.subTest(file=filename):
                 self.assertTrue((ROOT / filename).is_file())
@@ -210,7 +212,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
     def test_latest_published_anchor_and_immutable_candidate_snapshot(self):
         version = PUBLISHED_VERSION
         self.assertEqual(PACKAGE_VERSION, package_version())
-        self.assertEqual(version, PACKAGE_VERSION)  # current package is published
+        self.assertNotEqual(version, PACKAGE_VERSION)  # candidate is not published
         for filename in ("README.md", "docs/README.md", "docs/compatibility.md"):
             with self.subTest(file=filename):
                 text = (ROOT / filename).read_text(encoding="utf-8")
@@ -237,7 +239,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         self.assertIn("Published GitHub experimental prerelease", current)
         self.assertIn("Seven public uploaded assets", current)
         self.assertIn("does **not** ship Top-P", current)
-        self.assert_absent_or_explicitly_approved_alpha4_request()
+        self.assert_no_reused_alpha4_authorization()
         for filename in (
             "README.md", "docs/README.md", "docs/compatibility.md",
             "docs/reference/cli.md", "docs/development/feature-matrix.md",

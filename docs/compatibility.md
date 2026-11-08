@@ -1,5 +1,7 @@
 # Version and API compatibility
 
+`0.0.6-alpha.5` is **an unpublished source candidate**, adding pure `top_p`, `top_p_values`, `pearson_correlation` and a narrow multi-binding ELF64 object writer. These are not available in published alpha.4 downloads. See [candidate notes](releases/v0.0.6-alpha.5.md).
+
 `0.0.6-alpha.4` is **a published GitHub prerelease** (8 November 2026)
 with finite sampled calculus, cosine similarity and the first narrow,
 one-binding, compiler-owned ELF64 integer-kernel object writer.

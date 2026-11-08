@@ -88,6 +88,15 @@ step, diagnostic and memory contract is in
 Matrix arithmetic is also available: see [tiles and linear algebra](tiles.md).
 These calls require the alpha.4 candidate, not published alpha.3.
 
+## Post-alpha.4 scientific correlation
+
+The development-only `pearson_correlation(left, right) -> float` computes a
+centered Pearson correlation from two nonconstant, equally long visible
+vectors. It has no new allocations and uses scaled, compensated reductions.
+It is **not** included in the frozen alpha.4 source candidate. See the
+[Pearson guide](pearson-correlation.md) for numerical details and the
+[runnable example](../examples/pearson_correlation.srp).
+
 ## Numerical guarantees and limits
 
 Every stored element and scalar result is finite. Invalid lengths, domains,
@@ -233,6 +242,17 @@ Both functions prepay `4n` work and `8n` new vector payload bytes.
 See the [temperature guide](temperature-softmax.md) and
 [executable example](../examples/temperature_softmax.srp).
 These are **published in v0.0.6-alpha.3**, not the earlier v0.0.6-alpha.2.
+
+## Post-alpha.4 Top-P nucleus candidate ranking
+
+The development-only `top_p(probabilities, mass) -> integers` and
+`top_p_values(probabilities, mass) -> vector` select the shortest
+descending-probability prefix whose cumulative mass meets a finite
+threshold in `(0, 1]`. Inputs must contain normalized, nonnegative
+probabilities. This is deterministic selection, **not** random sampling,
+and is excluded from the v0.0.6-alpha.4 source candidate.
+See the [Top-P guide](nucleus-selection.md) and runnable
+[example](../examples/nucleus_selection.srp).
 
 ## Development-only categorical logit loss
 
