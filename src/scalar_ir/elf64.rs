@@ -2,7 +2,11 @@
 //! Production emission uses only safe Rust, no external compiler or linker.
 
 use super::{invalid, Operation, ScalarExpressionIr, Unary};
-use crate::{ast::BinaryOperator, diagnostics::{Diagnostic, Span}, value::ValueType};
+use crate::{
+    ast::BinaryOperator,
+    diagnostics::{Diagnostic, Span},
+    value::ValueType,
+};
 
 const MAX_TEXT_BYTES: usize = 200_000;
 const MAX_OBJECT_BYTES: usize = 262_144;
@@ -17,15 +21,24 @@ struct Code {
 
 impl Code {
     fn new(steps: usize) -> Result<Self, Diagnostic> {
-        let maximum = steps.checked_mul(24).and_then(|n| n.checked_add(64))
-            .filter(|n| *n <= MAX_TEXT_BYTES).ok_or_else(failure)?;
+        let maximum = steps
+            .checked_mul(24)
+            .and_then(|n| n.checked_add(64))
+            .filter(|n| *n <= MAX_TEXT_BYTES)
+            .ok_or_else(failure)?;
         let mut data = Vec::new();
         data.try_reserve_exact(maximum).map_err(|_| failure())?;
         Ok(Self { data })
     }
 
     fn push(&mut self, bytes: &[u8]) -> Result<(), Diagnostic> {
-        if self.data.len().checked_add(bytes.len()).filter(|n| *n <= MAX_TEXT_BYTES).is_none() {
+        if self
+            .data
+            .len()
+            .checked_add(bytes.len())
+            .filter(|n| *n <= MAX_TEXT_BYTES)
+            .is_none()
+        {
             return Err(failure());
         }
         // The initial reservation covers every possible supported instruction.
@@ -35,8 +48,11 @@ impl Code {
     }
 
     fn slot(index: usize) -> Result<[u8; 4], Diagnostic> {
-        index.checked_mul(8).and_then(|x| u32::try_from(x).ok())
-            .map(u32::to_le_bytes).ok_or_else(failure)
+        index
+            .checked_mul(8)
+            .and_then(|x| u32::try_from(x).ok())
+            .map(u32::to_le_bytes)
+            .ok_or_else(failure)
     }
 
     fn load_rax(&mut self, src: usize) -> Result<(), Diagnostic> {
@@ -60,8 +76,12 @@ fn text(ir: &ScalarExpressionIr) -> Result<Vec<u8>, Diagnostic> {
     if ir.registers.get(ir.root) != Some(&ValueType::Integer) {
         return Err(failure());
     }
-    let stack_size = ir.registers.len().checked_mul(8)
-        .and_then(|x| u32::try_from(x).ok()).ok_or_else(failure)?;
+    let stack_size = ir
+        .registers
+        .len()
+        .checked_mul(8)
+        .and_then(|x| u32::try_from(x).ok())
+        .ok_or_else(failure)?;
     let mut code = Code::new(ir.steps.len())?;
     // sub rsp, imm32; no calls are made and all temporaries live on our stack.
     code.push(&[0x48, 0x81, 0xec])?;
@@ -78,12 +98,21 @@ fn text(ir: &ScalarExpressionIr) -> Result<Vec<u8>, Diagnostic> {
                 code.load_rax(*src)?;
                 code.store_rax(*dst)?;
             }
-            Operation::Unary { dst, src, op: Unary::BitNot } => {
+            Operation::Unary {
+                dst,
+                src,
+                op: Unary::BitNot,
+            } => {
                 code.load_rax(*src)?;
                 code.push(&[0x48, 0xf7, 0xd0])?; // not rax
                 code.store_rax(*dst)?;
             }
-            Operation::Binary { dst, left, right, op } => {
+            Operation::Binary {
+                dst,
+                left,
+                right,
+                op,
+            } => {
                 code.load_rax(*left)?;
                 code.load_rcx(*right)?;
                 let instruction = match op {
@@ -106,14 +135,18 @@ fn text(ir: &ScalarExpressionIr) -> Result<Vec<u8>, Diagnostic> {
 }
 
 fn aligned(value: usize, alignment: usize) -> Result<usize, Diagnostic> {
-    value.checked_add(alignment - 1)
+    value
+        .checked_add(alignment - 1)
         .map(|x| x & !(alignment - 1))
         .ok_or_else(failure)
 }
 
 fn put(target: &mut [u8], at: usize, bytes: &[u8]) -> Result<(), Diagnostic> {
     let end = at.checked_add(bytes.len()).ok_or_else(failure)?;
-    target.get_mut(at..end).ok_or_else(failure)?.copy_from_slice(bytes);
+    target
+        .get_mut(at..end)
+        .ok_or_else(failure)?
+        .copy_from_slice(bytes);
     Ok(())
 }
 fn u16at(target: &mut [u8], at: usize, value: u16) -> Result<(), Diagnostic> {
@@ -128,9 +161,18 @@ fn u64at(target: &mut [u8], at: usize, value: u64) -> Result<(), Diagnostic> {
 
 #[allow(clippy::too_many_arguments)]
 fn section(
-    output: &mut [u8], offset: usize, index: usize, name: u32, kind: u32,
-    flags: u64, file_offset: usize, size: usize, link: u32,
-    info: u32, alignment: u64, entry_size: u64,
+    output: &mut [u8],
+    offset: usize,
+    index: usize,
+    name: u32,
+    kind: u32,
+    flags: u64,
+    file_offset: usize,
+    size: usize,
+    link: u32,
+    info: u32,
+    alignment: u64,
+    entry_size: u64,
 ) -> Result<(), Diagnostic> {
     let mut header = [0u8; 64];
     u32at(&mut header, 0, name)?;
@@ -142,24 +184,35 @@ fn section(
     u32at(&mut header, 44, info)?;
     u64at(&mut header, 48, alignment)?;
     u64at(&mut header, 56, entry_size)?;
-    put(output, offset.checked_add(index.checked_mul(64).ok_or_else(failure)?)
-        .ok_or_else(failure)?, &header)
+    put(
+        output,
+        offset
+            .checked_add(index.checked_mul(64).ok_or_else(failure)?)
+            .ok_or_else(failure)?,
+        &header,
+    )
 }
 
 pub(super) fn emit(ir: &ScalarExpressionIr) -> Result<Vec<u8>, Diagnostic> {
     let machine = text(ir)?;
     // Offsets are into shstrtab, starting with the required NUL name.
-    const SHSTR: &[u8] =
-        b"\0.text\0.symtab\0.strtab\0.shstrtab\0.note.GNU-stack\0";
+    const SHSTR: &[u8] = b"\0.text\0.symtab\0.strtab\0.shstrtab\0.note.GNU-stack\0";
     const STR: &[u8] = b"\0scarp_scalar_kernel\0";
     let text_offset = aligned(64, 16)?;
-    let sym_offset = aligned(text_offset.checked_add(machine.len()).ok_or_else(failure)?, 8)?;
+    let sym_offset = aligned(
+        text_offset.checked_add(machine.len()).ok_or_else(failure)?,
+        8,
+    )?;
     let str_offset = sym_offset.checked_add(48).ok_or_else(failure)?;
     let shstr_offset = str_offset.checked_add(STR.len()).ok_or_else(failure)?;
-    let header_offset = aligned(shstr_offset.checked_add(SHSTR.len())
-        .ok_or_else(failure)?, 8)?;
-    let total = header_offset.checked_add(6 * 64)
-        .filter(|n| *n <= MAX_OBJECT_BYTES).ok_or_else(failure)?;
+    let header_offset = aligned(
+        shstr_offset.checked_add(SHSTR.len()).ok_or_else(failure)?,
+        8,
+    )?;
+    let total = header_offset
+        .checked_add(6 * 64)
+        .filter(|n| *n <= MAX_OBJECT_BYTES)
+        .ok_or_else(failure)?;
 
     let mut object = Vec::new();
     object.try_reserve_exact(total).map_err(|_| failure())?;
@@ -186,15 +239,62 @@ pub(super) fn emit(ir: &ScalarExpressionIr) -> Result<Vec<u8>, Diagnostic> {
     put(&mut object, shstr_offset, SHSTR)?;
 
     // Null, executable .text, symtab, strtab, shstrtab, GNU noexec-stack.
-    section(&mut object, header_offset, 1, 1, 1, 6, text_offset,
-        machine.len(), 0, 0, 16, 0)?;
-    section(&mut object, header_offset, 2, 7, 2, 0, sym_offset,
-        symbols.len(), 3, 1, 8, 24)?;
-    section(&mut object, header_offset, 3, 15, 3, 0, str_offset,
-        STR.len(), 0, 0, 1, 0)?;
-    section(&mut object, header_offset, 4, 23, 3, 0, shstr_offset,
-        SHSTR.len(), 0, 0, 1, 0)?;
-    section(&mut object, header_offset, 5, 33, 1, 0, 0,
-        0, 0, 0, 1, 0)?;
+    section(
+        &mut object,
+        header_offset,
+        1,
+        1,
+        1,
+        6,
+        text_offset,
+        machine.len(),
+        0,
+        0,
+        16,
+        0,
+    )?;
+    section(
+        &mut object,
+        header_offset,
+        2,
+        7,
+        2,
+        0,
+        sym_offset,
+        symbols.len(),
+        3,
+        1,
+        8,
+        24,
+    )?;
+    section(
+        &mut object,
+        header_offset,
+        3,
+        15,
+        3,
+        0,
+        str_offset,
+        STR.len(),
+        0,
+        0,
+        1,
+        0,
+    )?;
+    section(
+        &mut object,
+        header_offset,
+        4,
+        23,
+        3,
+        0,
+        shstr_offset,
+        SHSTR.len(),
+        0,
+        0,
+        1,
+        0,
+    )?;
+    section(&mut object, header_offset, 5, 33, 1, 0, 0, 0, 0, 0, 1, 0)?;
     Ok(object)
 }

@@ -65,9 +65,13 @@ fn supported_bitwise_forms_have_checked_lowering() {
 #[test]
 fn unsupported_programs_fail_without_an_artifact() {
     for source in [
-        "", "print(1);", "bind value = true;",
-        "bind value = 1 + 2;", "bind value = 1 / 0;",
-        "bind value = 1 << 3;", "bind value = 2.0;",
+        "",
+        "print(1);",
+        "bind value = true;",
+        "bind value = 1 + 2;",
+        "bind value = 1 / 0;",
+        "bind value = 1 << 3;",
+        "bind value = 2.0;",
         "bind x = 1; bind y = 2;",
         "bind x = 1; print(x);",
     ] {
@@ -82,31 +86,49 @@ fn independent_host_link_and_execution_matches_integer_oracle() {
     use std::{fs, process::Command};
     let cc = std::env::var("SCARP_CC").unwrap_or_else(|_| "cc".to_owned());
     if Command::new(&cc).arg("--version").output().is_err() {
-        assert!(std::env::var_os("SCARP_REQUIRE_C").is_none(),
-            "CI requires a C compiler for independent ELF host validation");
+        assert!(
+            std::env::var_os("SCARP_REQUIRE_C").is_none(),
+            "CI requires a C compiler for independent ELF host validation"
+        );
         return;
     }
-    let directory = std::env::temp_dir().join(format!(
-        "scarp-native-kernel-{}", std::process::id()
-    ));
+    let directory =
+        std::env::temp_dir().join(format!("scarp-native-kernel-{}", std::process::id()));
     fs::create_dir(&directory).unwrap();
     let object_path = directory.join("kernel.o");
     let source_path = directory.join("harness.c");
     let executable = directory.join("harness");
-    fs::write(&object_path,
-        emit_elf64_integer_kernel("bind result = (42 & 15) ^ (~0 & 8);").unwrap()
-    ).unwrap();
+    fs::write(
+        &object_path,
+        emit_elf64_integer_kernel("bind result = (42 & 15) ^ (~0 & 8);").unwrap(),
+    )
+    .unwrap();
     fs::write(&source_path,
         "extern long long scarp_scalar_kernel(void);\nint main(void) { return scarp_scalar_kernel() == 2LL ? 0 : 1; }\n"
     ).unwrap();
     let status = Command::new(&cc)
-        .arg("-std=c11").arg("-Wall").arg("-Wextra").arg("-Werror")
-        .arg(&source_path).arg(&object_path).arg("-o").arg(&executable)
-        .status().unwrap();
-    assert!(status.success(), "independent C host failed to link ELF object");
+        .arg("-std=c11")
+        .arg("-Wall")
+        .arg("-Wextra")
+        .arg("-Werror")
+        .arg(&source_path)
+        .arg(&object_path)
+        .arg("-o")
+        .arg(&executable)
+        .status()
+        .unwrap();
+    assert!(
+        status.success(),
+        "independent C host failed to link ELF object"
+    );
     assert!(Command::new(&executable).status().unwrap().success());
-    if let Ok(view) = Command::new("readelf").arg("-h").arg("-S").arg("-s")
-        .arg(&object_path).output() {
+    if let Ok(view) = Command::new("readelf")
+        .arg("-h")
+        .arg("-S")
+        .arg("-s")
+        .arg(&object_path)
+        .output()
+    {
         assert!(view.status.success());
         let out = String::from_utf8(view.stdout).unwrap();
         assert!(out.contains("REL (Relocatable file)"));
