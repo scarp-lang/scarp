@@ -196,7 +196,7 @@ one-hot targets and explicit loss gradients. See [vectors](docs/vectors.md),
 [the numerical tutorial](docs/tutorials/numerical-program.md), and
 [error repairs](docs/reference/numerical-errors.md).
 
-The latest published prerelease is
+The earlier published prerelease was
 [0.0.6-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3),
 published 7 November 2026 from source commit
 `ceff07d9014f466974e0c9e02fc5d23573f55777`. It provides Windows x64,
