@@ -211,11 +211,7 @@ fn nucleus_handles_extreme_probabilities_and_very_small_thresholds() {
         &[0.0, 1.000_000_000_001][..],
         &[-f64::MIN_POSITIVE, 1.0][..],
     ] {
-        let failure = numeric::evaluate(
-            Builtin::TopP,
-            &inputs(invalid, 0.5),
-            1000,
-        ).unwrap_err();
+        let failure = numeric::evaluate(Builtin::TopP, &inputs(invalid, 0.5), 1000).unwrap_err();
         assert_eq!(failure.kind, Kind::NumericDomain, "{invalid:?}");
     }
 
