@@ -19,7 +19,9 @@ struct Centered<'a> {
 impl<'a> Centered<'a> {
     fn new(values: &'a [FiniteFloat], span: Span) -> Result<Option<Self>, Diagnostic> {
         let anchor = values[0].get();
-        let half = values.iter().any(|value| (value.get() - anchor).is_infinite());
+        let half = values
+            .iter()
+            .any(|value| (value.get() - anchor).is_infinite());
         let deviation = |value: f64| {
             if half {
                 value * 0.5 - anchor * 0.5
