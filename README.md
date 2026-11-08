@@ -1,17 +1,20 @@
 # Scarp
 
-**0.0.6-alpha.5** is an **unpublished post-alpha.4 source candidate**, not
-a GitHub Release or an approved publication request. This development tree
-integrates [deterministic Top-P](docs/nucleus-selection.md),
-[centered Pearson correlation](docs/pearson-correlation.md), and an
-experimental [multi-binding ELF64 kernel](docs/native-elf64.md) for a future
-separately approved prerelease. See [alpha.5 candidate scope](docs/releases/v0.0.6-alpha.5.md)
-and the [guarded release plan](docs/releases/v0.0.6-alpha.5-development-plan.md).
-The prior **v0.0.6-alpha.4** source is frozen at
-`f04be0758cbce405ddcdb229699b0ff83c09d207` pending independent
-publication verification; no new source is authorized by that approval.
+**0.0.6-alpha.5** is an **unpublished source candidate** with [Top-P nucleus ranking](docs/nucleus-selection.md), [Pearson correlation](docs/pearson-correlation.md), and experimental [multi-binding ELF64 integer kernels](docs/native-elf64.md). These features are **not** in published alpha.4 binaries. See [alpha.5 candidate notes](docs/releases/v0.0.6-alpha.5.md) and [release gates](docs/releases/v0.0.6-alpha.5-development-plan.md). No alpha.5 source approval or publication is implied.
 
-**0.0.6-alpha.3** is the latest **published GitHub prerelease** (7 November
+**0.0.6-alpha.4** is a **published experimental GitHub prerelease**
+(8 November 2026) from exact source
+`f04be0758cbce405ddcdb229699b0ff83c09d207`.
+The latest published prerelease is
+[0.0.6-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4),
+with verified Windows x64, Linux x64, and Apple Silicon archives.
+See the [public release notes](docs/releases/v0.0.6-alpha.4-publication.md),
+[publication verification](docs/releases/v0.0.6-alpha.4-validation.md),
+and historical [candidate snapshot](docs/releases/v0.0.6-alpha.4.md).
+The next `v0.0.6-alpha.5` candidate is in development and must receive
+a **different source-specific approval** before publication.
+
+**0.0.6-alpha.3** is an **earlier published GitHub prerelease** (7 November
 2026). It adds pure deterministic [Top-K ranking](docs/topk-selection.md),
 [temperature-controlled softmax](docs/temperature-softmax.md), and
 private scalar IR compiler verification. Download verified Windows x64, Linux
@@ -24,16 +27,16 @@ prepublication snapshot; this is not a stable or general native compiler release
 
 **Build Beyond Boundaries.**
 
-**Merged but unreleased:** [sampled calculus](docs/sampled-calculus.md)
+**Published in v0.0.6-alpha.4:** [sampled calculus](docs/sampled-calculus.md)
 adds bounded `sample_area(x, y)`, `sample_slopes(x, y)` and
 `sample_cumulative_area(x, y)` to current `main` via
 [PR #153](https://github.com/scarp-lang/scarp/pull/153) and
 [PR #155](https://github.com/scarp-lang/scarp/pull/155).
 These kernels passed Linux, Windows, macOS and Rust 1.74 validation.
-They are **not** in published alpha.3 binaries; compile from current
-source until a newer compatible prerelease is published.
+They were **not** in published v0.0.6-alpha.3 binaries; install the
+v0.0.6-alpha.4 prerelease or build that immutable source tag.
 
-**Also merged but unreleased:** [cosine similarity](docs/cosine-similarity.md)
+**Also published in v0.0.6-alpha.4:** [cosine similarity](docs/cosine-similarity.md)
 (#157) and an experimental [safe-Rust ELF64 integer-kernel writer](docs/native-elf64.md)
 (#158) on current source. The ELF writer supports only a pure integer initializer
 and returns relocatable object bytes; it does not produce a general Scarp
@@ -64,8 +67,8 @@ See [alpha.5 release notes](docs/releases/v0.0.5-alpha.5.md) and the
 [publication record](docs/releases/v0.0.5-alpha.5-validation.md).
 
 Scarp is an experimental programming language implemented in Rust. The latest
-published **0.0.6-alpha.3** prerelease was published on 7 November 2026 from
-exact source `ceff07d9014f466974e0c9e02fc5d23573f55777`. The compiler provides a lexer,
+published **0.0.6-alpha.4** prerelease was published on 8 November 2026 from
+exact source `f04be0758cbce405ddcdb229699b0ff83c09d207`. The compiler provides a lexer,
 parser, typed resolver, interpreter, source modules, finite binary64 numerics
 and a Scarp-first CLI. The bounded `create`, `launch` and project-directory
 `verify` workflow remains available. Syntax and APIs are not stable.
@@ -195,7 +198,7 @@ one-hot targets and explicit loss gradients. See [vectors](docs/vectors.md),
 [the numerical tutorial](docs/tutorials/numerical-program.md), and
 [error repairs](docs/reference/numerical-errors.md).
 
-The latest published prerelease is
+The earlier published prerelease was
 [0.0.6-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3),
 published 7 November 2026 from source commit
 `ceff07d9014f466974e0c9e02fc5d23573f55777`. It provides Windows x64,

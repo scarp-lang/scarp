@@ -1,19 +1,16 @@
 # Preparing a prerelease
 
-**Post-alpha.4 development:** the `v0.0.6-alpha.5` source candidate
-includes deterministic Top-P, Pearson correlation and narrowly expanded
-compiler-owned ELF64 integer kernel dependencies. It must not be published
-without verified alpha.4 publication/retirement, fresh exact-main seven-job
-validation and a distinct maintainer approval naming the complete alpha.5
-source commit. See [alpha.5 source notes](releases/v0.0.6-alpha.5.md)
-and the [development gates](releases/v0.0.6-alpha.5-development-plan.md).
+**The v0.0.6-alpha.5 source candidate is not approved or published.** It combines Top-P, Pearson and a limited dependent-integer ELF64 kernel emitter. Publication requires an independently verified exact-main source and an entirely new maintainer approval naming the full alpha.5 source SHA, then a reviewed one-time control request. See [alpha.5 gates](releases/v0.0.6-alpha.5-development-plan.md).
 
-
-**Unpublished source candidate:** v0.0.6-alpha.4 requires separate
-authorization of the complete exact-main source SHA before any tag,
-release-control request or publication. The latest published prerelease
-remains v0.0.6-alpha.3. See
-[alpha.4 readiness](releases/v0.0.6-alpha.4-preparation.md).
+**Latest published prerelease:** v0.0.6-alpha.4 was published on
+8 November 2026 from exact approved source
+`f04be0758cbce405ddcdb229699b0ff83c09d207`.
+See the [public release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4),
+[postpublication verification](releases/v0.0.6-alpha.4-validation.md),
+and immutable historical [candidate notes](releases/v0.0.6-alpha.4.md).
+Its fulfilled one-time authorization was retired in a separate maintenance
+PR. A different version, including alpha.5, requires its **own** complete
+source-SHA approval, reviewed control request and new seven-job gates.
 
 The package workflow builds and verifies archives. It has read-only repository
 permissions and never creates tags or GitHub Releases. A separate publisher

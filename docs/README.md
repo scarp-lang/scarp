@@ -1,18 +1,22 @@
 # Scarp documentation
 
-**0.0.6-alpha.5 prerelease** is an **unpublished development candidate**,
-not a tagged public release. This checkout includes experimental
-[Top-P nucleus selection](nucleus-selection.md),
-[Pearson scientific correlation](pearson-correlation.md),
-and limited [ELF64 integer-kernel dependencies](native-elf64.md).
-See [alpha.5 source notes](releases/v0.0.6-alpha.5.md) and
-[its guarded release plan](releases/v0.0.6-alpha.5-development-plan.md).
-Alpha.4 requires a separately source-pinned publication verification
-before alpha.5 can be considered for its own approval.
+**0.0.6-alpha.5 prerelease** is an **unpublished source candidate** offering [Top-P selection](nucleus-selection.md), [Pearson correlation](pearson-correlation.md), and [limited ELF64 native binding dependencies](native-elf64.md). See [candidate scope](releases/v0.0.6-alpha.5.md). Alpha.4 remains the latest public prerelease.
 
-**Merged, unreleased native experiment:** [the first ELF64 integer-kernel
-object writer](native-elf64.md) uses the verified private scalar IR. It does
-not implement a general native compile command, executable linker or stable ABI.
+**0.0.6-alpha.4 prerelease** is **published on 8 November 2026**.
+The [public GitHub release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4)
+and [exact-source verification](releases/v0.0.6-alpha.4-validation.md)
+record the annotated tag, all seven public assets and successful CI.
+The [alpha.4 candidate notes](releases/v0.0.6-alpha.4.md) remain an
+immutable prepublication snapshot.
+
+**Next prerelease preparation:** [alpha.5 development plan](releases/v0.0.6-alpha.5-development-plan.md)
+is a separately staged development review, **not** a published release
+or automatic source authorization.
+
+**Published experimental native feature:** [the first ELF64 integer-kernel
+object writer](native-elf64.md) uses the verified private scalar IR.
+It does not implement a general native compile command, executable linker
+or stable ABI.
 
 **0.0.6-alpha.3 prerelease** was **published on 7 November 2026**.
 It includes [Top-K ranking](topk-selection.md),
@@ -47,11 +51,11 @@ see [alpha.5 release notes](releases/v0.0.5-alpha.5.md) and the
 Development declarations use `bind` and `var`; see the [migration guide](syntax-migration.md). Published tags retain their original syntax.
 
 Choose a guide by the task you want to complete. Current tutorials are
-updated for the **0.0.6-alpha.3 published prerelease**, retaining
+updated for the **0.0.6-alpha.4 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
 contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.6-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3),
+[0.0.6-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)
@@ -89,9 +93,7 @@ experimental Rust-hosted C11 scalar emitter; see
 | [Finite floats](floats.md) | Use the alpha's binary64 scalars, numeric diagnostics, and function integration |
 | [Numerical vectors](vectors.md) | Use immutable numerical data, pure kernels, typed vector calls and bounded allocation |
 | [Sampled calculus (unreleased)](sampled-calculus.md) | Integrate measurements, accumulate prefix areas and calculate bounded interval derivatives with checked coordinates |
-| [Pearson correlation (post-alpha.4 development)](pearson-correlation.md) | Measure centered relationships in finite paired vectors with deterministic bounded precision |
 | [Cosine similarity (unreleased proposal)](cosine-similarity.md) | Compare orientation of two finite vectors using bounded, independently scaled numerical reductions |
-| [Top-P nucleus selection (post-alpha.4 development)](nucleus-selection.md) | Select the shortest probability-mass prefix using deterministic ordering; not part of alpha.4 candidate |
 | [Top-K inference ranking](topk-selection.md) | Select deterministic ranked model candidates and original scores using two development-only typed built-ins |
 | [Temperature softmax](temperature-softmax.md) | Adjust finite logit probabilities and log probabilities without randomness or nonfinite values |
 | [Root mean square](root-mean-square.md) | Use the published v0.0.6-alpha.1 finite RMS reduction, visible windows and exact work/allocation rules |

@@ -21,7 +21,7 @@
   Alpha.5 needs its own separate, exact-version + full-source authorization
   and one-time release request. No alpha.5 tag or GitHub Release is implied.
 
-## 0.0.6-alpha.4 — source candidate (unpublished), 2026-11-08
+## 0.0.6-alpha.4 — prerelease, 2026-11-08
 
 - Merge pure sampled numerical kernels (`sample_area`, `sample_slopes`,
   `sample_cumulative_area`) with bounded trapezoidal integration (#153/#155).
@@ -31,8 +31,12 @@
   emitter using verified scalar IR (#158). No native executable compiler,
   new CLI command or stable ABI.
 - Exclude draft Top-P PR #149, GPU/tensors, and unimplemented keywords.
-- This is **only a source candidate**: seven exact-main checks, archive
-  validation and separate maintainer approval are required to publish.
+- **Published as a GitHub experimental prerelease** on 8 November 2026 from
+  exact approved source `f04be0758cbce405ddcdb229699b0ff83c09d207`
+  after both seven-job source/control CI gates and seven public asset checks.
+  See the [public release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4)
+  and [postpublication verification](docs/releases/v0.0.6-alpha.4-validation.md).
+  The [candidate notes](docs/releases/v0.0.6-alpha.4.md) remain historical.
 
 ## 0.0.6-alpha.3 — prerelease, 2026-11-07
 
