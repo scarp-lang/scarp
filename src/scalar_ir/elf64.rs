@@ -5,7 +5,6 @@ use super::{invalid, program::ScalarProgramIr, Operation, Unary};
 use crate::{
     ast::BinaryOperator,
     diagnostics::{Diagnostic, Span},
-    value::ValueType,
 };
 
 const MAX_TEXT_BYTES: usize = 200_000;
