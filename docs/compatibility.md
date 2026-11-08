@@ -1,9 +1,14 @@
 # Version and API compatibility
 
-`0.0.6-alpha.4` is **an unpublished source candidate** with finite sampled
-calculus, cosine similarity and a limited ELF64 integer-kernel object writer.
+`0.0.6-alpha.5` is **an unpublished source candidate** adding deterministic
+Top-P selection, centered Pearson correlation and multiple integer binding
+dependencies in an experimental ELF64 object emitter. Neither this candidate
+nor its packages are published. A new exact-source approval is mandatory.
+The approved alpha.4 source includes sampled calculus, cosine similarity
+and an earlier one-binding ELF64 object writer. Public alpha.4 publication
+must be verified independently before the alpha.5 release sequence.
 There is no native executable compiler CLI or stable ABI. The latest
-published prerelease is still v0.0.6-alpha.3.
+verified published prerelease is v0.0.6-alpha.3.
 
 `0.0.6-alpha.3` was **published as an experimental GitHub prerelease on
 7 November 2026**. It adds four typed pure numerical built-ins:

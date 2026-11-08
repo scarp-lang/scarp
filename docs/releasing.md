@@ -1,5 +1,14 @@
 # Preparing a prerelease
 
+**Post-alpha.4 development:** the `v0.0.6-alpha.5` source candidate
+includes deterministic Top-P, Pearson correlation and narrowly expanded
+compiler-owned ELF64 integer kernel dependencies. It must not be published
+without verified alpha.4 publication/retirement, fresh exact-main seven-job
+validation and a distinct maintainer approval naming the complete alpha.5
+source commit. See [alpha.5 source notes](releases/v0.0.6-alpha.5.md)
+and the [development gates](releases/v0.0.6-alpha.5-development-plan.md).
+
+
 **Unpublished source candidate:** v0.0.6-alpha.4 requires separate
 authorization of the complete exact-main source SHA before any tag,
 release-control request or publication. The latest published prerelease

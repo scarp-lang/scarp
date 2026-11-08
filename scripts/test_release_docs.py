@@ -16,7 +16,7 @@ HISTORICAL_ALPHA2 = "0.0.6-alpha.2"
 HISTORICAL_ALPHA1 = "0.0.6-alpha.1"
 HISTORICAL_ALPHA4 = "0.0.5-alpha.4"
 HISTORICAL_ALPHA5 = "0.0.5-alpha.5"
-PACKAGE_VERSION = "0.0.6-alpha.4"
+PACKAGE_VERSION = "0.0.6-alpha.5"
 
 
 def package_version():
@@ -74,8 +74,8 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
             "docs/reference/cli.md": (f"v{version}",),
             "docs/development/feature-matrix.md": (f"Cargo declares `{version}`",),
             "CHANGELOG.md": (f"## {version} — source candidate (unpublished), 2026-11-08",),
-            "docs/releases/v0.0.6-alpha.4.md": (f"Scarp v{version}", "source candidate", "Publication boundary"),
-            "docs/releases/v0.0.6-alpha.4-publication.md": (
+            "docs/releases/v0.0.6-alpha.5.md": (f"Scarp v{version}", "source candidate", "Publication gates"),
+            "docs/releases/v0.0.6-alpha.5-publication.md": (
                 f"Scarp v{version} — prerelease", "## New in",
                 "## Compatibility and limits",
             ),
@@ -115,21 +115,24 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
                 for needle in expected:
                     self.assertIn(needle, text, f"update {filename} when changing the package release anchor")
 
-    def test_alpha4_candidate_is_separate_from_published_alpha3(self):
+    def test_alpha5_candidate_is_separate_from_published_alpha3(self):
         self.assertEqual(PACKAGE_VERSION, package_version())
         self.assertNotEqual(PUBLISHED_VERSION, PACKAGE_VERSION)
-        candidate = (ROOT / "docs/releases/v0.0.6-alpha.4.md").read_text(encoding="utf-8")
-        public = (ROOT / "docs/releases/v0.0.6-alpha.4-publication.md").read_text(encoding="utf-8")
-        self.assertIn("Versioned source candidate only", candidate)
-        self.assertIn("# Scarp v0.0.6-alpha.4 — prerelease", public)
+        candidate = (ROOT / "docs/releases/v0.0.6-alpha.5.md").read_text(encoding="utf-8")
+        public = (ROOT / "docs/releases/v0.0.6-alpha.5-publication.md").read_text(encoding="utf-8")
+        self.assertIn("Versioned development source candidate", candidate)
+        self.assertIn("# Scarp v0.0.6-alpha.5 — prerelease", public)
         self.assertNotIn("source candidate", public.lower())
         self.assertFalse((ROOT / ".github/release-request.json").exists())
         for filename in (
             "docs/native-elf64.md", "docs/cosine-similarity.md",
-            "docs/sampled-calculus.md",
+            "docs/sampled-calculus.md", "docs/nucleus-selection.md",
+            "docs/pearson-correlation.md",
             "examples/sampled_calculus.srp", "examples/sampled_calculus.stdout",
             "examples/sample_cumulative_area.srp", "examples/sample_cumulative_area.stdout",
             "examples/cosine_similarity.srp", "examples/cosine_similarity.stdout",
+            "examples/nucleus_selection.srp", "examples/nucleus_selection.stdout",
+            "examples/pearson_correlation.srp", "examples/pearson_correlation.stdout",
         ):
             with self.subTest(file=filename):
                 self.assertTrue((ROOT / filename).is_file())

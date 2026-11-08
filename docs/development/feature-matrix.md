@@ -1,7 +1,12 @@
 # Feature completeness and development roadmap
 
-Cargo declares `0.0.6-alpha.4` as an **unpublished source candidate**.
-The latest public prerelease is v0.0.6-alpha.3 (7 November 2026).
+Cargo declares `0.0.6-alpha.5` as an **unpublished source candidate**.
+The latest independently verified published prerelease is
+v0.0.6-alpha.3 (7 November 2026), pending public alpha.4 verification.
+The alpha.5 candidate adds implemented but **unreleased**
+`top_p` / `top_p_values`, `pearson_correlation`, and narrow ELF64
+integer binding dependencies; see the [candidate notes](../releases/v0.0.6-alpha.5.md).
+These are not general native executable or machine-learning-model features.
 Its typed built-ins `topk`, `topk_values`, `softmax_temp` and
 `logsoftmax_temp` are now publicly available in the GitHub prerelease.
 Private scalar IR verifies typed control flow, slot lifetimes and differential
@@ -10,7 +15,8 @@ adds the first narrowly scoped compiler-owned ELF64 integer-kernel object writer
 (#158) and scalar cosine similarity (#157); neither is in the alpha.3 tag,
 and neither introduces general executable compilation. See the
 [exact-source alpha.3 validation](../releases/v0.0.6-alpha.3-validation.md).
-Future Top-P nucleus work remains in draft PR #149 and outside this release.
+Historical Top-P draft #149 remains divergent; its independent post-alpha.4
+reimplementation #161 is included in this **unpublished alpha.5 source candidate**.
 
 Audit date: 2026-11-07. This inventory describes the published
 **v0.0.6-alpha.3 prerelease** and development work remaining; update a row

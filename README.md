@@ -1,9 +1,15 @@
 # Scarp
 
-**0.0.6-alpha.4** is an **unpublished source candidate**, not a GitHub
-release. The next source needs fresh exact-main CI and separately approved
-source SHA before any tag, release request or public publication.
-See [alpha.4 candidate scope](docs/releases/v0.0.6-alpha.4.md).
+**0.0.6-alpha.5** is an **unpublished post-alpha.4 source candidate**, not
+a GitHub Release or an approved publication request. This development tree
+integrates [deterministic Top-P](docs/nucleus-selection.md),
+[centered Pearson correlation](docs/pearson-correlation.md), and an
+experimental [multi-binding ELF64 kernel](docs/native-elf64.md) for a future
+separately approved prerelease. See [alpha.5 candidate scope](docs/releases/v0.0.6-alpha.5.md)
+and the [guarded release plan](docs/releases/v0.0.6-alpha.5-development-plan.md).
+The prior **v0.0.6-alpha.4** source is frozen at
+`f04be0758cbce405ddcdb229699b0ff83c09d207` pending independent
+publication verification; no new source is authorized by that approval.
 
 **0.0.6-alpha.3** is the latest **published GitHub prerelease** (7 November
 2026). It adds pure deterministic [Top-K ranking](docs/topk-selection.md),
