@@ -88,6 +88,15 @@ step, diagnostic and memory contract is in
 Matrix arithmetic is also available: see [tiles and linear algebra](tiles.md).
 These calls require the alpha.4 candidate, not published alpha.3.
 
+## Post-alpha.4 scientific correlation
+
+The development-only `pearson_correlation(left, right) -> float` computes a
+centered Pearson correlation from two nonconstant, equally long visible
+vectors. It has no new allocations and uses scaled, compensated reductions.
+It is **not** included in the frozen alpha.4 source candidate. See the
+[Pearson guide](pearson-correlation.md) for numerical details and the
+[runnable example](../examples/pearson_correlation.srp).
+
 ## Numerical guarantees and limits
 
 Every stored element and scalar result is finite. Invalid lengths, domains,
