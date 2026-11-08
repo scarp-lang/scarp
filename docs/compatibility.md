@@ -1,5 +1,10 @@
 # Version and API compatibility
 
+`0.0.6-alpha.4` is **an unpublished source candidate** with finite sampled
+calculus, cosine similarity and a limited ELF64 integer-kernel object writer.
+There is no native executable compiler CLI or stable ABI. The latest
+published prerelease is still v0.0.6-alpha.3.
+
 `0.0.6-alpha.3` was **published as an experimental GitHub prerelease on
 7 November 2026**. It adds four typed pure numerical built-ins:
 `topk`, `topk_values`, `softmax_temp` and `logsoftmax_temp`.

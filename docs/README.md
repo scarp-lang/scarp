@@ -1,5 +1,9 @@
 # Scarp documentation
 
+**0.0.6-alpha.4 prerelease** is an **unpublished source candidate**,
+not a tagged public release. See [alpha.4 source notes](releases/v0.0.6-alpha.4.md)
+and [release gates](releases/v0.0.6-alpha.4-preparation.md).
+
 **Next prerelease preparation:** [alpha.4 checklist](releases/v0.0.6-alpha.4-preparation.md)
 and [proposed scope](releases/v0.0.6-alpha.4.md) are planning only,
 not a version change, release, or publication authorization.

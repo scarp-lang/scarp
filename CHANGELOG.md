@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.0.6-alpha.4 — source candidate (unpublished), 2026-11-08
+
+- Merge pure sampled numerical kernels (`sample_area`, `sample_slopes`,
+  `sample_cumulative_area`) with bounded trapezoidal integration (#153/#155).
+- Add overflow-resistant `cosine_similarity` with independently scaled
+  compensated reductions and explicit zero-vector domains (#157).
+- Add first safe-Rust compiler-owned x86-64 ELF64 integer-kernel object
+  emitter using verified scalar IR (#158). No native executable compiler,
+  new CLI command or stable ABI.
+- Exclude draft Top-P PR #149, GPU/tensors, and unimplemented keywords.
+- This is **only a source candidate**: seven exact-main checks, archive
+  validation and separate maintainer approval are required to publish.
+
 ## 0.0.6-alpha.3 — prerelease, 2026-11-07
 
 - Add deterministic, bounded Top-K model score selection:

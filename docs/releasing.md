@@ -1,5 +1,11 @@
 # Preparing a prerelease
 
+**Unpublished source candidate:** v0.0.6-alpha.4 requires separate
+authorization of the complete exact-main source SHA before any tag,
+release-control request or publication. The latest published prerelease
+remains v0.0.6-alpha.3. See
+[alpha.4 readiness](releases/v0.0.6-alpha.4-preparation.md).
+
 The package workflow builds and verifies archives. It has read-only repository
 permissions and never creates tags or GitHub Releases. A separate publisher
 executes an explicit, reviewed request in `.github/release-request.json` after

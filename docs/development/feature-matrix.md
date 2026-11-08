@@ -1,6 +1,7 @@
 # Feature completeness and development roadmap
 
-Cargo declares `0.0.6-alpha.3`, **published on 7 November 2026**.
+Cargo declares `0.0.6-alpha.4` as an **unpublished source candidate**.
+The latest public prerelease is v0.0.6-alpha.3 (7 November 2026).
 Its typed built-ins `topk`, `topk_values`, `softmax_temp` and
 `logsoftmax_temp` are now publicly available in the GitHub prerelease.
 Private scalar IR verifies typed control flow, slot lifetimes and differential
