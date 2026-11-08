@@ -234,6 +234,17 @@ See the [temperature guide](temperature-softmax.md) and
 [executable example](../examples/temperature_softmax.srp).
 These are **published in v0.0.6-alpha.3**, not the earlier v0.0.6-alpha.2.
 
+## Post-alpha.4 Top-P nucleus candidate ranking
+
+The development-only `top_p(probabilities, mass) -> integers` and
+`top_p_values(probabilities, mass) -> vector` select the shortest
+descending-probability prefix whose cumulative mass meets a finite
+threshold in `(0, 1]`. Inputs must contain normalized, nonnegative
+probabilities. This is deterministic selection, **not** random sampling,
+and is excluded from the v0.0.6-alpha.4 source candidate.
+See the [Top-P guide](nucleus-selection.md) and runnable
+[example](../examples/nucleus_selection.srp).
+
 ## Development-only categorical logit loss
 
 Two new pure, typed scalar kernels operate on a finite logit vector

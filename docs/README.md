@@ -88,6 +88,7 @@ experimental Rust-hosted C11 scalar emitter; see
 | [Numerical vectors](vectors.md) | Use immutable numerical data, pure kernels, typed vector calls and bounded allocation |
 | [Sampled calculus (unreleased)](sampled-calculus.md) | Integrate measurements, accumulate prefix areas and calculate bounded interval derivatives with checked coordinates |
 | [Cosine similarity (unreleased proposal)](cosine-similarity.md) | Compare orientation of two finite vectors using bounded, independently scaled numerical reductions |
+| [Top-P nucleus selection (post-alpha.4 development)](nucleus-selection.md) | Select the shortest probability-mass prefix using deterministic ordering; not part of alpha.4 candidate |
 | [Top-K inference ranking](topk-selection.md) | Select deterministic ranked model candidates and original scores using two development-only typed built-ins |
 | [Temperature softmax](temperature-softmax.md) | Adjust finite logit probabilities and log probabilities without randomness or nonfinite values |
 | [Root mean square](root-mean-square.md) | Use the published v0.0.6-alpha.1 finite RMS reduction, visible windows and exact work/allocation rules |
