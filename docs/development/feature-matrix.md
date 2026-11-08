@@ -2,7 +2,7 @@
 
 Cargo declares `0.0.6-alpha.4` as the **published GitHub prerelease**.
 The latest public prerelease is v0.0.6-alpha.4 (8 November 2026).
-Earlier alpha.3 introduced `topk`, `topk_values`, `softmax_temp`
+Earlier v0.0.6-alpha.3 introduced `topk`, `topk_values`, `softmax_temp`
 and `logsoftmax_temp` and compiler-owned checked scalar IR.
 Alpha.4 adds bounded sampled calculus, finite cosine similarity and
 the first narrowly scoped compiler-owned x86-64 ELF64 integer-kernel
