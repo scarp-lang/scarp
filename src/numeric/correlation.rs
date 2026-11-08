@@ -133,6 +133,8 @@ pub(super) fn evaluate(
             .map(|(left, right)| Ok(x.centered(*left) * y.centered(*right))),
         span,
     )?;
-    let result = (xy / (xx.sqrt() * yy.sqrt())).clamp(-1.0, 1.0);
+    // The product of centered squared norms is <= (4 * 65536)^2,
+    // so taking one square root avoids a second rounding and remains finite.
+    let result = (xy / (xx * yy).sqrt()).clamp(-1.0, 1.0);
     finite_number(result, span).map(Value::Float)
 }
