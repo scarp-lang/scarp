@@ -1,0 +1,5 @@
+// Pearson correlation: centered scientific statistics, not cosine similarity.
+bind measurements = [1.0, 2.0, 3.0];
+print(pearson_correlation(measurements, [10.0, 20.0, 30.0]));
+print(pearson_correlation(measurements, [30.0, 20.0, 10.0]));
+print(pearson_correlation([-1.0, 0.0, 1.0], [1.0, -2.0, 1.0]));

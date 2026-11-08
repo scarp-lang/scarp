@@ -6,6 +6,7 @@ use crate::{
     value::{finite_number, FiniteFloat, NumericVector, Value, ValueType, MAX_VECTOR_LENGTH},
 };
 
+mod correlation;
 mod integers;
 mod kernels;
 mod samples;
@@ -21,6 +22,7 @@ pub enum Builtin {
     Variance,
     StdDev,
     CosineSimilarity,
+    PearsonCorrelation,
     SampleArea,
     SampleSlopes,
     SampleCumulativeArea,
@@ -109,6 +111,7 @@ impl Builtin {
             "variance" => Self::Variance,
             "stddev" => Self::StdDev,
             "cosine_similarity" => Self::CosineSimilarity,
+            "pearson_correlation" => Self::PearsonCorrelation,
             "sample_area" => Self::SampleArea,
             "sample_slopes" => Self::SampleSlopes,
             "sample_cumulative_area" => Self::SampleCumulativeArea,
@@ -211,7 +214,12 @@ impl Builtin {
             | Self::ArgMin
             | Self::MaxValue
             | Self::MinValue => &[Vector],
-            Self::Dot | Self::Mse | Self::Add | Self::Stitch | Self::CosineSimilarity => {
+            Self::Dot
+            | Self::Mse
+            | Self::Add
+            | Self::Stitch
+            | Self::CosineSimilarity
+            | Self::PearsonCorrelation => {
                 &[Vector, Vector]
             }
             Self::Window => &[Vector, Integer, Integer],
@@ -235,7 +243,11 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
-            Self::Variance | Self::StdDev | Self::SampleArea | Self::CosineSimilarity => {
+            Self::Variance
+            | Self::StdDev
+            | Self::SampleArea
+            | Self::CosineSimilarity
+            | Self::PearsonCorrelation => {
                 ValueType::Float
             }
             Self::IntsLength | Self::IntsSum => ValueType::Integer,
@@ -591,6 +603,9 @@ pub(crate) fn evaluate_with_spans(
     if function == Builtin::CosineSimilarity {
         return similarity::evaluate(args, budget, span, argument_span);
     }
+    if function == Builtin::PearsonCorrelation {
+        return correlation::evaluate(args, budget, span, argument_span);
+    }
     if matches!(
         function,
         Builtin::SampleArea | Builtin::SampleSlopes | Builtin::SampleCumulativeArea
@@ -910,6 +925,7 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::Variance
         | Builtin::StdDev
         | Builtin::CosineSimilarity
+        | Builtin::PearsonCorrelation
         | Builtin::SampleArea
         | Builtin::SampleSlopes
         | Builtin::SampleCumulativeArea

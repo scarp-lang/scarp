@@ -87,6 +87,7 @@ experimental Rust-hosted C11 scalar emitter; see
 | [Finite floats](floats.md) | Use the alpha's binary64 scalars, numeric diagnostics, and function integration |
 | [Numerical vectors](vectors.md) | Use immutable numerical data, pure kernels, typed vector calls and bounded allocation |
 | [Sampled calculus (unreleased)](sampled-calculus.md) | Integrate measurements, accumulate prefix areas and calculate bounded interval derivatives with checked coordinates |
+| [Pearson correlation (post-alpha.4 development)](pearson-correlation.md) | Measure centered relationships in finite paired vectors with deterministic bounded precision |
 | [Cosine similarity (unreleased proposal)](cosine-similarity.md) | Compare orientation of two finite vectors using bounded, independently scaled numerical reductions |
 | [Top-K inference ranking](topk-selection.md) | Select deterministic ranked model candidates and original scores using two development-only typed built-ins |
 | [Temperature softmax](temperature-softmax.md) | Adjust finite logit probabilities and log probabilities without randomness or nonfinite values |
