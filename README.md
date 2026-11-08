@@ -1,38 +1,34 @@
 # Scarp
 
-**0.0.6-alpha.4** is an **unpublished source candidate**, not a GitHub
-release. The next source needs fresh exact-main CI and separately approved
-source SHA before any tag, release request or public publication.
-See [alpha.4 candidate scope](docs/releases/v0.0.6-alpha.4.md).
+**v0.0.6-alpha.4** is the latest **published GitHub prerelease** (8 November
+2026), tagged from exact source commit
+`f04be0758cbce405ddcdb229699b0ff83c09d207`. The guarded publication
+includes Windows x64, Linux x64, macOS Apple Silicon archives, checksum sidecars
+and a combined SHA-256 manifest. See the
+[official release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4)
+and [published notes](docs/releases/v0.0.6-alpha.4-publication.md).
 
-**0.0.6-alpha.3** is the latest **published GitHub prerelease** (7 November
-2026). It adds pure deterministic [Top-K ranking](docs/topk-selection.md),
-[temperature-controlled softmax](docs/temperature-softmax.md), and
-private scalar IR compiler verification. Download verified Windows x64, Linux
-x64 and macOS Apple Silicon archives from the
-[public release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3).
-See [public release notes](docs/releases/v0.0.6-alpha.3-publication.md)
-and the [exact-source verification record](docs/releases/v0.0.6-alpha.3-validation.md).
-The [candidate notes](docs/releases/v0.0.6-alpha.3.md) remain a historical
-prepublication snapshot; this is not a stable or general native compiler release.
+It includes bounded [sampled calculus](docs/sampled-calculus.md)
+(`sample_area`, `sample_cumulative_area`, `sample_slopes`),
+[cosine similarity](docs/cosine-similarity.md), and the
+[experimental compiler-owned ELF64 integer object encoder](docs/native-elf64.md).
+The object encoder is a limited Rust embedding API, **not** a general native
+executable compiler or public `scarp compile` command.
+
+**v0.0.6-alpha.3** remains an [earlier published prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3)
+with deterministic Top-K, temperature-aware softmax and private scalar IR verification.
+The [alpha.3 publication notes](docs/releases/v0.0.6-alpha.3-publication.md)
+are retained for historical release boundaries. The alpha.4 candidate notes
+are likewise historical; the published release is authoritative.
 
 **Build Beyond Boundaries.**
 
-**Merged but unreleased:** [sampled calculus](docs/sampled-calculus.md)
-adds bounded `sample_area(x, y)`, `sample_slopes(x, y)` and
-`sample_cumulative_area(x, y)` to current `main` via
-[PR #153](https://github.com/scarp-lang/scarp/pull/153) and
-[PR #155](https://github.com/scarp-lang/scarp/pull/155).
-These kernels passed Linux, Windows, macOS and Rust 1.74 validation.
-They are **not** in published alpha.3 binaries; compile from current
-source until a newer compatible prerelease is published.
-
-**Also merged but unreleased:** [cosine similarity](docs/cosine-similarity.md)
-(#157) and an experimental [safe-Rust ELF64 integer-kernel writer](docs/native-elf64.md)
-(#158) on current source. The ELF writer supports only a pure integer initializer
-and returns relocatable object bytes; it does not produce a general Scarp
-executable or introduce a public native compiler CLI.
-
+**Published in alpha.4:** The sampled calculus, cosine similarity, and restricted
+ELF64 integer-kernel milestones originally developed in PRs #153, #155, #157
+and #158 are now included in the tagged alpha.4 source. They are not present
+in alpha.3 binaries. Further Top-P ranking, Pearson correlation, and expanded
+native-object support remain post-alpha.4 development work, not published
+alpha.4 capabilities.
 
 **0.0.6-alpha.2** is an **earlier published GitHub prerelease** (6 November
 2026), available for Windows x64, Linux x64 and macOS Apple Silicon. It adds
@@ -58,8 +54,8 @@ See [alpha.5 release notes](docs/releases/v0.0.5-alpha.5.md) and the
 [publication record](docs/releases/v0.0.5-alpha.5-validation.md).
 
 Scarp is an experimental programming language implemented in Rust. The latest
-published **0.0.6-alpha.3** prerelease was published on 7 November 2026 from
-exact source `ceff07d9014f466974e0c9e02fc5d23573f55777`. The compiler provides a lexer,
+published **0.0.6-alpha.4** prerelease was published on 8 November 2026 from
+exact source `f04be0758cbce405ddcdb229699b0ff83c09d207`. The compiler provides a lexer,
 parser, typed resolver, interpreter, source modules, finite binary64 numerics
 and a Scarp-first CLI. The bounded `create`, `launch` and project-directory
 `verify` workflow remains available. Syntax and APIs are not stable.
