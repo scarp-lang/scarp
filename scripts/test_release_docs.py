@@ -64,6 +64,20 @@ def validate_release_request_document(request, version):
 
 
 class ReleaseDocConsistencyTests(unittest.TestCase):
+    def assert_absent_or_explicitly_approved_alpha4_request(self):
+        """Allow only the reviewed alpha.4 request; absence remains safe."""
+        request_path = ROOT / ".github/release-request.json"
+        if not request_path.exists():
+            return
+        request = json.loads(request_path.read_text(encoding="utf-8"))
+        validate_release_request_document(request, PACKAGE_VERSION)
+        self.assertEqual(request, {
+            "version": "0.0.6-alpha.4",
+            "source_commit": "f04be0758cbce405ddcdb229699b0ff83c09d207",
+            "tagger_name": "Sanskar",
+            "tagger_email": "sanskarin@outlook.in",
+        })
+
     def test_current_release_anchors(self):
         version = package_version()
         self.assertEqual(version, PACKAGE_VERSION)
@@ -123,7 +137,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         self.assertIn("Versioned source candidate only", candidate)
         self.assertIn("# Scarp v0.0.6-alpha.4 — prerelease", public)
         self.assertNotIn("source candidate", public.lower())
-        self.assertFalse((ROOT / ".github/release-request.json").exists())
+        self.assert_absent_or_explicitly_approved_alpha4_request()
         for filename in (
             "docs/native-elf64.md", "docs/cosine-similarity.md",
             "docs/sampled-calculus.md",
@@ -216,7 +230,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         self.assertIn("Published as an experimental GitHub prerelease", current)
         self.assertIn("Seven public assets", current)
         self.assertIn("PR #149", current)
-        self.assertFalse((ROOT / ".github/release-request.json").exists())
+        self.assert_absent_or_explicitly_approved_alpha4_request()
         for filename in (
             "README.md", "docs/README.md", "docs/compatibility.md",
             "docs/reference/cli.md", "docs/development/feature-matrix.md",
