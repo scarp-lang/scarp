@@ -1,8 +1,10 @@
 # Command-line reference
 
-**v0.0.6-alpha.4** is an unpublished source candidate. It does not add
-`scarp compile` or a native executable compiler; the ELF64 object writer
-is an experimental Rust library API. CLI execution remains interpreter-based.
+**v0.0.6-alpha.4** is a published experimental GitHub prerelease.
+It adds scientific numerical functions and the first native ELF64 object
+writer exposed only as an experimental Rust library API.
+It does **not** add `scarp compile` or a native executable compiler.
+CLI execution remains interpreter-based. See the [verified release](../releases/v0.0.6-alpha.4-validation.md).
 
 The **published `v0.0.6-alpha.3` prerelease** adds numerical built-ins but
 **no new CLI commands**. The interpreter-backed command vocabulary
@@ -19,8 +21,8 @@ Published v0.0.6-alpha.1 adds static `inspect symbols` and `inspect references`
 commands, which are absent from older alpha.5 packages.
 
 The latest published prerelease is
-[v0.0.6-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.3).
-It adds project-directory module inspection. The experimental C11 scalar
+[v0.0.6-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4).
+It retains project-directory module inspection. The experimental C11 scalar
 source emitter is a Rust embedding API, **not** a Scarp CLI command;
 `scarp compile` still does not exist.
 

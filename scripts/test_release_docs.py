@@ -11,7 +11,8 @@ import json
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLISHED_VERSION = "0.0.6-alpha.3"
+PUBLISHED_VERSION = "0.0.6-alpha.4"
+HISTORICAL_ALPHA3 = "0.0.6-alpha.3"
 HISTORICAL_ALPHA2 = "0.0.6-alpha.2"
 HISTORICAL_ALPHA1 = "0.0.6-alpha.1"
 HISTORICAL_ALPHA4 = "0.0.5-alpha.4"
@@ -84,10 +85,10 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         needles = {
             "README.md": (f"**{version}**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/README.md": (f"**{version} prerelease**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
-            "docs/compatibility.md": (f"`{version}` is **an unpublished source candidate**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
+            "docs/compatibility.md": (f"`{version}` is **a published GitHub prerelease**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/reference/cli.md": (f"v{version}",),
             "docs/development/feature-matrix.md": (f"Cargo declares `{version}`",),
-            "CHANGELOG.md": (f"## {version} — source candidate (unpublished), 2026-11-08",),
+            "CHANGELOG.md": (f"## {version} — prerelease, 2026-11-08",),
             "docs/releases/v0.0.6-alpha.4.md": (f"Scarp v{version}", "source candidate", "Publication boundary"),
             "docs/releases/v0.0.6-alpha.4-publication.md": (
                 f"Scarp v{version} — prerelease", "## New in",
@@ -100,10 +101,16 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
                 "42020731912", "5 November 2026",
             ),
             "docs/releases/v0.0.6-alpha.3-validation.md": (
-                f"Scarp v{PUBLISHED_VERSION}",
+                f"Scarp v{HISTORICAL_ALPHA3}",
                 "ceff07d9014f466974e0c9e02fc5d23573f55777",
                 "42372237527", "437560402", "7 November 2026",
                 "ca60692c2d93be0173ec5955bcad65e512a73846bcdc65ecdc3e13746e07e1ad",
+            ),
+            "docs/releases/v0.0.6-alpha.4-validation.md": (
+                f"Scarp v{PUBLISHED_VERSION}",
+                "f04be0758cbce405ddcdb229699b0ff83c09d207",
+                "438100037", "42459313202",
+                "958f8a62aec536dd6919ce4bfbb65d9d1afef3c40cdfe3c7427a59db35e69132",
             ),
             "docs/releases/v0.0.6-alpha.2-validation.md": (
                 f"Scarp v{HISTORICAL_ALPHA2}",
@@ -129,9 +136,9 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
                 for needle in expected:
                     self.assertIn(needle, text, f"update {filename} when changing the package release anchor")
 
-    def test_alpha4_candidate_is_separate_from_published_alpha3(self):
+    def test_alpha4_candidate_snapshot_is_separate_from_published_notes(self):
         self.assertEqual(PACKAGE_VERSION, package_version())
-        self.assertNotEqual(PUBLISHED_VERSION, PACKAGE_VERSION)
+        self.assertEqual(PUBLISHED_VERSION, PACKAGE_VERSION)
         candidate = (ROOT / "docs/releases/v0.0.6-alpha.4.md").read_text(encoding="utf-8")
         public = (ROOT / "docs/releases/v0.0.6-alpha.4-publication.md").read_text(encoding="utf-8")
         self.assertIn("Versioned source candidate only", candidate)
@@ -203,7 +210,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
     def test_latest_published_anchor_and_immutable_candidate_snapshot(self):
         version = PUBLISHED_VERSION
         self.assertEqual(PACKAGE_VERSION, package_version())
-        self.assertNotEqual(version, PACKAGE_VERSION)  # candidate is not yet public
+        self.assertEqual(version, PACKAGE_VERSION)  # current package is published
         for filename in ("README.md", "docs/README.md", "docs/compatibility.md"):
             with self.subTest(file=filename):
                 text = (ROOT / filename).read_text(encoding="utf-8")
@@ -226,10 +233,10 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
 
 
     def test_current_release_is_public_and_request_retired(self):
-        current = (ROOT / "docs/releases/v0.0.6-alpha.3-validation.md").read_text(encoding="utf-8")
-        self.assertIn("Published as an experimental GitHub prerelease", current)
-        self.assertIn("Seven public assets", current)
-        self.assertIn("PR #149", current)
+        current = (ROOT / "docs/releases/v0.0.6-alpha.4-validation.md").read_text(encoding="utf-8")
+        self.assertIn("Published GitHub experimental prerelease", current)
+        self.assertIn("Seven public uploaded assets", current)
+        self.assertIn("does **not** ship Top-P", current)
         self.assert_absent_or_explicitly_approved_alpha4_request()
         for filename in (
             "README.md", "docs/README.md", "docs/compatibility.md",
