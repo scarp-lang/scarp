@@ -32,17 +32,17 @@ fn correlation_identifies_centered_relationships_not_uncentered_cosines() {
     close(pearson(&[1.0, 2.0, 3.0], &[30.0, 20.0, 10.0]), -1.0);
     close(pearson(&[-1.0, 0.0, 1.0], &[1.0, -2.0, 1.0]), 0.0);
     close(pearson(&[3.0, 4.0], &[9.0, 6.0]), -1.0);
-    close(pearson(&[1.0, 2.0, 3.0], &[1.0, 4.0, 9.0]), 0.989743318610787);
+    close(
+        pearson(&[1.0, 2.0, 3.0], &[1.0, 4.0, 9.0]),
+        0.989743318610787,
+    );
 }
 
 #[test]
 fn shifted_and_scaled_extreme_finite_inputs_remain_well_conditioned() {
     let tiny = f64::from_bits(1);
     close(pearson(&[0.0, tiny], &[tiny, 0.0]), -1.0);
-    close(
-        pearson(&[-f64::MAX, f64::MAX], &[-f64::MAX, f64::MAX]),
-        1.0,
-    );
+    close(pearson(&[-f64::MAX, f64::MAX], &[-f64::MAX, f64::MAX]), 1.0);
     close(
         pearson(&[-f64::MAX, f64::MAX], &[f64::MAX, -f64::MAX]),
         -1.0,
@@ -81,10 +81,7 @@ fn domains_types_and_source_argument_spans_are_preserved() {
     let options = ExecutionOptions::default();
     let expected = scarp::check_with_options(source, options).unwrap_err();
     assert_eq!(expected.kind, Kind::NumericDomain);
-    assert_eq!(
-        &source[expected.span.start..expected.span.end],
-        "[0.0,0.0]"
-    );
+    assert_eq!(&source[expected.span.start..expected.span.end], "[0.0,0.0]");
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let RunError::Diagnostic(actual) =
         scarp::run_with_io_and_options(source, &mut stdout, &mut stderr, options).unwrap_err()
