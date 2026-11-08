@@ -219,9 +219,7 @@ impl Builtin {
             | Self::Add
             | Self::Stitch
             | Self::CosineSimilarity
-            | Self::PearsonCorrelation => {
-                &[Vector, Vector]
-            }
+            | Self::PearsonCorrelation => &[Vector, Vector],
             Self::Window => &[Vector, Integer, Integer],
             Self::Scale => &[Vector, Float],
             Self::Clamp => &[Vector, Float, Float],
@@ -247,9 +245,7 @@ impl Builtin {
             | Self::StdDev
             | Self::SampleArea
             | Self::CosineSimilarity
-            | Self::PearsonCorrelation => {
-                ValueType::Float
-            }
+            | Self::PearsonCorrelation => ValueType::Float,
             Self::IntsLength | Self::IntsSum => ValueType::Integer,
             Self::IntsWindow
             | Self::IntsJoin
