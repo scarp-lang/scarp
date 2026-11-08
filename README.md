@@ -1,5 +1,10 @@
 # Scarp
 
+**0.0.6-alpha.4** is an **unpublished source candidate**, not a GitHub
+release. The next source needs fresh exact-main CI and separately approved
+source SHA before any tag, release request or public publication.
+See [alpha.4 candidate scope](docs/releases/v0.0.6-alpha.4.md).
+
 **0.0.6-alpha.3** is the latest **published GitHub prerelease** (7 November
 2026). It adds pure deterministic [Top-K ranking](docs/topk-selection.md),
 [temperature-controlled softmax](docs/temperature-softmax.md), and

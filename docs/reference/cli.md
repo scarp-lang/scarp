@@ -1,5 +1,9 @@
 # Command-line reference
 
+**v0.0.6-alpha.4** is an unpublished source candidate. It does not add
+`scarp compile` or a native executable compiler; the ELF64 object writer
+is an experimental Rust library API. CLI execution remains interpreter-based.
+
 The **published `v0.0.6-alpha.3` prerelease** adds numerical built-ins but
 **no new CLI commands**. The interpreter-backed command vocabulary
 remains compatible with published `v0.0.6-alpha.2`. See

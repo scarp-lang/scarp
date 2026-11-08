@@ -16,7 +16,7 @@ HISTORICAL_ALPHA2 = "0.0.6-alpha.2"
 HISTORICAL_ALPHA1 = "0.0.6-alpha.1"
 HISTORICAL_ALPHA4 = "0.0.5-alpha.4"
 HISTORICAL_ALPHA5 = "0.0.5-alpha.5"
-PACKAGE_VERSION = "0.0.6-alpha.3"
+PACKAGE_VERSION = "0.0.6-alpha.4"
 
 
 def package_version():
@@ -70,12 +70,12 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         needles = {
             "README.md": (f"**{version}**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/README.md": (f"**{version} prerelease**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
-            "docs/compatibility.md": (f"`{version}` was **published", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
+            "docs/compatibility.md": (f"`{version}` is **an unpublished source candidate**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/reference/cli.md": (f"v{version}",),
             "docs/development/feature-matrix.md": (f"Cargo declares `{version}`",),
-            "CHANGELOG.md": (f"## {version} — prerelease, 2026-11-07",),
-            "docs/releases/v0.0.6-alpha.3.md": (f"Scarp v{version}", "Not a published GitHub prerelease", "Release process"),
-            "docs/releases/v0.0.6-alpha.3-publication.md": (
+            "CHANGELOG.md": (f"## {version} — source candidate (unpublished), 2026-11-08",),
+            "docs/releases/v0.0.6-alpha.4.md": (f"Scarp v{version}", "source candidate", "Publication boundary"),
+            "docs/releases/v0.0.6-alpha.4-publication.md": (
                 f"Scarp v{version} — prerelease", "## New in",
                 "## Compatibility and limits",
             ),
@@ -114,6 +114,25 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
                 text = (ROOT / filename).read_text(encoding="utf-8")
                 for needle in expected:
                     self.assertIn(needle, text, f"update {filename} when changing the package release anchor")
+
+    def test_alpha4_candidate_is_separate_from_published_alpha3(self):
+        self.assertEqual(PACKAGE_VERSION, package_version())
+        self.assertNotEqual(PUBLISHED_VERSION, PACKAGE_VERSION)
+        candidate = (ROOT / "docs/releases/v0.0.6-alpha.4.md").read_text(encoding="utf-8")
+        public = (ROOT / "docs/releases/v0.0.6-alpha.4-publication.md").read_text(encoding="utf-8")
+        self.assertIn("Versioned source candidate only", candidate)
+        self.assertIn("# Scarp v0.0.6-alpha.4 — prerelease", public)
+        self.assertNotIn("source candidate", public.lower())
+        self.assertFalse((ROOT / ".github/release-request.json").exists())
+        for filename in (
+            "docs/native-elf64.md", "docs/cosine-similarity.md",
+            "docs/sampled-calculus.md",
+            "examples/sampled_calculus.srp", "examples/sampled_calculus.stdout",
+            "examples/sample_cumulative_area.srp", "examples/sample_cumulative_area.stdout",
+            "examples/cosine_similarity.srp", "examples/cosine_similarity.stdout",
+        ):
+            with self.subTest(file=filename):
+                self.assertTrue((ROOT / filename).is_file())
 
     def test_alpha3_immutable_candidate_snapshot_and_published_notes(self):
         candidate = (ROOT / "docs/releases/v0.0.6-alpha.3.md").read_text(encoding="utf-8")
@@ -170,7 +189,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
     def test_latest_published_anchor_and_immutable_candidate_snapshot(self):
         version = PUBLISHED_VERSION
         self.assertEqual(PACKAGE_VERSION, package_version())
-        self.assertEqual(version, PACKAGE_VERSION)
+        self.assertNotEqual(version, PACKAGE_VERSION)  # candidate is not yet public
         for filename in ("README.md", "docs/README.md", "docs/compatibility.md"):
             with self.subTest(file=filename):
                 text = (ROOT / filename).read_text(encoding="utf-8")
