@@ -4,7 +4,10 @@ Cargo declares `0.0.6-alpha.3`, **published on 7 November 2026**.
 Its typed built-ins `topk`, `topk_values`, `softmax_temp` and
 `logsoftmax_temp` are now publicly available in the GitHub prerelease.
 Private scalar IR verifies typed control flow, slot lifetimes and differential
-execution without a general native object writer. See the
+execution without a general native object writer. Newer **unreleased main**
+adds the first narrowly scoped compiler-owned ELF64 integer-kernel object writer
+(#158) and scalar cosine similarity (#157); neither is in the alpha.3 tag,
+and neither introduces general executable compilation. See the
 [exact-source alpha.3 validation](../releases/v0.0.6-alpha.3-validation.md).
 Future Top-P nucleus work remains in draft PR #149 and outside this release.
 
