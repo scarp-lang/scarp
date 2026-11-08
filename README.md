@@ -22,6 +22,12 @@ These kernels passed Linux, Windows, macOS and Rust 1.74 validation.
 They are **not** in published alpha.3 binaries; compile from current
 source until a newer compatible prerelease is published.
 
+**Also merged but unreleased:** [cosine similarity](docs/cosine-similarity.md)
+(#157) and an experimental [safe-Rust ELF64 integer-kernel writer](docs/native-elf64.md)
+(#158) on current source. The ELF writer supports only a pure integer initializer
+and returns relocatable object bytes; it does not produce a general Scarp
+executable or introduce a public native compiler CLI.
+
 
 **0.0.6-alpha.2** is an **earlier published GitHub prerelease** (6 November
 2026), available for Windows x64, Linux x64 and macOS Apple Silicon. It adds

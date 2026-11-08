@@ -4,6 +4,10 @@
 and [proposed scope](releases/v0.0.6-alpha.4.md) are planning only,
 not a version change, release, or publication authorization.
 
+**Merged, unreleased native experiment:** [the first ELF64 integer-kernel
+object writer](native-elf64.md) uses the verified private scalar IR. It does
+not implement a general native compile command, executable linker or stable ABI.
+
 **0.0.6-alpha.3 prerelease** was **published on 7 November 2026**.
 It includes [Top-K ranking](topk-selection.md),
 [temperature softmax](temperature-softmax.md), and verified private
