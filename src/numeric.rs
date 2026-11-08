@@ -228,7 +228,7 @@ impl Builtin {
             }
             Self::SoftmaxTemp | Self::LogSoftmaxTemp | Self::TopP | Self::TopPValues => {
                 &[Vector, Float]
-            },
+            }
             Self::OneHot => &[Integer, Integer],
             Self::Tile => &[Vector, Integer, Integer],
             Self::Height | Self::Width | Self::Unroll | Self::Turn => &[Tile],
