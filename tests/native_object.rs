@@ -169,15 +169,17 @@ fn independent_host_executes_multiple_checked_binding_dependencies() {
         );
         return;
     }
-    let directory = std::env::temp_dir().join(format!(
-        "scarp-multibinding-native-{}", std::process::id()
-    ));
+    let directory =
+        std::env::temp_dir().join(format!("scarp-multibinding-native-{}", std::process::id()));
     fs::create_dir(&directory).unwrap();
     let object_path = directory.join("bindings.o");
     let source_path = directory.join("harness.c");
     let executable = directory.join("harness");
     for (source, expected) in [
-        ("bind seed=42; bind mask=15; bind result=(seed & mask) ^ (~0 & 8);", 2i64),
+        (
+            "bind seed=42; bind mask=15; bind result=(seed & mask) ^ (~0 & 8);",
+            2i64,
+        ),
         ("bind a=0; bind b=a | 17; bind c=b ^ 9;", 24),
         ("bind first=1; bind second=first;", 1),
         ("bind a=0; bind b=~a; bind c=b & 63;", 63),
