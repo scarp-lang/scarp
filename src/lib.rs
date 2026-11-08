@@ -21,6 +21,8 @@ pub mod lexer;
 pub mod limits;
 pub mod modules;
 mod native_preflight;
+/// Experimental x86-64 ELF object generation for a tiny integer kernel subset.
+pub mod native_object;
 pub mod numeric;
 pub mod parser;
 pub mod resolver;

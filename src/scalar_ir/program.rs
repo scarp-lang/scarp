@@ -194,6 +194,22 @@ impl ScalarProgramIr {
         Ok(ir)
     }
 
+    /// Only one declaration's pure integer initializer is currently eligible
+    /// for the experimental ELF kernel ABI; this is not whole-program emission.
+    pub(super) fn single_integer_kernel(&self) -> Result<&ScalarExpressionIr, Diagnostic> {
+        if self.slots != [ValueType::Integer] || self.steps.len() != 1 {
+            return Err(invalid(Span::default()));
+        }
+        match &self.steps[0].kind {
+            ProgramOp::Store { slot: 0, value }
+                if value.registers.get(value.root) == Some(&ValueType::Integer) =>
+            {
+                Ok(value)
+            }
+            _ => Err(invalid(self.steps[0].span)),
+        }
+    }
+
     fn check_slot(&self, slot: usize, kind: ValueType, span: Span) -> Result<(), Diagnostic> {
         if self.slots.get(slot) == Some(&kind) {
             Ok(())
