@@ -85,7 +85,9 @@ fn text(program: &ScalarProgramIr) -> Result<Vec<u8>, Diagnostic> {
     for (_, expr) in program.integer_stores() {
         expr.verify()?;
         max_registers = max_registers.max(expr.registers.len());
-        total_steps = total_steps.checked_add(expr.steps.len()).ok_or_else(failure)?;
+        total_steps = total_steps
+            .checked_add(expr.steps.len())
+            .ok_or_else(failure)?;
     }
     let stack_size = slot_count
         .checked_add(max_registers)
