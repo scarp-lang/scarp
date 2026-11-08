@@ -16,10 +16,11 @@
 - Exercise the combined numerical/native/compiler changes together on
   Linux, Windows, macOS, Rust 1.74 and all three native package targets
   (integration draft #165).
-- **Candidate only:** prior alpha.4 publication and release-control retirement,
-  final integrated main CI and independent artifact validation are prerequisites.
-  Alpha.5 needs its own separate, exact-version + full-source authorization
-  and one-time release request. No alpha.5 tag or GitHub Release is implied.
+- **Candidate only:** alpha.4 is already published and its one-time
+  release request retired; alpha.5 still needs complete exact-final-main CI,
+  independent artifact verification and a separate full-source authorization
+  followed by a new one-time guarded request. This does not create an
+  alpha.5 tag or GitHub Release.
 
 ## 0.0.6-alpha.4 — prerelease, 2026-11-08
 
