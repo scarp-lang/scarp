@@ -1,5 +1,7 @@
 # Make decisions with if, elif, and else
 
+> **Canonical public guide:** [Control flow](https://scarp-lang.github.io/scarp-docs/language/control-flow) and [Scarp by Example chapter 02](https://github.com/scarp-lang/scarp-by-example/tree/main/examples/02-control-flow). Earlier ‘development conditional branch’ wording below records the timeline of the original tutorial; the feature was already present in subsequent published compiler releases. Run examples with the exact release and CLI stated by the up-to-date documentation.
+
 This tutorial requires the development conditional branch. It builds on
 [variables](variables.md) and [the boolean rules](../proposals/0004-boolean-expressions.md).
 The published v0.0.1 interpreter does not support this syntax.
