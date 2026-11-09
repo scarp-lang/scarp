@@ -1,5 +1,14 @@
 # Scarp
 
+## Official learning resources and repository boundaries
+
+- **Public documentation (English/Hindi):** [scarp-docs](https://github.com/scarp-lang/scarp-docs). This is the primary home for language guides, version-aware API reference, installation, and CLI instructions.
+- **Runnable course:** [scarp-by-example](https://github.com/scarp-lang/scarp-by-example). This is the primary home for numbered lessons, coding labs and expected outputs.
+- **Compiler repository (here):** Implementation, Rust tests, release engineering, design proposals, technical architecture, release evidence and regression `.srp` / `.stdout` fixtures. These remain here because automated testing depends on them; migrating a tutorial does not delete its compiler fixture.
+
+The initial published alpha.4 lesson migration is under review in [course PR #57](https://github.com/scarp-lang/scarp-by-example/pull/57) and [documentation PR #91](https://github.com/scarp-lang/scarp-docs/pull/91). This compiler branch changes only the signposts, not released tags, source syntax or regression fixtures.
+
+
 **0.0.6-alpha.5** is an **unpublished source candidate** with [Top-P nucleus ranking](docs/nucleus-selection.md), [Pearson correlation](docs/pearson-correlation.md), and experimental [multi-binding ELF64 integer kernels](docs/native-elf64.md). These features are **not** in published alpha.4 binaries. See [alpha.5 candidate notes](docs/releases/v0.0.6-alpha.5.md) and [release gates](docs/releases/v0.0.6-alpha.5-development-plan.md). No alpha.5 source approval or publication is implied.
 
 **0.0.6-alpha.4** is a **published experimental GitHub prerelease**
