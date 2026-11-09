@@ -7,8 +7,11 @@
 use super::*;
 
 fn invalid_quantile(span: Span) -> Diagnostic {
-    domain(span, "quantile fraction must be between 0.0 and 1.0 inclusive")
-        .with_help("pass a finite fraction in [0.0, 1.0]")
+    domain(
+        span,
+        "quantile fraction must be between 0.0 and 1.0 inclusive",
+    )
+    .with_help("pass a finite fraction in [0.0, 1.0]")
 }
 
 // Avoid overflow in the difference for opposite-signed finite endpoints.
@@ -47,7 +50,10 @@ pub(super) fn evaluate(
         0.5
     };
     if input.is_empty() {
-        return Err(domain(at(0), "median and quantile require a nonempty vector"));
+        return Err(domain(
+            at(0),
+            "median and quantile require a nonempty vector",
+        ));
     }
     let len = input.len();
     let levels = u64::from(usize::BITS - len.leading_zeros());
