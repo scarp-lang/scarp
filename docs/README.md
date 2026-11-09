@@ -71,6 +71,13 @@ The [feature-completeness matrix](development/feature-matrix.md) distinguishes
 implemented features, historical experiments and future dependencies. Current
 declarations accept explicit primitive annotations; see [variables](variables.md).
 
+For unreleased foundation work, the [9 November core-type and PR audit](development/core-types-audit-2026-11-09.md)
+records the exact main/release checkpoint and every open compiler PR. The
+[scalar/text draft contract](text-foundations.md) describes six intrinsics on
+this feature branch, absent from published alpha.5. The
+[type staging proposal](proposals/core-types-staging.md) keeps future character,
+byte and general collection support distinct from implemented source types.
+
 The published alpha.3 compiler introduced
 [module inspection](module-inspection.md) and [constant expressions](constant-expressions.md).
 The older alpha.1 snapshot lacks those capabilities. Published alpha.4 adds

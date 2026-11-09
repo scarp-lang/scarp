@@ -10,6 +10,7 @@ mod correlation;
 mod integers;
 mod kernels;
 mod nucleus;
+mod parse_format;
 mod samples;
 mod scalar_text;
 mod similarity;
@@ -92,6 +93,12 @@ pub enum Builtin {
     MatMul,
     TileAdd,
     TileScale,
+    IntegerToText,
+    FloatToText,
+    TextToInteger,
+    TextToFloat,
+    TextTrim,
+    TextReplace,
 }
 
 impl Builtin {
@@ -111,6 +118,12 @@ impl Builtin {
     }
     pub fn from_name(name: &str) -> Option<Self> {
         Some(match name {
+            "integer_to_text" => Self::IntegerToText,
+            "float_to_text" => Self::FloatToText,
+            "text_to_integer" => Self::TextToInteger,
+            "text_to_float" => Self::TextToFloat,
+            "text_trim" => Self::TextTrim,
+            "text_replace" => Self::TextReplace,
             "variance" => Self::Variance,
             "stddev" => Self::StdDev,
             "cosine_similarity" => Self::CosineSimilarity,
@@ -190,6 +203,10 @@ impl Builtin {
     pub fn parameter_types(self) -> &'static [ValueType] {
         use ValueType::{Float, Integer, Integers, String, Tile, Vector};
         match self {
+            Self::IntegerToText => &[Integer],
+            Self::FloatToText => &[Float],
+            Self::TextToInteger | Self::TextToFloat | Self::TextTrim => &[String],
+            Self::TextReplace => &[String, String, String],
             Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
             Self::SampleArea | Self::SampleSlopes | Self::SampleCumulativeArea => &[Vector, Vector],
             Self::IntsLength | Self::IntsSum | Self::IntsToVector => &[Integers],
@@ -248,6 +265,11 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
+            Self::IntegerToText | Self::FloatToText | Self::TextTrim | Self::TextReplace => {
+                ValueType::String
+            }
+            Self::TextToInteger => ValueType::Integer,
+            Self::TextToFloat => ValueType::Float,
             Self::Variance
             | Self::StdDev
             | Self::SampleArea
@@ -591,9 +613,22 @@ pub(crate) fn evaluate_with_spans(
     }
     if matches!(
         function,
-        Builtin::TextConcat | Builtin::TextSlice | Builtin::TextRepeat
+        Builtin::TextConcat
+            | Builtin::TextSlice
+            | Builtin::TextRepeat
+            | Builtin::TextTrim
+            | Builtin::TextReplace
     ) {
         return text::evaluate(function, args, budget, span, argument_span);
+    }
+    if matches!(
+        function,
+        Builtin::IntegerToText
+            | Builtin::FloatToText
+            | Builtin::TextToInteger
+            | Builtin::TextToFloat
+    ) {
+        return parse_format::evaluate(function, args, budget, span, argument_span);
     }
     if function.is_scalar_text() {
         return scalar_text::evaluate(function, args, budget, span, argument_span);
@@ -929,6 +964,12 @@ pub(crate) fn evaluate_with_spans(
             vector(values, span)
         }
         Builtin::Length
+        | Builtin::IntegerToText
+        | Builtin::FloatToText
+        | Builtin::TextToInteger
+        | Builtin::TextToFloat
+        | Builtin::TextTrim
+        | Builtin::TextReplace
         | Builtin::Variance
         | Builtin::StdDev
         | Builtin::CosineSimilarity

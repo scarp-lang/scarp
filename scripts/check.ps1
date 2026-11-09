@@ -58,7 +58,7 @@ try {
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'modules', 'examples/constant_expressions.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', 'examples/typed_declarations.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'check', 'examples/typed_declarations.srp')
-    foreach ($example in @('scalar_conversions', 'unicode_text', 'text_construction', 'symbol_navigation', 'integer_collections', 'bit_fields', 'numerical_kernels', 'root_mean_square', 'collection_module', 'topk_scores', 'temperature_softmax', 'sampled_calculus', 'sample_cumulative_area', 'cosine_similarity', 'nucleus_selection', 'pearson_correlation')) {
+    foreach ($example in @('scalar_conversions', 'unicode_text', 'text_construction', 'symbol_navigation', 'integer_collections', 'bit_fields', 'numerical_kernels', 'root_mean_square', 'collection_module', 'topk_scores', 'temperature_softmax', 'sampled_calculus', 'sample_cumulative_area', 'cosine_similarity', 'nucleus_selection', 'pearson_correlation', 'text_foundations')) {
         Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', "examples/$example.srp")
         Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'check', "examples/$example.srp")
     }
