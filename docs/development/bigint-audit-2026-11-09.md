@@ -81,6 +81,9 @@ That assertion was corrected without weakening canonicalization checks, and
 both stable/minimum compiler smoke benchmarks were reproduced locally before
 requesting fresh automatic CI. The failed run is not treated as an integration
 gate; only the updated head's checks count.
+The benchmark CI step also explicitly uses Bash on all three hosts so an
+earlier failed Cargo command cannot be hidden by a later successful benchmark
+under Windows PowerShell's default native-command handling.
 
 Cross-platform packaging, macOS and Windows results must be read from this
 PR's actual GitHub checks; local Linux results are not a claim of owner-performed

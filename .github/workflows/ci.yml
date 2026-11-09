@@ -64,6 +64,7 @@ jobs:
           SCARP_CC=gcc cargo test --locked --offline --test c_backend
           SCARP_CC=clang SCARP_C_SANITIZE=1 cargo test --locked --offline --test c_backend
       - name: Smoke-test benchmark workloads
+        shell: bash
         run: |
           cargo bench --locked --offline --bench runtime -- --quick
           cargo bench --locked --offline --bench numerics -- --quick
