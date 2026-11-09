@@ -195,7 +195,11 @@ impl Builtin {
     pub fn parameter_types(self) -> &'static [ValueType] {
         use ValueType::{Float, Integer, Integers, String, Tile, Vector};
         match self {
-            Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh
+            Self::Variance
+            | Self::StdDev
+            | Self::Sigmoid
+            | Self::Relu
+            | Self::Tanh
             | Self::Median => &[Vector],
             Self::Quantile => &[Vector, Float],
             Self::SampleArea | Self::SampleSlopes | Self::SampleCumulativeArea => &[Vector, Vector],
@@ -945,6 +949,8 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::StdDev
         | Builtin::CosineSimilarity
         | Builtin::PearsonCorrelation
+        | Builtin::Median
+        | Builtin::Quantile
         | Builtin::SampleArea
         | Builtin::SampleSlopes
         | Builtin::SampleCumulativeArea
