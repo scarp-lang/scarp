@@ -1,5 +1,11 @@
 # Feature completeness and development roadmap
 
+Post-alpha.5 feature branch: [bounded BigInt](../bigint.md) now implements a
+separate runtime integer type with exact signed arithmetic, typed functions,
+module-function handoff and resource quotas. BigInt constants, bitwise
+operations, float coercion and native backends remain unsupported. This is
+separate from the frozen alpha.5 release candidate and published alpha.4.
+
 Cargo declares `0.0.6-alpha.5` as an **unpublished source candidate**. New development-only work includes deterministic Top-P selection, centered Pearson correlation and ELF64 integer initializer dependencies. The latest published prerelease is **v0.0.6-alpha.4**. See [candidate notes](../releases/v0.0.6-alpha.5.md).
 
 Cargo declares `0.0.6-alpha.4` as the **published GitHub prerelease**.
@@ -53,6 +59,7 @@ requires separate architecture and multiple implementation phases.
 | Lexical shadowing | Implemented | Rich pattern bindings | Resolver scopes | P2 | M | Shadowing initializer, duplicates, captures | Scope rules |
 | Assignments | =, +=, -=, *=, /=, %=, &=, |=, ^=, <<=, >>=, >>>= | General composite-value mutation requires design | Typed resolver and evaluator | P2 | M | Type preservation, overflow, shift bounds, atomic output | Operators |
 | Integer and finite-float math | Checked i64/binary64 and exact explicit conversions | Additional scalar math after domain design | Built-in registry and evaluator | P0 | S | Bounds, signed zero, loss of precision | Numeric reference |
+| BigInt (post-alpha.5 branch) | Exact signed runtime arithmetic, comparisons, explicit conversions, typed functions/modules, configurable limits | Constant folding, optimized large multiplication/division, native backend and decimal arithmetic | Independent safe-Rust magnitude engine and shared Budget | P1 | L | Seeded Rust/Python oracles, budgets, CLI/module parity, opt-in large fixtures | [BigInt](../bigint.md) |
 | Scalar constants | Implemented by #71; annotations checked before evaluation | Approved constant intrinsics only after separate design | Shared expression typing/evaluation | P0 | M | Order/cycles, import visibility, task/node bounds | Constant guide |
 | Bitwise/radix/remainder | Implemented in main and published alpha.3; tests/bit_operations.rs covers full-width operations | No missing signed-i64 operator in this subset | Current lexer, parser, resolver and evaluator | P0 | M | All shift counts, overflow, precedence, module parity | Values/operators |
 | Strings | UTF-8 literals/equality, shared storage, bounded queries and construction | Normalization and richer text policy | Typed pure built-ins and work charging | P0 | M | Combining marks, emoji, empty input, limits | Text indexing contract |

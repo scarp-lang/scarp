@@ -1,0 +1,8 @@
+// Development BigInt milestone; unavailable in published alpha.4.
+bind a: bigint = bigint("999999999999999999999999999999");
+bind one = bigint_from_integer(1);
+print(a + one);
+print(a * bigint("123456789"));
+print(-a / bigint("1000000000000000000"));
+print(-a % bigint("1000000000000000000"));
+print(a > one, bigint_abs(-a) == a, bigint_to_integer(one));

@@ -320,6 +320,7 @@ pub enum Value {
     Tile(NumericTile),
     Boolean(bool),
     String(Arc<str>),
+    BigInt(crate::bigint::BigInt),
 }
 
 impl Value {
@@ -333,12 +334,20 @@ impl Value {
             Self::Tile(_) => ValueType::Tile,
             Self::Boolean(_) => ValueType::Boolean,
             Self::String(_) => ValueType::String,
+            Self::BigInt(_) => ValueType::BigInt,
         }
     }
 
     pub fn as_integer(&self) -> Option<i64> {
         match self {
             Self::Integer(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    pub fn as_bigint(&self) -> Option<&crate::bigint::BigInt> {
+        match self {
+            Self::BigInt(value) => Some(value),
             _ => None,
         }
     }
@@ -437,6 +446,7 @@ impl fmt::Display for Value {
             Self::Tile(value) => value.fmt(f),
             Self::Boolean(value) => value.fmt(f),
             Self::String(value) => f.write_str(value),
+            Self::BigInt(value) => value.fmt(f),
         }
     }
 }

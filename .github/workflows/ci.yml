@@ -68,6 +68,7 @@ jobs:
           cargo bench --locked --offline --bench runtime -- --quick
           cargo bench --locked --offline --bench numerics -- --quick
           cargo bench --locked --offline --bench compiler -- --quick
+          cargo bench --locked --offline --bench bigint -- --quick
       - name: Verify release and branch-maintenance tools
         if: runner.os == 'Linux'
         run: |
@@ -76,6 +77,7 @@ jobs:
           python3 scripts/test_symbol_index_json.py target/debug/scarp
           python3 scripts/test_rms.py target/debug/scarp
           python3 scripts/test_sampled_calculus.py target/debug/scarp
+          python3 scripts/test_bigint.py target/debug/scarp
           python3 -m unittest discover -s scripts -p 'test_*release*.py'
           python3 -m unittest discover -s scripts -p 'test_prune_branches.py'
       - name: Validate PowerShell check script
@@ -109,3 +111,4 @@ jobs:
           cargo bench --locked --offline --bench runtime -- --quick
           cargo bench --locked --offline --bench numerics -- --quick
           cargo bench --locked --offline --bench compiler -- --quick
+          cargo bench --locked --offline --bench bigint -- --quick

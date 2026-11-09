@@ -151,6 +151,9 @@ diagnostic_catalogue! {
     TextConstruction => ("E0048", "Invalid or excessive text construction. Repetition counts must be nonnegative, each materialized string is limited to 1048576 UTF-8 bytes, and cumulative new payload is limited by --max-text-bytes / ExecutionOptions.max_text_bytes. Sharing strings does not recharge; retirement does not refund allocation. This is a logical payload cap, not a physical process-memory limit."),
     NativeUnsupported => ("E0049", "Experimental scalar native emission cannot represent this program or would exceed its explicit resource caps. Use interpreter execution, or restrict the source to supported integer/boolean operations, bounded control flow and single-argument stdout lines."),
     SymbolIndexLimit => ("E0050", "Symbol navigation index limit exceeded. Reduce symbol/reference metadata or adjust IndexLimits in Rust embedding. These opt-in limits are separate from compiler module, constant, type, and runtime limits."),
+    InvalidBigInt => ("E0051", "Invalid bigint decimal text. Use an optional ASCII + or - followed by at least one ASCII decimal digit. Whitespace, separators, radix prefixes, non-ASCII digits and fractional/exponent notation are rejected; leading zeros and negative zero normalize."),
+    BigIntLimit => ("E0052", "Bigint digit or cumulative limb-payload allowance exceeded. Reduce operands/results or explicitly raise --max-bigint-digits or --max-bigint-bytes. Leading input zeros and division scratch count; digit limits have a 1000000 ceiling. This is not a process-memory cap; work remains bounded separately by --max-steps."),
+    BigIntAllocation => ("E0053", "A bigint limb buffer could not be reserved or its capacity calculation overflowed. Reduce operand sizes or host memory pressure; configured digit/payload quota exhaustion uses E0052 instead."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

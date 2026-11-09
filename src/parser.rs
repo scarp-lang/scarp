@@ -533,7 +533,7 @@ impl Parser<'_> {
                     error.0.kind = DiagnosticKind::UnexpectedToken;
                     error.0.message = error.0.message.replace("parameter", "binding");
                 }
-                error.with_help("binding types are integer, float, vector, integers, tile, boolean or string; an initializer is required")
+                error.with_help("binding types are integer, float, bigint, vector, integers, tile, boolean or string; an initializer is required")
             })?;
             Some(crate::ast::TypeAnnotation { kind, span })
         } else {
@@ -646,7 +646,7 @@ impl Parser<'_> {
                 ),
             )
             .with_help(
-                "use integer, float, vector, integers, tile, boolean, string, or unit for a result",
+                "use integer, float, bigint, vector, integers, tile, boolean, string, or unit for a result",
             )),
         }
     }
