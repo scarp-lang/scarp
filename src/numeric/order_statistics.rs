@@ -51,7 +51,7 @@ pub(super) fn evaluate(
     }
     let len = input.len();
     let levels = u64::from(usize::BITS - len.leading_zeros());
-    budget.charge(len as u64 * (levels + 5), span)?;
+    budget.charge(len as u64 * (levels + 4), span)?;
     let mut ordered = buffer::<f64>(len, budget, span)?;
     ordered.extend(input.as_slice().iter().map(|value| value.get()));
     // total_cmp gives a reproducible order for signed zero (negative first)
