@@ -2,7 +2,7 @@
 
 The separate post-alpha.5 feature branch extends the binding-type grammar with
 [`bigint`](bigint.md). This exact runtime integer type is not available in
-published alpha.4 or the frozen alpha.5 source candidate; BigInt constant
+published alpha.5; BigInt constant
 initializers and native code generation remain unsupported.
 
 Published alpha.4 adds the `tile` parameter/result type and immutable

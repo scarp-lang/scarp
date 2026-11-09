@@ -1,16 +1,22 @@
 # Preparing a prerelease
 
-**The v0.0.6-alpha.5 source candidate is not approved or published.** It combines Top-P, Pearson and a limited dependent-integer ELF64 kernel emitter. Publication requires an independently verified exact-main source and an entirely new maintainer approval naming the full alpha.5 source SHA, then a reviewed one-time control request. See [alpha.5 gates](releases/v0.0.6-alpha.5-development-plan.md).
+**Latest published prerelease:** [v0.0.6-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5)
+was published on **9 November 2026**, from exact approved source
+`205e92f166f186c3905e5880d41c31717b697b8e`.
+See the [postpublication verification](releases/v0.0.6-alpha.5-validation.md)
+for the reviewed one-time request, annotated tag, two successful seven-job CI
+matrices, seven audited public assets, and guarded publisher run.
+Its [candidate notes](releases/v0.0.6-alpha.5.md) are a historical
+prepublication record. The fulfilled release request was retired by separate
+maintenance PR #177.
 
-**Latest published prerelease:** v0.0.6-alpha.4 was published on
-8 November 2026 from exact approved source
+The earlier v0.0.6-alpha.4 was published on 8 November 2026 from
 `f04be0758cbce405ddcdb229699b0ff83c09d207`.
-See the [public release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4),
-[postpublication verification](releases/v0.0.6-alpha.4-validation.md),
-and immutable historical [candidate notes](releases/v0.0.6-alpha.4.md).
-Its fulfilled one-time authorization was retired in a separate maintenance
-PR. A different version, including alpha.5, requires its **own** complete
-source-SHA approval, reviewed control request and new seven-job gates.
+See its [public release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4)
+and [verification record](releases/v0.0.6-alpha.4-validation.md).
+Any future version requires its **own** separately approved full source SHA,
+seven-job CI evidence and one-time control request. Version changes and
+development plans alone never grant publication authorization.
 
 The package workflow builds and verifies archives. It has read-only repository
 permissions and never creates tags or GitHub Releases. A separate publisher
@@ -73,7 +79,8 @@ development identifier is not evidence that a public release exists.
 `v0.0.0.1` is not a three-part version.
 
 Alpha.1, alpha.2, alpha.3, alpha.4, alpha.5, v0.0.6-alpha.1,
-v0.0.6-alpha.2 and v0.0.6-alpha.3 are published; fulfilled
+v0.0.6-alpha.2, v0.0.6-alpha.3, v0.0.6-alpha.4 and
+v0.0.6-alpha.5 are published; fulfilled
 requests are retired after publication verification. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve
 the original candidate contract. Every new release needs fresh exact-version
 and full source-commit approval after all gates. The verifier requires nested module libraries/guides

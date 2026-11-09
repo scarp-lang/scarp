@@ -1,7 +1,7 @@
 # Scarp में बहुत बड़े पूर्णांक: BigInt
 
-यह **अभी अप्रकाशित development feature** है। Published `v0.0.6-alpha.4` या
-पहले से तैयार alpha.5 candidate में यह सुविधा उपलब्ध नहीं है। इस feature
+यह **अभी अप्रकाशित development feature** है। Published `v0.0.6-alpha.5`
+में यह सुविधा उपलब्ध नहीं है। इस feature
 branch के source से compiler बनाना जरूरी है; सिर्फ version देखकर support
 न मानें। [पूरी reference और limits](../bigint.md) देखें।
 

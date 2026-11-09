@@ -89,7 +89,7 @@ The benchmark times compiled interpreter plans with realistic constructor and
 output costs. Results depend on toolchain/host; no isolated arithmetic,
 cryptographic constant-time, allocator-count or peak-RSS guarantee is implied.
 All supported-platform CI and the Rust 1.74 minimum must pass before integration.
-This PR does not change the frozen release candidate, publish tags, or authorize
+Published alpha.5 remains immutable. This PR does not publish tags or authorize
 release publication. Ecosystem sites/extensions should adopt the feature only
 after a specific compiler revision is integrated and compatibility-tested.
 

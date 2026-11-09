@@ -5,8 +5,7 @@ The separate post-alpha.5 [BigInt development milestone](bigint.md) adds
 (8,388,608 cumulative limb bytes including division scratch). Arithmetic,
 comparison and printing also consume the existing shared work budget. Output
 snapshot accounting includes BigInt payload/digits. These are logical quotas,
-not physical process-memory limits, and are not in published alpha.4/frozen
-alpha.5. `exec`/`run` and evaluating `check` accept these flags; static `verify`
+not physical process-memory limits, and are not in published alpha.5. `exec`/`run` and evaluating `check` accept these flags; static `verify`
 does not. Full formulas and errors are specified in the linked guide.
 
 In the alpha.4 candidate, vectors and tiles share the cumulative numerical

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.6-alpha.5 — source candidate (unpublished), 2026-11-08
+## 0.0.6-alpha.5 — published GitHub prerelease, 2026-11-09
 
 - Add deterministic CPU-only nucleus selection `top_p(vector, mass) -> integers`
   and `top_p_values(vector, mass) -> vector`, with a normalized finite
@@ -16,11 +16,12 @@
 - Exercise the combined numerical/native/compiler changes together on
   Linux, Windows, macOS, Rust 1.74 and all three native package targets
   (integration draft #165).
-- **Candidate only:** alpha.4 is already published and its one-time
-  release request retired; alpha.5 still needs complete exact-final-main CI,
-  independent artifact verification and a separate full-source authorization
-  followed by a new one-time guarded request. This does not create an
-  alpha.5 tag or GitHub Release.
+- **Published:** alpha.5 was released on 9 November 2026 from immutable source
+  `205e92f166f186c3905e5880d41c31717b697b8e`, with separate
+  seven-job source/control CI matrices and seven verified native assets.
+  See the [public release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5)
+  and [postpublication record](docs/releases/v0.0.6-alpha.5-validation.md).
+  The separately authorized one-time release request was retired.
 
 ## 0.0.6-alpha.4 — prerelease, 2026-11-08
 

@@ -1,7 +1,7 @@
 # Exact, bounded BigInt integers (development milestone)
 
-**Unreleased feature branch, after the frozen alpha.5 candidate.** Published
-v0.0.6-alpha.4 and the existing alpha.5 source candidate do not contain BigInt.
+**Unreleased feature branch, after published alpha.5.** The published
+v0.0.6-alpha.5 binaries do not contain BigInt.
 Use a compiler built from this PR's exact source; a Cargo version printed as
 `0.0.6-alpha.5` alone does not identify its feature set. No new release/tag is
 created by this work. See the [design](proposals/bounded-bigint.md) and

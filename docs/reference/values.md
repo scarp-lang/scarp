@@ -17,7 +17,7 @@ compilation; ordinary script bindings retain runtime behavior.
 | Kind | Examples | Rules |
 | --- | --- | --- |
 | Integer | `0`, `42`, `-7`, `0xFF`, `0b1010` | Signed 64-bit values; decimal, hexadecimal and binary literals |
-| BigInt (post-alpha.5 development) | `bigint("12345678901234567890")` | Separate exact signed integer, explicit conversions, [bounded digits/work/storage](../bigint.md); absent from published alpha.4/frozen alpha.5 |
+| BigInt (post-alpha.5 development) | `bigint("12345678901234567890")` | Separate exact signed integer, explicit conversions, [bounded digits/work/storage](../bigint.md); absent from published alpha.5 |
 | Float (alpha) | `0.5`, `1e3`, `-0.0` | Finite binary64; no integer coercion |
 | Vector (since alpha.2) | `[1.0, -0.0]`, `[]` | Immutable finite floats, at most 65,536 elements |
 | Tile (alpha.4 candidate) | `tile([1.0, 2.0], 1, 2)` | Immutable row-major finite floats with explicit shape |

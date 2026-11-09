@@ -210,4 +210,4 @@ E0053 for fallible limb-buffer reservation failure. Existing E0008 diagnoses a
 zero divisor, E0044 rejects out-of-range `bigint_to_integer`, and E0017 enforces
 shared arithmetic/comparison/formatting work. Constructor/conversion diagnostics
 point at arguments; arithmetic failures point at operators. These codes/features
-are not in published alpha.4 or the frozen alpha.5 candidate.
+are not in published alpha.5.

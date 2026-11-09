@@ -1,5 +1,20 @@
 # BigInt development audit — 9 November 2026
 
+## Follow-up against published alpha.5
+
+Later on 9 November, alpha.5 was published from exact source
+`205e92f166f186c3905e5880d41c31717b697b8e`. PR #172's earlier head
+`8e2728e2a064062ec45af1c3682ba7394abe762d` passed all seven CI jobs, including
+Windows PowerShell validation and all three native packages. Main subsequently
+advanced to `27a1e572f7fedb567319d3df83091fe4919089f2` with two additional native
+regression tests and publication records. No runtime source changed between the
+original base and that main revision. This PR now merges that exact main while
+preserving published release provenance and the new native regression tests.
+The conflicting README/feature-matrix publication headers were reconciled;
+BigInt remains draft-only and unreleased. The sections below preserve the
+original prepublication audit checkpoint, rather than rewriting its history.
+
+
 ## Verified starting point
 
 | Item | Observed state |
