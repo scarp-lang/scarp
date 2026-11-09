@@ -38,6 +38,11 @@ pub struct ExecutionOptions {
     pub max_vector_bytes: usize,
     /// Cumulative newly materialized UTF-8 string payload; sharing does not recharge.
     pub max_text_bytes: usize,
+    /// Maximum decimal digits in each bigint input/result (ceiling 1,000,000).
+    /// Input leading zeros count; a sign does not count. Zero needs one digit.
+    pub max_bigint_digits: usize,
+    /// Cumulative newly reserved bigint limb payload, including scratch buffers.
+    pub max_bigint_bytes: usize,
 }
 
 impl Default for ExecutionOptions {
@@ -50,6 +55,8 @@ impl Default for ExecutionOptions {
             max_capture_bytes: 16 * 1024 * 1024,
             max_vector_bytes: 8 * 1024 * 1024,
             max_text_bytes: 8 * 1024 * 1024,
+            max_bigint_digits: crate::bigint::DEFAULT_BIGINT_DIGITS,
+            max_bigint_bytes: crate::bigint::DEFAULT_BIGINT_BYTES,
         }
     }
 }
@@ -70,6 +77,9 @@ pub(crate) struct Budget {
     vector_limit: usize,
     text_remaining: usize,
     text_limit: usize,
+    bigint_digits: usize,
+    bigint_remaining: usize,
+    bigint_limit: usize,
 }
 
 impl Budget {
@@ -81,6 +91,9 @@ impl Budget {
             vector_limit: usize::MAX,
             text_remaining: usize::MAX,
             text_limit: usize::MAX,
+            bigint_digits: crate::bigint::DEFAULT_BIGINT_DIGITS,
+            bigint_remaining: crate::bigint::DEFAULT_BIGINT_BYTES,
+            bigint_limit: crate::bigint::DEFAULT_BIGINT_BYTES,
         }
     }
 
@@ -90,6 +103,32 @@ impl Budget {
         self.vector_remaining = bytes;
         self.vector_limit = bytes;
         self
+    }
+
+    pub fn with_bigint_limits(mut self, digits: usize, bytes: usize) -> Self {
+        self.bigint_digits = digits.min(crate::bigint::MAX_BIGINT_DIGITS);
+        self.bigint_remaining = bytes;
+        self.bigint_limit = bytes;
+        self
+    }
+
+    pub fn check_bigint_digits(&self, digits: usize, span: Span) -> Result<(), Diagnostic> {
+        if digits > self.bigint_digits {
+            return Err(Diagnostic::new(DiagnosticKind::BigIntLimit, span,
+                format!("bigint decimal digit limit of {} exceeded", self.bigint_digits))
+                .with_help("reduce input/result digits or raise --max-bigint-digits / ExecutionOptions.max_bigint_digits up to 1000000"));
+        }
+        Ok(())
+    }
+
+    pub fn charge_bigint_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
+        if bytes > self.bigint_remaining {
+            return Err(Diagnostic::new(DiagnosticKind::BigIntLimit, span,
+                format!("cumulative bigint allocation limit of {} bytes exceeded", self.bigint_limit))
+                .with_help("reduce bigint materialization or raise --max-bigint-bytes / ExecutionOptions.max_bigint_bytes; scratch buffers also count"));
+        }
+        self.bigint_remaining -= bytes;
+        Ok(())
     }
 
     pub fn charge_vector_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {

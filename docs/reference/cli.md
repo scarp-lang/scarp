@@ -321,3 +321,12 @@ graph inspections; runtime budgets do not apply. They accept the existing
 `symbols` or `references` aliases are introduced. See the [navigation contract](../symbol-index.md)
 for snapshot-local IDs, precise source positions, limits, schema-v1 fixtures,
 implicit definitions and failure behavior. These commands are not in alpha.5.
+
+## BigInt development flags (post-alpha.5 branch)
+
+The [BigInt milestone](../bigint.md) adds `--max-bigint-digits` (default 10,000,
+maximum 1,000,000) and `--max-bigint-bytes` (default 8,388,608). `exec`/`run` and
+evaluating `check` accept them before the filename; static `verify` rejects
+runtime flags. E0051 diagnoses malformed decimal text, E0052 digit/payload
+quota exhaustion, and E0053 limb reservation failure. `explain` documents all
+three codes. These features are absent from published alpha.5.

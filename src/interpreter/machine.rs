@@ -134,7 +134,8 @@ pub(super) fn prepare(
     }];
     let mut budget = Budget::new(options.limits.max_steps)
         .with_vector_bytes(options.max_vector_bytes)
-        .with_text_bytes(options.max_text_bytes);
+        .with_text_bytes(options.max_text_bytes)
+        .with_bigint_limits(options.max_bigint_digits, options.max_bigint_bytes);
     let mut events = Vec::new();
     let mut calls = 0_u64;
     let mut prints = 0;
@@ -269,8 +270,13 @@ pub(super) fn prepare(
                                 frame.environment[index_slot] = Value::Integer(0);
                             }
                             Completion::Update(slot, operator, previous, span) => {
-                                frame.environment[slot] =
-                                    evaluator::apply_binary(operator, &previous, &value, span)?;
+                                frame.environment[slot] = evaluator::apply_binary_with_budget(
+                                    operator,
+                                    &previous,
+                                    &value,
+                                    &mut budget,
+                                    span,
+                                )?;
                             }
                             Completion::Guard(target, span) => {
                                 if !value.require_boolean(span)? {
@@ -294,6 +300,12 @@ pub(super) fn prepare(
                                 }
                             }
                             Completion::Output => {
+                                if let Some(number) = value.as_bigint() {
+                                    budget.charge(
+                                        number.decimal_digits() as u64,
+                                        frame.output.as_ref().unwrap().span,
+                                    )?;
+                                }
                                 if let Some(tile) = value.as_tile() {
                                     // Formatting visits cells and row delimiters,
                                     // including rows of a zero-width tile.
@@ -611,6 +623,9 @@ fn charge_capture(
     let payload = match value {
         PrintValue::String(text) => text.len(),
         PrintValue::Value(Value::String(text)) => text.len(),
+        PrintValue::Value(Value::BigInt(number)) => number
+            .payload_bytes()
+            .max(number.decimal_digits() + usize::from(number.is_negative())),
         PrintValue::Value(Value::Vector(vector)) => vector.len().saturating_mul(8),
         PrintValue::Value(Value::Integers(vector)) => vector.len().saturating_mul(8),
         PrintValue::Value(Value::Tile(tile)) => tile.len().saturating_mul(8).saturating_add(16),

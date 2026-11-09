@@ -6,6 +6,7 @@ use crate::{
     value::{finite_number, FiniteFloat, NumericVector, Value, ValueType, MAX_VECTOR_LENGTH},
 };
 
+mod bigints;
 mod correlation;
 mod integers;
 mod kernels;
@@ -92,6 +93,10 @@ pub enum Builtin {
     MatMul,
     TileAdd,
     TileScale,
+    BigInt,
+    BigIntFromInteger,
+    BigIntToInteger,
+    BigIntAbs,
 }
 
 impl Builtin {
@@ -111,6 +116,10 @@ impl Builtin {
     }
     pub fn from_name(name: &str) -> Option<Self> {
         Some(match name {
+            "bigint" => Self::BigInt,
+            "bigint_from_integer" => Self::BigIntFromInteger,
+            "bigint_to_integer" => Self::BigIntToInteger,
+            "bigint_abs" => Self::BigIntAbs,
             "variance" => Self::Variance,
             "stddev" => Self::StdDev,
             "cosine_similarity" => Self::CosineSimilarity,
@@ -190,6 +199,9 @@ impl Builtin {
     pub fn parameter_types(self) -> &'static [ValueType] {
         use ValueType::{Float, Integer, Integers, String, Tile, Vector};
         match self {
+            Self::BigInt => &[String],
+            Self::BigIntFromInteger => &[Integer],
+            Self::BigIntToInteger | Self::BigIntAbs => &[ValueType::BigInt],
             Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
             Self::SampleArea | Self::SampleSlopes | Self::SampleCumulativeArea => &[Vector, Vector],
             Self::IntsLength | Self::IntsSum | Self::IntsToVector => &[Integers],
@@ -248,6 +260,8 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
+            Self::BigInt | Self::BigIntFromInteger | Self::BigIntAbs => ValueType::BigInt,
+            Self::BigIntToInteger => ValueType::Integer,
             Self::Variance
             | Self::StdDev
             | Self::SampleArea
@@ -322,6 +336,13 @@ impl Builtin {
                 | Self::TextEndsWith
         )
     }
+
+    fn is_bigint(self) -> bool {
+        matches!(
+            self,
+            Self::BigInt | Self::BigIntFromInteger | Self::BigIntToInteger | Self::BigIntAbs
+        )
+    }
 }
 
 /// Evaluate a native kernel with checked argument types and an explicit work
@@ -336,6 +357,24 @@ pub fn evaluate(
         function,
         arguments,
         &mut Budget::new(max_steps),
+        Span::default(),
+    )
+}
+
+/// Standalone built-in with the same work and payload options as a program.
+/// Frame/call/output options are irrelevant to a standalone pure built-in.
+pub fn evaluate_with_options(
+    function: Builtin,
+    arguments: &[Value],
+    options: crate::ExecutionOptions,
+) -> Result<Value, Diagnostic> {
+    evaluate_with_budget(
+        function,
+        arguments,
+        &mut Budget::new(options.limits.max_steps)
+            .with_vector_bytes(options.max_vector_bytes)
+            .with_text_bytes(options.max_text_bytes)
+            .with_bigint_limits(options.max_bigint_digits, options.max_bigint_bytes),
         Span::default(),
     )
 }
@@ -575,6 +614,9 @@ pub(crate) fn evaluate_with_spans(
     }
     for (i, (value, &expected)) in args.iter().zip(types).enumerate() {
         crate::types::require_exact(value.kind(), expected, argument_span(i))?;
+    }
+    if function.is_bigint() {
+        return bigints::evaluate(function, args, budget, span, argument_span);
     }
     if matches!(
         function,
@@ -929,6 +971,10 @@ pub(crate) fn evaluate_with_spans(
             vector(values, span)
         }
         Builtin::Length
+        | Builtin::BigInt
+        | Builtin::BigIntFromInteger
+        | Builtin::BigIntToInteger
+        | Builtin::BigIntAbs
         | Builtin::Variance
         | Builtin::StdDev
         | Builtin::CosineSimilarity

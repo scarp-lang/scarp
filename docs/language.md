@@ -1,5 +1,10 @@
 # Scarp prototype language reference
 
+The separate post-alpha.5 feature branch extends the binding-type grammar with
+[`bigint`](bigint.md). This exact runtime integer type is not available in
+published alpha.5; BigInt constant
+initializers and native code generation remain unsupported.
+
 Published alpha.4 adds the `tile` parameter/result type and immutable
 two-axis values. `height`, `width`, `cell`, `lane`, `unroll`, `turn`, `matvec`,
 `matmul`, `tileadd` and `tilescale` follow [the tile contract](tiles.md).
@@ -83,7 +88,7 @@ conditional     = "if", expression, block,
                   { "elif", expression, block }, [ "else", block ] ;
 block           = "{", { statement }, "}" ;
 declaration     = ("bind" | "var"), IDENTIFIER, [ ":", binding_type ], "=", expression, ";" ;
-binding_type    = "integer" | "float" | "boolean" | "string" | "vector" | "tile" ;
+binding_type    = "integer" | "float" | "bigint" | "boolean" | "string" | "vector" | "integers" | "tile" ;
 assignment      = IDENTIFIER, assign_operator, expression, ";" ;
 assign_operator = "=" | "+=" | "-=" | "*=" | "/=" ;
 output_statement = output_name, "(", [ argument_list ], ")", ";" ;

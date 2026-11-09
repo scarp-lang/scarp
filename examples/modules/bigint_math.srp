@@ -1,0 +1,4 @@
+// Runtime constructors in exported pure functions, not folded constants.
+pub pure funcra twice(n: bigint) -> bigint {
+    return n * bigint_from_integer(2);
+}

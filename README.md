@@ -1,5 +1,10 @@
 # Scarp
 
+**Post-alpha.5 development:** [bounded BigInt](docs/bigint.md) adds a separate
+exact signed runtime type with explicit conversions and deterministic
+work/digit/allocation quotas. BigInt is absent from the published alpha.5
+binaries. This branch does not change a version, tag or publication request.
+
 **0.0.6-alpha.5** is the **latest published experimental GitHub prerelease**
 (9 November 2026), from exact source
 `205e92f166f186c3905e5880d41c31717b697b8e`.

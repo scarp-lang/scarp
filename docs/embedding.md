@@ -1,5 +1,12 @@
 # Embed Scarp in a Rust application
 
+Post-alpha.5 [BigInt development](bigint.md) adds `Value::BigInt`, the appended
+primitive `BigInt`, and `ExecutionOptions.max_bigint_digits/max_bigint_bytes`.
+Exhaustive enum matches and complete option literals need updating; prefer
+`..ExecutionOptions::default()`. The two-field `ExecutionLimits` is unchanged.
+`numeric::evaluate_with_options` applies the same work/text/vector/BigInt limits
+to a standalone built-in without program frames. Published alpha.5 binaries do not have these APIs.
+
 Unreleased development adds bounded [constant compilation](constant-expressions.md)
 to module resolution. Existing entry points use default ConstantLimits; additive
 loader/native-path/resolve APIs let hosts select them. Source-only scarp::compile
