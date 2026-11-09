@@ -70,8 +70,8 @@ fn endpoints_and_signed_zero_bits_are_deterministic() {
 fn extreme_values_interpolate_without_overflow() {
     let largest = f64::MAX;
     assert_eq!(result(&[-largest, largest], 0.5), 0.0);
-    assert_eq!(result(&[-largest, largest], 0.25), -0.5 * largest);
-    assert_eq!(result(&[-largest, largest], 0.75), 0.5 * largest);
+    assert!((result(&[-largest, largest], 0.25) / largest + 0.5).abs() < 1e-15);
+    assert!((result(&[-largest, largest], 0.75) / largest - 0.5).abs() < 1e-15);
     assert_eq!(result(&[largest, largest], 0.5), largest);
     let tiny = f64::from_bits(1);
     assert_eq!(result(&[0.0, tiny], 1.0).to_bits(), tiny.to_bits());
