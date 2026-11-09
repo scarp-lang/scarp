@@ -37,6 +37,23 @@ Compiler tag: **published `v0.0.6-alpha.4`**, immutable source commit `f04be0758
 
 Review the source changes in [course PR #57](https://github.com/scarp-lang/scarp-by-example/pull/57), bilingual API explanations in [docs PR #91](https://github.com/scarp-lang/scarp-docs/pull/91) and compiler navigation in [PR #173](https://github.com/scarp-lang/scarp/pull/173). The course's `docs/migration-provenance.json` plus `scripts/verify_migration_provenance.py` enforce byte-for-byte identity against the pinned release in CI.
 
+## Second phase — historical compiler tutorial navigation
+
+The six older compiler tutorials now retain their original paths and sample explanations, but prominently direct readers to the maintained English/Hindi documentation and compiler-backed course. Their initial "development branch" / "latest prerelease" labels have been disambiguated with full version numbers; historical tags themselves are unchanged.
+
+| Compiler-side tutorial retained | Canonical public guide | Runnable learning |
+| --- | --- | --- |
+| `docs/tutorials/first-program.md` | [Current first program, v0.0.6-alpha.4](https://scarp-lang.github.io/scarp-docs/guide/first-program-alpha4) | [01-basics](https://github.com/scarp-lang/scarp-by-example/tree/main/examples/01-basics) |
+| `docs/tutorials/variables.md` | [Variables and scopes](https://scarp-lang.github.io/scarp-docs/language/variables) | Basics `bind`, `var`, scopes |
+| `docs/tutorials/scopes.md` | [Lexical scopes](https://scarp-lang.github.io/scarp-docs/language/variables) | Basics, scope and shadowing |
+| `docs/tutorials/decisions.md` | [Control flow](https://scarp-lang.github.io/scarp-docs/language/control-flow) | [02-control-flow](https://github.com/scarp-lang/scarp-by-example/tree/main/examples/02-control-flow) |
+| `docs/tutorials/modules.md` | [Modules and visibility](https://scarp-lang.github.io/scarp-docs/language/modules-and-visibility) | [05-modules](https://github.com/scarp-lang/scarp-by-example/tree/main/examples/05-modules) |
+| `docs/tutorials/numerical-program.md` | [Vectors and tiles](https://scarp-lang.github.io/scarp-docs/language/numerics), [published alpha.4 numerical guide](https://scarp-lang.github.io/scarp-docs/language/scientific-kernels-alpha4) | [04-collections](https://github.com/scarp-lang/scarp-by-example/tree/main/examples/04-collections) |
+
+The new [English](https://github.com/scarp-lang/scarp-docs/blob/docs-migrate-numerical-guides-20261109/docs/guide/first-program-alpha4.md) and [Hindi](https://github.com/scarp-lang/scarp-docs/blob/docs-migrate-numerical-guides-20261109/docs/hi/guide/first-program-alpha4.md) first-program walkthroughs use unchanged `.srp` and stdout from the existing course (hello and bindings). Their `scarp verify` and `scarp exec` examples are release-tagged and pass the site snippet policy; the older historical `scarp check` / `scarp run` guidance stays available.
+
+**Merge dependency:** this compiler PR references an as-yet-unpublished new documentation route. Merge documentation PR #91 and verify the deployed site first, then merge this navigation PR; do not send users to the new route on production before the docs deploy.
+
 ## Follow-on migration batches
 
 1. **Audit remaining example fixtures.** Compare each published-tag fixture with existing course lessons; do not duplicate identical instruction unnecessarily. Prefer unique concepts (e.g. import inspection or editor debugging) and keep their supporting modules together.
