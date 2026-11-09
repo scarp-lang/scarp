@@ -61,10 +61,8 @@ fn generated_elf64_kernels_match_independent_c_host() {
         return;
     }
 
-    let directory = std::env::temp_dir().join(format!(
-        "scarp-generated-elf64-{}",
-        std::process::id()
-    ));
+    let directory =
+        std::env::temp_dir().join(format!("scarp-generated-elf64-{}", std::process::id()));
     fs::create_dir_all(&directory).unwrap();
     let object_path = directory.join("kernel.o");
     let harness_path = directory.join("harness.c");
