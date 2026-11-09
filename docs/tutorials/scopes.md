@@ -1,5 +1,7 @@
 # Scopes and shadowing
 
+> **Canonical public guide:** [Variables and lexical scopes](https://scarp-lang.github.io/scarp-docs/language/variables), supported by [Scarp by Example chapter 01](https://github.com/scarp-lang/scarp-by-example/tree/main/examples/01-basics). The “development-only” description below is a historical milestone, not a statement that all current Scarp releases lack scoped bindings.
+
 This development-only tutorial explains which declaration a name refers to,
 what survives a block, and how a shadowing initializer behaves. A block contains
 statements between `{` and `}` and does not need a trailing semicolon.
