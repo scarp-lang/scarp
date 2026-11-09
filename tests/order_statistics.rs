@@ -69,6 +69,8 @@ fn endpoints_and_signed_zero_bits_are_deterministic() {
     assert_eq!(result(&data, 0.0).to_bits(), (-0.0f64).to_bits());
     assert_eq!(result(&data, 1.0).to_bits(), 0.0f64.to_bits());
     assert_eq!(result(&data, 0.5), 0.0);
+    assert_eq!(result(&[-0.0], 0.5).to_bits(), (-0.0f64).to_bits());
+    assert_eq!(result(&[-0.0, -0.0], 0.75).to_bits(), (-0.0f64).to_bits());
     assert_eq!(result(&[5.0, 1.0, 4.0, 2.0, 3.0], 0.0), 1.0);
     assert_eq!(result(&[5.0, 1.0, 4.0, 2.0, 3.0], 1.0), 5.0);
 }
