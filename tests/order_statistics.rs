@@ -14,10 +14,14 @@ fn arguments(values: &[f64], fraction: Option<f64>) -> Vec<Value> {
 }
 
 fn result(values: &[f64], fraction: f64) -> f64 {
-    numeric::evaluate(Builtin::Quantile, &arguments(values, Some(fraction)), 1_500_000)
-        .unwrap()
-        .as_float()
-        .unwrap()
+    numeric::evaluate(
+        Builtin::Quantile,
+        &arguments(values, Some(fraction)),
+        1_500_000,
+    )
+    .unwrap()
+    .as_float()
+    .unwrap()
 }
 
 fn output(source: &str) -> String {
@@ -52,7 +56,10 @@ fn median_and_quantile_are_typed_language_functions() {
         output("pure funcra middle(v: vector) -> float { return median(v); } pure funcra percentile(v: vector, q: float) -> float { return quantile(v,q); } print(middle([1.0,3.0,2.0])); print(percentile([1.0,2.0,3.0],0.5));"),
         "2.0\n2.0\n"
     );
-    assert_eq!(output("print(median([9.0])); print(quantile([9.0],1.0));"), "9.0\n9.0\n");
+    assert_eq!(
+        output("print(median([9.0])); print(quantile([9.0],1.0));"),
+        "9.0\n9.0\n"
+    );
     assert_eq!(output("bind median=7; print(median);"), "7\n");
 }
 
@@ -171,8 +178,7 @@ fn deterministic_small_integer_reference_matches_linear_rank_quantiles() {
                 let p = (len - 1) as f64 * rank;
                 let lo = p.floor() as usize;
                 let hi = (lo + 1).min(len - 1);
-                let expected = sorted[lo] * (1.0 - (p - lo as f64))
-                    + sorted[hi] * (p - lo as f64);
+                let expected = sorted[lo] * (1.0 - (p - lo as f64)) + sorted[hi] * (p - lo as f64);
                 let actual = result(&sample, q);
                 assert!(
                     (actual - expected).abs() <= 1.0e-12,
