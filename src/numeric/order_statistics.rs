@@ -18,7 +18,7 @@ fn invalid_quantile(span: Span) -> Diagnostic {
 // For like signs the difference itself is finite, avoiding overflow in the
 // weighted sum. Exact endpoints retain their original signed-zero bits.
 fn interpolate(lower: f64, upper: f64, fraction: f64) -> f64 {
-    if fraction == 0.0 {
+    if fraction == 0.0 || lower.to_bits() == upper.to_bits() {
         lower
     } else if fraction == 1.0 {
         upper
