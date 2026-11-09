@@ -1,8 +1,12 @@
 # Your first Scarp program
 
-This tutorial uses development main and its canonical `print` statement. Older
-published interpreters use `println` for these single-argument examples. It
-teaches the complete file-to-output path before introducing variables.
+> **Canonical learner guide:** Use [the published v0.0.6-alpha.4 first-program walkthrough](https://scarp-lang.github.io/scarp-docs/guide/first-program-alpha4) and the [runnable Scarp by Example basics](https://github.com/scarp-lang/scarp-by-example/tree/main/examples/01-basics) for new learning. This file is retained as compiler-side historical background; its “development main” wording and `cargo run -- run` examples document older evolution, not the recommended CLI for the currently published prerelease. Original regression fixtures remain in this repository.
+
+This historical tutorial was written when `print` was on the development
+branch. Very early published interpreters used `println` for these
+single-argument examples. Later published compilers support `print`; the
+current version-specific learner guide above uses `verify` / `exec` commands.
+This file preserves the original file-to-output explanation.
 Use [getting started](../getting-started.md) to select an executable.
 
 ## Statements, comments, and output

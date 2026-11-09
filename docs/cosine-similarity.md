@@ -1,9 +1,10 @@
-# Cosine similarity (development branch)
+# Cosine similarity — published in v0.0.6-alpha.4
 
-> **Unreleased development feature.** This addition is proposed for a future
-> Scarp release and is **not** included in the published `v0.0.6-alpha.3`
-> binaries. Do not claim release availability until the new PR is merged and
-> a separately authorized release is published.
+> **Published experimental feature.** `cosine_similarity` is available in the
+> [Scarp v0.0.6-alpha.4 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4)
+> from source `f04be0758cbce405ddcdb229699b0ff83c09d207` (8 November 2026).
+> It is **not** available in the earlier v0.0.6-alpha.3 binaries. The
+> interpreter API remains experimental; this does not imply a general native compiler.
 
 `cosine_similarity(left, right) -> float` measures the orientation of two
 finite vectors, independently of their lengths. It is a useful foundational

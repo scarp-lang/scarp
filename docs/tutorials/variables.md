@@ -1,7 +1,9 @@
 # Variables and mutation
 
-This tutorial requires the development stack. Published v0.0.1 does not support
-declarations. It shows how to name values, choose mutability, and keep earlier
+> **Canonical public guide:** [Variables and scopes](https://scarp-lang.github.io/scarp-docs/language/variables) and [compiler-tested basics lessons](https://github.com/scarp-lang/scarp-by-example/tree/main/examples/01-basics). The examples below originated during early language development and are retained as historical learning material. Refer to the canonical version-specific documentation before running their commands in a published compiler.
+
+This tutorial originated in an early development stack. Published v0.0.1 does not support
+the modern `bind` / `var` declarations, but newer published releases do. It shows how to name values, choose mutability, and keep earlier
 results when values change. The precise rules are in the
 [variable reference](../variables.md).
 

@@ -1,12 +1,13 @@
-# Sampled calculus (merged into main, unreleased)
+# Sampled calculus — published in v0.0.6-alpha.4
 
-**Status:** merged into `main` through
+**Status:** `sample_area`, `sample_slopes` and `sample_cumulative_area` are
+available in the [published experimental Scarp v0.0.6-alpha.4 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4),
+from exact source `f04be0758cbce405ddcdb229699b0ff83c09d207` (8 November 2026).
+The changes originally arrived via
 [compiler PR #153](https://github.com/scarp-lang/scarp/pull/153) and
-[compiler PR #155](https://github.com/scarp-lang/scarp/pull/155), after
-the published `v0.0.6-alpha.3` prerelease. Rust kernels, regression
-tests and runnable `.srp` fixtures are in the current source.
-**None of these three functions is in the published alpha.3 binaries.**
-A newer compatible compiler build is required.
+[compiler PR #155](https://github.com/scarp-lang/scarp/pull/155) after alpha.3.
+**The earlier alpha.3 binaries do not contain these functions.**
+The features are bounded numerical kernels, not symbolic calculus or a general library.
 
 Scarp currently represents finite binary64 measurements as immutable
 one-dimensional `vector` values. Until named standard-library namespaces are

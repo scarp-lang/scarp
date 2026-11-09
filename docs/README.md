@@ -1,5 +1,16 @@
 # Scarp documentation
 
+## Official learning resources and repository boundaries
+
+The [content migration inventory and ownership audit](migrations/learning-content-migration.md) maps the first published migration cohort to their lesson destinations and describes the safe, non-destructive follow-up phases.
+
+- **Public documentation (English/Hindi):** [scarp-docs](https://github.com/scarp-lang/scarp-docs). This is the primary home for language guides, version-aware API reference, installation, and CLI instructions.
+- **Runnable course:** [scarp-by-example](https://github.com/scarp-lang/scarp-by-example). This is the primary home for numbered lessons, coding labs and expected outputs.
+- **Compiler repository (here):** Implementation, Rust tests, release engineering, design proposals, technical architecture, release evidence and regression `.srp` / `.stdout` fixtures. These remain here because automated testing depends on them; migrating a tutorial does not delete its compiler fixture.
+
+The initial published alpha.4 lesson migration is under review in [course PR #57](https://github.com/scarp-lang/scarp-by-example/pull/57) and [documentation PR #91](https://github.com/scarp-lang/scarp-docs/pull/91). This compiler branch changes only the signposts, not released tags, source syntax or regression fixtures.
+
+
 **0.0.6-alpha.5 prerelease** is **published on 9 November 2026**,
 with pure [Top-P selection](nucleus-selection.md), [Pearson correlation](pearson-correlation.md)
 and [limited ELF64 native binding dependencies](native-elf64.md).
