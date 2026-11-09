@@ -58,6 +58,7 @@ minimum toolchains. Stable was Rust 1.99.1; minimum was Rust 1.74.0.
 | Python oracle against final stable binary | 304 operand pairs, 3,344 independent arithmetic/comparison results; exec/evaluating-check parity and silent static verify |
 | Python oracle `--large` | Passed generated 19/100/1k/10k/100k/1m-digit linear-operation fixtures, with controlled Python conversion limit |
 | BigInt quick benchmark on stable/minimum | Passed; reproducible expanded stable measurements recorded separately |
+| Existing compiler quick benchmark on stable/minimum | Passed after replacing its fixed primitive count with `PrimitiveType::ALL.len() + 1`; stable runtime/numerics smoke benchmarks also passed |
 | Existing Python inspection/diagnostic/symbol/RMS/calculus tools | 27 tests passed in total |
 | Existing release helper suites | 97 passed |
 | Existing branch-pruning tests | 5 passed |
@@ -72,6 +73,14 @@ successful validation. Clippy on Rust 1.74 additionally reported unrelated
 pre-existing test lints; CI's actual Clippy gate uses stable, which passed.
 After adding an explicit C11 BigInt-rejection assertion, the focused suite was
 rechecked successfully. No physical out-of-memory condition was injected.
+
+The first PR CI run passed its Rust debug/release tests and all three package
+jobs, but the existing compiler benchmark still asserted nine total types for
+eight primitives plus one signature. Adding BigInt made the correct count ten.
+That assertion was corrected without weakening canonicalization checks, and
+both stable/minimum compiler smoke benchmarks were reproduced locally before
+requesting fresh automatic CI. The failed run is not treated as an integration
+gate; only the updated head's checks count.
 
 Cross-platform packaging, macOS and Windows results must be read from this
 PR's actual GitHub checks; local Linux results are not a claim of owner-performed
