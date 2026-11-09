@@ -2,6 +2,8 @@
 
 ## Official learning resources and repository boundaries
 
+The [content migration inventory and ownership audit](migrations/learning-content-migration.md) maps the first five published example fixtures to their lesson destinations and describes the safe, non-destructive follow-up phases.
+
 - **Public documentation (English/Hindi):** [scarp-docs](https://github.com/scarp-lang/scarp-docs). This is the primary home for language guides, version-aware API reference, installation, and CLI instructions.
 - **Runnable course:** [scarp-by-example](https://github.com/scarp-lang/scarp-by-example). This is the primary home for numbered lessons, coding labs and expected outputs.
 - **Compiler repository (here):** Implementation, Rust tests, release engineering, design proposals, technical architecture, release evidence and regression `.srp` / `.stdout` fixtures. These remain here because automated testing depends on them; migrating a tutorial does not delete its compiler fixture.
