@@ -1,22 +1,23 @@
 # Feature completeness and development roadmap
 
 **Reviewed 2026-11-09.** The latest **published** GitHub prerelease is
-[v0.0.6-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4)
-(8 November 2026). Cargo declares `0.0.6-alpha.5` as an
-**unpublished source candidate**, not an available
-download or approved release. Its implemented-but-unreleased development
-features are deterministic `top_p` / `top_p_values`, centered
-`pearson_correlation`, and dependent integer bindings for the experimental
-compiler-owned ELF64 relocatable-object Rust API. See the
-[alpha.5 candidate notes](../releases/v0.0.6-alpha.5.md).
+[v0.0.6-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5)
+(9 November 2026), from exact source
+`205e92f166f186c3905e5880d41c31717b697b8e`.
+Cargo declares `0.0.6-alpha.5`, matching the published prerelease's
+version. Published alpha.5 includes deterministic `top_p` and
+`top_p_values`, centered `pearson_correlation`, and dependent integer
+bindings in the experimental ELF64 relocatable-object Rust API; see the
+[publication verification](../releases/v0.0.6-alpha.5-validation.md).
+Its [source candidate notes](../releases/v0.0.6-alpha.5.md) remain a
+historical snapshot and do not govern current publication status.
 
-Published alpha.4 adds sampled numerical calculus, cosine similarity and the
-first narrow ELF64 integer-kernel object writer; alpha.3 adds `topk`,
-`topk_values`, `softmax_temp` and `logsoftmax_temp`. Neither the published
-releases nor the alpha.5 source candidate provide a general native executable
-compiler, stochastic sampling, GPU/tensor runtime or native `scarp compile`
-CLI command. The table below identifies published, candidate and proposed
-features separately. Historical development notes are preserved for context.
+Published alpha.4 introduced sampled numerical calculus, cosine similarity and
+the first narrow ELF64 object writer; alpha.3 introduced `topk`,
+`topk_values`, `softmax_temp` and `logsoftmax_temp`. No published
+release provides a general native executable compiler, stochastic sampling,
+GPU/tensor runtime or native `scarp compile` CLI command.
+Future feature rows remain proposals; historical notes are preserved.
 
 The earlier 0.0.6-alpha.2 was published on 6 November 2026 from exact source
 `398b8ff705154a02423fe458ce3a427401e81e31`;
@@ -83,7 +84,7 @@ requires separate architecture and multiple implementation phases.
 | Typed execution plan | Implemented lowered slot/operation plan | Explicit stable IR and CFG views | Resolver plan invariants | P1 | L | IR/source mapping and control edges | IR architecture |
 | Optimizations | Constant modules, slot retirement, terminal self transfer | General folding, DCE and CFG passes | IR/effect/budget-equivalence contract | P1 | L | Differential output/errors/budgets | Optimization semantics |
 | Native backend | Experimental scalar C11 library emitter in v0.0.5-alpha.5, compiler-owned verified scalar IR in v0.0.6-alpha.3, and narrow ELF64 object writer in v0.0.6-alpha.4; no native CLI | Reviewed compiler-owned typed IR, target ABI and resource limits | Current resolver, scalar preflight and budgets | P1 | XL | Differential interpreter/C, rejection parity and IR verifier | [Native IR proposal](../proposals/0037-compiler-owned-native-ir.md) |
-| Native object writer | Experimental safe-Rust x86-64 ELF64 relocatable integer-kernel API published for one initializer in v0.0.6-alpha.4; multiple dependent integer `bind` initializers implemented in unpublished alpha.5 source | General-purpose lowering, checked runtime arithmetic, cross-platform object formats, executable linking and stable ABI remain missing | Verified private scalar IR and approved target ABI | P1 | XL | Exact object fixtures, independent decoding and host differential checks | [Native IR proposal](../proposals/0037-compiler-owned-native-ir.md) |
+| Native object writer | Experimental safe-Rust x86-64 ELF64 relocatable integer-kernel API published for one initializer in v0.0.6-alpha.4; multiple dependent integer `bind` initializers published in v0.0.6-alpha.5 | General-purpose lowering, checked runtime arithmetic, cross-platform object formats, executable linking and stable ABI remain missing | Verified private scalar IR and approved target ABI | P1 | XL | Exact object fixtures, independent decoding and host differential checks | [Native IR proposal](../proposals/0037-compiler-owned-native-ir.md) |
 | Native build/compile CLI | Historical PR #22 only; unavailable on main | Safe output publication and later opt-in object CLI after codegen validation | Reviewed object encoder, platform/ABI compatibility and artifact safety | P2 | L | Existing destination, symlink, race and unsupported-target checks | [Native IR proposal](../proposals/0037-compiler-owned-native-ir.md) |
 | Math/linear algebra library | Bounded vector/tile kernels and exact scalar conversions; published v0.0.6-alpha.1 RMS with independent Decimal oracle | Broader scalar math catalogue after domain design | Pure intrinsic dispatch | P0 | M | Numeric domains, finiteness, exact budgets | Built-in reference |
 | Sampled scientific calculus | Published v0.0.6-alpha.4: bounded `sample_area`, `sample_slopes` and `sample_cumulative_area` for finite samples | Adaptive integration, pointwise derivatives, higher-order schemes | Finite vector registry and execution budgets | P1 | M | Analytic linear oracle, irregular grid, overflow, subnormal, shape, work and allocation | [Sampled calculus contract](../sampled-calculus.md) |
@@ -91,7 +92,7 @@ requires separate architecture and multiple implementation phases.
 | Formatting/JSON/serialization | Versioned module metadata JSON implemented | Language value JSON, general formatting and serialization | Error/composite values; bounded parsing | P1 | L | Escaping, schemas, invalid data, limits | Format/version policy |
 | Filesystem/network/process I/O | Explicit source loader only | External capability model and structured errors | Effects, permissions, errors | P2 | XL | Denied access, roots, no ambient authority | Security model |
 | Dates/time/random/environment | Missing | Explicit nondeterministic host capabilities | Effects/host interfaces | P3 | L | Seed/replay, denied host calls | Capability APIs |
-| Numerical AI kernels | Published: vectors/tiles, stable softmax/loss/gradients, RMS, alpha.3 Top-K and temperature-controlled softmax, alpha.4 cosine similarity; unpublished alpha.5 candidate adds deterministic Top-P and Pearson correlation | Generalized tensors/broadcasting and shape types (proposal 0036) | Composite numeric type/shape design | P1 | XL | Reference models, shapes, budgets, precision | Tensor proposal |
+| Numerical AI kernels | Published: vectors/tiles, stable softmax/loss/gradients, RMS, alpha.3 Top-K and temperature-controlled softmax, alpha.4 cosine similarity; published alpha.5 adds deterministic Top-P and Pearson correlation | Generalized tensors/broadcasting and shape types (proposal 0036) | Composite numeric type/shape design | P1 | XL | Reference models, shapes, budgets, precision | Tensor proposal |
 | CPU training/inference | Small classification examples implemented | Parameter/layer APIs and general models | Tensor/shape and serialization design | P2 | XL | Numerical oracles, convergence, reproducibility | AI tutorials |
 | Automatic differentiation | Loss gradient kernels only | Graph/tape and chain-rule architecture | Tensor representation and lifetime budgets | P2 | XL | Finite differences, graph reuse, memory | AD design |
 | GPU/backend abstraction | Missing | Explicit devices, transfer and backend contracts | General tensors and stable IR | P3 | XL | CPU differential, deterministic error rules | No GPU-support claim |
