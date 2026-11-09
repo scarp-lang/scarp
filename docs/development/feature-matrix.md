@@ -35,7 +35,7 @@ seven successful CI jobs, then integrated in that order. Retargeting #71 to main
 preserved its verified source tree. Integration commits are `4ec11a3` and `93ae364`.
 The guarded prerelease publisher requires an explicit reviewed request pinned
 to a verified source commit. The earlier v0.0.5-alpha.5 was published from source
-`2eeed0aa52ccb59523307841ad8ffbd83f8911a8`. with seven verified assets;
+`2eeed0aa52ccb59523307841ad8ffbd83f8911a8` with seven verified assets;
 see the [publication record](../releases/v0.0.5-alpha.5-validation.md).
 The completed request is retired in a post-publication PR; no package registry
 publication occurred. The [alpha.4 record](../releases/v0.0.5-alpha.4-validation.md)
