@@ -2,8 +2,8 @@
 
 **Reviewed 2026-11-09.** The latest **published** GitHub prerelease is
 [v0.0.6-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4)
-(8 November 2026). `Cargo.toml` currently declares
-**0.0.6-alpha.5 as an unpublished source candidate**, not an available
+(8 November 2026). Cargo declares `0.0.6-alpha.5` as an
+**unpublished source candidate**, not an available
 download or approved release. Its implemented-but-unreleased development
 features are deterministic `top_p` / `top_p_values`, centered
 `pearson_correlation`, and dependent integer bindings for the experimental
