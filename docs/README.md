@@ -1,5 +1,14 @@
 # Scarp documentation
 
+## Official learning resources and repository boundaries
+
+- **Public documentation (English/Hindi):** [scarp-docs](https://github.com/scarp-lang/scarp-docs). This is the primary home for language guides, version-aware API reference, installation, and CLI instructions.
+- **Runnable course:** [scarp-by-example](https://github.com/scarp-lang/scarp-by-example). This is the primary home for numbered lessons, coding labs and expected outputs.
+- **Compiler repository (here):** Implementation, Rust tests, release engineering, design proposals, technical architecture, release evidence and regression `.srp` / `.stdout` fixtures. These remain here because automated testing depends on them; migrating a tutorial does not delete its compiler fixture.
+
+The initial published alpha.4 lesson migration is under review in [course PR #57](https://github.com/scarp-lang/scarp-by-example/pull/57) and [documentation PR #91](https://github.com/scarp-lang/scarp-docs/pull/91). This compiler branch changes only the signposts, not released tags, source syntax or regression fixtures.
+
+
 **0.0.6-alpha.5 prerelease** is an **unpublished source candidate** offering [Top-P selection](nucleus-selection.md), [Pearson correlation](pearson-correlation.md), and [limited ELF64 native binding dependencies](native-elf64.md). See [candidate scope](releases/v0.0.6-alpha.5.md). Alpha.4 remains the latest public prerelease.
 
 **0.0.6-alpha.4 prerelease** is **published on 8 November 2026**.
@@ -92,8 +101,8 @@ experimental Rust-hosted C11 scalar emitter; see
 | [Import tutorial](tutorials/modules.md) | Run a three-file numerical program and repair private-member/cycle errors |
 | [Finite floats](floats.md) | Use the alpha's binary64 scalars, numeric diagnostics, and function integration |
 | [Numerical vectors](vectors.md) | Use immutable numerical data, pure kernels, typed vector calls and bounded allocation |
-| [Sampled calculus (unreleased)](sampled-calculus.md) | Integrate measurements, accumulate prefix areas and calculate bounded interval derivatives with checked coordinates |
-| [Cosine similarity (unreleased proposal)](cosine-similarity.md) | Compare orientation of two finite vectors using bounded, independently scaled numerical reductions |
+| [Sampled calculus (published in v0.0.6-alpha.4)](sampled-calculus.md) | Integrate measurements, accumulate prefix areas and calculate bounded interval derivatives with checked coordinates |
+| [Cosine similarity (published in v0.0.6-alpha.4)](cosine-similarity.md) | Compare orientation of two finite vectors using bounded, independently scaled numerical reductions |
 | [Top-K inference ranking](topk-selection.md) | Select deterministic ranked model candidates and original scores using two development-only typed built-ins |
 | [Temperature softmax](temperature-softmax.md) | Adjust finite logit probabilities and log probabilities without randomness or nonfinite values |
 | [Root mean square](root-mean-square.md) | Use the published v0.0.6-alpha.1 finite RMS reduction, visible windows and exact work/allocation rules |
