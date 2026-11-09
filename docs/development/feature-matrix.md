@@ -1,29 +1,30 @@
 # Feature completeness and development roadmap
 
-Cargo declares `0.0.6-alpha.5` as an **unpublished source candidate**. New development-only work includes deterministic Top-P selection, centered Pearson correlation and ELF64 integer initializer dependencies. The latest published prerelease is **v0.0.6-alpha.4**. See [candidate notes](../releases/v0.0.6-alpha.5.md).
+**Reviewed 2026-11-09.** The latest **published** GitHub prerelease is
+[v0.0.6-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4)
+(8 November 2026). Cargo declares `0.0.6-alpha.5` as an
+**unpublished source candidate**, not an available
+download or approved release. Its implemented-but-unreleased development
+features are deterministic `top_p` / `top_p_values`, centered
+`pearson_correlation`, and dependent integer bindings for the experimental
+compiler-owned ELF64 relocatable-object Rust API. See the
+[alpha.5 candidate notes](../releases/v0.0.6-alpha.5.md).
 
-Cargo declares `0.0.6-alpha.4` as the **published GitHub prerelease**.
-The latest public prerelease is v0.0.6-alpha.4 (8 November 2026).
-Earlier v0.0.6-alpha.3 introduced `topk`, `topk_values`, `softmax_temp`
-and `logsoftmax_temp` and compiler-owned checked scalar IR.
-Alpha.4 adds bounded sampled calculus, finite cosine similarity and
-the first narrowly scoped compiler-owned x86-64 ELF64 integer-kernel
-relocatable-object Rust API (one pure initializer). No general native
-executable compiler or new CLI command is implied.
-See the [alpha.4 public verification](../releases/v0.0.6-alpha.4-validation.md).
-Top-P, Pearson correlation and multi-binding native dependencies are in
-**post-alpha.4 draft PRs**, not in this published version.
+Published alpha.4 adds sampled numerical calculus, cosine similarity and the
+first narrow ELF64 integer-kernel object writer; alpha.3 adds `topk`,
+`topk_values`, `softmax_temp` and `logsoftmax_temp`. Neither the published
+releases nor the alpha.5 source candidate provide a general native executable
+compiler, stochastic sampling, GPU/tensor runtime or native `scarp compile`
+CLI command. The table below identifies published, candidate and proposed
+features separately. Historical development notes are preserved for context.
 
-Audit date: 2026-11-08. This inventory describes the published
-**v0.0.6-alpha.4 prerelease** and development work remaining; update a row
-when an implementation lands. No roadmap row implies a new CLI command.
 The earlier 0.0.6-alpha.2 was published on 6 November 2026 from exact source
 `398b8ff705154a02423fe458ce3a427401e81e31`;
 see its [historical publication record](../releases/v0.0.6-alpha.2-validation.md).
 The language remains experimental, without a stable public contract.
 Future feature rows remain proposals.
 
-Current audit baseline: `1aff6cabf93f2e0bce6953b29e1abe7d00ebd5fb`.
+Historical audit baseline: `1aff6cabf93f2e0bce6953b29e1abe7d00ebd5fb`.
 Historical initial main: `1d3b69a79bb0f656b4da3517560ce59e1e41f3bc`. Inspected development:
 `05b4c40f63567267f5d9662ba8108d403d682f88` (148 main-only and 31 development-only
 commits). That branch contains older native/project/CLI experiments and lacks
@@ -33,7 +34,7 @@ PR #70 (inspection) and #71 (constants) were independently checked against their
 seven successful CI jobs, then integrated in that order. Retargeting #71 to main
 preserved its verified source tree. Integration commits are `4ec11a3` and `93ae364`.
 The guarded prerelease publisher requires an explicit reviewed request pinned
-to a verified source commit. Alpha.5 was published from source
+to a verified source commit. The earlier v0.0.5-alpha.5 was published from source
 `2eeed0aa52ccb59523307841ad8ffbd83f8911a8` with seven verified assets;
 see the [publication record](../releases/v0.0.5-alpha.5-validation.md).
 The completed request is retired in a post-publication PR; no package registry
@@ -77,20 +78,20 @@ requires separate architecture and multiple implementation phases.
 | Module loading/visibility | Implemented; trusted roots and bounds | Explicit re-exports and standard modules | Export/alias contract | P1 | M | Re-export collisions/private access, cycles | Modules |
 | Import/dependency inspection | #70/#71 integrated; schema-v1 JSON and constant edges implemented; project-directory metadata inspection published in alpha.5 | Navigation builds on this inventory | Existing immutable metadata | P0 | M | Exact schema/order/escaping/I/O/CLI | Inspection schema |
 | Source navigation | Published v0.0.6-alpha.1: symbol/reference snapshots and static JSON/text CLI; development adds strict UTF-16 mapping and bounded version-guarded editor snapshots (#116) | Type-symbol navigation, LSP, rename and incremental invalidation | Shared linker scopes and immutable source maps | P0 | L | Cross-file, shadowing, Unicode, exact JSON, limits, no execution | [Navigation contract](../symbol-index.md) |
-| Incremental checking/cache | Development: bounded invalidation planning, exact-input semantic reuse, per-file source-relative lexer tokens and **parsed AST caching** (#117); no incremental linker | Dirty-subgraph semantic link/type reuse and resident memory accounting remain missing | Compiler dependency graph and [invalidation contract](incremental-invalidation.md) | P1 | L | Diamond changes, deleted/added imports, retargeting, full CI; future cold-vs-cached parity | [Syntax cache and remaining gates](syntax-cache.md) |
+| Incremental checking/cache | Published in v0.0.6-alpha.2: bounded invalidation planning, exact-input semantic reuse, source-relative lexer token and parsed AST caching; no incremental linker | Dirty-subgraph semantic link/type reuse and resident memory accounting remain missing | Compiler dependency graph and [invalidation contract](incremental-invalidation.md) | P1 | L | Diamond changes, deleted/added imports, retargeting, full CI; future cold-vs-cached parity | [Syntax cache and remaining gates](syntax-cache.md) |
 | Module initialization | Intentionally absent | Effectful initialization requires separate design | Capability/effect and cycle policy | P3 | XL | Failure/ordering/deduplication | Initialization design |
 | Typed execution plan | Implemented lowered slot/operation plan | Explicit stable IR and CFG views | Resolver plan invariants | P1 | L | IR/source mapping and control edges | IR architecture |
 | Optimizations | Constant modules, slot retirement, terminal self transfer | General folding, DCE and CFG passes | IR/effect/budget-equivalence contract | P1 | L | Differential output/errors/budgets | Optimization semantics |
-| Native backend | Experimental scalar C11 library emitter published in alpha.5, plus shared internal preflight; no native CLI | Reviewed compiler-owned typed IR, target ABI and resource limits | Current resolver, scalar preflight and budgets | P1 | XL | Differential interpreter/C, rejection parity and IR verifier | [Native IR proposal](../proposals/0037-compiler-owned-native-ir.md) |
-| Native object writer | Not implemented; first x86-64 ELF64 relocatable target proposed only | Safe-Rust sections, symbols, relocations, host contract and byte limits | Verified private scalar IR and approved target ABI | P1 | XL | Exact object fixtures, independent decoding and host differential checks | [Native IR proposal](../proposals/0037-compiler-owned-native-ir.md) |
+| Native backend | Experimental scalar C11 library emitter in v0.0.5-alpha.5, compiler-owned verified scalar IR in v0.0.6-alpha.3, and narrow ELF64 object writer in v0.0.6-alpha.4; no native CLI | Reviewed compiler-owned typed IR, target ABI and resource limits | Current resolver, scalar preflight and budgets | P1 | XL | Differential interpreter/C, rejection parity and IR verifier | [Native IR proposal](../proposals/0037-compiler-owned-native-ir.md) |
+| Native object writer | Experimental safe-Rust x86-64 ELF64 relocatable integer-kernel API published for one initializer in v0.0.6-alpha.4; multiple dependent integer `bind` initializers implemented in unpublished alpha.5 source | General-purpose lowering, checked runtime arithmetic, cross-platform object formats, executable linking and stable ABI remain missing | Verified private scalar IR and approved target ABI | P1 | XL | Exact object fixtures, independent decoding and host differential checks | [Native IR proposal](../proposals/0037-compiler-owned-native-ir.md) |
 | Native build/compile CLI | Historical PR #22 only; unavailable on main | Safe output publication and later opt-in object CLI after codegen validation | Reviewed object encoder, platform/ABI compatibility and artifact safety | P2 | L | Existing destination, symlink, race and unsupported-target checks | [Native IR proposal](../proposals/0037-compiler-owned-native-ir.md) |
 | Math/linear algebra library | Bounded vector/tile kernels and exact scalar conversions; published v0.0.6-alpha.1 RMS with independent Decimal oracle | Broader scalar math catalogue after domain design | Pure intrinsic dispatch | P0 | M | Numeric domains, finiteness, exact budgets | Built-in reference |
-| Sampled scientific calculus | Merged on `main` in PR #153: pure `sample_area` trapezoid and `sample_slopes` interval derivatives; **not** in published alpha.3. Also includes merged `sample_cumulative_area` prefix integration, unreleased | Adaptive integration, pointwise derivatives, higher-order schemes | Finite vector registry and execution budgets | P1 | M | Analytic linear oracle, irregular grid, overflow, subnormal, shape, work and allocation | [Sampled calculus contract](../sampled-calculus.md) |
+| Sampled scientific calculus | Published v0.0.6-alpha.4: bounded `sample_area`, `sample_slopes` and `sample_cumulative_area` for finite samples | Adaptive integration, pointwise derivatives, higher-order schemes | Finite vector registry and execution budgets | P1 | M | Analytic linear oracle, irregular grid, overflow, subnormal, shape, work and allocation | [Sampled calculus contract](../sampled-calculus.md) |
 | General text/algorithms | Unicode length/codepoint/search/prefix/suffix implemented | General collection sorting/search | Allocation/work policy, collection types | P0 | M | Unicode semantics, deterministic search, limits | Standard library |
 | Formatting/JSON/serialization | Versioned module metadata JSON implemented | Language value JSON, general formatting and serialization | Error/composite values; bounded parsing | P1 | L | Escaping, schemas, invalid data, limits | Format/version policy |
 | Filesystem/network/process I/O | Explicit source loader only | External capability model and structured errors | Effects, permissions, errors | P2 | XL | Denied access, roots, no ambient authority | Security model |
 | Dates/time/random/environment | Missing | Explicit nondeterministic host capabilities | Effects/host interfaces | P3 | L | Seed/replay, denied host calls | Capability APIs |
-| Numerical AI kernels | Vectors/tiles, stable softmax/loss/gradients; published RMS | Generalized tensors/broadcasting and shape types (proposal 0036) | Composite numeric type/shape design | P1 | XL | Reference models, shapes, budgets, precision | Tensor proposal |
+| Numerical AI kernels | Published: vectors/tiles, stable softmax/loss/gradients, RMS, alpha.3 Top-K and temperature-controlled softmax, alpha.4 cosine similarity; unpublished alpha.5 candidate adds deterministic Top-P and Pearson correlation | Generalized tensors/broadcasting and shape types (proposal 0036) | Composite numeric type/shape design | P1 | XL | Reference models, shapes, budgets, precision | Tensor proposal |
 | CPU training/inference | Small classification examples implemented | Parameter/layer APIs and general models | Tensor/shape and serialization design | P2 | XL | Numerical oracles, convergence, reproducibility | AI tutorials |
 | Automatic differentiation | Loss gradient kernels only | Graph/tape and chain-rule architecture | Tensor representation and lifetime budgets | P2 | XL | Finite differences, graph reuse, memory | AD design |
 | GPU/backend abstraction | Missing | Explicit devices, transfer and backend contracts | General tensors and stable IR | P3 | XL | CPU differential, deterministic error rules | No GPU-support claim |
@@ -120,7 +121,7 @@ Current main has a tested interpreter-backed project workflow and static
 project-directory verification, not a native compiler, registry, general
 tensor runtime or GPU backend. Historical branches were not wholesale merged.
 
-## This cycle's complete vertical slices
+## Historical completed development slices
 
 1. Integrate verified inspection/constants (#70 then #71).
 2. Optional binding/constant type annotations with strict inference compatibility.
