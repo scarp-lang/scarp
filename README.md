@@ -1,5 +1,7 @@
 # Scarp
 
+**Post-alpha.5 development only (not released):** [median and quantile](docs/order-statistics.md) add bounded deterministic order statistics on an isolated review branch; they are **not** part of the current alpha.5 source candidate.
+
 **0.0.6-alpha.5** is an **unpublished source candidate** with [Top-P nucleus ranking](docs/nucleus-selection.md), [Pearson correlation](docs/pearson-correlation.md), and experimental [multi-binding ELF64 integer kernels](docs/native-elf64.md). These features are **not** in published alpha.4 binaries. See [alpha.5 candidate notes](docs/releases/v0.0.6-alpha.5.md) and [release gates](docs/releases/v0.0.6-alpha.5-development-plan.md). No alpha.5 source approval or publication is implied.
 
 **0.0.6-alpha.4** is a **published experimental GitHub prerelease**

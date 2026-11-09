@@ -1,5 +1,7 @@
 # Scarp documentation
 
+**Post-alpha.5 development (not yet released):** [bounded median and quantiles](order-statistics.md) are being reviewed separately and are **not** included in alpha.5 candidate source.
+
 **0.0.6-alpha.5 prerelease** is an **unpublished source candidate** offering [Top-P selection](nucleus-selection.md), [Pearson correlation](pearson-correlation.md), and [limited ELF64 native binding dependencies](native-elf64.md). See [candidate scope](releases/v0.0.6-alpha.5.md). Alpha.4 remains the latest public prerelease.
 
 **0.0.6-alpha.4 prerelease** is **published on 8 November 2026**.
