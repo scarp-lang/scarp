@@ -2,7 +2,7 @@
 
 ## Official learning resources and repository boundaries
 
-The [content migration inventory and ownership audit](migrations/learning-content-migration.md) maps the first five published example fixtures to their lesson destinations and describes the safe, non-destructive follow-up phases.
+The [content migration inventory and ownership audit](migrations/learning-content-migration.md) maps the first published migration cohort to their lesson destinations and describes the safe, non-destructive follow-up phases.
 
 - **Public documentation (English/Hindi):** [scarp-docs](https://github.com/scarp-lang/scarp-docs). This is the primary home for language guides, version-aware API reference, installation, and CLI instructions.
 - **Runnable course:** [scarp-by-example](https://github.com/scarp-lang/scarp-by-example). This is the primary home for numbered lessons, coding labs and expected outputs.
@@ -11,18 +11,20 @@ The [content migration inventory and ownership audit](migrations/learning-conten
 The initial published alpha.4 lesson migration is under review in [course PR #57](https://github.com/scarp-lang/scarp-by-example/pull/57) and [documentation PR #91](https://github.com/scarp-lang/scarp-docs/pull/91). This compiler branch changes only the signposts, not released tags, source syntax or regression fixtures.
 
 
-**0.0.6-alpha.5 prerelease** is an **unpublished source candidate** offering [Top-P selection](nucleus-selection.md), [Pearson correlation](pearson-correlation.md), and [limited ELF64 native binding dependencies](native-elf64.md). See [candidate scope](releases/v0.0.6-alpha.5.md). Alpha.4 remains the latest public prerelease.
+**0.0.6-alpha.5 prerelease** is **published on 9 November 2026**,
+with pure [Top-P selection](nucleus-selection.md), [Pearson correlation](pearson-correlation.md)
+and [limited ELF64 native binding dependencies](native-elf64.md).
+The [public GitHub release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5),
+[exact-source verification](releases/v0.0.6-alpha.5-validation.md),
+and [public release notes](releases/v0.0.6-alpha.5-publication.md)
+identify all seven audited assets. The [candidate notes](releases/v0.0.6-alpha.5.md)
+remain an immutable historical snapshot.
 
-**0.0.6-alpha.4 prerelease** is **published on 8 November 2026**.
-The [public GitHub release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4)
-and [exact-source verification](releases/v0.0.6-alpha.4-validation.md)
-record the annotated tag, all seven public assets and successful CI.
-The [alpha.4 candidate notes](releases/v0.0.6-alpha.4.md) remain an
-immutable prepublication snapshot.
-
-**Next prerelease preparation:** [alpha.5 development plan](releases/v0.0.6-alpha.5-development-plan.md)
-is a separately staged development review, **not** a published release
-or automatic source authorization.
+**0.0.6-alpha.4 prerelease** was published on 8 November 2026.
+Its [release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4)
+and [verification record](releases/v0.0.6-alpha.4-validation.md)
+preserve the first ELF64 object-writer and sampled-calculus milestone.
+The [alpha.4 candidate notes](releases/v0.0.6-alpha.4.md) also remain historical.
 
 **Published experimental native feature:** [the first ELF64 integer-kernel
 object writer](native-elf64.md) uses the verified private scalar IR.
@@ -62,11 +64,11 @@ see [alpha.5 release notes](releases/v0.0.5-alpha.5.md) and the
 Development declarations use `bind` and `var`; see the [migration guide](syntax-migration.md). Published tags retain their original syntax.
 
 Choose a guide by the task you want to complete. Current tutorials are
-updated for the **0.0.6-alpha.4 published prerelease**, retaining
+updated for the **0.0.6-alpha.5 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
 contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.6-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4),
+[0.0.6-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)
@@ -103,9 +105,11 @@ experimental Rust-hosted C11 scalar emitter; see
 | [Import tutorial](tutorials/modules.md) | Run a three-file numerical program and repair private-member/cycle errors |
 | [Finite floats](floats.md) | Use the alpha's binary64 scalars, numeric diagnostics, and function integration |
 | [Numerical vectors](vectors.md) | Use immutable numerical data, pure kernels, typed vector calls and bounded allocation |
-| [Sampled calculus (published in v0.0.6-alpha.4)](sampled-calculus.md) | Integrate measurements, accumulate prefix areas and calculate bounded interval derivatives with checked coordinates |
-| [Cosine similarity (published in v0.0.6-alpha.4)](cosine-similarity.md) | Compare orientation of two finite vectors using bounded, independently scaled numerical reductions |
-| [Top-K inference ranking](topk-selection.md) | Select deterministic ranked model candidates and original scores using two development-only typed built-ins |
+| [Sampled calculus (published)](sampled-calculus.md) | Integrate measurements, accumulate prefix areas and calculate bounded interval derivatives with checked coordinates |
+| [Cosine similarity (published)](cosine-similarity.md) | Compare orientation of two finite vectors using bounded, independently scaled numerical reductions |
+| [Top-K inference ranking](topk-selection.md) | Select deterministic ranked model candidates and original scores using two published typed built-ins |
+| [Top-P nucleus ranking](nucleus-selection.md) | Rank a deterministic normalized probability prefix with stable tie ordering; published alpha.5, not random sampling |
+| [Pearson correlation](pearson-correlation.md) | Compute centered finite vector correlation with independent scaling and strict input limits; published alpha.5 |
 | [Temperature softmax](temperature-softmax.md) | Adjust finite logit probabilities and log probabilities without randomness or nonfinite values |
 | [Root mean square](root-mean-square.md) | Use the published v0.0.6-alpha.1 finite RMS reduction, visible windows and exact work/allocation rules |
 | [Your first numerical program](tutorials/numerical-program.md) | Build a small typed numerical calculation and compare probabilities safely |

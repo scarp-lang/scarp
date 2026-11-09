@@ -54,6 +54,10 @@ The new [English](https://github.com/scarp-lang/scarp-docs/blob/docs-migrate-num
 
 **Merge dependency:** this compiler PR references an as-yet-unpublished new documentation route. Merge documentation PR #91 and verify the deployed site first, then merge this navigation PR; do not send users to the new route on production before the docs deploy.
 
+## New published alpha.5 release
+
+[Scarp v0.0.6-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5) was published on 9 November 2026, from exact source `205e92f166f186c3905e5880d41c31717b697b8e`. Future alpha.5 course examples must preserve this distinct provenance rather than rewriting earlier alpha.4 fixtures. Compiler regression sources remain in this repository.
+
 ## Follow-on migration batches
 
 1. **Audit remaining example fixtures.** Compare each published-tag fixture with existing course lessons; do not duplicate identical instruction unnecessarily. Prefer unique concepts (e.g. import inspection or editor debugging) and keep their supporting modules together.
@@ -67,5 +71,5 @@ The new [English](https://github.com/scarp-lang/scarp-docs/blob/docs-migrate-num
 - Each course lesson must have an immutable compiler release pin, original `.srp`, corresponding byte-exact `.stdout`, a chapter entry and a matching Hindi exercise.
 - The course must pass its three-OS `verify` + `exec` checks, source-provenance comparison, unit tests, Pages generation, link and sitemap inventory tests.
 - Documentation must pass the local-link, bilingual code-fence parity, release-evidence and site-build checks.
-- No experimental `v0.0.6-alpha.5` APIs such as `pearson_correlation` or nucleus selection may be documented as published in `v0.0.6-alpha.4`.
+- The now-published `v0.0.6-alpha.5` APIs (`pearson_correlation` and deterministic nucleus selection) must not be advertised as available in alpha.4. Keep all migration copies byte-pinned to the specific release from which they originated.
 - Release publication, branch merges and GitHub Pages deployments remain separate gated actions. A migration PR does not authorize a new compiler prerelease.

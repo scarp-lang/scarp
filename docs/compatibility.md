@@ -1,6 +1,14 @@
 # Version and API compatibility
 
-`0.0.6-alpha.5` is **an unpublished source candidate**, adding pure `top_p`, `top_p_values`, `pearson_correlation` and a narrow multi-binding ELF64 object writer. These are not available in published alpha.4 downloads. See [candidate notes](releases/v0.0.6-alpha.5.md).
+`0.0.6-alpha.5` is **a published GitHub prerelease** (9 November 2026),
+adding pure `top_p`, `top_p_values`, centered `pearson_correlation`,
+and a narrow compiler-owned multi-binding ELF64 integer object writer.
+These additions are absent from older alpha.4 downloads. See the
+[public release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5)
+and [exact-source publication record](releases/v0.0.6-alpha.5-validation.md).
+Rust embedding users with exhaustive `numeric::Builtin` matches may need to
+handle the additional variants. There is no general native executable
+compiler CLI or stable ABI.
 
 `0.0.6-alpha.4` is **a published GitHub prerelease** (8 November 2026)
 with finite sampled calculus, cosine similarity and the first narrow,
@@ -28,20 +36,20 @@ See [RMS semantics and limits](root-mean-square.md). The opt-in
 and independent resource limits; it does not change the existing module or
 diagnostic JSON schema-v1 contracts.
 
-**Current published package:** `0.0.6-alpha.4` is a GitHub prerelease.
+**Current published package:** `0.0.6-alpha.5` is a GitHub prerelease.
 It builds on alpha.2's optional Rust embedding caches and dependency
 invalidation, adding bounded AI-oriented score operations and internal
 compiler verification without changing CLI syntax or enabling a general
 native executable compiler. See the
-[public release notes](releases/v0.0.6-alpha.4-publication.md) and
-[exact-source publication record](releases/v0.0.6-alpha.4-validation.md).
+[public release notes](releases/v0.0.6-alpha.5-publication.md) and
+[exact-source publication record](releases/v0.0.6-alpha.5-validation.md).
 Windows, Linux and macOS archives are available; features remain experimental
 and no general native executable compiler or stable ABI is implied.
 The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.6-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4).
+[0.0.6-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a

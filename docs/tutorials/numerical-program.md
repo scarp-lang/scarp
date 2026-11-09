@@ -7,7 +7,7 @@ with `cargo build --locked --offline`, then verify `cargo run -- --version`.
 An older alpha.1 executable accepts floats but does not implement vectors.
 To reproduce the historical module-capable milestone, use the
 [published `v0.0.5-alpha.1` prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.1).
-For new users, select the currently published `v0.0.6-alpha.4` compiler using
+For new users, select the currently published `v0.0.6-alpha.5` compiler using
 the canonical guide linked above; do not treat the older alpha.1 link as latest.
 
 ## Construct data and read an element
