@@ -1,5 +1,7 @@
 # Split a numerical program into files
 
+> **Canonical public guide:** [Modules, visibility and inspection](https://scarp-lang.github.io/scarp-docs/language/modules-and-visibility), plus [runnable module lessons](https://github.com/scarp-lang/scarp-by-example/tree/main/examples/05-modules). The first module-capable release was `v0.0.5-alpha.1`; **the earlier `v0.0.4-alpha.4` lacked imports**. The old phrase “published alpha.4 does not support imports” below referred to that *older version family*, not the published `v0.0.6-alpha.4`. Keep the full release tag when discussing compatibility.
+
 Use a build identifying as `scarp 0.0.5-alpha.1`; published alpha.4 does not
 support imports. Run `cargo run -- --version` in this checkout to verify it.
 
