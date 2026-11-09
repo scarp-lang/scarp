@@ -1,5 +1,7 @@
 # Your first numerical program
 
+> **Canonical public guide:** [Vectors and tiles](https://scarp-lang.github.io/scarp-docs/language/numerics), [published v0.0.6-alpha.4 numerical kernels](https://scarp-lang.github.io/scarp-docs/language/scientific-kernels-alpha4), and the [executable collections and AI lessons](https://github.com/scarp-lang/scarp-by-example/tree/main/examples). The alpha.2/alpha.1 build notes and `v0.0.5-alpha.1` download links below describe older milestones; new learners should choose the published release matching their guide.
+
 This tutorial uses the alpha.2 numerical implementation. Build the current source
 with `cargo build --locked --offline`, then verify `cargo run -- --version`.
 An older alpha.1 executable accepts floats but does not implement vectors.
