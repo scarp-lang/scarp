@@ -151,6 +151,11 @@ diagnostic_catalogue! {
     TextConstruction => ("E0048", "Invalid or excessive text construction. Repetition counts must be nonnegative, each materialized string is limited to 1048576 UTF-8 bytes, and cumulative new payload is limited by --max-text-bytes / ExecutionOptions.max_text_bytes. Sharing strings does not recharge; retirement does not refund allocation. This is a logical payload cap, not a physical process-memory limit."),
     NativeUnsupported => ("E0049", "Experimental scalar native emission cannot represent this program or would exceed its explicit resource caps. Use interpreter execution, or restrict the source to supported integer/boolean operations, bounded control flow and single-argument stdout lines."),
     SymbolIndexLimit => ("E0050", "Symbol navigation index limit exceeded. Reduce symbol/reference metadata or adjust IndexLimits in Rust embedding. These opt-in limits are separate from compiler module, constant, type, and runtime limits."),
+    InputUnavailable => ("E0054", "Program input is unavailable in this execution mode. Supply an explicit buffered reader through the input embedding APIs or redirect stdin to scarp exec. Legacy check never reads input; terminal prompts need a future interactive mode."),
+    InputEof => ("E0055", "End of program input before a new line. An empty LF/CRLF-terminated line is valid empty text; a final nonempty unterminated line is valid. Supply another line for each selected read_line call."),
+    InputEncoding => ("E0056", "Program input contains invalid UTF-8. Encode input as UTF-8; no replacement, normalization or implicit numeric conversion is performed."),
+    InputIo => ("E0057", "The explicit program input reader failed. Check the host reader or redirected input source. Consumed input cannot be rolled back; source and runtime failures still prevent program-output replay."),
+    InputLimit => ("E0058", "Program input exceeded a raw per-line byte, cumulative-byte, or selected-read quota, or bounded storage reservation failed. InputLimits and --max-input-* configure these bounds; CR/LF terminators count. Text and work budgets also apply; raising input limits cannot exceed the existing string ceiling."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

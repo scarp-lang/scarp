@@ -319,7 +319,7 @@ impl Rewriter<'_> {
                     .map(|s| s.info.span);
                 let builtin = declaration.is_none()
                     && !name.contains('.')
-                    && crate::numeric::Builtin::from_name(name).is_some();
+                    && crate::resolver::is_builtin_name(name);
                 self.navigation(|b| {
                     b.step(node.span)?;
                     if let Some(declaration) = declaration {
@@ -391,9 +391,7 @@ impl Rewriter<'_> {
                                 .as_ref()
                                 .unwrap()
                                 .clone();
-                        } else if name.contains('.')
-                            || crate::numeric::Builtin::from_name(name).is_none()
-                        {
+                        } else if name.contains('.') || !crate::resolver::is_builtin_name(name) {
                             return Err(Diagnostic::new(
                                 Kind::ModuleSymbol,
                                 *function_span,

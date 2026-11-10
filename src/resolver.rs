@@ -139,6 +139,11 @@ pub(crate) enum ResolvedCall {
         parameters: Vec<usize>,
     },
     Builtin(Builtin),
+    ReadLine,
+}
+
+pub(crate) fn is_builtin_name(name: &str) -> bool {
+    name == "read_line" || Builtin::from_name(name).is_some()
 }
 
 /// Static function signature and call-graph information. Spans are source bytes.
@@ -982,6 +987,26 @@ fn resolve_expression(
             } => {
                 // Preserve existing user function names; kernels occupy call
                 // position only when no user declaration has this name.
+                if name == "read_line" && !names.contains_key(name) {
+                    if !arguments.is_empty() {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::CallArguments,
+                            *function_span,
+                            "read_line requires zero arguments",
+                        ));
+                    }
+                    if pure {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::ImpureFunction,
+                            *function_span,
+                            "pure expressions cannot read program input",
+                        ));
+                    }
+                    slots.push(None);
+                    calls.push(Some(ResolvedCall::ReadLine));
+                    types.push(ValueType::String.id());
+                    continue;
+                }
                 if let Some(builtin) =
                     Builtin::from_name(name).filter(|_| !names.contains_key(name))
                 {

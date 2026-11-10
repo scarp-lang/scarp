@@ -1,5 +1,16 @@
 # Test and validate changes
 
+For the **unreleased program-input development slice**, run
+`cargo test --locked --offline --test program_input --test program_input_modules_cli`,
+`cargo run --locked --offline --example program_input`, and
+`python3 scripts/test_program_input.py target/debug/scarp`.
+The oracle covers seeded Unicode lines and real Unix PTYs. The shared example
+runner supplies raw `.stdin` companions, compares exact `.stdout`, and rejects
+orphaned fixtures. Package smoke tests repeat redirected input against extracted
+binaries and statically verify input programs; legacy `check` must never read
+stdin. See the [input contract](program-input.md). This feature is absent from
+published alpha.5 and needs the full platform/MSRV/package matrix before integration.
+
 For the **published v0.0.6-alpha.2 prerelease** (and continued source development), exercise
 `--test module_invalidation --test module_cache --test module_token_cache
 --test module_syntax_cache` and

@@ -8,11 +8,12 @@ param(
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 function Invoke-ScarpProcess {
-    param([string]$Executable, [string[]]$Arguments)
+    param([string]$Executable, [string[]]$Arguments, [byte[]]$InputBytes = @())
     $start = [System.Diagnostics.ProcessStartInfo]::new()
     $start.FileName = $Executable
     $start.UseShellExecute = $false
     $start.CreateNoWindow = $true
+    $start.RedirectStandardInput = $true
     $start.RedirectStandardOutput = $true
     $start.RedirectStandardError = $true
     foreach ($argument in $Arguments) { $start.ArgumentList.Add($argument) }
@@ -24,6 +25,10 @@ function Invoke-ScarpProcess {
         if (-not $process.Start()) { throw 'Could not start packaged executable' }
         $readOut = $process.StandardOutput.BaseStream.CopyToAsync($stdout)
         $readErr = $process.StandardError.BaseStream.CopyToAsync($stderr)
+        if ($InputBytes.Length -gt 0) {
+            $process.StandardInput.BaseStream.Write($InputBytes, 0, $InputBytes.Length)
+        }
+        $process.StandardInput.Close()
         $process.WaitForExit()
         [void]$readOut.GetAwaiter().GetResult()
         [void]$readErr.GetAwaiter().GetResult()
@@ -188,12 +193,16 @@ try {
     foreach ($exampleFile in $exampleSources) {
         $example = $exampleFile.BaseName
         $source = $exampleFile.FullName
-        $actual = Invoke-ScarpProcess -Executable $executable -Arguments @('run', $source)
+        $inputPath = Join-Path $extractedPackage "examples/$example.stdin"
+        $hasInput = Test-Path -LiteralPath $inputPath
+        $inputBytes = if ($hasInput) { [IO.File]::ReadAllBytes($inputPath) } else { [byte[]]@() }
+        $actual = Invoke-ScarpProcess -Executable $executable -Arguments @('run', $source) -InputBytes $inputBytes
         if ($actual.ExitCode -ne 0 -or $actual.Stderr.Length -ne 0) { throw "Packaged $example example failed" }
         $expected = [System.IO.File]::ReadAllBytes((Join-Path $extractedPackage "examples/$example.stdout"))
         if ([Convert]::ToBase64String($actual.Stdout) -cne [Convert]::ToBase64String($expected)) { throw "Packaged $example output differs" }
-        $checkOutput = & $executable check $source
-        if ($LASTEXITCODE -ne 0 -or $checkOutput) { throw "Packaged $example validation failed" }
+        $checkVerb = if ($hasInput) { 'verify' } else { 'check' }
+        $checked = Invoke-ScarpProcess -Executable $executable -Arguments @($checkVerb, $source)
+        if ($checked.ExitCode -ne 0 -or $checked.Stdout.Length -ne 0 -or $checked.Stderr.Length -ne 0) { throw "Packaged $example validation failed" }
         $inventory = Invoke-ScarpProcess -Executable $executable -Arguments @('modules', $source)
         if ($inventory.ExitCode -ne 0 -or $inventory.Stderr.Length -ne 0 -or -not [System.Text.Encoding]::UTF8.GetString($inventory.Stdout).StartsWith('modules: ')) {
             throw "Packaged $example static module inspection failed"

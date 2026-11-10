@@ -104,6 +104,7 @@ experimental Rust-hosted C11 scalar emitter; see
 | [Your first numerical program](tutorials/numerical-program.md) | Build a small typed numerical calculation and compare probabilities safely |
 | [Numerical errors](reference/numerical-errors.md) | Repair type, shape, index, domain, overflow and quota failures |
 | [Functions](functions.md) | Learn typed calls, defaults, contracts, and bounded invocation resources |
+| [Program input (unreleased development)](program-input.md) | Review explicit readers, UTF-8 lines, quotas and terminal restrictions; absent from published alpha.5 |
 | [Output](output.md) | Choose print/write, control newlines, and route explicit stderr |
 | [Variables and mutation](tutorials/variables.md) | Introduce names, copy values, choose mutability, and avoid forward references |
 | [Scopes and shadowing](tutorials/scopes.md) | Predict which declaration a name uses and what survives a block |

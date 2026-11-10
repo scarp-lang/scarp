@@ -5,6 +5,7 @@ use std::io::{self, Write};
 use crate::{
     ast::OutputTarget,
     diagnostics::Diagnostic,
+    input::{InputLimits, InputState},
     limits::{ExecutionLimits, ExecutionOptions},
     resolver::ResolvedProgram,
     value::Value,
@@ -55,7 +56,12 @@ fn prepare(
     capture: bool,
     options: ExecutionOptions,
 ) -> Result<Vec<OutputEvent<'_>>, Diagnostic> {
-    machine::prepare(program, capture, options)
+    machine::prepare(
+        program,
+        capture,
+        options,
+        &mut InputState::new(None, InputLimits::default()),
+    )
 }
 
 /// Resolve and evaluate through `compile` first. Arithmetic failures never write
@@ -121,6 +127,51 @@ pub fn execute_with_io_and_options(
     options: ExecutionOptions,
 ) -> Result<(), RunError> {
     let events = prepare(program, true, options).map_err(RunError::Diagnostic)?;
+    replay(events, stdout, stderr)
+}
+
+/// Execute using an explicit input reader. Output remains buffered; input
+/// consumption is not reversible. The host owns reader readiness and deadlines.
+pub fn execute_with_input(
+    program: &ResolvedProgram,
+    input: &mut impl io::BufRead,
+    stdout: &mut impl Write,
+    stderr: &mut impl Write,
+) -> Result<(), RunError> {
+    execute_with_input_and_options(
+        program,
+        input,
+        stdout,
+        stderr,
+        ExecutionOptions::default(),
+        InputLimits::default(),
+    )
+}
+
+/// Input-capable execution with separate input quotas and unchanged runtime options.
+pub fn execute_with_input_and_options(
+    program: &ResolvedProgram,
+    input: &mut impl io::BufRead,
+    stdout: &mut impl Write,
+    stderr: &mut impl Write,
+    options: ExecutionOptions,
+    input_limits: InputLimits,
+) -> Result<(), RunError> {
+    let events = machine::prepare(
+        program,
+        true,
+        options,
+        &mut InputState::new(Some(input), input_limits),
+    )
+    .map_err(RunError::Diagnostic)?;
+    replay(events, stdout, stderr)
+}
+
+fn replay(
+    events: Vec<OutputEvent<'_>>,
+    stdout: &mut impl Write,
+    stderr: &mut impl Write,
+) -> Result<(), RunError> {
     let mut previous = None;
     for event in events.iter().filter(|event| event.has_bytes()) {
         if let Some(previous) = previous.filter(|previous| *previous != event.target) {

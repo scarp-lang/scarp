@@ -4,7 +4,7 @@ use std::{
     env,
     ffi::{OsStr, OsString},
     fs,
-    io::{self, BufWriter, Write},
+    io::{self, BufWriter, IsTerminal, Write},
     path::Path,
     process::ExitCode,
 };
@@ -13,7 +13,7 @@ use scarp::{
     diagnostics::{Diagnostic, LocationTracker},
     lexer,
     modules::{self, ModuleLimits, ModuleRunError},
-    ExecutionOptions,
+    ExecutionOptions, InputLimits,
 };
 
 const HELP: &str = "Scarp — Build Beyond Boundaries.
@@ -129,9 +129,14 @@ const EXEC_HELP: &str = "Usage: scarp exec [budget options] [--] <file.srp>
 Execute a checked Scarp source file with the existing interpreter.
 --diagnostic-format=json is available for real compiler errors.
 Execution-limit options: --max-steps, --max-prints, --max-call-depth, --max-calls,
---max-live-slots, --max-capture-bytes, --max-vector-bytes, --max-text-bytes. Options precede the
+--max-live-slots, --max-capture-bytes, --max-vector-bytes, --max-text-bytes,
+--max-input-line-bytes, --max-input-bytes, --max-input-reads. Options precede the
 source path. -- before a filename permits filenames beginning with a dash.
 Program-argument forwarding and project entrypoint execution are not supported.
+read_line reads redirected UTF-8 stdin; terminal input is rejected at the selected call.
+Input defaults: 65536 raw bytes per line, 1048576 total bytes, 4096 reads.
+CR/LF count toward input/text quotas. Input cannot be rolled back; output stays buffered.
+No interactive prompt is displayed or flushed before a read.
 ";
 
 const CREATE_HELP: &str = "Usage: scarp create [--] <new-directory>
@@ -211,6 +216,9 @@ Snapshot bytes are a logical storage cap, not an exact process-memory limit.
 Counts are unsigned decimal digits, zero is valid, and each option may occur once.
 Example: scarp run --max-steps 2000000 --max-prints 10 examples/repeat.srp
 Use scarp check with the same options to evaluate without printing.
+read_line requires redirected UTF-8 stdin; terminal prompts are not supported.
+--max-input-line-bytes 65536, --max-input-bytes 1048576, --max-input-reads 4096.
+Raw input counts CR/LF and uses the text/work budgets. Output stays buffered.
 --diagnostic-format=json writes schema-1 errors to stderr, with local UTF-8 byte spans
 and one-based Unicode scalar columns. Program output and error status stay unchanged.
 Imports use an explicit alias and resolve relative to each file within the entry directory.
@@ -229,7 +237,9 @@ Function defaults: --max-call-depth 256, --max-calls 100000,
 Vector and tile buffers share this cumulative quota; retirement does not refund it.
 --max-text-bytes 8388608 limits cumulative new UTF-8 payload (1048576 bytes per string).
 String sharing and direct literal output do not allocate text payload; retirement gives no refund.
-All eight options take unsigned decimal counts, allow zero, and may occur once.
+All budget options take unsigned decimal counts, allow zero, and may occur once.
+Input-limit options are accepted, but check never reads stdin: a selected read_line
+reports E0054. Use verify for static validation of input programs.
 Snapshot bytes are a logical storage cap, including when check discards output.
 Example: scarp check --max-steps 2000000 examples/repeat.srp
 --diagnostic-format=json writes schema-1 errors to stderr; the default is text.
@@ -570,6 +580,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         command,
         filename,
         options,
+        input_limits,
         json,
         json_diagnostics,
     } = match invocation(&args) {
@@ -658,7 +669,15 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                 Err(error) => report_module_diagnostic(&error, errors, json_diagnostics),
             }
         } else {
-            match program.execute(output, errors, options) {
+            let stdin = io::stdin();
+            let result = if stdin.is_terminal() {
+                // A selected read fails immediately; buffered output cannot
+                // serve as a visible interactive prompt in this mode.
+                program.execute(output, errors, options)
+            } else {
+                program.execute_with_input(&mut stdin.lock(), output, errors, options, input_limits)
+            };
+            match result {
                 Ok(()) => 0,
                 Err(ModuleRunError::Diagnostic(error)) => {
                     report_module_diagnostic(&error, errors, json_diagnostics)
@@ -738,6 +757,9 @@ fn execution_limit_flag(flag: &str) -> bool {
             | "--max-capture-bytes"
             | "--max-vector-bytes"
             | "--max-text-bytes"
+            | "--max-input-line-bytes"
+            | "--max-input-bytes"
+            | "--max-input-reads"
     )
 }
 
@@ -770,6 +792,7 @@ struct Invocation<'a> {
     command: &'a OsStr,
     filename: &'a OsStr,
     options: ExecutionOptions,
+    input_limits: InputLimits,
     json: bool,
     json_diagnostics: bool,
 }
@@ -777,6 +800,7 @@ struct Invocation<'a> {
 fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
     let command = args.first().ok_or("expected a command and a file path")?;
     let mut options = ExecutionOptions::default();
+    let mut input_limits = InputLimits::default();
     let mut index = 1;
     let mut seen = Vec::new();
     let mut separator = false;
@@ -848,6 +872,9 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
                     "--max-capture-bytes" => options.max_capture_bytes = value,
                     "--max-vector-bytes" => options.max_vector_bytes = value,
                     "--max-text-bytes" => options.max_text_bytes = value,
+                    "--max-input-line-bytes" => input_limits.max_line_bytes = value,
+                    "--max-input-bytes" => input_limits.max_total_bytes = value,
+                    "--max-input-reads" => input_limits.max_reads = value,
                     _ => unreachable!(),
                 }
             }
@@ -865,6 +892,7 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
         command: command.as_os_str(),
         filename: filename.as_os_str(),
         options,
+        input_limits,
         json,
         json_diagnostics,
     })

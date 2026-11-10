@@ -29,6 +29,8 @@ try {
     Invoke-Cargo -CargoArguments @('doc', '--locked', '--no-deps')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--example', 'interned_types')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--example', 'symbol_index')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--example', 'program_input')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/program_input.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', 'examples/hello.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'tokens', 'examples/hello.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', 'examples/arithmetic.srp')

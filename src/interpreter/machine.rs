@@ -4,6 +4,7 @@ use crate::{
     ast::{BinaryOperator, OutputTarget},
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     evaluator::{self, Evaluation, Workspace},
+    input::InputState,
     limits::{Budget, ExecutionOptions},
     resolver::{
         ResolvedArgument, ResolvedCall, ResolvedExpression, ResolvedOperation, ResolvedProgram,
@@ -104,11 +105,12 @@ impl<'a> Frame<'a> {
     }
 }
 
-pub(super) fn prepare(
-    program: &ResolvedProgram,
+pub(super) fn prepare<'a>(
+    program: &'a ResolvedProgram,
     capture: bool,
     options: ExecutionOptions,
-) -> Result<Vec<OutputEvent<'_>>, Diagnostic> {
+    input: &mut InputState<'_>,
+) -> Result<Vec<OutputEvent<'a>>, Diagnostic> {
     if program.binding_count() > options.max_live_slots {
         return Err(limit(
             Span::default(),
@@ -149,6 +151,10 @@ pub(super) fn prepare(
                     .workspace
                     .resume(expression, &frame.environment, &mut budget)?
                 {
+                    Evaluation::ReadLine(span) => {
+                        let value = input.read_line(&mut budget, span)?;
+                        frame.workspace.accept(value);
+                    }
                     Evaluation::Call {
                         node,
                         arguments,

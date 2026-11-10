@@ -15,6 +15,7 @@ pub mod ast;
 pub mod c_backend;
 pub mod diagnostics;
 pub mod evaluator;
+pub mod input;
 pub mod interpreter;
 mod json;
 pub mod lexer;
@@ -34,6 +35,7 @@ use std::{fmt, io};
 
 use ast::Program;
 use diagnostics::Diagnostic;
+pub use input::InputLimits;
 pub use limits::{ExecutionLimits, ExecutionOptions};
 pub use resolver::ResolvedProgram;
 
@@ -55,7 +57,7 @@ pub fn compile_with_type_limits(
 }
 
 /// Validate syntax, names, and checked arithmetic without writing program output.
-/// The current language has no side effects other than printing.
+/// A selected input operation fails without reading any external input.
 ///
 /// ```
 /// scarp::check("var count = 1; count += 2; print(count);")?;
@@ -110,6 +112,52 @@ pub fn run_with_io_and_options(
         stdout,
         stderr,
         options,
+    )
+}
+
+/// Execute with an explicit buffered input reader and two output destinations.
+/// Program output is replayed only after successful evaluation. Consumed input
+/// cannot be rolled back. No prompt is flushed before a read.
+///
+/// ```
+/// let mut input = std::io::Cursor::new(b"Ada\n");
+/// let (mut out, mut err) = (Vec::new(), Vec::new());
+/// scarp::run_with_input("print(read_line());", &mut input, &mut out, &mut err)?;
+/// assert_eq!(out, b"Ada\n");
+/// # Ok::<(), scarp::RunError>(())
+/// ```
+pub fn run_with_input(
+    source: &str,
+    input: &mut impl io::BufRead,
+    stdout: &mut impl io::Write,
+    stderr: &mut impl io::Write,
+) -> Result<(), RunError> {
+    run_with_input_and_options(
+        source,
+        input,
+        stdout,
+        stderr,
+        ExecutionOptions::default(),
+        InputLimits::default(),
+    )
+}
+
+/// Explicit input execution with independent runtime and raw-input quotas.
+pub fn run_with_input_and_options(
+    source: &str,
+    input: &mut impl io::BufRead,
+    stdout: &mut impl io::Write,
+    stderr: &mut impl io::Write,
+    options: ExecutionOptions,
+    input_limits: InputLimits,
+) -> Result<(), RunError> {
+    interpreter::execute_with_input_and_options(
+        &compile(source).map_err(RunError::Diagnostic)?,
+        input,
+        stdout,
+        stderr,
+        options,
+        input_limits,
     )
 }
 

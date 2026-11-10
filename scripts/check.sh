@@ -63,3 +63,7 @@ cargo run --locked -- check examples/native_scalar_repeat.srp
 cargo run --locked -- run examples/inspection_json.srp
 cargo run --locked -- modules --json examples/inspection_json.srp
 cargo run --locked -- explain E0044
+
+cargo run --locked --example program_input
+cargo run --locked -- verify examples/program_input.srp
+cargo run --locked -- run examples/program_input.srp < examples/program_input.stdin

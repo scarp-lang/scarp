@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — core program input development
+
+- Implement bounded impure `read_line() -> string` with explicit Rust reader
+  injection, redirected CLI input, UTF-8/CRLF/EOF diagnostics and independent
+  raw byte/read quotas. Preserve public runtime option structs and atomic
+  program-output replay. Static verification never reads input; evaluating
+  check and selected terminal input fail clearly without reading.
+- Add compiler-owned input/output fixtures, module/CLI/embedding regressions,
+  native rejection checks and an independent Unicode/Unix PTY oracle. Extend
+  package smoke tests to supply raw `.stdin` fixtures.
+- Published alpha.5, package versions, tags and release authorizations remain
+  unchanged. Interactive prompts and additional data types are deferred.
+
 ## 0.0.6-alpha.5 — published GitHub prerelease, 2026-11-09
 
 - Add deterministic CPU-only nucleus selection `top_p(vector, mass) -> integers`

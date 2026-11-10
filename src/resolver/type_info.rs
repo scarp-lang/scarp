@@ -10,6 +10,7 @@ pub(super) struct ProgramTypes {
     bindings: Vec<TypeId>,
     functions: Vec<TypeId>,
     builtins: BTreeMap<Builtin, TypeId>,
+    input: Option<TypeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,6 +68,7 @@ impl TypedExpression<'_> {
                     Some(ResolvedCall::Builtin(builtin)) => {
                         self.types.builtins.get(&builtin).copied()
                     }
+                    Some(ResolvedCall::ReadLine) => self.types.input,
                     None => None,
                 };
                 TypedNode {
@@ -224,8 +226,20 @@ pub(super) fn build(
         functions.push(id);
     }
     let mut builtins = BTreeMap::new();
+    let mut input = None;
     for (_, expression) in expressions(program) {
         for (index, call) in expression.calls.iter().enumerate() {
+            if matches!(call, Some(ResolvedCall::ReadLine)) && input.is_none() {
+                input = Some(
+                    registry
+                        .intern(TypeKind::Function {
+                            parameters: Vec::new().into(),
+                            result: ValueType::String.id(),
+                            effect: FunctionEffect::Impure,
+                        })
+                        .map_err(|error| failure(error, expression.syntax.nodes()[index].span))?,
+                );
+            }
             if let Some(ResolvedCall::Builtin(builtin)) = call {
                 if let std::collections::btree_map::Entry::Vacant(entry) = builtins.entry(*builtin)
                 {
@@ -242,5 +256,6 @@ pub(super) fn build(
         bindings: program.slot_types.iter().map(|kind| kind.id()).collect(),
         functions,
         builtins,
+        input,
     })
 }
