@@ -1,5 +1,8 @@
 # Scarp documentation
 
+**0.0.6-alpha.6 prerelease** is the development candidate for input, text utilities
+and tuples; see [scope and qualification](releases/v0.0.6-alpha.6.md).
+
 **0.0.6-alpha.5 prerelease** is **published on 9 November 2026**,
 with pure [Top-P selection](nucleus-selection.md), [Pearson correlation](pearson-correlation.md)
 and [limited ELF64 native binding dependencies](native-elf64.md).
@@ -65,11 +68,22 @@ records the verified maintainer transfer to scarp-lang/scarp. Historical release
 notes describe fixed snapshots. Tensors, general native executable compilation, a package manager and
 website deployment remain separate.
 
+**Tuple development:** [immutable heterogeneous tuples](tuples.md) are implemented
+in the alpha.6 candidate and absent from published alpha.5. Review the structural
+Rust API/schema migration before adopting that source.
+
 ## Guides and what each adds
 
 The [feature-completeness matrix](development/feature-matrix.md) distinguishes
 implemented features, historical experiments and future dependencies. Current
 declarations accept explicit primitive annotations; see [variables](variables.md).
+
+For unreleased foundation work, the [9 November core-type and PR audit](development/core-types-audit-2026-11-09.md)
+records the exact main/release checkpoint and every open compiler PR. The
+[scalar/text draft contract](text-foundations.md) describes six intrinsics on
+the alpha.6 candidate, absent from published alpha.5. The
+[type staging proposal](proposals/core-types-staging.md) keeps future character,
+byte and general collection support distinct from implemented source types.
 
 The published alpha.3 compiler introduced
 [module inspection](module-inspection.md) and [constant expressions](constant-expressions.md).
@@ -104,6 +118,7 @@ experimental Rust-hosted C11 scalar emitter; see
 | [Your first numerical program](tutorials/numerical-program.md) | Build a small typed numerical calculation and compare probabilities safely |
 | [Numerical errors](reference/numerical-errors.md) | Repair type, shape, index, domain, overflow and quota failures |
 | [Functions](functions.md) | Learn typed calls, defaults, contracts, and bounded invocation resources |
+| [Program input (unreleased development)](program-input.md) | Review explicit readers, UTF-8 lines, quotas and terminal restrictions; absent from published alpha.5 |
 | [Output](output.md) | Choose print/write, control newlines, and route explicit stderr |
 | [Variables and mutation](tutorials/variables.md) | Introduce names, copy values, choose mutability, and avoid forward references |
 | [Scopes and shadowing](tutorials/scopes.md) | Predict which declaration a name uses and what survives a block |

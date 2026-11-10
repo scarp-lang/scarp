@@ -212,11 +212,11 @@ impl std::error::Error for ModuleRunError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SymbolKind {
     Function {
-        parameters: Vec<crate::value::ValueType>,
-        result: crate::value::ValueType,
+        parameters: Vec<crate::types::SourceType>,
+        result: crate::types::SourceType,
         pure: bool,
     },
-    Constant(crate::value::ValueType),
+    Constant(crate::types::SourceType),
 }
 #[derive(Debug, Clone)]
 pub struct SymbolInfo {
@@ -278,6 +278,32 @@ impl ModuleProgram {
                 RunError::Output(error) => ModuleRunError::Output(error),
             },
         )
+    }
+
+    /// Execute with a caller-owned buffered reader, preserving source-map diagnostics.
+    pub fn execute_with_input(
+        &self,
+        input: &mut impl io::BufRead,
+        stdout: &mut impl io::Write,
+        stderr: &mut impl io::Write,
+        options: ExecutionOptions,
+        input_limits: crate::InputLimits,
+    ) -> Result<(), ModuleRunError> {
+        interpreter::execute_with_input_and_options(
+            &self.program,
+            input,
+            stdout,
+            stderr,
+            options,
+            input_limits,
+        )
+        .map_err(|error| match error {
+            RunError::Diagnostic(diagnostic) => ModuleRunError::Diagnostic(ModuleDiagnostic {
+                diagnostic,
+                sources: self.sources.clone(),
+            }),
+            RunError::Output(error) => ModuleRunError::Output(error),
+        })
     }
 }
 

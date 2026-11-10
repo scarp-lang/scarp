@@ -1,7 +1,7 @@
 use super::*;
 use crate::limits::text_construction;
 
-fn reserve(bytes: usize, budget: &mut Budget, span: Span) -> Result<String, Diagnostic> {
+pub(super) fn reserve(bytes: usize, budget: &mut Budget, span: Span) -> Result<String, Diagnostic> {
     budget.charge_text_allocation(bytes, span)?;
     budget.charge(u64::try_from(bytes).unwrap_or(u64::MAX).max(1), span)?;
     let mut result = String::new();
@@ -27,6 +27,60 @@ pub(super) fn evaluate(
 ) -> Result<Value, Diagnostic> {
     let text = args[0].as_str().expect("checked string argument");
     let result = match function {
+        Builtin::TextTrim => {
+            budget.charge(u64::try_from(text.len()).unwrap_or(u64::MAX).max(1), span)?;
+            let trimmed = text.trim();
+            if trimmed.len() == text.len() {
+                return Ok(args[0].clone());
+            }
+            let mut result = reserve(trimmed.len(), budget, span)?;
+            result.push_str(trimmed);
+            result
+        }
+        Builtin::TextReplace => {
+            let pattern = args[1].as_str().expect("typed pattern");
+            let replacement = args[2].as_str().expect("typed replacement");
+            if pattern.is_empty() {
+                return Err(Diagnostic::new(
+                    DiagnosticKind::NumericDomain,
+                    argument_span(1),
+                    "text_replace requires a nonempty search pattern",
+                )
+                .with_help("supply a nonempty exact UTF-8 substring; replacement may be empty"));
+            }
+            let work = u64::try_from(text.len())
+                .unwrap_or(u64::MAX)
+                .saturating_mul(u64::try_from(pattern.len()).unwrap_or(u64::MAX))
+                .saturating_add(text.len() as u64)
+                .saturating_add(pattern.len() as u64)
+                .saturating_mul(2)
+                .max(1);
+            budget.charge(work, span)?;
+            let count = text.matches(pattern).count();
+            if count == 0 || pattern == replacement {
+                return Ok(args[0].clone());
+            }
+            let removed = count
+                .checked_mul(pattern.len())
+                .ok_or_else(|| size_error(span))?;
+            let inserted = count
+                .checked_mul(replacement.len())
+                .ok_or_else(|| size_error(span))?;
+            let bytes = text
+                .len()
+                .checked_sub(removed)
+                .and_then(|n| n.checked_add(inserted))
+                .ok_or_else(|| size_error(span))?;
+            let mut result = reserve(bytes, budget, span)?;
+            let mut start = 0;
+            for (offset, matched) in text.match_indices(pattern) {
+                result.push_str(&text[start..offset]);
+                result.push_str(replacement);
+                start = offset + matched.len();
+            }
+            result.push_str(&text[start..]);
+            result
+        }
         Builtin::TextConcat => {
             let right = args[1].as_str().expect("checked string argument");
             let bytes = text

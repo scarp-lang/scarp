@@ -85,7 +85,7 @@ fn operand_type(types: &[ValueType], child: usize, span: Span) -> Result<ValueTy
 
 fn verify_expression_shape(
     expression: &crate::resolver::ResolvedExpression,
-    binding_types: &[ValueType],
+    binding_types: &[crate::types::SourceType],
 ) -> Result<(), Diagnostic> {
     let nodes = expression.syntax.nodes();
     if nodes.len() > MAX_EXPRESSION_NODES
@@ -110,8 +110,9 @@ fn verify_expression_shape(
             ExpressionKind::Boolean(_) => ValueType::Boolean,
             ExpressionKind::Name(_) => {
                 let slot = expression.slots[index].ok_or_else(|| unsupported(node.span))?;
-                *binding_types
+                binding_types
                     .get(slot)
+                    .and_then(|kind| kind.as_primitive())
                     .ok_or_else(|| unsupported(node.span))?
             }
             ExpressionKind::Group { expression: child } => {
@@ -189,7 +190,7 @@ fn verify_expression_shape(
         }
         inferred.push(kind);
     }
-    if inferred.get(expression.syntax.root()).copied() != Some(expression.kind) {
+    if inferred.get(expression.syntax.root()).copied() != expression.kind.as_primitive() {
         return Err(unsupported(Span::default()));
     }
     Ok(())
@@ -208,7 +209,9 @@ fn verify_operation_types(program: &ResolvedProgram) -> Result<(), Diagnostic> {
                 operator,
                 operator_span,
             } => {
-                slots.get(*slot) == Some(&ValueType::Integer)
+                slots
+                    .get(*slot)
+                    .is_some_and(|kind| kind == &ValueType::Integer)
                     && value.kind == ValueType::Integer
                     && !operator.is_comparison()
                     && operator_span.start <= operator_span.end
@@ -219,20 +222,28 @@ fn verify_operation_types(program: &ResolvedProgram) -> Result<(), Diagnostic> {
                 index_slot,
             } => {
                 count.kind == ValueType::Integer
-                    && slots.get(*count_slot) == Some(&ValueType::Integer)
-                    && slots.get(*index_slot) == Some(&ValueType::Integer)
+                    && slots
+                        .get(*count_slot)
+                        .is_some_and(|kind| kind == &ValueType::Integer)
+                    && slots
+                        .get(*index_slot)
+                        .is_some_and(|kind| kind == &ValueType::Integer)
             }
             ResolvedStatement::RepeatGuard {
                 count_slot,
                 index_slot,
                 ..
             } => {
-                slots.get(*count_slot) == Some(&ValueType::Integer)
-                    && slots.get(*index_slot) == Some(&ValueType::Integer)
+                slots
+                    .get(*count_slot)
+                    .is_some_and(|kind| kind == &ValueType::Integer)
+                    && slots
+                        .get(*index_slot)
+                        .is_some_and(|kind| kind == &ValueType::Integer)
             }
-            ResolvedStatement::RepeatNext { index_slot } => {
-                slots.get(*index_slot) == Some(&ValueType::Integer)
-            }
+            ResolvedStatement::RepeatNext { index_slot } => slots
+                .get(*index_slot)
+                .is_some_and(|kind| kind == &ValueType::Integer),
             ResolvedStatement::JumpIfFalse { condition, .. } => {
                 condition.kind == ValueType::Boolean
             }
@@ -252,10 +263,12 @@ pub(crate) fn inspect(program: &ResolvedProgram) -> Result<ScalarRequirements, D
     if !program.functions.is_empty()
         || program.binding_count() > MAX_SCALAR_SLOTS
         || program.statements.len() > MAX_OPERATIONS
-        || program
-            .binding_types()
-            .iter()
-            .any(|kind| !matches!(kind, ValueType::Integer | ValueType::Boolean))
+        || program.binding_types().iter().any(|kind| {
+            !matches!(
+                kind.as_primitive(),
+                Some(ValueType::Integer | ValueType::Boolean)
+            )
+        })
     {
         return Err(unsupported(Span::default()));
     }
@@ -294,7 +307,10 @@ pub(crate) fn inspect(program: &ResolvedProgram) -> Result<ScalarRequirements, D
         };
         if let Some(expression) = expression {
             verify_expression_shape(expression, program.binding_types())?;
-            if !matches!(expression.kind, ValueType::Integer | ValueType::Boolean) {
+            if !matches!(
+                expression.kind.as_primitive(),
+                Some(ValueType::Integer | ValueType::Boolean)
+            ) {
                 return Err(unsupported(operation.span));
             }
             for node in expression.syntax.nodes() {
@@ -474,7 +490,7 @@ mod tests {
                 })
                 .unwrap();
             match corruption {
-                0 => expression.kind = ValueType::Boolean,
+                0 => expression.kind = ValueType::Boolean.into(),
                 1 => expression.types[0] = ValueType::Boolean.id(),
                 2 => {
                     expression.slots.clear();
@@ -516,7 +532,7 @@ mod tests {
         let mut program = compile("if true { print(1); }").unwrap();
         for operation in &mut program.statements {
             if let ResolvedStatement::JumpIfFalse { condition, .. } = &mut operation.kind {
-                condition.kind = ValueType::Integer;
+                condition.kind = ValueType::Integer.into();
             }
         }
         assert_eq!(
@@ -527,7 +543,7 @@ mod tests {
         let mut program = compile("repeat 2 as index { print(index); }").unwrap();
         for operation in &mut program.statements {
             if let ResolvedStatement::RepeatInit { count, .. } = &mut operation.kind {
-                count.kind = ValueType::Boolean;
+                count.kind = ValueType::Boolean.into();
             }
         }
         assert_eq!(

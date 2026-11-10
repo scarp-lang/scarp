@@ -5,6 +5,9 @@ use std::{fmt, sync::Arc};
 use crate::diagnostics::{Diagnostic, DiagnosticKind, Span};
 
 pub use crate::types::PrimitiveType as ValueType;
+use crate::types::SourceType;
+mod tuple;
+pub use tuple::TupleValue;
 
 pub const MAX_TEXT_BYTES: usize = 1024 * 1024;
 
@@ -320,19 +323,30 @@ pub enum Value {
     Tile(NumericTile),
     Boolean(bool),
     String(Arc<str>),
+    Tuple(TupleValue),
 }
 
 impl Value {
-    pub fn kind(&self) -> ValueType {
+    /// Exact structural value type; use as_primitive() for legacy primitive classification.
+    pub fn kind(&self) -> SourceType {
         match self {
-            Self::Unit => ValueType::Unit,
-            Self::Integer(_) => ValueType::Integer,
-            Self::Float(_) => ValueType::Float,
-            Self::Vector(_) => ValueType::Vector,
-            Self::Integers(_) => ValueType::Integers,
-            Self::Tile(_) => ValueType::Tile,
-            Self::Boolean(_) => ValueType::Boolean,
-            Self::String(_) => ValueType::String,
+            Self::Tuple(value) => value.kind().clone(),
+            Self::Unit => ValueType::Unit.into(),
+            Self::Integer(_) => ValueType::Integer.into(),
+            Self::Float(_) => ValueType::Float.into(),
+            Self::Vector(_) => ValueType::Vector.into(),
+            Self::Integers(_) => ValueType::Integers.into(),
+            Self::Tile(_) => ValueType::Tile.into(),
+            Self::Boolean(_) => ValueType::Boolean.into(),
+            Self::String(_) => ValueType::String.into(),
+        }
+    }
+
+    pub fn as_tuple(&self) -> Option<&TupleValue> {
+        if let Self::Tuple(value) = self {
+            Some(value)
+        } else {
+            None
         }
     }
 
@@ -429,6 +443,7 @@ impl From<String> for Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Tuple(value) => value.fmt(f),
             Self::Unit => f.write_str("unit"),
             Self::Integer(value) => value.fmt(f),
             Self::Float(value) => value.fmt(f),

@@ -21,7 +21,7 @@ fn annotation_nodes_keep_exact_unicode_crlf_type_spans_and_old_nodes_have_none()
     let source = "// नमस्ते 🌍\r\nbind text: string=\"café\"; var count=2;";
     let parsed = scarp::parse(source).unwrap();
     let Statement::Declaration {
-        annotation: Some(annotation),
+        annotation: Some(ref annotation),
         ..
     } = parsed.statements[0]
     else {

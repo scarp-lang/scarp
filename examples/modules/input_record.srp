@@ -1,0 +1,9 @@
+pub funcra read() -> tuple<integer, string> {
+    bind number = text_to_integer(text_trim(read_line()));
+    bind label = text_replace(text_trim(read_line()), "_", " ");
+    return (number, label);
+}
+
+pub pure funcra describe(value: tuple<integer, string>) -> string {
+    return text_concat(integer_to_text(value[0]), text_concat(": ", value[1]));
+}

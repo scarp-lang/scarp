@@ -1,5 +1,9 @@
 # Scarp prototype language reference
 
+**Unreleased tuple development:** the feature branch adds `(1, "text")`,
+`(1,)`, `tuple<integer, string>` and literal-only projections. Published alpha.5
+does not support them. See the [complete tuple contract and exclusions](tuples.md).
+
 Published alpha.4 adds the `tile` parameter/result type and immutable
 two-axis values. `height`, `width`, `cell`, `lane`, `unroll`, `turn`, `matvec`,
 `matmul`, `tileadd` and `tilescale` follow [the tile contract](tiles.md).

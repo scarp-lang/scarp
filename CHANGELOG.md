@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.0.6-alpha.6 — development candidate, 2026-11-10
+
+- Add impure bounded `read_line()` with explicit Rust readers, redirected CLI
+  stdin, UTF-8/CRLF/EOF diagnostics and independent line/byte/read limits.
+- Add six pure scalar/text intrinsics: `integer_to_text`, `float_to_text`,
+  `text_to_integer`, `text_to_float`, `text_trim` and `text_replace`.
+- Add immutable heterogeneous tuples, singleton syntax, structural `tuple<...>`
+  types, literal-only projection, exact equality and escaped nested display.
+- Support tuples across typed/default/named function arguments, returns,
+  contracts, recursion and imported interfaces with bounded work/payload quotas.
+- Migrate source-facing Rust fields and `Value::kind()` to `SourceType`; add
+  `ExecutionOptions.max_tuple_bytes`. Tuple-exposing module JSON uses schema 2;
+  primitive IDs, primitive inventories and navigation/diagnostic schema remain.
+- Add E0054-E0061 (E0051-E0053 remain reserved), compiler-owned basics fixtures,
+  combined input/text/tuple regressions, Unicode/PTY checks and extracted-package
+  stdin/example smoke tests. Native backends explicitly reject input/tuples.
+- Interactive prompts, empty tuples, tuple constants, dynamic tuple indices,
+  destructuring, mutable elements, BigInt and order statistics are excluded.
+
 ## 0.0.6-alpha.5 — published GitHub prerelease, 2026-11-09
 
 - Add deterministic CPU-only nucleus selection `top_p(vector, mass) -> integers`

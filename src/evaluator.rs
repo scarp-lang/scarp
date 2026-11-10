@@ -36,9 +36,11 @@ pub(crate) struct Workspace {
 enum Task {
     BitNot(Span),
     Vector(usize, bool, Span),
+    Tuple(usize, Span),
     Index(Span),
     Builtin(Builtin, usize, Span),
     UserCall(usize, usize, Span),
+    ReadLine(Span),
     Visit(usize),
     Negate(Span),
     Not(Span),
@@ -49,6 +51,7 @@ enum Task {
 
 pub(crate) enum Evaluation {
     Complete(Value),
+    ReadLine(Span),
     Call {
         node: usize,
         arguments: Vec<Value>,
@@ -70,6 +73,7 @@ impl Workspace {
         self.start(expression);
         match self.resume(expression, environment, budget)? {
             Evaluation::Complete(value) => Ok(value),
+            Evaluation::ReadLine(span) => Err(crate::input::unavailable(span)),
             Evaluation::Call { span, .. } => Err(Diagnostic::new(
                 DiagnosticKind::FunctionUnsupported,
                 span,
@@ -98,6 +102,8 @@ impl Workspace {
             let span = match &task {
                 Task::Visit(index) => expression.syntax.nodes()[*index].span,
                 Task::UserCall(_, _, span)
+                | Task::Tuple(_, span)
+                | Task::ReadLine(span)
                 | Task::Vector(_, _, span)
                 | Task::BitNot(span)
                 | Task::Index(span)
@@ -115,6 +121,7 @@ impl Workspace {
                     match &node.kind {
                         ExpressionKind::UserCall { arguments, .. } => {
                             tasks.push(match &expression.calls[index] {
+                                Some(ResolvedCall::ReadLine) => Task::ReadLine(node.span),
                                 Some(ResolvedCall::Builtin(builtin)) => {
                                     Task::Builtin(*builtin, index, node.span)
                                 }
@@ -122,6 +129,12 @@ impl Workspace {
                             });
                             for argument in arguments.iter().rev() {
                                 tasks.push(Task::Visit(argument.expression));
+                            }
+                        }
+                        ExpressionKind::Tuple { elements } => {
+                            tasks.push(Task::Tuple(elements.len(), node.span));
+                            for &element in elements.iter().rev() {
+                                tasks.push(Task::Visit(element));
                             }
                         }
                         ExpressionKind::Vector { elements }
@@ -139,6 +152,7 @@ impl Workspace {
                             vector,
                             index,
                             operator_span,
+                            ..
                         } => {
                             tasks.push(Task::Index(*operator_span));
                             tasks.push(Task::Visit(*index));
@@ -203,6 +217,32 @@ impl Workspace {
                         }
                     }
                 }
+                Task::Tuple(count, span) => {
+                    budget.charge(count as u64, span)?;
+                    let start = values.len() - count;
+                    let bytes = crate::value::TupleValue::allocation_bytes(&values[start..])
+                        .ok_or_else(|| {
+                            Diagnostic::new(
+                                DiagnosticKind::TupleAllocation,
+                                span,
+                                "tuple allocation size overflow",
+                            )
+                        })?;
+                    budget.charge_tuple_allocation(bytes, span)?;
+                    let mut elements = Vec::new();
+                    elements.try_reserve_exact(count).map_err(|_| {
+                        Diagnostic::new(
+                            DiagnosticKind::TupleAllocation,
+                            span,
+                            "could not reserve tuple storage",
+                        )
+                    })?;
+                    elements.extend(values.drain(start..));
+                    let tuple = crate::value::TupleValue::new(elements).ok_or_else(|| {
+                        Diagnostic::new(DiagnosticKind::TupleLimit, span, "invalid tuple shape")
+                    })?;
+                    values.push(Value::Tuple(tuple));
+                }
                 Task::Vector(count, integers, span) => {
                     budget.charge(count as u64, span)?;
                     let start = values.len() - count;
@@ -228,6 +268,21 @@ impl Workspace {
                 Task::Index(span) => {
                     let index = values.pop().unwrap().require_integer(span)?;
                     let value = values.pop().unwrap();
+                    if let Some(tuple) = value.as_tuple() {
+                        let element = usize::try_from(index)
+                            .ok()
+                            .and_then(|i| tuple.elements().get(i))
+                            .cloned()
+                            .ok_or_else(|| {
+                                Diagnostic::new(
+                                    DiagnosticKind::TupleIndex,
+                                    span,
+                                    "tuple index outside arity",
+                                )
+                            })?;
+                        values.push(element);
+                        continue;
+                    }
                     if let Some(array) = value.as_integers() {
                         let element = usize::try_from(index)
                             .ok()
@@ -276,6 +331,7 @@ impl Workspace {
                     values.truncate(start);
                     values.push(value);
                 }
+                Task::ReadLine(span) => return Ok(Evaluation::ReadLine(span)),
                 Task::UserCall(node, count, span) => {
                     let arguments = values.split_off(values.len() - count);
                     return Ok(Evaluation::Call {
@@ -319,6 +375,9 @@ impl Workspace {
                     }
                     if let (Some(a), Some(b)) = (left.as_integers(), right.as_integers()) {
                         budget.charge(a.len().max(b.len()) as u64, span)?;
+                    }
+                    if let (Some(a), Some(b)) = (left.as_tuple(), right.as_tuple()) {
+                        budget.charge(a.work().max(b.work()), span)?;
                     }
                     values.push(apply_binary(operator, &left, &right, span)?);
                 }

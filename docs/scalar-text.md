@@ -79,3 +79,11 @@ Old variants/codes, ValueType and execution-option layouts are unchanged.
 The current scope excludes string construction, slicing, formatting, normalization
 and parsing numbers from strings. Those need explicit allocation and error policies.
 See [Proposal 0033](proposals/0033-scalar-text-intrinsics.md).
+
+## Core text foundations (separate draft)
+
+The [core-text implementation contract](text-foundations.md) adds explicit
+integer/float ↔ string conversion, Unicode trimming and literal replacement.
+These APIs are draft-only and absent from published alpha.5. Existing
+`to_float`/`to_integer` exact-conversion rules below are preserved; decimal text
+parsing of floats deliberately follows finite binary64 literal rounding.

@@ -4,3 +4,4 @@
 *.ps1 text eol=crlf
 examples/control_escapes.stdout -text
 examples/output.stdout -text
+*.stdin -text whitespace=cr-at-eol

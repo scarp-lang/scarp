@@ -1,0 +1,1 @@
+pure funcra forbidden() -> string { return read_line(); }

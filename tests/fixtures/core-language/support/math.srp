@@ -1,0 +1,2 @@
+pub bind base: integer = 7;
+pub pure funcra twice(value: integer) -> integer { return value * 2; }

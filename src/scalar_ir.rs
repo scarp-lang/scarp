@@ -511,7 +511,15 @@ mod tests {
                 _ => None,
             })
             .expect("source must contain a scalar output expression");
-        ScalarExpressionIr::lower(expression, program.binding_types()).unwrap()
+        ScalarExpressionIr::lower(
+            expression,
+            &program
+                .binding_types()
+                .iter()
+                .map(|kind| kind.as_primitive().expect("scalar test type"))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap()
     }
 
     #[test]

@@ -1,0 +1,10 @@
+// Draft-only core text APIs; not in published v0.0.6-alpha.5 binaries.
+pure funcra amount(text: string) -> integer {
+    return text_to_integer(text_trim(text));
+}
+
+print(integer_to_text(amount("  -42 ")));
+bind number = text_to_float("1.25e2");
+print(float_to_text(number), to_integer(number));
+print(text_replace(text_trim("  café café  "), "é", "🌍"));
+print(float_to_text(-0.0));

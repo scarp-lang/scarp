@@ -1,5 +1,9 @@
 # Preparing a prerelease
 
+**Current development candidate:** [v0.0.6-alpha.6](releases/v0.0.6-alpha.6.md).
+The next publication uses fresh exact-source CI, package verification and its own
+one-time request. Existing tags/assets and prior approval records remain immutable.
+
 **Latest published prerelease:** [v0.0.6-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5)
 was published on **9 November 2026**, from exact approved source
 `205e92f166f186c3905e5880d41c31717b697b8e`.

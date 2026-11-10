@@ -74,8 +74,16 @@ fn aliases_share_ast_shapes_and_keep_single_argument_compatibility() {
 fn all_spellings_reject_empty_middle_arguments_and_require_terminators() {
     for name in ["print", "println", "write", "eprint", "ewrite"] {
         for body in [
-            "(,);", "(,1);", "(1,,2);", "(1 2);", "(1)", "(1, 2", "(1, 2,", "(1;", "(1,;",
-            "((1,2));",
+            "(,);",
+            "(,1);",
+            "(1,,2);",
+            "(1 2);",
+            "(1)",
+            "(1, 2",
+            "(1, 2,",
+            "(1;",
+            "(1,;",
+            "((1,,2));",
         ] {
             let source = format!("{name}{body}");
             let error = scarp::compile(&source).unwrap_err();

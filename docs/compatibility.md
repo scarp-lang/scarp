@@ -1,5 +1,12 @@
 # Version and API compatibility
 
+`0.0.6-alpha.6` is the current development candidate. Tuple source annotations,
+function metadata and `Value::kind()` now use structural `SourceType`; complete
+`ExecutionOptions` literals add `max_tuple_bytes`. See [tuple migration](tuples.md).
+Module inventories exposing tuple interfaces use schema 2; primitive-only output
+and symbol/reference/diagnostic schemas retain version 1. Input uses an independent
+`InputLimits` struct and explicit reader APIs.
+
 `0.0.6-alpha.5` is **a published GitHub prerelease** (9 November 2026),
 adding pure `top_p`, `top_p_values`, centered `pearson_correlation`,
 and a narrow compiler-owned multi-binding ELF64 integer object writer.

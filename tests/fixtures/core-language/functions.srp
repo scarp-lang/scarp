@@ -1,0 +1,4 @@
+pure funcra add(left: integer, right: integer = 2) -> integer { return left + right; }
+funcra show(value: integer) -> unit { print(value); return; }
+show(add(left: 5));
+print(add(right: 4, left: 3));

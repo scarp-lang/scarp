@@ -1,0 +1,1799 @@
+{
+  "schema_version": 1,
+  "audit_date": "2026-11-09",
+  "main_commit": "27a1e572f7fedb567319d3df83091fe4919089f2",
+  "published_release": "v0.0.6-alpha.5",
+  "release_source": "205e92f166f186c3905e5880d41c31717b697b8e",
+  "release_published_at": "2026-11-09T11:39:41Z",
+  "open_pr_count_at_checkpoint": 15,
+  "pull_requests": [
+    {
+      "number": 173,
+      "title": "docs: preserve compiler fixtures while redirecting six tutorials to official bilingual guides",
+      "url": "https://github.com/scarp-lang/scarp/pull/173",
+      "head": "8d57149affab6879cf3801848e072c214ef25377",
+      "base_branch": "main",
+      "base_commit": "d222996be74ad3150417e084c7f59f67713eec9e",
+      "draft": true,
+      "mergeable_to_declared_base": false,
+      "mergeable_state": "dirty",
+      "changed_files": 11,
+      "review_submissions": 0,
+      "inline_review_threads": 0,
+      "discussion_comments": 0,
+      "discussion_comment_urls": [],
+      "workflow_runs": [
+        {
+          "id": 42609316574,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/42609316574",
+          "name": "Release packages",
+          "jobs": [
+            {
+              "id": 129133407731,
+              "name": "Package / aarch64-apple-darwin",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 129133407938,
+              "name": "Package / x86_64-pc-windows-msvc",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 129133408029,
+              "name": "Package / x86_64-unknown-linux-gnu",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 42609316611,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/42609316611",
+          "name": "Rust checks",
+          "jobs": [
+            {
+              "id": 129133475883,
+              "name": "Minimum Rust / 1.74.0",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 129133476307,
+              "name": "Stable / windows-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 129133476405,
+              "name": "Stable / ubuntu-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 129133476572,
+              "name": "Stable / macos-15",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "main_only_commits": 5,
+      "head_only_commits": 19,
+      "simulated_main_merge_conflicts": [
+        "CONFLICT (content): Merge conflict in README.md",
+        "CONFLICT (content): Merge conflict in docs/README.md"
+      ],
+      "reviewed_patch_sha256": "ee552d242c5bb077f8070eb542b05b105a62473cbaa758d317ba51c0e8702ec0",
+      "patch_bytes": 24242
+    },
+    {
+      "number": 172,
+      "title": "feat(bigint): bounded exact signed integers (post-alpha.5)",
+      "url": "https://github.com/scarp-lang/scarp/pull/172",
+      "head": "8e2728e2a064062ec45af1c3682ba7394abe762d",
+      "base_branch": "main",
+      "base_commit": "d222996be74ad3150417e084c7f59f67713eec9e",
+      "draft": true,
+      "mergeable_to_declared_base": false,
+      "mergeable_state": "dirty",
+      "changed_files": 53,
+      "review_submissions": 0,
+      "inline_review_threads": 0,
+      "discussion_comments": 0,
+      "discussion_comment_urls": [],
+      "workflow_runs": [
+        {
+          "id": 42594386207,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/42594386207",
+          "name": "Release packages",
+          "jobs": [
+            {
+              "id": 129083384246,
+              "name": "Package / x86_64-unknown-linux-gnu",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 129083384733,
+              "name": "Package / aarch64-apple-darwin",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 129083384859,
+              "name": "Package / x86_64-pc-windows-msvc",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 42594386147,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/42594386147",
+          "name": "Rust checks",
+          "jobs": [
+            {
+              "id": 129083492274,
+              "name": "Minimum Rust / 1.74.0",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 129083492556,
+              "name": "Stable / windows-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 129083492569,
+              "name": "Stable / ubuntu-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 129083492777,
+              "name": "Stable / macos-15",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "main_only_commits": 5,
+      "head_only_commits": 3,
+      "simulated_main_merge_conflicts": [
+        "CONFLICT (content): Merge conflict in README.md",
+        "CONFLICT (content): Merge conflict in docs/development/feature-matrix.md"
+      ],
+      "reviewed_patch_sha256": "9804b61d7e97934ba681243dd69dd36496d460baa41e832e9d98b6f88c6daf62",
+      "patch_bytes": 138018
+    },
+    {
+      "number": 171,
+      "title": "feat(numerics): bounded median and type-7 quantiles (post-alpha.5)",
+      "url": "https://github.com/scarp-lang/scarp/pull/171",
+      "head": "ff876ae973c6ec897a4b337214522610e4ab14a2",
+      "base_branch": "main",
+      "base_commit": "d222996be74ad3150417e084c7f59f67713eec9e",
+      "draft": true,
+      "mergeable_to_declared_base": false,
+      "mergeable_state": "dirty",
+      "changed_files": 10,
+      "review_submissions": 0,
+      "inline_review_threads": 0,
+      "discussion_comments": 0,
+      "discussion_comment_urls": [],
+      "workflow_runs": [
+        {
+          "id": 42584695884,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/42584695884",
+          "name": "Rust checks",
+          "jobs": [
+            {
+              "id": 129051669373,
+              "name": "Minimum Rust / 1.74.0",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 129051669571,
+              "name": "Stable / ubuntu-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 129051669719,
+              "name": "Stable / windows-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 129051669725,
+              "name": "Stable / macos-15",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 42584696038,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/42584696038",
+          "name": "Release packages",
+          "jobs": [
+            {
+              "id": 129051596440,
+              "name": "Package / x86_64-pc-windows-msvc",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 129051596862,
+              "name": "Package / x86_64-unknown-linux-gnu",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 129051597023,
+              "name": "Package / aarch64-apple-darwin",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "main_only_commits": 5,
+      "head_only_commits": 17,
+      "simulated_main_merge_conflicts": [
+        "CONFLICT (content): Merge conflict in README.md",
+        "CONFLICT (content): Merge conflict in docs/README.md"
+      ],
+      "reviewed_patch_sha256": "a44ba0bef943bbc60f361577c1c2d114acd5e67b283b5ae1498bff4e3fe8a43f",
+      "patch_bytes": 21621
+    },
+    {
+      "number": 149,
+      "title": "feat(ai): deterministic Top-P nucleus selection (post-alpha.3)",
+      "url": "https://github.com/scarp-lang/scarp/pull/149",
+      "head": "2567b9a604366027d2b6640460c32eafb8b31258",
+      "base_branch": "main",
+      "base_commit": "ceff07d9014f466974e0c9e02fc5d23573f55777",
+      "draft": true,
+      "mergeable_to_declared_base": false,
+      "mergeable_state": "dirty",
+      "changed_files": 12,
+      "review_submissions": 0,
+      "inline_review_threads": 0,
+      "discussion_comments": 0,
+      "discussion_comment_urls": [],
+      "workflow_runs": [
+        {
+          "id": 42361554892,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/42361554892",
+          "name": "Rust checks",
+          "jobs": [
+            {
+              "id": 128370888952,
+              "name": "Stable / windows-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 128370889044,
+              "name": "Stable / ubuntu-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 128370889182,
+              "name": "Stable / macos-15",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 128370889189,
+              "name": "Minimum Rust / 1.74.0",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 42361554890,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/42361554890",
+          "name": "Release packages",
+          "jobs": [
+            {
+              "id": 128370837448,
+              "name": "Package / x86_64-unknown-linux-gnu",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 128370837596,
+              "name": "Package / x86_64-pc-windows-msvc",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 128370837685,
+              "name": "Package / aarch64-apple-darwin",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "main_only_commits": 39,
+      "head_only_commits": 14,
+      "simulated_main_merge_conflicts": [
+        "CONFLICT (add/add): Merge conflict in docs/nucleus-selection.md",
+        "CONFLICT (content): Merge conflict in docs/topk-selection.md",
+        "CONFLICT (content): Merge conflict in scripts/check.ps1",
+        "CONFLICT (content): Merge conflict in scripts/check.sh",
+        "CONFLICT (content): Merge conflict in src/numeric.rs",
+        "CONFLICT (add/add): Merge conflict in src/numeric/nucleus.rs",
+        "CONFLICT (add/add): Merge conflict in tests/nucleus_selection.rs"
+      ],
+      "reviewed_patch_sha256": "735040c316ddf3c8767e38538d86909a5c51db64442df8d70bd982c3b0eea90e",
+      "patch_bytes": 26166
+    },
+    {
+      "number": 27,
+      "title": "Add typed funcra functions with contracts and bounded call frames",
+      "url": "https://github.com/scarp-lang/scarp/pull/27",
+      "head": "6a0d1e7b6fe53f1aaa37eabc8ed947293969e64f",
+      "base_branch": "scarp/output-statements",
+      "base_commit": "4b1b3e2532c7769c5fe011f693fc47c42de1a5a5",
+      "draft": false,
+      "mergeable_to_declared_base": true,
+      "mergeable_state": "clean",
+      "changed_files": 54,
+      "review_submissions": 0,
+      "inline_review_threads": 0,
+      "discussion_comments": 0,
+      "discussion_comment_urls": [],
+      "workflow_runs": [
+        {
+          "id": 40447653355,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40447653355",
+          "name": "Rust checks",
+          "jobs": [
+            {
+              "id": 122002645165,
+              "name": "Minimum Rust / 1.74.0",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 122002645280,
+              "name": "Stable / windows-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 122002645294,
+              "name": "Stable / ubuntu-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 122002645324,
+              "name": "Stable / macos-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 122002645421,
+              "name": "Freestanding C and undefined behavior checks",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 40447653362,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40447653362",
+          "name": "Release packages",
+          "jobs": [
+            {
+              "id": 122002645194,
+              "name": "Package / aarch64-apple-darwin",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 122002645404,
+              "name": "Package / x86_64-unknown-linux-gnu",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 122002645461,
+              "name": "Package / x86_64-pc-windows-msvc",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "main_only_commits": 537,
+      "head_only_commits": 48,
+      "simulated_main_merge_conflicts": [
+        "CONFLICT (content): Merge conflict in .github/workflows/ci.yml",
+        "CONFLICT (content): Merge conflict in CHANGELOG.md",
+        "CONFLICT (content): Merge conflict in Cargo.lock",
+        "CONFLICT (content): Merge conflict in Cargo.toml",
+        "CONFLICT (content): Merge conflict in README.md",
+        "CONFLICT (content): Merge conflict in benches/runtime.rs",
+        "CONFLICT (content): Merge conflict in docs/README.md",
+        "CONFLICT (content): Merge conflict in docs/architecture.md",
+        "CONFLICT (content): Merge conflict in docs/compatibility.md",
+        "CONFLICT (content): Merge conflict in docs/embedding.md",
+        "CONFLICT (add/add): Merge conflict in docs/functions.md",
+        "CONFLICT (content): Merge conflict in docs/getting-started.md",
+        "CONFLICT (content): Merge conflict in docs/language.md",
+        "CONFLICT (add/add): Merge conflict in docs/output.md",
+        "CONFLICT (content): Merge conflict in docs/performance.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0002-variables.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0003-string-bindings.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0004-boolean-expressions.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0005-conditional-statements.md",
+        "CONFLICT (add/add): Merge conflict in docs/proposals/0015-funcra-functions.md",
+        "CONFLICT (content): Merge conflict in docs/reference/cli.md",
+        "CONFLICT (content): Merge conflict in docs/reference/diagnostics.md",
+        "CONFLICT (content): Merge conflict in docs/reference/values.md",
+        "CONFLICT (content): Merge conflict in docs/troubleshooting.md",
+        "CONFLICT (content): Merge conflict in docs/tutorials/decisions.md",
+        "CONFLICT (content): Merge conflict in docs/tutorials/first-program.md",
+        "CONFLICT (content): Merge conflict in docs/tutorials/scopes.md",
+        "CONFLICT (content): Merge conflict in docs/tutorials/variables.md",
+        "CONFLICT (content): Merge conflict in docs/variables.md",
+        "CONFLICT (content): Merge conflict in examples/bindings.srp",
+        "CONFLICT (content): Merge conflict in examples/decisions.srp",
+        "CONFLICT (add/add): Merge conflict in examples/functions.srp",
+        "CONFLICT (add/add): Merge conflict in examples/functions.stdout",
+        "CONFLICT (content): Merge conflict in examples/scopes.srp",
+        "CONFLICT (content): Merge conflict in examples/string_bindings.srp",
+        "CONFLICT (content): Merge conflict in scripts/benchmarks/compare.rs",
+        "CONFLICT (content): Merge conflict in scripts/check.ps1",
+        "CONFLICT (content): Merge conflict in scripts/check.sh",
+        "CONFLICT (content): Merge conflict in scripts/package.ps1",
+        "CONFLICT (content): Merge conflict in src/ast.rs",
+        "CONFLICT (add/add): Merge conflict in src/c_backend.rs",
+        "CONFLICT (add/add): Merge conflict in src/c_runtime.h",
+        "CONFLICT (content): Merge conflict in src/diagnostics.rs",
+        "CONFLICT (content): Merge conflict in src/evaluator.rs",
+        "CONFLICT (add/add): Merge conflict in src/interpreter/machine.rs",
+        "CONFLICT (content): Merge conflict in src/lexer.rs",
+        "CONFLICT (content): Merge conflict in src/lib.rs",
+        "CONFLICT (content): Merge conflict in src/limits.rs",
+        "CONFLICT (content): Merge conflict in src/main.rs",
+        "CONFLICT (add/add): Merge conflict in src/numeric.rs",
+        "CONFLICT (content): Merge conflict in src/parser.rs",
+        "CONFLICT (content): Merge conflict in src/resolver.rs",
+        "CONFLICT (add/add): Merge conflict in src/resolver/functions.rs",
+        "CONFLICT (content): Merge conflict in src/value.rs",
+        "CONFLICT (add/add): Merge conflict in tests/binding_syntax.rs",
+        "CONFLICT (content): Merge conflict in tests/bindings.rs",
+        "CONFLICT (add/add): Merge conflict in tests/bit_operations.rs",
+        "CONFLICT (content): Merge conflict in tests/booleans.rs",
+        "CONFLICT (add/add): Merge conflict in tests/c_backend.rs",
+        "CONFLICT (content): Merge conflict in tests/cli.rs",
+        "CONFLICT (content): Merge conflict in tests/conformance.rs",
+        "CONFLICT (content): Merge conflict in tests/expressions.rs",
+        "CONFLICT (add/add): Merge conflict in tests/fixtures/functions/contract.stderr",
+        "CONFLICT (add/add): Merge conflict in tests/fixtures/functions/named_argument.stderr",
+        "CONFLICT (add/add): Merge conflict in tests/fixtures/functions/return_type.stderr",
+        "CONFLICT (content): Merge conflict in tests/front_end.rs",
+        "CONFLICT (add/add): Merge conflict in tests/function_diagnostics.rs",
+        "CONFLICT (add/add): Merge conflict in tests/functions.rs",
+        "CONFLICT (add/add): Merge conflict in tests/output.rs",
+        "CONFLICT (add/add): Merge conflict in tests/vectors.rs"
+      ],
+      "reviewed_patch_sha256": "8f67e5c6de71660264bbfcacafe5df2094e432c3cd5ad5f72d983759265f6e9e",
+      "patch_bytes": 180807
+    },
+    {
+      "number": 26,
+      "title": "Add consistent output arguments and explicit stdout and stderr streams",
+      "url": "https://github.com/scarp-lang/scarp/pull/26",
+      "head": "4b1b3e2532c7769c5fe011f693fc47c42de1a5a5",
+      "base_branch": "scarp/bind-var-syntax",
+      "base_commit": "3449af94910af2b25991a63c42254f99eb5c9667",
+      "draft": false,
+      "mergeable_to_declared_base": true,
+      "mergeable_state": "clean",
+      "changed_files": 41,
+      "review_submissions": 0,
+      "inline_review_threads": 0,
+      "discussion_comments": 0,
+      "discussion_comment_urls": [],
+      "workflow_runs": [
+        {
+          "id": 40282122960,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40282122960",
+          "name": "Release packages",
+          "jobs": [
+            {
+              "id": 121437525473,
+              "name": "Package / x86_64-pc-windows-msvc",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121437525764,
+              "name": "Package / aarch64-apple-darwin",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121437525823,
+              "name": "Package / x86_64-unknown-linux-gnu",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 40282122956,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40282122956",
+          "name": "Rust checks",
+          "jobs": [
+            {
+              "id": 121437525599,
+              "name": "Stable / windows-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121437525786,
+              "name": "Stable / ubuntu-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121437525790,
+              "name": "Freestanding C and undefined behavior checks",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121437525839,
+              "name": "Minimum Rust / 1.74.0",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121437525870,
+              "name": "Stable / macos-latest",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "main_only_commits": 537,
+      "head_only_commits": 40,
+      "simulated_main_merge_conflicts": [
+        "CONFLICT (content): Merge conflict in .github/workflows/ci.yml",
+        "CONFLICT (content): Merge conflict in CHANGELOG.md",
+        "CONFLICT (content): Merge conflict in Cargo.lock",
+        "CONFLICT (content): Merge conflict in Cargo.toml",
+        "CONFLICT (content): Merge conflict in README.md",
+        "CONFLICT (content): Merge conflict in benches/runtime.rs",
+        "CONFLICT (content): Merge conflict in docs/README.md",
+        "CONFLICT (content): Merge conflict in docs/architecture.md",
+        "CONFLICT (content): Merge conflict in docs/compatibility.md",
+        "CONFLICT (content): Merge conflict in docs/embedding.md",
+        "CONFLICT (content): Merge conflict in docs/getting-started.md",
+        "CONFLICT (content): Merge conflict in docs/language.md",
+        "CONFLICT (add/add): Merge conflict in docs/output.md",
+        "CONFLICT (content): Merge conflict in docs/performance.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0002-variables.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0003-string-bindings.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0004-boolean-expressions.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0005-conditional-statements.md",
+        "CONFLICT (content): Merge conflict in docs/reference/cli.md",
+        "CONFLICT (content): Merge conflict in docs/reference/diagnostics.md",
+        "CONFLICT (content): Merge conflict in docs/reference/values.md",
+        "CONFLICT (content): Merge conflict in docs/troubleshooting.md",
+        "CONFLICT (content): Merge conflict in docs/tutorials/decisions.md",
+        "CONFLICT (content): Merge conflict in docs/tutorials/first-program.md",
+        "CONFLICT (content): Merge conflict in docs/tutorials/scopes.md",
+        "CONFLICT (content): Merge conflict in docs/tutorials/variables.md",
+        "CONFLICT (content): Merge conflict in docs/variables.md",
+        "CONFLICT (content): Merge conflict in examples/bindings.srp",
+        "CONFLICT (content): Merge conflict in examples/decisions.srp",
+        "CONFLICT (content): Merge conflict in examples/scopes.srp",
+        "CONFLICT (content): Merge conflict in examples/string_bindings.srp",
+        "CONFLICT (content): Merge conflict in scripts/benchmarks/compare.rs",
+        "CONFLICT (content): Merge conflict in scripts/check.ps1",
+        "CONFLICT (content): Merge conflict in scripts/check.sh",
+        "CONFLICT (content): Merge conflict in scripts/package.ps1",
+        "CONFLICT (content): Merge conflict in src/ast.rs",
+        "CONFLICT (add/add): Merge conflict in src/c_backend.rs",
+        "CONFLICT (add/add): Merge conflict in src/c_runtime.h",
+        "CONFLICT (content): Merge conflict in src/diagnostics.rs",
+        "CONFLICT (content): Merge conflict in src/evaluator.rs",
+        "CONFLICT (content): Merge conflict in src/interpreter.rs",
+        "CONFLICT (content): Merge conflict in src/lexer.rs",
+        "CONFLICT (content): Merge conflict in src/lib.rs",
+        "CONFLICT (content): Merge conflict in src/limits.rs",
+        "CONFLICT (content): Merge conflict in src/main.rs",
+        "CONFLICT (add/add): Merge conflict in src/numeric.rs",
+        "CONFLICT (content): Merge conflict in src/parser.rs",
+        "CONFLICT (content): Merge conflict in src/resolver.rs",
+        "CONFLICT (content): Merge conflict in src/value.rs",
+        "CONFLICT (add/add): Merge conflict in tests/binding_syntax.rs",
+        "CONFLICT (content): Merge conflict in tests/bindings.rs",
+        "CONFLICT (add/add): Merge conflict in tests/bit_operations.rs",
+        "CONFLICT (content): Merge conflict in tests/booleans.rs",
+        "CONFLICT (add/add): Merge conflict in tests/c_backend.rs",
+        "CONFLICT (content): Merge conflict in tests/cli.rs",
+        "CONFLICT (content): Merge conflict in tests/conformance.rs",
+        "CONFLICT (content): Merge conflict in tests/expressions.rs",
+        "CONFLICT (content): Merge conflict in tests/front_end.rs",
+        "CONFLICT (add/add): Merge conflict in tests/output.rs",
+        "CONFLICT (add/add): Merge conflict in tests/vectors.rs"
+      ],
+      "reviewed_patch_sha256": "3e10415f0a2d374cd218c21188159777055a1af2eb9367b009d4f45e30b1ab6f",
+      "patch_bytes": 124544
+    },
+    {
+      "number": 25,
+      "title": "Adopt explicit bind and var declarations throughout the development stack",
+      "url": "https://github.com/scarp-lang/scarp/pull/25",
+      "head": "3449af94910af2b25991a63c42254f99eb5c9667",
+      "base_branch": "scarp/canonical-cli",
+      "base_commit": "984c59e1cc1c40626949633f8ac165fd2ae5ca1d",
+      "draft": false,
+      "mergeable_to_declared_base": true,
+      "mergeable_state": "clean",
+      "changed_files": 60,
+      "review_submissions": 0,
+      "inline_review_threads": 0,
+      "discussion_comments": 0,
+      "discussion_comment_urls": [],
+      "workflow_runs": [
+        {
+          "id": 40266990944,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40266990944",
+          "name": "Release packages",
+          "jobs": [
+            {
+              "id": 121391439212,
+              "name": "Package / x86_64-pc-windows-msvc",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121391439369,
+              "name": "Package / x86_64-unknown-linux-gnu",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121391439404,
+              "name": "Package / aarch64-apple-darwin",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 40266990972,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40266990972",
+          "name": "Rust checks",
+          "jobs": [
+            {
+              "id": 121391439373,
+              "name": "Stable / ubuntu-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121391439477,
+              "name": "Stable / windows-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121391439496,
+              "name": "Minimum Rust / 1.74.0",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121391439533,
+              "name": "Stable / macos-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121391439601,
+              "name": "Freestanding C and undefined behavior checks",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "main_only_commits": 537,
+      "head_only_commits": 35,
+      "simulated_main_merge_conflicts": [
+        "CONFLICT (content): Merge conflict in .github/workflows/ci.yml",
+        "CONFLICT (content): Merge conflict in CHANGELOG.md",
+        "CONFLICT (content): Merge conflict in Cargo.lock",
+        "CONFLICT (content): Merge conflict in Cargo.toml",
+        "CONFLICT (content): Merge conflict in README.md",
+        "CONFLICT (content): Merge conflict in benches/runtime.rs",
+        "CONFLICT (content): Merge conflict in docs/README.md",
+        "CONFLICT (content): Merge conflict in docs/architecture.md",
+        "CONFLICT (content): Merge conflict in docs/compatibility.md",
+        "CONFLICT (content): Merge conflict in docs/embedding.md",
+        "CONFLICT (content): Merge conflict in docs/getting-started.md",
+        "CONFLICT (content): Merge conflict in docs/language.md",
+        "CONFLICT (content): Merge conflict in docs/performance.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0002-variables.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0003-string-bindings.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0004-boolean-expressions.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0005-conditional-statements.md",
+        "CONFLICT (content): Merge conflict in docs/reference/cli.md",
+        "CONFLICT (content): Merge conflict in docs/reference/diagnostics.md",
+        "CONFLICT (content): Merge conflict in docs/reference/values.md",
+        "CONFLICT (content): Merge conflict in docs/troubleshooting.md",
+        "CONFLICT (content): Merge conflict in docs/tutorials/decisions.md",
+        "CONFLICT (content): Merge conflict in docs/tutorials/first-program.md",
+        "CONFLICT (content): Merge conflict in docs/tutorials/scopes.md",
+        "CONFLICT (content): Merge conflict in docs/tutorials/variables.md",
+        "CONFLICT (content): Merge conflict in docs/variables.md",
+        "CONFLICT (content): Merge conflict in examples/bindings.srp",
+        "CONFLICT (content): Merge conflict in examples/decisions.srp",
+        "CONFLICT (content): Merge conflict in examples/scopes.srp",
+        "CONFLICT (content): Merge conflict in examples/string_bindings.srp",
+        "CONFLICT (content): Merge conflict in scripts/benchmarks/compare.rs",
+        "CONFLICT (content): Merge conflict in scripts/check.ps1",
+        "CONFLICT (content): Merge conflict in scripts/check.sh",
+        "CONFLICT (content): Merge conflict in scripts/package.ps1",
+        "CONFLICT (content): Merge conflict in src/ast.rs",
+        "CONFLICT (add/add): Merge conflict in src/c_backend.rs",
+        "CONFLICT (add/add): Merge conflict in src/c_runtime.h",
+        "CONFLICT (content): Merge conflict in src/diagnostics.rs",
+        "CONFLICT (content): Merge conflict in src/evaluator.rs",
+        "CONFLICT (content): Merge conflict in src/interpreter.rs",
+        "CONFLICT (content): Merge conflict in src/lexer.rs",
+        "CONFLICT (content): Merge conflict in src/lib.rs",
+        "CONFLICT (content): Merge conflict in src/main.rs",
+        "CONFLICT (add/add): Merge conflict in src/numeric.rs",
+        "CONFLICT (content): Merge conflict in src/parser.rs",
+        "CONFLICT (content): Merge conflict in src/resolver.rs",
+        "CONFLICT (content): Merge conflict in src/value.rs",
+        "CONFLICT (add/add): Merge conflict in tests/binding_syntax.rs",
+        "CONFLICT (content): Merge conflict in tests/bindings.rs",
+        "CONFLICT (add/add): Merge conflict in tests/bit_operations.rs",
+        "CONFLICT (content): Merge conflict in tests/booleans.rs",
+        "CONFLICT (add/add): Merge conflict in tests/c_backend.rs",
+        "CONFLICT (content): Merge conflict in tests/cli.rs",
+        "CONFLICT (content): Merge conflict in tests/conformance.rs",
+        "CONFLICT (content): Merge conflict in tests/expressions.rs",
+        "CONFLICT (content): Merge conflict in tests/front_end.rs",
+        "CONFLICT (add/add): Merge conflict in tests/vectors.rs"
+      ],
+      "reviewed_patch_sha256": "4ecb3ed3789e8b1d286ec3717dbbc0c29ef5cb339f4b009b93e6999369b76b63",
+      "patch_bytes": 157577
+    },
+    {
+      "number": 24,
+      "title": "Use the specified canonical command names without compatibility aliases",
+      "url": "https://github.com/scarp-lang/scarp/pull/24",
+      "head": "984c59e1cc1c40626949633f8ac165fd2ae5ca1d",
+      "base_branch": "scarp/cli-foundation",
+      "base_commit": "2553e02ddaef4d3302e5dbd6c39098dff3eaad35",
+      "draft": false,
+      "mergeable_to_declared_base": true,
+      "mergeable_state": "clean",
+      "changed_files": 30,
+      "review_submissions": 0,
+      "inline_review_threads": 0,
+      "discussion_comments": 1,
+      "discussion_comment_urls": [
+        "https://github.com/scarp-lang/scarp/pull/24#issuecomment-6578847990"
+      ],
+      "workflow_runs": [
+        {
+          "id": 40262309618,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40262309618",
+          "name": "Rust checks",
+          "jobs": [
+            {
+              "id": 121377099481,
+              "name": "Stable / ubuntu-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121377099601,
+              "name": "Minimum Rust / 1.74.0",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121377099631,
+              "name": "Stable / macos-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121377099642,
+              "name": "Stable / windows-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121377099783,
+              "name": "Freestanding C and undefined behavior checks",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 40262309564,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40262309564",
+          "name": "Release packages",
+          "jobs": [
+            {
+              "id": 121377099328,
+              "name": "Package / aarch64-apple-darwin",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121377099462,
+              "name": "Package / x86_64-pc-windows-msvc",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121377099511,
+              "name": "Package / x86_64-unknown-linux-gnu",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "main_only_commits": 537,
+      "head_only_commits": 30,
+      "simulated_main_merge_conflicts": [
+        "CONFLICT (content): Merge conflict in .github/workflows/ci.yml",
+        "CONFLICT (content): Merge conflict in CHANGELOG.md",
+        "CONFLICT (content): Merge conflict in Cargo.lock",
+        "CONFLICT (content): Merge conflict in Cargo.toml",
+        "CONFLICT (content): Merge conflict in README.md",
+        "CONFLICT (content): Merge conflict in benches/runtime.rs",
+        "CONFLICT (content): Merge conflict in docs/README.md",
+        "CONFLICT (content): Merge conflict in docs/architecture.md",
+        "CONFLICT (content): Merge conflict in docs/compatibility.md",
+        "CONFLICT (content): Merge conflict in docs/embedding.md",
+        "CONFLICT (content): Merge conflict in docs/getting-started.md",
+        "CONFLICT (content): Merge conflict in docs/language.md",
+        "CONFLICT (content): Merge conflict in docs/performance.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0002-variables.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0003-string-bindings.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0004-boolean-expressions.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0005-conditional-statements.md",
+        "CONFLICT (content): Merge conflict in docs/reference/cli.md",
+        "CONFLICT (content): Merge conflict in docs/reference/diagnostics.md",
+        "CONFLICT (content): Merge conflict in docs/reference/values.md",
+        "CONFLICT (content): Merge conflict in docs/troubleshooting.md",
+        "CONFLICT (content): Merge conflict in docs/tutorials/first-program.md",
+        "CONFLICT (content): Merge conflict in docs/variables.md",
+        "CONFLICT (add/add): Merge conflict in examples/bit_fields.srp",
+        "CONFLICT (content): Merge conflict in scripts/check.ps1",
+        "CONFLICT (content): Merge conflict in scripts/check.sh",
+        "CONFLICT (content): Merge conflict in scripts/package.ps1",
+        "CONFLICT (content): Merge conflict in src/ast.rs",
+        "CONFLICT (add/add): Merge conflict in src/c_backend.rs",
+        "CONFLICT (add/add): Merge conflict in src/c_runtime.h",
+        "CONFLICT (content): Merge conflict in src/diagnostics.rs",
+        "CONFLICT (content): Merge conflict in src/evaluator.rs",
+        "CONFLICT (content): Merge conflict in src/interpreter.rs",
+        "CONFLICT (content): Merge conflict in src/lexer.rs",
+        "CONFLICT (content): Merge conflict in src/lib.rs",
+        "CONFLICT (content): Merge conflict in src/main.rs",
+        "CONFLICT (add/add): Merge conflict in src/numeric.rs",
+        "CONFLICT (content): Merge conflict in src/parser.rs",
+        "CONFLICT (content): Merge conflict in src/resolver.rs",
+        "CONFLICT (content): Merge conflict in src/value.rs",
+        "CONFLICT (content): Merge conflict in tests/bindings.rs",
+        "CONFLICT (add/add): Merge conflict in tests/bit_operations.rs",
+        "CONFLICT (content): Merge conflict in tests/booleans.rs",
+        "CONFLICT (add/add): Merge conflict in tests/c_backend.rs",
+        "CONFLICT (content): Merge conflict in tests/cli.rs",
+        "CONFLICT (content): Merge conflict in tests/conformance.rs",
+        "CONFLICT (content): Merge conflict in tests/expressions.rs",
+        "CONFLICT (content): Merge conflict in tests/front_end.rs",
+        "CONFLICT (add/add): Merge conflict in tests/vectors.rs"
+      ],
+      "reviewed_patch_sha256": "648ba84cac052a6570afa83a4d0adb75163e489aaf4ca5e42d91e5766f8fe21a",
+      "patch_bytes": 112960
+    },
+    {
+      "number": 23,
+      "title": "Add CLI guidance aliases static verification and frontend inspection",
+      "url": "https://github.com/scarp-lang/scarp/pull/23",
+      "head": "2553e02ddaef4d3302e5dbd6c39098dff3eaad35",
+      "base_branch": "scarp/native-build-cli",
+      "base_commit": "49549f8cdb16e4b2ba05d011962b809e5c474ed0",
+      "draft": false,
+      "mergeable_to_declared_base": true,
+      "mergeable_state": "clean",
+      "changed_files": 13,
+      "review_submissions": 0,
+      "inline_review_threads": 0,
+      "discussion_comments": 0,
+      "discussion_comment_urls": [],
+      "workflow_runs": [
+        {
+          "id": 40258899891,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40258899891",
+          "name": "Release packages",
+          "jobs": [
+            {
+              "id": 121366716854,
+              "name": "Package / x86_64-pc-windows-msvc",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121366717087,
+              "name": "Package / aarch64-apple-darwin",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121366717104,
+              "name": "Package / x86_64-unknown-linux-gnu",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 40258899833,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40258899833",
+          "name": "Rust checks",
+          "jobs": [
+            {
+              "id": 121366716686,
+              "name": "Stable / windows-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121366716837,
+              "name": "Minimum Rust / 1.74.0",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121366716877,
+              "name": "Freestanding C and undefined behavior checks",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121366716907,
+              "name": "Stable / ubuntu-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121366716925,
+              "name": "Stable / macos-latest",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "main_only_commits": 537,
+      "head_only_commits": 26,
+      "simulated_main_merge_conflicts": [
+        "CONFLICT (content): Merge conflict in .github/workflows/ci.yml",
+        "CONFLICT (content): Merge conflict in CHANGELOG.md",
+        "CONFLICT (content): Merge conflict in Cargo.lock",
+        "CONFLICT (content): Merge conflict in Cargo.toml",
+        "CONFLICT (content): Merge conflict in README.md",
+        "CONFLICT (content): Merge conflict in benches/runtime.rs",
+        "CONFLICT (content): Merge conflict in docs/README.md",
+        "CONFLICT (content): Merge conflict in docs/architecture.md",
+        "CONFLICT (content): Merge conflict in docs/compatibility.md",
+        "CONFLICT (content): Merge conflict in docs/embedding.md",
+        "CONFLICT (content): Merge conflict in docs/getting-started.md",
+        "CONFLICT (content): Merge conflict in docs/language.md",
+        "CONFLICT (content): Merge conflict in docs/performance.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0002-variables.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0003-string-bindings.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0004-boolean-expressions.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0005-conditional-statements.md",
+        "CONFLICT (content): Merge conflict in docs/reference/cli.md",
+        "CONFLICT (content): Merge conflict in docs/reference/diagnostics.md",
+        "CONFLICT (content): Merge conflict in docs/reference/values.md",
+        "CONFLICT (content): Merge conflict in docs/troubleshooting.md",
+        "CONFLICT (content): Merge conflict in docs/variables.md",
+        "CONFLICT (add/add): Merge conflict in examples/bit_fields.srp",
+        "CONFLICT (content): Merge conflict in scripts/check.ps1",
+        "CONFLICT (content): Merge conflict in scripts/check.sh",
+        "CONFLICT (content): Merge conflict in scripts/package.ps1",
+        "CONFLICT (content): Merge conflict in src/ast.rs",
+        "CONFLICT (add/add): Merge conflict in src/c_backend.rs",
+        "CONFLICT (add/add): Merge conflict in src/c_runtime.h",
+        "CONFLICT (content): Merge conflict in src/diagnostics.rs",
+        "CONFLICT (content): Merge conflict in src/evaluator.rs",
+        "CONFLICT (content): Merge conflict in src/interpreter.rs",
+        "CONFLICT (content): Merge conflict in src/lexer.rs",
+        "CONFLICT (content): Merge conflict in src/lib.rs",
+        "CONFLICT (content): Merge conflict in src/main.rs",
+        "CONFLICT (add/add): Merge conflict in src/numeric.rs",
+        "CONFLICT (content): Merge conflict in src/parser.rs",
+        "CONFLICT (content): Merge conflict in src/resolver.rs",
+        "CONFLICT (content): Merge conflict in src/value.rs",
+        "CONFLICT (content): Merge conflict in tests/bindings.rs",
+        "CONFLICT (add/add): Merge conflict in tests/bit_operations.rs",
+        "CONFLICT (content): Merge conflict in tests/booleans.rs",
+        "CONFLICT (add/add): Merge conflict in tests/c_backend.rs",
+        "CONFLICT (content): Merge conflict in tests/conformance.rs",
+        "CONFLICT (content): Merge conflict in tests/expressions.rs",
+        "CONFLICT (content): Merge conflict in tests/front_end.rs",
+        "CONFLICT (add/add): Merge conflict in tests/vectors.rs"
+      ],
+      "reviewed_patch_sha256": "150c3e854b80ca178db14c9782b5babba031a1a51518467304da7610fa7918f9",
+      "patch_bytes": 47567
+    },
+    {
+      "number": 22,
+      "title": "Add native compile and build commands to the Scarp CLI",
+      "url": "https://github.com/scarp-lang/scarp/pull/22",
+      "head": "49549f8cdb16e4b2ba05d011962b809e5c474ed0",
+      "base_branch": "scarp/freestanding-c-backend",
+      "base_commit": "b47d69dc320d15968fccd81b26a7bfda87bc1e70",
+      "draft": false,
+      "mergeable_to_declared_base": true,
+      "mergeable_state": "clean",
+      "changed_files": 26,
+      "review_submissions": 0,
+      "inline_review_threads": 0,
+      "discussion_comments": 1,
+      "discussion_comment_urls": [
+        "https://github.com/scarp-lang/scarp/pull/22#issuecomment-6578847036"
+      ],
+      "workflow_runs": [
+        {
+          "id": 40257383724,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40257383724",
+          "name": "Release packages",
+          "jobs": [
+            {
+              "id": 121362041032,
+              "name": "Package / aarch64-apple-darwin",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121362041192,
+              "name": "Package / x86_64-pc-windows-msvc",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121362041196,
+              "name": "Package / x86_64-unknown-linux-gnu",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 40257383672,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40257383672",
+          "name": "Rust checks",
+          "jobs": [
+            {
+              "id": 121362040681,
+              "name": "Minimum Rust / 1.74.0",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121362040868,
+              "name": "Stable / windows-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121362040950,
+              "name": "Stable / ubuntu-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121362041013,
+              "name": "Freestanding C and undefined behavior checks",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121362041033,
+              "name": "Stable / macos-latest",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "main_only_commits": 537,
+      "head_only_commits": 22,
+      "simulated_main_merge_conflicts": [
+        "CONFLICT (content): Merge conflict in .github/workflows/ci.yml",
+        "CONFLICT (content): Merge conflict in CHANGELOG.md",
+        "CONFLICT (content): Merge conflict in Cargo.lock",
+        "CONFLICT (content): Merge conflict in Cargo.toml",
+        "CONFLICT (content): Merge conflict in README.md",
+        "CONFLICT (content): Merge conflict in benches/runtime.rs",
+        "CONFLICT (content): Merge conflict in docs/README.md",
+        "CONFLICT (content): Merge conflict in docs/architecture.md",
+        "CONFLICT (content): Merge conflict in docs/compatibility.md",
+        "CONFLICT (content): Merge conflict in docs/embedding.md",
+        "CONFLICT (content): Merge conflict in docs/getting-started.md",
+        "CONFLICT (content): Merge conflict in docs/language.md",
+        "CONFLICT (content): Merge conflict in docs/performance.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0002-variables.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0003-string-bindings.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0004-boolean-expressions.md",
+        "CONFLICT (content): Merge conflict in docs/proposals/0005-conditional-statements.md",
+        "CONFLICT (content): Merge conflict in docs/reference/cli.md",
+        "CONFLICT (content): Merge conflict in docs/reference/diagnostics.md",
+        "CONFLICT (content): Merge conflict in docs/reference/values.md",
+        "CONFLICT (content): Merge conflict in docs/troubleshooting.md",
+        "CONFLICT (content): Merge conflict in docs/variables.md",
+        "CONFLICT (add/add): Merge conflict in examples/bit_fields.srp",
+        "CONFLICT (content): Merge conflict in scripts/check.ps1",
+        "CONFLICT (content): Merge conflict in scripts/check.sh",
+        "CONFLICT (content): Merge conflict in scripts/package.ps1",
+        "CONFLICT (content): Merge conflict in src/ast.rs",
+        "CONFLICT (add/add): Merge conflict in src/c_backend.rs",
+        "CONFLICT (add/add): Merge conflict in src/c_runtime.h",
+        "CONFLICT (content): Merge conflict in src/diagnostics.rs",
+        "CONFLICT (content): Merge conflict in src/evaluator.rs",
+        "CONFLICT (content): Merge conflict in src/interpreter.rs",
+        "CONFLICT (content): Merge conflict in src/lexer.rs",
+        "CONFLICT (content): Merge conflict in src/lib.rs",
+        "CONFLICT (content): Merge conflict in src/main.rs",
+        "CONFLICT (add/add): Merge conflict in src/numeric.rs",
+        "CONFLICT (content): Merge conflict in src/parser.rs",
+        "CONFLICT (content): Merge conflict in src/resolver.rs",
+        "CONFLICT (content): Merge conflict in src/value.rs",
+        "CONFLICT (content): Merge conflict in tests/bindings.rs",
+        "CONFLICT (add/add): Merge conflict in tests/bit_operations.rs",
+        "CONFLICT (content): Merge conflict in tests/booleans.rs",
+        "CONFLICT (add/add): Merge conflict in tests/c_backend.rs",
+        "CONFLICT (content): Merge conflict in tests/conformance.rs",
+        "CONFLICT (content): Merge conflict in tests/expressions.rs",
+        "CONFLICT (content): Merge conflict in tests/front_end.rs",
+        "CONFLICT (add/add): Merge conflict in tests/vectors.rs"
+      ],
+      "reviewed_patch_sha256": "c38eda805e8da39f313db23c3fd9b9daa20a4344dfc2eec5f8645404f0bd5c7e",
+      "patch_bytes": 73982
+    },
+    {
+      "number": 20,
+      "title": "Add freestanding C emission for checked computation units",
+      "url": "https://github.com/scarp-lang/scarp/pull/20",
+      "head": "b47d69dc320d15968fccd81b26a7bfda87bc1e70",
+      "base_branch": "scarp/integer-bit-operations",
+      "base_commit": "fdd9a8effdefe57835ac593c4d2a6b9b8474e94d",
+      "draft": false,
+      "mergeable_to_declared_base": true,
+      "mergeable_state": "clean",
+      "changed_files": 21,
+      "review_submissions": 0,
+      "inline_review_threads": 0,
+      "discussion_comments": 0,
+      "discussion_comment_urls": [],
+      "workflow_runs": [
+        {
+          "id": 40211101631,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40211101631",
+          "name": "Release packages",
+          "jobs": [
+            {
+              "id": 121222304377,
+              "name": "Package / aarch64-apple-darwin",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121222304539,
+              "name": "Package / x86_64-pc-windows-msvc",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121222304547,
+              "name": "Package / x86_64-unknown-linux-gnu",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 40211101696,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40211101696",
+          "name": "Rust checks",
+          "jobs": [
+            {
+              "id": 121222304578,
+              "name": "Minimum Rust / 1.74.0",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121222304834,
+              "name": "Stable / windows-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121222304840,
+              "name": "Stable / ubuntu-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121222304846,
+              "name": "Freestanding C and undefined behavior checks",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121222304864,
+              "name": "Stable / macos-latest",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "main_only_commits": 537,
+      "head_only_commits": 16,
+      "simulated_main_merge_conflicts": [
+        "CONFLICT (content): Merge conflict in .github/workflows/ci.yml",
+        "CONFLICT (content): Merge conflict in CHANGELOG.md",
+        "CONFLICT (content): Merge conflict in README.md",
+        "CONFLICT (content): Merge conflict in benches/runtime.rs",
+        "CONFLICT (content): Merge conflict in docs/README.md",
+        "CONFLICT (content): Merge conflict in docs/architecture.md",
+        "CONFLICT (content): Merge conflict in docs/compatibility.md",
+        "CONFLICT (content): Merge conflict in docs/getting-started.md",
+        "CONFLICT (content): Merge conflict in docs/language.md",
+        "CONFLICT (content): Merge conflict in docs/performance.md",
+        "CONFLICT (content): Merge conflict in docs/reference/cli.md",
+        "CONFLICT (content): Merge conflict in docs/reference/diagnostics.md",
+        "CONFLICT (content): Merge conflict in docs/reference/values.md",
+        "CONFLICT (content): Merge conflict in docs/releases/v0.0.2.md",
+        "CONFLICT (content): Merge conflict in docs/variables.md",
+        "CONFLICT (add/add): Merge conflict in examples/bit_fields.srp",
+        "CONFLICT (content): Merge conflict in scripts/check.ps1",
+        "CONFLICT (content): Merge conflict in scripts/check.sh",
+        "CONFLICT (content): Merge conflict in scripts/package.ps1",
+        "CONFLICT (content): Merge conflict in src/ast.rs",
+        "CONFLICT (add/add): Merge conflict in src/c_backend.rs",
+        "CONFLICT (add/add): Merge conflict in src/c_runtime.h",
+        "CONFLICT (content): Merge conflict in src/diagnostics.rs",
+        "CONFLICT (content): Merge conflict in src/evaluator.rs",
+        "CONFLICT (content): Merge conflict in src/interpreter.rs",
+        "CONFLICT (content): Merge conflict in src/lexer.rs",
+        "CONFLICT (content): Merge conflict in src/lib.rs",
+        "CONFLICT (content): Merge conflict in src/main.rs",
+        "CONFLICT (add/add): Merge conflict in src/numeric.rs",
+        "CONFLICT (content): Merge conflict in src/parser.rs",
+        "CONFLICT (content): Merge conflict in src/resolver.rs",
+        "CONFLICT (content): Merge conflict in src/value.rs",
+        "CONFLICT (content): Merge conflict in tests/bindings.rs",
+        "CONFLICT (add/add): Merge conflict in tests/bit_operations.rs",
+        "CONFLICT (content): Merge conflict in tests/booleans.rs",
+        "CONFLICT (add/add): Merge conflict in tests/c_backend.rs",
+        "CONFLICT (content): Merge conflict in tests/conformance.rs",
+        "CONFLICT (content): Merge conflict in tests/expressions.rs",
+        "CONFLICT (content): Merge conflict in tests/front_end.rs",
+        "CONFLICT (add/add): Merge conflict in tests/vectors.rs"
+      ],
+      "reviewed_patch_sha256": "5265a4a09ccea1c1668adcf10d47346d448226384b5407a41b5d55adaa73f614",
+      "patch_bytes": 62041
+    },
+    {
+      "number": 19,
+      "title": "Add fixed-width integer masks shifts and radix literals",
+      "url": "https://github.com/scarp-lang/scarp/pull/19",
+      "head": "fdd9a8effdefe57835ac593c4d2a6b9b8474e94d",
+      "base_branch": "scarp/numeric-vectors",
+      "base_commit": "90be3968799becba2e35eb3bf74428f8c3605b8d",
+      "draft": false,
+      "mergeable_to_declared_base": true,
+      "mergeable_state": "clean",
+      "changed_files": 22,
+      "review_submissions": 0,
+      "inline_review_threads": 0,
+      "discussion_comments": 0,
+      "discussion_comment_urls": [],
+      "workflow_runs": [
+        {
+          "id": 40208756503,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40208756503",
+          "name": "Release packages",
+          "jobs": [
+            {
+              "id": 121215268298,
+              "name": "Package / x86_64-unknown-linux-gnu",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121215268447,
+              "name": "Package / x86_64-pc-windows-msvc",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121215268555,
+              "name": "Package / aarch64-apple-darwin",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 40208756496,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40208756496",
+          "name": "Rust checks",
+          "jobs": [
+            {
+              "id": 121215268354,
+              "name": "Minimum Rust / 1.74.0",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121215268503,
+              "name": "Stable / ubuntu-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121215268668,
+              "name": "Stable / macos-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121215268675,
+              "name": "Stable / windows-latest",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "main_only_commits": 537,
+      "head_only_commits": 12,
+      "simulated_main_merge_conflicts": [
+        "CONFLICT (content): Merge conflict in CHANGELOG.md",
+        "CONFLICT (content): Merge conflict in README.md",
+        "CONFLICT (content): Merge conflict in benches/runtime.rs",
+        "CONFLICT (content): Merge conflict in docs/README.md",
+        "CONFLICT (content): Merge conflict in docs/architecture.md",
+        "CONFLICT (content): Merge conflict in docs/compatibility.md",
+        "CONFLICT (content): Merge conflict in docs/getting-started.md",
+        "CONFLICT (content): Merge conflict in docs/language.md",
+        "CONFLICT (content): Merge conflict in docs/performance.md",
+        "CONFLICT (content): Merge conflict in docs/reference/diagnostics.md",
+        "CONFLICT (content): Merge conflict in docs/reference/values.md",
+        "CONFLICT (content): Merge conflict in docs/releases/v0.0.2.md",
+        "CONFLICT (content): Merge conflict in docs/variables.md",
+        "CONFLICT (add/add): Merge conflict in examples/bit_fields.srp",
+        "CONFLICT (content): Merge conflict in scripts/check.ps1",
+        "CONFLICT (content): Merge conflict in scripts/check.sh",
+        "CONFLICT (content): Merge conflict in scripts/package.ps1",
+        "CONFLICT (content): Merge conflict in src/ast.rs",
+        "CONFLICT (content): Merge conflict in src/diagnostics.rs",
+        "CONFLICT (content): Merge conflict in src/evaluator.rs",
+        "CONFLICT (content): Merge conflict in src/interpreter.rs",
+        "CONFLICT (content): Merge conflict in src/lexer.rs",
+        "CONFLICT (content): Merge conflict in src/lib.rs",
+        "CONFLICT (add/add): Merge conflict in src/numeric.rs",
+        "CONFLICT (content): Merge conflict in src/parser.rs",
+        "CONFLICT (content): Merge conflict in src/resolver.rs",
+        "CONFLICT (content): Merge conflict in src/value.rs",
+        "CONFLICT (content): Merge conflict in tests/bindings.rs",
+        "CONFLICT (add/add): Merge conflict in tests/bit_operations.rs",
+        "CONFLICT (content): Merge conflict in tests/booleans.rs",
+        "CONFLICT (content): Merge conflict in tests/conformance.rs",
+        "CONFLICT (content): Merge conflict in tests/expressions.rs",
+        "CONFLICT (content): Merge conflict in tests/front_end.rs",
+        "CONFLICT (add/add): Merge conflict in tests/vectors.rs"
+      ],
+      "reviewed_patch_sha256": "0a61cd229bc2535487f7cf0621d17bc88b1f989ae051fc546f8a00a6a5d8fa50",
+      "patch_bytes": 40430
+    },
+    {
+      "number": 18,
+      "title": "Add immutable numerical vectors and native finite kernels",
+      "url": "https://github.com/scarp-lang/scarp/pull/18",
+      "head": "90be3968799becba2e35eb3bf74428f8c3605b8d",
+      "base_branch": "scarp/finite-decimals",
+      "base_commit": "9a14eb18ea2123c034b0eb465322a4e0701a89e8",
+      "draft": false,
+      "mergeable_to_declared_base": true,
+      "mergeable_state": "clean",
+      "changed_files": 39,
+      "review_submissions": 0,
+      "inline_review_threads": 0,
+      "discussion_comments": 0,
+      "discussion_comment_urls": [],
+      "workflow_runs": [
+        {
+          "id": 40205631739,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40205631739",
+          "name": "Release packages",
+          "jobs": [
+            {
+              "id": 121205826566,
+              "name": "Package / x86_64-unknown-linux-gnu",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121205826815,
+              "name": "Package / x86_64-pc-windows-msvc",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121205826820,
+              "name": "Package / aarch64-apple-darwin",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 40205631753,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40205631753",
+          "name": "Rust checks",
+          "jobs": [
+            {
+              "id": 121205826646,
+              "name": "Stable / macos-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121205826773,
+              "name": "Stable / windows-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121205826845,
+              "name": "Minimum Rust / 1.74.0",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121205826909,
+              "name": "Stable / ubuntu-latest",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "main_only_commits": 537,
+      "head_only_commits": 8,
+      "simulated_main_merge_conflicts": [
+        "CONFLICT (content): Merge conflict in CHANGELOG.md",
+        "CONFLICT (content): Merge conflict in README.md",
+        "CONFLICT (content): Merge conflict in benches/runtime.rs",
+        "CONFLICT (content): Merge conflict in docs/README.md",
+        "CONFLICT (content): Merge conflict in docs/architecture.md",
+        "CONFLICT (content): Merge conflict in docs/compatibility.md",
+        "CONFLICT (content): Merge conflict in docs/getting-started.md",
+        "CONFLICT (content): Merge conflict in docs/language.md",
+        "CONFLICT (content): Merge conflict in docs/performance.md",
+        "CONFLICT (content): Merge conflict in docs/reference/diagnostics.md",
+        "CONFLICT (content): Merge conflict in docs/reference/values.md",
+        "CONFLICT (content): Merge conflict in docs/releases/v0.0.2.md",
+        "CONFLICT (content): Merge conflict in docs/variables.md",
+        "CONFLICT (content): Merge conflict in scripts/check.ps1",
+        "CONFLICT (content): Merge conflict in scripts/check.sh",
+        "CONFLICT (content): Merge conflict in scripts/package.ps1",
+        "CONFLICT (content): Merge conflict in src/ast.rs",
+        "CONFLICT (content): Merge conflict in src/diagnostics.rs",
+        "CONFLICT (content): Merge conflict in src/evaluator.rs",
+        "CONFLICT (content): Merge conflict in src/interpreter.rs",
+        "CONFLICT (content): Merge conflict in src/lexer.rs",
+        "CONFLICT (content): Merge conflict in src/lib.rs",
+        "CONFLICT (add/add): Merge conflict in src/numeric.rs",
+        "CONFLICT (content): Merge conflict in src/parser.rs",
+        "CONFLICT (content): Merge conflict in src/resolver.rs",
+        "CONFLICT (content): Merge conflict in src/value.rs",
+        "CONFLICT (content): Merge conflict in tests/bindings.rs",
+        "CONFLICT (content): Merge conflict in tests/conformance.rs",
+        "CONFLICT (content): Merge conflict in tests/expressions.rs",
+        "CONFLICT (content): Merge conflict in tests/front_end.rs",
+        "CONFLICT (add/add): Merge conflict in tests/vectors.rs"
+      ],
+      "reviewed_patch_sha256": "cfe3653601c6794442540cbe6f799d3391a3e5768c7cd7e4fb11077283786d5d",
+      "patch_bytes": 75134
+    },
+    {
+      "number": 17,
+      "title": "Add finite decimal arithmetic and scientific literals",
+      "url": "https://github.com/scarp-lang/scarp/pull/17",
+      "head": "9a14eb18ea2123c034b0eb465322a4e0701a89e8",
+      "base_branch": "scarp/bounded-loops",
+      "base_commit": "6bc405b721914656e132f71fba965afeff70d8de",
+      "draft": false,
+      "mergeable_to_declared_base": true,
+      "mergeable_state": "clean",
+      "changed_files": 28,
+      "review_submissions": 0,
+      "inline_review_threads": 0,
+      "discussion_comments": 0,
+      "discussion_comment_urls": [],
+      "workflow_runs": [
+        {
+          "id": 40204064015,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40204064015",
+          "name": "Release packages",
+          "jobs": [
+            {
+              "id": 121201130931,
+              "name": "Package / x86_64-unknown-linux-gnu",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121201131140,
+              "name": "Package / aarch64-apple-darwin",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121201131201,
+              "name": "Package / x86_64-pc-windows-msvc",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 40204064096,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40204064096",
+          "name": "Rust checks",
+          "jobs": [
+            {
+              "id": 121201131293,
+              "name": "Stable / macos-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121201131401,
+              "name": "Minimum Rust / 1.74.0",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121201131402,
+              "name": "Stable / windows-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121201131598,
+              "name": "Stable / ubuntu-latest",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "main_only_commits": 537,
+      "head_only_commits": 4,
+      "simulated_main_merge_conflicts": [
+        "CONFLICT (content): Merge conflict in CHANGELOG.md",
+        "CONFLICT (content): Merge conflict in README.md",
+        "CONFLICT (content): Merge conflict in docs/README.md",
+        "CONFLICT (content): Merge conflict in docs/architecture.md",
+        "CONFLICT (content): Merge conflict in docs/compatibility.md",
+        "CONFLICT (content): Merge conflict in docs/getting-started.md",
+        "CONFLICT (content): Merge conflict in docs/language.md",
+        "CONFLICT (content): Merge conflict in docs/reference/diagnostics.md",
+        "CONFLICT (content): Merge conflict in docs/reference/values.md",
+        "CONFLICT (content): Merge conflict in docs/releases/v0.0.2.md",
+        "CONFLICT (content): Merge conflict in docs/variables.md",
+        "CONFLICT (content): Merge conflict in scripts/check.ps1",
+        "CONFLICT (content): Merge conflict in scripts/check.sh",
+        "CONFLICT (content): Merge conflict in scripts/package.ps1",
+        "CONFLICT (content): Merge conflict in src/ast.rs",
+        "CONFLICT (content): Merge conflict in src/diagnostics.rs",
+        "CONFLICT (content): Merge conflict in src/evaluator.rs",
+        "CONFLICT (content): Merge conflict in src/lexer.rs",
+        "CONFLICT (content): Merge conflict in src/parser.rs",
+        "CONFLICT (content): Merge conflict in src/resolver.rs",
+        "CONFLICT (content): Merge conflict in src/value.rs",
+        "CONFLICT (content): Merge conflict in tests/conformance.rs",
+        "CONFLICT (content): Merge conflict in tests/expressions.rs"
+      ],
+      "reviewed_patch_sha256": "d8d6c832eee9bf7ce9102202327b98ed353def504af5fcf9c463c56ce936414f",
+      "patch_bytes": 47629
+    },
+    {
+      "number": 16,
+      "title": "Add scoped while loops and deterministic execution budgets",
+      "url": "https://github.com/scarp-lang/scarp/pull/16",
+      "head": "6bc405b721914656e132f71fba965afeff70d8de",
+      "base_branch": "scarp/execution-workspace",
+      "base_commit": "11ef2187adb9cf137acd2a3a5d3bcbaa58cefd56",
+      "draft": false,
+      "mergeable_to_declared_base": true,
+      "mergeable_state": "clean",
+      "changed_files": 27,
+      "review_submissions": 0,
+      "inline_review_threads": 0,
+      "discussion_comments": 0,
+      "discussion_comment_urls": [],
+      "workflow_runs": [
+        {
+          "id": 40203128675,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40203128675",
+          "name": "Release packages",
+          "jobs": [
+            {
+              "id": 121198337801,
+              "name": "Package / x86_64-unknown-linux-gnu",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121198337939,
+              "name": "Package / aarch64-apple-darwin",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121198337949,
+              "name": "Package / x86_64-pc-windows-msvc",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 40203128622,
+          "url": "https://github.com/scarp-lang/scarp/actions/runs/40203128622",
+          "name": "Rust checks",
+          "jobs": [
+            {
+              "id": 121198337319,
+              "name": "Minimum Rust / 1.74.0",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121198337448,
+              "name": "Stable / ubuntu-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121198337456,
+              "name": "Stable / windows-latest",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "id": 121198337498,
+              "name": "Stable / macos-latest",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        }
+      ],
+      "main_only_commits": 537,
+      "head_only_commits": 0,
+      "simulated_main_merge_conflicts": [],
+      "reviewed_patch_sha256": "ef4e271b8ec4f64b380adf39963a8a87e949c8578b05e071be2ef2ffff2a4735",
+      "patch_bytes": 58018
+    }
+  ],
+  "follow_up": {
+    "bigint_pr": 172,
+    "updated_head": "b0134e2acc7e795c95ee27a34175e80bcf80e85f",
+    "merged_main": "27a1e572f7fedb567319d3df83091fe4919089f2",
+    "source_published": false,
+    "bigint_ci": {
+      "head": "b0134e2acc7e795c95ee27a34175e80bcf80e85f",
+      "rust_checks": {
+        "run_id": 42637685941,
+        "url": "https://github.com/scarp-lang/scarp/actions/runs/42637685941",
+        "jobs": 4,
+        "successful_jobs": 4
+      },
+      "release_packages": {
+        "run_id": 42637685893,
+        "url": "https://github.com/scarp-lang/scarp/actions/runs/42637685893",
+        "jobs": 3,
+        "successful_jobs": 3
+      },
+      "local_test_count_per_profile": 897,
+      "oracle_pairs": 304,
+      "oracle_results": 3344,
+      "controlled_linear_digits": [
+        19,
+        100,
+        1000,
+        10000,
+        100000,
+        1000000
+      ]
+    },
+    "text_foundations": {
+      "baseline_main": "27a1e572f7fedb567319d3df83091fe4919089f2",
+      "implemented_intrinsics": [
+        "integer_to_text",
+        "float_to_text",
+        "text_to_integer",
+        "text_to_float",
+        "text_trim",
+        "text_replace"
+      ],
+      "new_rust_tests": 19,
+      "test_count_per_profile": 891,
+      "toolchains": [
+        "1.99.1",
+        "1.74.0"
+      ],
+      "profiles": [
+        "debug",
+        "release"
+      ],
+      "independent_python_results": 1010,
+      "bench_correctness_smoke": [
+        "runtime",
+        "numerics",
+        "compiler"
+      ],
+      "published": false,
+      "report": "core-types-audit-2026-11-09.md"
+    }
+  },
+  "migration_dependencies": {
+    "docs_pr": "https://github.com/scarp-lang/scarp-docs/pull/91",
+    "examples_pr": "https://github.com/scarp-lang/scarp-by-example/pull/57",
+    "both_merged": false,
+    "live_routes_checked": [
+      "https://scarp-lang.github.io/scarp-docs/guide/first-program-alpha4",
+      "https://scarp-lang.github.io/scarp-docs/hi/guide/first-program-alpha4",
+      "https://scarp-lang.github.io/scarp-docs/language/scientific-kernels-alpha4"
+    ],
+    "live_route_status": 404
+  }
+}

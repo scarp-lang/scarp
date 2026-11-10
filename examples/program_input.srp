@@ -1,0 +1,7 @@
+// Development-only bounded input; published alpha.5 does not support read_line.
+// Run with redirected input: scarp exec examples/program_input.srp < examples/program_input.stdin
+bind name: string = read_line();
+print("Hello", name);
+repeat 2 as index {
+    print(index, read_line());
+}

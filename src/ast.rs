@@ -92,9 +92,9 @@ pub enum Statement {
 }
 
 /// Optional explicit binding type, retaining its source token location.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeAnnotation {
-    pub kind: crate::value::ValueType,
+    pub kind: crate::types::SourceType,
     pub span: Span,
 }
 
@@ -123,7 +123,7 @@ pub struct FunctionDeclaration {
     pub name: String,
     pub name_span: Span,
     pub parameters: Vec<Parameter>,
-    pub result: crate::value::ValueType,
+    pub result: crate::types::SourceType,
     pub pure: bool,
     pub contracts: Vec<Contract>,
     pub statements: Vec<Statement>,
@@ -134,7 +134,7 @@ pub struct FunctionDeclaration {
 pub struct Parameter {
     pub name: String,
     pub span: Span,
-    pub kind: crate::value::ValueType,
+    pub kind: crate::types::SourceType,
     pub default: Option<Expression>,
 }
 
@@ -205,6 +205,9 @@ pub struct ExpressionNode {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExpressionKind {
+    Tuple {
+        elements: Vec<usize>,
+    },
     Integers {
         elements: Vec<usize>,
     },
@@ -215,6 +218,9 @@ pub enum ExpressionKind {
         vector: usize,
         index: usize,
         operator_span: Span,
+        /// Original syntax was a nonnegative integer literal (possibly grouped).
+        /// Retained across constant folding so tuple projection stays literal-only.
+        source_literal: bool,
     },
     UserCall {
         name: String,

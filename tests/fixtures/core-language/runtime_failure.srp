@@ -1,0 +1,1 @@
+print("before"); eprint("before"); print(1/0);
