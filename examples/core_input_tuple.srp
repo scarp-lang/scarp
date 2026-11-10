@@ -1,4 +1,4 @@
-// alpha.6 candidate: redirected UTF-8 input, text conversion and imported tuples.
+// Published alpha.6: redirected UTF-8 input, text conversion and imported tuples.
 import "modules/input_record.srp" as records;
 bind entry: tuple<integer, string> = records.read();
 print(entry);

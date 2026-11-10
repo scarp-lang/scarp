@@ -1,6 +1,6 @@
 # Proposal 0039: Bounded program input before richer I/O
 
-**Status:** Gate A implemented in the alpha.6 integration candidate; Gate B deferred  
+**Status:** Gate A published in v0.0.6-alpha.6; Gate B deferred
 **Reviewed:** 2026-11-10  
 **Intended starting milestone:** post-v0.0.6-alpha.5 core-language work  
 **Scope:** deterministic UTF-8 stdin lines, explicit host capability, and a separately gated interactive mode

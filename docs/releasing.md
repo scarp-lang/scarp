@@ -1,18 +1,17 @@
 # Preparing a prerelease
 
-**Current development candidate:** [v0.0.6-alpha.6](releases/v0.0.6-alpha.6.md).
-The next publication uses fresh exact-source CI, package verification and its own
-one-time request. Existing tags/assets and prior approval records remain immutable.
+**Latest published prerelease:** [v0.0.6-alpha.6](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.6)
+was published on **10 November 2026**, from exact source `cdf6a3924ec2a36c7beca5a9aec4f01a0bce515e`.
+See [postpublication verification](releases/v0.0.6-alpha.6-validation.md) for the
+annotated tag, independent source/control seven-job matrices and all seven assets.
+The fulfilled request is retired with this verification record; future releases
+require their own authorization, exact source and fresh complete qualification.
+The [candidate notes](releases/v0.0.6-alpha.6.md) remain historical.
 
-**Latest published prerelease:** [v0.0.6-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5)
-was published on **9 November 2026**, from exact approved source
-`205e92f166f186c3905e5880d41c31717b697b8e`.
-See the [postpublication verification](releases/v0.0.6-alpha.5-validation.md)
-for the reviewed one-time request, annotated tag, two successful seven-job CI
-matrices, seven audited public assets, and guarded publisher run.
-Its [candidate notes](releases/v0.0.6-alpha.5.md) are a historical
-prepublication record. The fulfilled release request was retired by separate
-maintenance PR #177.
+The earlier [v0.0.6-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5)
+was published on 9 November from `205e92f166f186c3905e5880d41c31717b697b8e`.
+Its [verification](releases/v0.0.6-alpha.5-validation.md), public assets and
+historical notes remain immutable; its request was retired by PR #177.
 
 The earlier v0.0.6-alpha.4 was published on 8 November 2026 from
 `f04be0758cbce405ddcdb229699b0ff83c09d207`.

@@ -1,4 +1,4 @@
-// alpha.6 candidate tuples; published alpha.5 does not accept this syntax.
+// Published alpha.6 tuples; published alpha.5 does not accept this syntax.
 import "modules/tuple_pairs.srp" as pairs;
 bind first: tuple<integer, string> = pairs.make(7, label: "नमस्ते");
 var value = first;

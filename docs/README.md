@@ -1,7 +1,8 @@
 # Scarp documentation
 
-**0.0.6-alpha.6 prerelease** is the development candidate for input, text utilities
-and tuples; see [scope and qualification](releases/v0.0.6-alpha.6.md).
+**0.0.6-alpha.6 prerelease** was published on **10 November 2026**, adding
+bounded input, scalar/text utilities and immutable tuples. See [public notes](releases/v0.0.6-alpha.6-publication.md)
+and [exact-source verification](releases/v0.0.6-alpha.6-validation.md).
 
 **0.0.6-alpha.5 prerelease** is **published on 9 November 2026**,
 with pure [Top-P selection](nucleus-selection.md), [Pearson correlation](pearson-correlation.md)
@@ -56,11 +57,11 @@ see [alpha.5 release notes](releases/v0.0.5-alpha.5.md) and the
 Development declarations use `bind` and `var`; see the [migration guide](syntax-migration.md). Published tags retain their original syntax.
 
 Choose a guide by the task you want to complete. Current tutorials are
-updated for the **0.0.6-alpha.5 published prerelease**, retaining
+updated for the **0.0.6-alpha.6 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
 contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.6-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5),
+[0.0.6-alpha.6](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.6),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)
@@ -68,8 +69,8 @@ records the verified maintainer transfer to scarp-lang/scarp. Historical release
 notes describe fixed snapshots. Tensors, general native executable compilation, a package manager and
 website deployment remain separate.
 
-**Tuple development:** [immutable heterogeneous tuples](tuples.md) are implemented
-in the alpha.6 candidate and absent from published alpha.5. Review the structural
+**Published tuple support:** [immutable heterogeneous tuples](tuples.md) are implemented
+in published alpha.6 and absent from alpha.5. Review the structural
 Rust API/schema migration before adopting that source.
 
 ## Guides and what each adds
@@ -78,10 +79,10 @@ The [feature-completeness matrix](development/feature-matrix.md) distinguishes
 implemented features, historical experiments and future dependencies. Current
 declarations accept explicit primitive annotations; see [variables](variables.md).
 
-For unreleased foundation work, the [9 November core-type and PR audit](development/core-types-audit-2026-11-09.md)
+For foundation design history, the [9 November core-type and PR audit](development/core-types-audit-2026-11-09.md)
 records the exact main/release checkpoint and every open compiler PR. The
-[scalar/text draft contract](text-foundations.md) describes six intrinsics on
-the alpha.6 candidate, absent from published alpha.5. The
+[scalar/text contract](text-foundations.md) describes six intrinsics on
+published alpha.6, absent from alpha.5. The
 [type staging proposal](proposals/core-types-staging.md) keeps future character,
 byte and general collection support distinct from implemented source types.
 
@@ -118,7 +119,7 @@ experimental Rust-hosted C11 scalar emitter; see
 | [Your first numerical program](tutorials/numerical-program.md) | Build a small typed numerical calculation and compare probabilities safely |
 | [Numerical errors](reference/numerical-errors.md) | Repair type, shape, index, domain, overflow and quota failures |
 | [Functions](functions.md) | Learn typed calls, defaults, contracts, and bounded invocation resources |
-| [Program input (unreleased development)](program-input.md) | Review explicit readers, UTF-8 lines, quotas and terminal restrictions; absent from published alpha.5 |
+| [Program input (published alpha.6)](program-input.md) | Review explicit readers, UTF-8 lines, quotas and terminal restrictions; absent from published alpha.5 |
 | [Output](output.md) | Choose print/write, control newlines, and route explicit stderr |
 | [Variables and mutation](tutorials/variables.md) | Introduce names, copy values, choose mutability, and avoid forward references |
 | [Scopes and shadowing](tutorials/scopes.md) | Predict which declaration a name uses and what survives a block |
