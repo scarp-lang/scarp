@@ -187,7 +187,7 @@ impl ResolvedProgram {
     }
 }
 
-fn failure(error: TypeRegistryError, span: Span) -> Diagnostic {
+pub(super) fn failure(error: TypeRegistryError, span: Span) -> Diagnostic {
     Diagnostic::new(DiagnosticKind::TypeComplexity, span, error.to_string()).with_help(
         "reduce semantic type/signature complexity or adjust TypeLimits in the embedding compiler",
     )
@@ -195,31 +195,34 @@ fn failure(error: TypeRegistryError, span: Span) -> Diagnostic {
 
 pub(super) fn build(
     program: &ResolvedProgram,
-    limits: TypeLimits,
+    mut registry: TypeRegistryBuilder,
 ) -> Result<ProgramTypes, Diagnostic> {
-    let initial = program
-        .metadata
-        .first()
-        .map(|function| function.span)
-        .or_else(|| program.statements.first().map(|operation| operation.span))
-        .unwrap_or_default();
-    let mut registry = TypeRegistryBuilder::new(limits).map_err(|error| failure(error, initial))?;
     let mut functions = Vec::with_capacity(program.metadata.len());
     for function in &program.metadata {
+        let signature = TypeKind::Function {
+            parameters: function
+                .parameters
+                .iter()
+                .map(|parameter| {
+                    parameter
+                        .kind
+                        .intern(&mut registry)
+                        .map_err(|e| failure(e, parameter.span))
+                })
+                .collect::<Result<Vec<_>, _>>()?
+                .into(),
+            result: function
+                .result
+                .intern(&mut registry)
+                .map_err(|e| failure(e, function.span))?,
+            effect: if function.pure {
+                FunctionEffect::Pure
+            } else {
+                FunctionEffect::Impure
+            },
+        };
         let id = registry
-            .intern(TypeKind::Function {
-                parameters: function
-                    .parameters
-                    .iter()
-                    .map(|parameter| parameter.kind.id())
-                    .collect(),
-                result: function.result.id(),
-                effect: if function.pure {
-                    FunctionEffect::Pure
-                } else {
-                    FunctionEffect::Impure
-                },
-            })
+            .intern(signature)
             .map_err(|error| failure(error, function.span))?;
         functions.push(id);
     }
@@ -237,9 +240,17 @@ pub(super) fn build(
             }
         }
     }
+    let bindings = program
+        .slot_types
+        .iter()
+        .map(|kind| {
+            kind.intern(&mut registry)
+                .map_err(|e| failure(e, Span::default()))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(ProgramTypes {
         registry: registry.finish(),
-        bindings: program.slot_types.iter().map(|kind| kind.id()).collect(),
+        bindings,
         functions,
         builtins,
     })

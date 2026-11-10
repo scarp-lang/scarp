@@ -151,6 +151,9 @@ diagnostic_catalogue! {
     TextConstruction => ("E0048", "Invalid or excessive text construction. Repetition counts must be nonnegative, each materialized string is limited to 1048576 UTF-8 bytes, and cumulative new payload is limited by --max-text-bytes / ExecutionOptions.max_text_bytes. Sharing strings does not recharge; retirement does not refund allocation. This is a logical payload cap, not a physical process-memory limit."),
     NativeUnsupported => ("E0049", "Experimental scalar native emission cannot represent this program or would exceed its explicit resource caps. Use interpreter execution, or restrict the source to supported integer/boolean operations, bounded control flow and single-argument stdout lines."),
     SymbolIndexLimit => ("E0050", "Symbol navigation index limit exceeded. Reduce symbol/reference metadata or adjust IndexLimits in Rust embedding. These opt-in limits are separate from compiler module, constant, type, and runtime limits."),
+    TupleIndex => ("E0059", "Tuple projection requires a nonnegative integer literal within the fixed tuple arity. Use t[0], not a runtime/computed/negative index. Numerical collection indexing retains its existing rules."),
+    TupleLimit => ("E0060", "Tuple shape exceeds the supported bounds. Use one through 32 members, tuple depth at most 32 and structural type size at most 4096 nodes. Empty tuples and unit members are unsupported."),
+    TupleAllocation => ("E0061", "Tuple payload allocation exceeded its cumulative quota or bounded reservation failed. Reuse immutable tuples or reduce construction; adjust --max-tuple-bytes / ExecutionOptions.max_tuple_bytes explicitly. This is a logical payload quota, not process RAM."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

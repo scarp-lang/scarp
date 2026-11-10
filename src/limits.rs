@@ -38,6 +38,8 @@ pub struct ExecutionOptions {
     pub max_vector_bytes: usize,
     /// Cumulative newly materialized UTF-8 string payload; sharing does not recharge.
     pub max_text_bytes: usize,
+    /// Cumulative immutable tuple member/structural payload, independent of text/vectors.
+    pub max_tuple_bytes: usize,
 }
 
 impl Default for ExecutionOptions {
@@ -50,6 +52,7 @@ impl Default for ExecutionOptions {
             max_capture_bytes: 16 * 1024 * 1024,
             max_vector_bytes: 8 * 1024 * 1024,
             max_text_bytes: 8 * 1024 * 1024,
+            max_tuple_bytes: 8 * 1024 * 1024,
         }
     }
 }
@@ -70,6 +73,8 @@ pub(crate) struct Budget {
     vector_limit: usize,
     text_remaining: usize,
     text_limit: usize,
+    tuple_remaining: usize,
+    tuple_limit: usize,
 }
 
 impl Budget {
@@ -81,6 +86,8 @@ impl Budget {
             vector_limit: usize::MAX,
             text_remaining: usize::MAX,
             text_limit: usize::MAX,
+            tuple_remaining: 8 * 1024 * 1024,
+            tuple_limit: 8 * 1024 * 1024,
         }
     }
 
@@ -105,6 +112,19 @@ impl Budget {
             .with_help("reduce vector materialization or raise --max-vector-bytes / ExecutionOptions.max_vector_bytes"));
         }
         self.vector_remaining -= bytes;
+        Ok(())
+    }
+
+    pub fn with_tuple_bytes(mut self, bytes: usize) -> Self {
+        self.tuple_remaining = bytes;
+        self.tuple_limit = bytes;
+        self
+    }
+    pub fn charge_tuple_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
+        if bytes > self.tuple_remaining {
+            return Err(Diagnostic::new(DiagnosticKind::TupleAllocation, span, format!("cumulative tuple allocation limit of {} bytes exceeded", self.tuple_limit)).with_help("reduce tuple construction or raise --max-tuple-bytes / ExecutionOptions.max_tuple_bytes"));
+        }
+        self.tuple_remaining -= bytes;
         Ok(())
     }
 

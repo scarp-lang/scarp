@@ -82,9 +82,11 @@ Evaluating check retains runtime work/allocation/capture checks without replay.
 
 ## Limits and implementation safeguards
 
-Initial tuple arity is 1..32; nested tuple type/value depth is at most 64, matching
-the existing expression/type ceiling, and structural type nodes are bounded.
-Confirm stack tests at maximum legal nesting before qualification. The source
+Initial tuple arity is 1..32; nested tuple type/value depth is at most 32 and
+structural type nodes are limited to 4096. The existing expression ceiling
+remains 64. The implementation selects the lower tuple ceiling to reserve
+stack space for structural type/display/drop operations; its maximum-depth
+program passed on a 256 KiB host stack. The source
 parser rejects oversized shapes before materializing arbitrary member lists.
 Public host constructors enforce the same shape bounds and reject unit members.
 

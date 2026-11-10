@@ -63,3 +63,7 @@ cargo run --locked -- check examples/native_scalar_repeat.srp
 cargo run --locked -- run examples/inspection_json.srp
 cargo run --locked -- modules --json examples/inspection_json.srp
 cargo run --locked -- explain E0044
+
+cargo run --locked -- run examples/tuples.srp
+cargo run --locked -- check examples/tuples.srp
+cargo run --locked --example tuple_types

@@ -574,7 +574,13 @@ pub(crate) fn evaluate_with_spans(
         ));
     }
     for (i, (value, &expected)) in args.iter().zip(types).enumerate() {
-        crate::types::require_exact(value.kind(), expected, argument_span(i))?;
+        if value.kind() != expected {
+            return Err(crate::value::type_mismatch(
+                argument_span(i),
+                expected,
+                value.kind(),
+            ));
+        }
     }
     if matches!(
         function,

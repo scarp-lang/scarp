@@ -1,5 +1,13 @@
 # Test and validate changes
 
+For **unreleased tuples**, run `cargo test --locked --offline --test tuples
+--test tuples_modules_cli` and `cargo run --locked --offline --example tuple_types`.
+The [tuple contract](tuples.md) records exact source/shape/work limits, native
+rejection, schema migration and the Rust host compatibility boundary. The real
+`examples/tuples.srp` and negative `tests/fixtures/tuples` corpus run in tests;
+package smoke checks require schema 2 for this tuple interface and schema 1 for
+all existing primitive examples.
+
 For the **published v0.0.6-alpha.2 prerelease** (and continued source development), exercise
 `--test module_invalidation --test module_cache --test module_token_cache
 --test module_syntax_cache` and

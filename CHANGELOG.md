@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — immutable tuple development
+
+- Implement heterogeneous immutable tuple values/literals, singletons,
+  structural `tuple<...>` types, exact inference and literal-only projection.
+- Support typed functions, defaults/contracts/recursion, imported interfaces,
+  exact whole-value replacement, escaped nested display and bounded equality.
+- Add explicit tuple payload/work/capture accounting, checked host constructors,
+  E0059-E0061, native rejection, executable fixtures and stack/ownership tests.
+- Migrate source metadata to `SourceType`; module inventories exposing tuple
+  signatures use schema 2. Primitive IDs/operations and navigation schema remain
+  compatible; host AST/signature/value-kind fields and complete runtime option
+  struct literals require the documented migration.
+- Published alpha.5, versions and release controls are unchanged. Empty tuples,
+  tuple constants, dynamic indices, destructuring and mutable elements are deferred.
+
 ## 0.0.6-alpha.5 — published GitHub prerelease, 2026-11-09
 
 - Add deterministic CPU-only nucleus selection `top_p(vector, mass) -> integers`

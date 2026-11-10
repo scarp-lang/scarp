@@ -1,4 +1,7 @@
 //! Semantic type identities. Source-language legality is checked separately.
+mod source;
+pub use source::{SourceType, TupleType, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH};
+
 use std::{
     collections::HashMap,
     fmt,
@@ -77,12 +80,6 @@ impl fmt::Debug for TypeId {
     }
 }
 impl TypeId {
-    pub(crate) fn is_numeric(self) -> bool {
-        matches!(
-            self.primitive(),
-            Some(PrimitiveType::Integer | PrimitiveType::Float)
-        )
-    }
     pub fn index(self) -> usize {
         (self.0 & u64::from(u32::MAX)) as usize
     }
@@ -103,24 +100,11 @@ impl fmt::Display for TypeId {
     }
 }
 
-pub(crate) fn require_exact(
-    found: impl Into<TypeId>,
-    expected: impl Into<TypeId>,
-    span: crate::diagnostics::Span,
-) -> Result<(), crate::diagnostics::Diagnostic> {
-    let (found, expected) = (found.into(), expected.into());
-    if found == expected {
-        Ok(())
-    } else {
-        Err(type_mismatch(span, expected, found))
-    }
-}
 pub(crate) fn type_mismatch(
     span: crate::diagnostics::Span,
-    expected: impl Into<TypeId>,
-    found: impl Into<TypeId>,
+    expected: impl fmt::Display,
+    found: impl fmt::Display,
 ) -> crate::diagnostics::Diagnostic {
-    let (expected, found) = (expected.into(), found.into());
     crate::diagnostics::Diagnostic::new(crate::diagnostics::DiagnosticKind::TypeMismatch,span,format!("expected {expected}, found {found}"))
         .with_help("keep primitive types consistent; numeric operands must share a numeric kind, logic requires booleans")
 }
@@ -142,8 +126,8 @@ pub enum FunctionEffect {
     Impure,
 }
 
-// Children are IDs rather than owned subtrees. These descriptors prepare future
-// types; their presence here does not add source syntax or runtime values.
+// Children are IDs rather than owned subtrees. Source tuples use Tuple; other
+// composite descriptors remain tooling-only until their value contracts are implemented.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeKind {
     Primitive(PrimitiveType),

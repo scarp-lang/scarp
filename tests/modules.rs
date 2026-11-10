@@ -609,6 +609,7 @@ fn default_file_count_and_depth_boundaries_are_enforced_iteratively() {
             max_live_slots: 0,
             max_capture_bytes: 0,
             max_vector_bytes: 0,
+            max_tuple_bytes: ExecutionOptions::default().max_tuple_bytes,
             max_text_bytes: 0,
         })
         .unwrap();
@@ -711,14 +712,14 @@ fn loading_is_separate_from_linking_and_typed_metadata_is_inspectable() {
     .unwrap();
     assert_eq!(
         program.modules()[1].symbols[0].kind,
-        modules::SymbolKind::Constant(scarp::value::ValueType::Integer)
+        modules::SymbolKind::Constant(scarp::value::ValueType::Integer.into())
     );
     assert!(program.modules()[1].symbols[0].public);
     assert_eq!(
         program.modules()[1].symbols[1].kind,
         modules::SymbolKind::Function {
-            parameters: vec![scarp::value::ValueType::Tile],
-            result: scarp::value::ValueType::Vector,
+            parameters: vec![scarp::value::ValueType::Tile.into()],
+            result: scarp::value::ValueType::Vector.into(),
             pure: true
         }
     );

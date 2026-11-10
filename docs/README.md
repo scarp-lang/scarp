@@ -65,6 +65,10 @@ records the verified maintainer transfer to scarp-lang/scarp. Historical release
 notes describe fixed snapshots. Tensors, general native executable compilation, a package manager and
 website deployment remain separate.
 
+**Tuple development:** [immutable heterogeneous tuples](tuples.md) are implemented
+on their feature branch and absent from published alpha.5. Review the structural
+Rust API/schema migration before adopting that source.
+
 ## Guides and what each adds
 
 The [feature-completeness matrix](development/feature-matrix.md) distinguishes

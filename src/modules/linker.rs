@@ -89,8 +89,12 @@ fn collect(
                             public,
                             span: function.name_span,
                             kind: SymbolKind::Function {
-                                parameters: function.parameters.iter().map(|p| p.kind).collect(),
-                                result: function.result,
+                                parameters: function
+                                    .parameters
+                                    .iter()
+                                    .map(|p| p.kind.clone())
+                                    .collect(),
+                                result: function.result.clone(),
                                 pure: function.pure,
                             },
                         },
@@ -110,7 +114,7 @@ fn collect(
                     if *mutable {
                         return Err(syntax(*name_span, "library variables cannot be mutable"));
                     }
-                    let value = work.evaluate(initializer, *annotation, |name, span| {
+                    let value = work.evaluate(initializer, annotation.clone(), |name, span| {
                         let symbol = lookup_symbol(&table, |target| tables[target].as_ref().expect("completed dependency"), name, span)?
                             .ok_or_else(|| crate::resolver::unknown_name(name, span)
                                 .with_help("constant initializers may reference only earlier module constants or imported public constants"))?;

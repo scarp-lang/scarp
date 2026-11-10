@@ -212,11 +212,11 @@ impl std::error::Error for ModuleRunError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SymbolKind {
     Function {
-        parameters: Vec<crate::value::ValueType>,
-        result: crate::value::ValueType,
+        parameters: Vec<crate::types::SourceType>,
+        result: crate::types::SourceType,
         pure: bool,
     },
-    Constant(crate::value::ValueType),
+    Constant(crate::types::SourceType),
 }
 #[derive(Debug, Clone)]
 pub struct SymbolInfo {

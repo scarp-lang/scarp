@@ -1,5 +1,10 @@
 # Scarp
 
+**Unreleased tuple development:** the tuple feature branch implements immutable
+heterogeneous values, structural annotations and literal-only projections.
+See [the compiler contract and Rust migration](docs/tuples.md). This syntax is
+absent from published v0.0.6-alpha.5.
+
 **0.0.6-alpha.5** is the **latest published experimental GitHub prerelease**
 (9 November 2026), from exact source
 `205e92f166f186c3905e5880d41c31717b697b8e`.

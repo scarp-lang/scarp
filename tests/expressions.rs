@@ -200,7 +200,7 @@ fn rejects_malformed_expressions_and_deferred_syntax() {
         "1.2.3",
         "0xgg",
         "1_000",
-        "(1, 2)",
+        "(1,, 2)",
         "1 %",
         "\"a\" + \"b\"",
         "1 + \"text\"",
@@ -239,7 +239,9 @@ fn expression_nodes_preserve_spans_and_postorder_invariants() {
                     assert!(argument.expression < id);
                 }
             }
-            ExpressionKind::Vector { elements } | ExpressionKind::Integers { elements } => {
+            ExpressionKind::Tuple { elements }
+            | ExpressionKind::Vector { elements }
+            | ExpressionKind::Integers { elements } => {
                 assert!(elements.iter().all(|element| *element < id))
             }
             ExpressionKind::Index { vector, index, .. } => assert!(*vector < id && *index < id),

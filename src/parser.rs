@@ -1,5 +1,8 @@
 //! Parse declarations, assignments, blocks, and print statements without execution.
 
+use crate::types::{SourceType, MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH};
+use std::collections::VecDeque;
+
 use crate::{
     ast::{
         AssignmentOperator, BinaryOperator, CallArgument, ConditionalBranch, Contract, Expression,
@@ -19,9 +22,14 @@ pub const MAX_BLOCK_DEPTH: usize = 64;
 
 /// Parse a token stream. An omitted EOF token is treated as the end of input.
 pub fn parse(tokens: &[Token]) -> Result<Program, Diagnostic> {
-    Parser { tokens, cursor: 0 }
-        .program()
-        .map_err(|error| *error.0)
+    Parser {
+        tokens,
+        cursor: 0,
+        pending: VecDeque::new(),
+        type_end: 0,
+    }
+    .program()
+    .map_err(|error| *error.0)
 }
 
 // Keep recursive success paths' Result values small. Public diagnostics retain
@@ -41,11 +49,47 @@ impl ParseError {
 struct Parser<'a> {
     tokens: &'a [Token],
     cursor: usize,
+    pending: VecDeque<Token>,
+    type_end: usize,
 }
 
 impl Parser<'_> {
     fn current(&self) -> Option<&Token> {
-        self.tokens.get(self.cursor)
+        self.pending
+            .front()
+            .or_else(|| self.tokens.get(self.cursor))
+    }
+
+    fn advance(&mut self) {
+        if self.pending.pop_front().is_none() {
+            self.cursor += 1;
+        }
+    }
+    fn type_close(&mut self) -> Result<Span, ParseError> {
+        let token = self
+            .current()
+            .cloned()
+            .ok_or_else(|| self.expected("'>' after tuple type"))?;
+        let remainder = match token.kind {
+            TokenKind::Greater => Vec::new(),
+            TokenKind::ShiftRight => vec![TokenKind::Greater],
+            TokenKind::UnsignedRight => vec![TokenKind::Greater, TokenKind::Greater],
+            TokenKind::GreaterEqual => vec![TokenKind::Equal],
+            TokenKind::RightEqual => vec![TokenKind::Greater, TokenKind::Equal],
+            TokenKind::UnsignedEqual => {
+                vec![TokenKind::Greater, TokenKind::Greater, TokenKind::Equal]
+            }
+            _ => return Err(self.expected("'>' after tuple type")),
+        };
+        self.advance();
+        for (offset, kind) in remainder.into_iter().enumerate().rev() {
+            self.pending.push_front(Token {
+                kind,
+                span: Span::new(token.span.start + offset + 1, token.span.start + offset + 2),
+            });
+        }
+        self.type_end = token.span.start + 1;
+        Ok(Span::new(token.span.start, self.type_end))
     }
 
     fn expected(&self, expected: &str) -> ParseError {
@@ -68,7 +112,7 @@ impl Parser<'_> {
         if let Some(token) = self.current() {
             if token.kind == kind {
                 let span = token.span;
-                self.cursor += 1;
+                self.advance();
                 return Ok(span);
             }
         }
@@ -155,7 +199,7 @@ impl Parser<'_> {
             .with_help("move this declaration outside the block"));
         }
         let import = self.keyword("import");
-        self.cursor += 1;
+        self.advance();
         if import {
             let (path, path_span) = match self.current() {
                 Some(Token {
@@ -171,7 +215,7 @@ impl Parser<'_> {
                     .with_help("use import \"library.srp\" as library;"))
                 }
             };
-            self.cursor += 1;
+            self.advance();
             if !self.keyword("as") {
                 return Err(ParseError::new(
                     DiagnosticKind::ModuleSyntax,
@@ -180,7 +224,7 @@ impl Parser<'_> {
                 )
                 .with_help("use import \"library.srp\" as library;"));
             }
-            self.cursor += 1;
+            self.advance();
             let (alias, alias_span) = self.identifier()?;
             let end = self.punctuation(TokenKind::Semicolon, "';'")?.end;
             Ok(Statement::Import {
@@ -224,7 +268,7 @@ impl Parser<'_> {
     fn qualified_identifier(&mut self) -> Result<(String, Span), ParseError> {
         let (mut name, mut span) = self.identifier()?;
         if self.at(&TokenKind::Dot) {
-            self.cursor += 1;
+            self.advance();
             let (member, member_span) = self.identifier()?;
             name.push('.');
             name.push_str(&member);
@@ -281,7 +325,7 @@ impl Parser<'_> {
 
     fn repeat_loop(&mut self, depth: usize) -> Result<Statement, ParseError> {
         let start = self.current().unwrap().span.start;
-        self.cursor += 1;
+        self.advance();
         let mut nodes = Vec::new();
         let root = self.logical_or(&mut nodes, 0)?;
         if !self.keyword("as") {
@@ -289,7 +333,7 @@ impl Parser<'_> {
                 .expected("as followed by an index name")
                 .with_help("use repeat count as index { statements }"));
         }
-        self.cursor += 1;
+        self.advance();
         let (index, index_span) = match self.current() {
             Some(Token {
                 kind: TokenKind::Identifier(name),
@@ -301,7 +345,7 @@ impl Parser<'_> {
                     .with_help("use repeat count as index { statements }"))
             }
         };
-        self.cursor += 1;
+        self.advance();
         if !matches!(self.current().map(|t| &t.kind), Some(TokenKind::LeftBrace)) {
             return Err(self.expected("'{'").with_help(
                 "enclose the repeat body in braces: repeat count as index { statements }",
@@ -319,7 +363,7 @@ impl Parser<'_> {
 
     fn while_loop(&mut self, depth: usize) -> Result<Statement, ParseError> {
         let start = self.current().unwrap().span.start;
-        self.cursor += 1;
+        self.advance();
         let mut nodes = Vec::new();
         let root = self.logical_or(&mut nodes, 0).map_err(|error| {
             if error.0.kind == DiagnosticKind::UnexpectedToken {
@@ -365,7 +409,7 @@ impl Parser<'_> {
                 TokenKind::RightBrace if in_block => break,
                 TokenKind::Identifier(name) if name == "return" => {
                     let start = token.span.start;
-                    self.cursor += 1;
+                    self.advance();
                     let value = if self.at(&TokenKind::Semicolon) {
                         None
                     } else {
@@ -380,7 +424,7 @@ impl Parser<'_> {
                 TokenKind::Identifier(name) if name == "break" || name == "continue" => {
                     let start = token.span.start;
                     let is_break = name == "break";
-                    self.cursor += 1;
+                    self.advance();
                     let end = self.punctuation(TokenKind::Semicolon, "';'")?.end;
                     let span = Span::new(start, end);
                     statements.push(if is_break {
@@ -500,7 +544,7 @@ impl Parser<'_> {
         let start = token.span.start;
         let mutable = name == "var";
         let keyword = if mutable { "var" } else { "bind" };
-        self.cursor += 1;
+        self.advance();
         if self.keyword("mut")
             && matches!(
                 self.tokens.get(self.cursor + 1).map(|token| &token.kind),
@@ -522,9 +566,9 @@ impl Parser<'_> {
                     .with_help(format!("use {keyword} name = expression;")))
             }
         };
-        self.cursor += 1;
+        self.advance();
         let annotation = if self.at(&TokenKind::Colon) {
-            self.cursor += 1;
+            self.advance();
             let span = self
                 .current()
                 .map_or_else(Span::default, |token| token.span);
@@ -535,7 +579,10 @@ impl Parser<'_> {
                 }
                 error.with_help("binding types are integer, float, vector, integers, tile, boolean or string; an initializer is required")
             })?;
-            Some(crate::ast::TypeAnnotation { kind, span })
+            Some(crate::ast::TypeAnnotation {
+                kind,
+                span: Span::new(span.start, self.type_end),
+            })
         } else {
             None
         };
@@ -573,7 +620,8 @@ impl Parser<'_> {
         let name = name.clone();
         let name_span = token.span;
         let operator_span = self.tokens[self.cursor + 1].span;
-        self.cursor += 2;
+        self.advance();
+        self.advance();
         let mut nodes = Vec::new();
         let root = self.logical_or(&mut nodes, 0).map_err(|error| {
             if error.0.kind == DiagnosticKind::UnexpectedToken {
@@ -617,19 +665,69 @@ impl Parser<'_> {
                 span,
             }) => {
                 let result = (name.clone(), *span);
-                self.cursor += 1;
+                self.advance();
                 Ok(result)
             }
             _ => Err(self.expected("an identifier")),
         }
     }
 
-    fn value_type(&mut self, result: bool) -> Result<ValueType, ParseError> {
+    fn value_type(&mut self, result: bool) -> Result<SourceType, ParseError> {
+        self.source_type(result, 0)
+    }
+    fn source_type(&mut self, result: bool, depth: usize) -> Result<SourceType, ParseError> {
         let (name, span) = self.identifier()?;
+        self.type_end = span.end;
+        if name == "tuple" {
+            if depth >= MAX_TUPLE_DEPTH {
+                return Err(ParseError::new(
+                    DiagnosticKind::TupleLimit,
+                    span,
+                    "tuple type nesting exceeds 32 levels",
+                ));
+            }
+            self.punctuation(TokenKind::Less, "'<' after tuple")?;
+            let mut elements = Vec::new();
+            loop {
+                if elements.len() >= MAX_TUPLE_ARITY {
+                    return Err(ParseError::new(
+                        DiagnosticKind::TupleLimit,
+                        span,
+                        "tuple type arity exceeds 32",
+                    ));
+                }
+                elements.push(self.source_type(false, depth + 1)?);
+                if !self.at(&TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+                if matches!(
+                    self.current().map(|t| &t.kind),
+                    Some(
+                        TokenKind::Greater
+                            | TokenKind::ShiftRight
+                            | TokenKind::UnsignedRight
+                            | TokenKind::GreaterEqual
+                            | TokenKind::RightEqual
+                            | TokenKind::UnsignedEqual
+                    )
+                ) {
+                    break;
+                }
+            }
+            let end = self.type_close()?.end;
+            return SourceType::tuple(elements).ok_or_else(|| {
+                ParseError::new(
+                    DiagnosticKind::TupleLimit,
+                    Span::new(span.start, end),
+                    "tuple type exceeds shape limits",
+                )
+            });
+        }
         if let Some(kind) =
             ValueType::from_name(&name).filter(|kind| result || *kind != ValueType::Unit)
         {
-            return Ok(kind);
+            return Ok(kind.into());
         }
         match name.as_str() {
             "funcra" | "pure" => Err(ParseError::new(
@@ -655,12 +753,12 @@ impl Parser<'_> {
         let start = self.current().unwrap().span.start;
         let pure = self.keyword("pure");
         if pure {
-            self.cursor += 1;
+            self.advance();
         }
         if !self.keyword("funcra") {
             return Err(self.expected("funcra"));
         }
-        self.cursor += 1;
+        self.advance();
         let (name, name_span) = self.identifier()?;
         self.punctuation(TokenKind::LeftParen, "'('")?;
         let mut parameters = Vec::new();
@@ -669,7 +767,7 @@ impl Parser<'_> {
             self.punctuation(TokenKind::Colon, "':' before the parameter type")?;
             let kind = self.value_type(false)?;
             let default = if self.at(&TokenKind::Equal) {
-                self.cursor += 1;
+                self.advance();
                 Some(self.expression()?)
             } else {
                 None
@@ -683,7 +781,7 @@ impl Parser<'_> {
             if !self.at(&TokenKind::Comma) {
                 break;
             }
-            self.cursor += 1;
+            self.advance();
         }
         self.punctuation(TokenKind::RightParen, "')'")?;
         self.punctuation(TokenKind::Arrow, "'->' before the result type")?;
@@ -692,7 +790,7 @@ impl Parser<'_> {
         while self.keyword("needs") || self.keyword("ensures") {
             let start = self.current().unwrap().span.start;
             let postcondition = self.keyword("ensures");
-            self.cursor += 1;
+            self.advance();
             let expression = self.expression()?;
             let end = self
                 .punctuation(TokenKind::Semicolon, "';' after the contract")?
@@ -728,7 +826,7 @@ impl Parser<'_> {
             OutputTarget::Stdout
         };
         let newline = name != "write" && name != "ewrite";
-        self.cursor += 1;
+        self.advance();
         self.punctuation(TokenKind::LeftParen, "'('")?;
         let mut arguments = Vec::new();
         // Keep ordinary one-argument line output free of list allocations.
@@ -747,7 +845,7 @@ impl Parser<'_> {
                 }) = self.current().filter(|_| direct_string)
                 {
                     let argument = PrintArgument::String(value.clone());
-                    self.cursor += 1;
+                    self.advance();
                     argument
                 } else {
                     if !matches!(
@@ -783,7 +881,7 @@ impl Parser<'_> {
                 ) {
                     break;
                 }
-                self.cursor += 1;
+                self.advance();
                 if matches!(
                     self.current().map(|token| &token.kind),
                     Some(TokenKind::RightParen)
@@ -831,7 +929,7 @@ impl Parser<'_> {
         let mut branches = Vec::new();
         let mut end;
         loop {
-            self.cursor += 1; // if or elif
+            self.advance(); // if or elif
             let mut nodes = Vec::new();
             let root = self.logical_or(&mut nodes, 0)?;
             let (statements, span) = self.block(depth)?;
@@ -846,7 +944,7 @@ impl Parser<'_> {
             }
         }
         let otherwise = if self.keyword("else") {
-            self.cursor += 1;
+            self.advance();
             let (statements, span) = self.block(depth)?;
             end = span.end;
             statements
@@ -868,7 +966,7 @@ impl Parser<'_> {
         let mut left = self.logical_and(nodes, depth)?;
         while self.keyword("or") {
             let operator_span = self.current().unwrap().span;
-            self.cursor += 1;
+            self.advance();
             let right = self.logical_and(nodes, depth)?;
             left = logical(nodes, left, LogicalOperator::Or, right, operator_span);
         }
@@ -883,7 +981,7 @@ impl Parser<'_> {
         let mut left = self.logical_not(nodes, depth)?;
         while self.keyword("and") {
             let operator_span = self.current().unwrap().span;
-            self.cursor += 1;
+            self.advance();
             let right = self.logical_not(nodes, depth)?;
             left = logical(nodes, left, LogicalOperator::And, right, operator_span);
         }
@@ -898,7 +996,7 @@ impl Parser<'_> {
         let mut operators = Vec::new();
         while self.keyword("not") {
             operators.push(self.current().unwrap().span);
-            self.cursor += 1;
+            self.advance();
         }
         let mut operand = self.comparison(nodes, depth)?;
         for operator_span in operators.into_iter().rev() {
@@ -926,7 +1024,7 @@ impl Parser<'_> {
             .and_then(|token| comparison_operator(&token.kind))
         {
             let operator_span = self.current().unwrap().span;
-            self.cursor += 1;
+            self.advance();
             let right = self.arithmetic(nodes, depth)?;
             if self
                 .current()
@@ -980,7 +1078,7 @@ impl Parser<'_> {
                 reduce_binary(nodes, &mut operands, operator, span);
             }
             operators.push((operator, span, precedence));
-            self.cursor += 1;
+            self.advance();
             operands.push(self.unary(nodes, depth)?);
         }
         while let Some((operator, span, _)) = operators.pop() {
@@ -999,7 +1097,7 @@ impl Parser<'_> {
             Some(TokenKind::BitNot)
         ) {
             let operator_span = self.current().unwrap().span;
-            self.cursor += 1;
+            self.advance();
             let operand = self.postfix(nodes, depth)?;
             let span = Span::new(operator_span.start, nodes[operand].span.end);
             return Ok(push(
@@ -1017,7 +1115,7 @@ impl Parser<'_> {
         }) = self.current()
         {
             let operator_span = *span;
-            self.cursor += 1;
+            self.advance();
             // The minimum integer has no representable positive i64 magnitude.
             // Only a direct literal after '-' gets this special treatment.
             if let Some(Token {
@@ -1027,7 +1125,7 @@ impl Parser<'_> {
             {
                 if integer_magnitude(digits) == Some(1_u64 << 63) {
                     let span = Span::new(operator_span.start, span.end);
-                    self.cursor += 1;
+                    self.advance();
                     return Ok(push(nodes, ExpressionKind::Integer(i64::MIN), span));
                 }
             }
@@ -1066,16 +1164,23 @@ impl Parser<'_> {
         while self.at(&TokenKind::LeftBracket) {
             let opening = self.current().unwrap().span;
             self.expression_depth(depth, opening)?;
-            self.cursor += 1;
+            self.advance();
             let index = self.logical_or(nodes, depth + 1)?;
             let end = self.punctuation(TokenKind::RightBracket, "']'")?.end;
             let span = Span::new(nodes[vector].span.start, end);
+            let mut literal = index;
+            while let ExpressionKind::Group { expression } = nodes[literal].kind {
+                literal = expression;
+            }
+            let source_literal =
+                matches!(nodes[literal].kind, ExpressionKind::Integer(n) if n >= 0);
             vector = push(
                 nodes,
                 ExpressionKind::Index {
                     vector,
                     index,
                     operator_span: Span::new(opening.start, end),
+                    source_literal,
                 },
                 span,
             );
@@ -1100,7 +1205,8 @@ impl Parser<'_> {
                 .get(self.cursor + 1)
                 .is_some_and(|token| token.kind == TokenKind::Colon);
         if integers {
-            self.cursor += 2;
+            self.advance();
+            self.advance();
         }
         let mut elements = Vec::new();
         while !self.at(&TokenKind::RightBracket) {
@@ -1116,7 +1222,7 @@ impl Parser<'_> {
             if !self.at(&TokenKind::Comma) {
                 break;
             }
-            self.cursor += 1;
+            self.advance();
         }
         let end = self.punctuation(TokenKind::RightBracket, "']'")?.end;
         Ok(push(
@@ -1146,7 +1252,7 @@ impl Parser<'_> {
                 .is_some_and(|t| t.kind == TokenKind::Colon)
             {
                 let label = self.identifier()?;
-                self.cursor += 1;
+                self.advance();
                 Some(label)
             } else {
                 None
@@ -1156,7 +1262,7 @@ impl Parser<'_> {
             if !self.at(&TokenKind::Comma) {
                 break;
             }
-            self.cursor += 1;
+            self.advance();
         }
         let end = self.punctuation(TokenKind::RightParen, "')'")?.end;
         Ok(push(
@@ -1207,20 +1313,49 @@ impl Parser<'_> {
         depth: usize,
     ) -> Result<usize, ParseError> {
         let opening = self.current().unwrap().span;
-        if depth >= MAX_EXPRESSION_DEPTH {
-            return Err(ParseError::new(
-                DiagnosticKind::ExpressionNesting,
-                opening,
-                format!("expression nesting exceeds {MAX_EXPRESSION_DEPTH} levels"),
-            )
-            .with_help("reduce the number of nested parentheses"));
+        self.expression_depth(depth, opening)?;
+        self.advance();
+        let first = self.logical_or(nodes, depth + 1)?;
+        if !self.at(&TokenKind::Comma) {
+            let end = self.punctuation(TokenKind::RightParen, "')'")?.end;
+            return Ok(push(
+                nodes,
+                ExpressionKind::Group { expression: first },
+                Span::new(opening.start, end),
+            ));
         }
-        self.cursor += 1;
-        let expression = self.logical_or(nodes, depth + 1)?;
-        let end = self.punctuation(TokenKind::RightParen, "')'")?.end;
+        // Keep list storage out of the ordinary grouping stack frame.
+        self.tuple_literal(nodes, depth, opening, first)
+    }
+
+    fn tuple_literal(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+        opening: Span,
+        first: usize,
+    ) -> Result<usize, ParseError> {
+        let mut elements = vec![first];
+        while self.at(&TokenKind::Comma) {
+            self.advance();
+            if self.at(&TokenKind::RightParen) {
+                break;
+            }
+            if elements.len() >= MAX_TUPLE_ARITY {
+                return Err(ParseError::new(
+                    DiagnosticKind::TupleLimit,
+                    opening,
+                    "tuple literal arity exceeds 32",
+                ));
+            }
+            elements.push(self.logical_or(nodes, depth + 1)?);
+        }
+        let end = self
+            .punctuation(TokenKind::RightParen, "')' after tuple elements")?
+            .end;
         Ok(push(
             nodes,
-            ExpressionKind::Group { expression },
+            ExpressionKind::Tuple { elements },
             Span::new(opening.start, end),
         ))
     }
@@ -1243,7 +1378,7 @@ impl Parser<'_> {
                         )
                     })?;
                 let span = *span;
-                self.cursor += 1;
+                self.advance();
                 Ok(push(nodes, ExpressionKind::Float(value), span))
             }
             Some(Token {
@@ -1252,7 +1387,7 @@ impl Parser<'_> {
             }) => {
                 let kind = ExpressionKind::String(value.clone());
                 let span = *span;
-                self.cursor += 1;
+                self.advance();
                 Ok(push(nodes, kind, span))
             }
             Some(Token {
@@ -1272,7 +1407,7 @@ impl Parser<'_> {
                     _ => ExpressionKind::Name(name.clone()),
                 };
                 let span = *span;
-                self.cursor += 1;
+                self.advance();
                 Ok(push(nodes, kind, span))
             }
             Some(Token {
@@ -1295,7 +1430,7 @@ impl Parser<'_> {
                             "use a value from -9223372036854775808 to 9223372036854775807",
                         )
                     })?;
-                self.cursor += 1;
+                self.advance();
                 Ok(push(nodes, ExpressionKind::Integer(value), span))
             }
             _ => Err(self.expected("a literal, variable name, or '('")),

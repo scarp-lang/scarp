@@ -4,9 +4,10 @@ pub(super) fn resolve_function(
     function: FunctionDeclaration,
     signatures: &[FunctionInfo],
     names: &HashMap<String, usize>,
+    registry: &mut TypeRegistryBuilder,
 ) -> Result<ResolvedFunction, Diagnostic> {
-    let mut resolver = Resolver::new(signatures, names);
-    resolver.result = Some((function.result, function.name_span));
+    let mut resolver = Resolver::new(signatures, names, registry);
+    resolver.result = Some((function.result.clone(), function.name_span));
     resolver.pure = true;
     let mut defaults = Vec::new();
     let mut optional = false;
@@ -31,7 +32,7 @@ pub(super) fn resolve_function(
             optional = true;
             let expression = resolver.expression(expression)?;
             let initializer_span = expression.syntax.nodes()[expression.syntax.root()].span;
-            require_type(expression.kind, parameter.kind, initializer_span).map_err(|error| {
+            require_type(&expression.kind, &parameter.kind, initializer_span).map_err(|error| {
                 error.with_related(parameter.span, "the parameter's type is declared here")
             })?;
             Some(expression)
@@ -46,12 +47,12 @@ pub(super) fn resolve_function(
             None
         };
         let slot = resolver.slot_types.len();
-        resolver.slot_types.push(parameter.kind);
+        resolver.slot_types.push(parameter.kind.clone());
         resolver.scopes[0].insert(
             parameter.name,
             Binding {
                 slot,
-                kind: parameter.kind,
+                kind: parameter.kind.clone(),
                 declaration: parameter.span,
                 mutable: false,
                 repeat_index: false,
@@ -62,7 +63,7 @@ pub(super) fn resolve_function(
     }
     let result_slot = (function.result != ValueType::Unit).then_some(resolver.slot_types.len());
     if result_slot.is_some() {
-        resolver.slot_types.push(function.result);
+        resolver.slot_types.push(function.result.clone());
     }
     let mut contracts = Vec::new();
     for contract in function.contracts {
@@ -72,7 +73,7 @@ pub(super) fn resolve_function(
                     "result".into(),
                     Binding {
                         slot,
-                        kind: function.result,
+                        kind: function.result.clone(),
                         mutable: false,
                         repeat_index: false,
                         parameter: false,
@@ -82,7 +83,7 @@ pub(super) fn resolve_function(
             }
         }
         let expression = resolver.expression(contract.expression)?;
-        require_type(expression.kind, ValueType::Boolean, contract.span)?;
+        require_type(&expression.kind, ValueType::Boolean, contract.span)?;
         resolver.scopes[0].remove("result");
         contracts.push(ResolvedContract {
             expression,
@@ -106,7 +107,14 @@ pub(super) fn resolve_function(
     Ok(ResolvedFunction {
         statements: resolver.statements,
         slots: resolver.slot_types.len(),
-        slot_types: resolver.slot_types.iter().map(|kind| kind.id()).collect(),
+        slot_types: resolver
+            .slot_types
+            .iter()
+            .map(|kind| {
+                kind.intern(resolver.registry)
+                    .map_err(|e| type_info::failure(e, function.span))
+            })
+            .collect::<Result<Vec<_>, _>>()?,
         defaults,
         contracts,
         result_slot,
