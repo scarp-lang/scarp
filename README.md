@@ -1,21 +1,25 @@
 # Scarp
 
-**0.0.6-alpha.6** is the current development candidate for bounded program
-input, six scalar/text utilities and immutable heterogeneous tuples. See the
-[candidate scope](docs/releases/v0.0.6-alpha.6.md), [input contract](docs/program-input.md),
-[text contract](docs/text-foundations.md) and [tuple/Rust API migration](docs/tuples.md).
-Publication status is recorded separately after exact-source verification.
+**0.0.6-alpha.6** is the **latest published experimental GitHub prerelease**
+(10 November 2026), from exact source `cdf6a3924ec2a36c7beca5a9aec4f01a0bce515e`.
+It adds [bounded input](docs/program-input.md), [scalar/text utilities](docs/text-foundations.md)
+and [immutable tuples with a Rust API migration](docs/tuples.md).
+The latest published prerelease is
+[0.0.6-alpha.6](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.6),
+with seven verified assets for Windows x64, Linux x64 and macOS Apple Silicon.
+See [public notes](docs/releases/v0.0.6-alpha.6-publication.md) and
+[exact-source publication verification](docs/releases/v0.0.6-alpha.6-validation.md).
+The [candidate snapshot](docs/releases/v0.0.6-alpha.6.md) preserves preparation history.
 
-**0.0.6-alpha.5** is the **latest published experimental GitHub prerelease**
+**0.0.6-alpha.5** is an **earlier published experimental GitHub prerelease**
 (9 November 2026), from exact source
 `205e92f166f186c3905e5880d41c31717b697b8e`.
 It adds deterministic [Top-P nucleus ranking](docs/nucleus-selection.md),
 centered [Pearson correlation](docs/pearson-correlation.md), and limited
 [multi-binding ELF64 integer-kernel objects](docs/native-elf64.md). These
 features do **not** imply random sampling, a native executable CLI, or a
-stable ABI. The latest published prerelease is
-[0.0.6-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5),
-with verified Windows x64, Linux x64 and Apple Silicon archives.
+stable ABI. That release provided verified Windows x64, Linux x64 and
+Apple Silicon archives.
 See its [public release notes](docs/releases/v0.0.6-alpha.5-publication.md),
 [postpublication verification](docs/releases/v0.0.6-alpha.5-validation.md),
 and historical [candidate snapshot](docs/releases/v0.0.6-alpha.5.md).
@@ -80,8 +84,8 @@ See [alpha.5 release notes](docs/releases/v0.0.5-alpha.5.md) and the
 [publication record](docs/releases/v0.0.5-alpha.5-validation.md).
 
 Scarp is an experimental programming language implemented in Rust. The latest
-published **0.0.6-alpha.5** prerelease was published on 9 November 2026 from
-exact source `205e92f166f186c3905e5880d41c31717b697b8e`. The compiler provides a lexer,
+published **0.0.6-alpha.6** prerelease was published on 10 November 2026 from
+exact source `cdf6a3924ec2a36c7beca5a9aec4f01a0bce515e`. The compiler provides a lexer,
 parser, typed resolver, interpreter, source modules, finite binary64 numerics
 and a Scarp-first CLI. The bounded `create`, `launch` and project-directory
 `verify` workflow remains available. Syntax and APIs are not stable.

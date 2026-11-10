@@ -1,6 +1,6 @@
 # Version and API compatibility
 
-`0.0.6-alpha.6` is the current development candidate. Tuple source annotations,
+`0.0.6-alpha.6` is **a published GitHub prerelease** (10 November 2026). Tuple source annotations,
 function metadata and `Value::kind()` now use structural `SourceType`; complete
 `ExecutionOptions` literals add `max_tuple_bytes`. See [tuple migration](tuples.md).
 Module inventories exposing tuple interfaces use schema 2; primitive-only output
@@ -43,7 +43,7 @@ See [RMS semantics and limits](root-mean-square.md). The opt-in
 and independent resource limits; it does not change the existing module or
 diagnostic JSON schema-v1 contracts.
 
-**Current published package:** `0.0.6-alpha.5` is a GitHub prerelease.
+**Earlier published package:** `0.0.6-alpha.5` is a GitHub prerelease.
 It builds on alpha.2's optional Rust embedding caches and dependency
 invalidation, adding bounded AI-oriented score operations and internal
 compiler verification without changing CLI syntax or enabling a general
@@ -56,7 +56,7 @@ The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.6-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5).
+[0.0.6-alpha.6](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.6).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a
@@ -132,7 +132,7 @@ Use this guide before copying an example into a different Scarp executable or
 updating a Rust embedding host. It compares the published v0.0.1, v0.0.2,
 v0.0.3-beta.1, beta.2, and beta.3 snapshots. Beta.3 uses the syntax described below;
 separate feature branches can differ from both main and downloaded binaries.
-The latest published prerelease is v0.0.6-alpha.2. It retains
+The earlier v0.0.6-alpha.2 prerelease retains
 the alpha.5 project inspection and experimental scalar C11 emitter and
 alpha.1 symbol/reference navigation and finite root mean square, and
 adds opt-in incremental compiler cache foundations. The emitter

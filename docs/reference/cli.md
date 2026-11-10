@@ -1,12 +1,12 @@
 # Command-line reference
 
-**v0.0.6-alpha.6 development candidate:** `exec`/`run`/`launch` support redirected
+**v0.0.6-alpha.6 published prerelease:** `exec`/`run`/`launch` support redirected
 UTF-8 `read_line()` with `--max-input-line-bytes`, `--max-input-bytes` and
 `--max-input-reads`. `--max-tuple-bytes` limits new tuple payload. Terminal reads
 and evaluating `check` report E0054; `verify` remains static. See the
 [input contract](../program-input.md) and [tuple contract](../tuples.md).
 
-**v0.0.6-alpha.5** is the latest published experimental GitHub prerelease,
+**v0.0.6-alpha.5** is an earlier published experimental GitHub prerelease,
 released on **9 November 2026** from exact source
 `205e92f166f186c3905e5880d41c31717b697b8e`.
 See the [public release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5)
@@ -26,7 +26,7 @@ The **published `v0.0.6-alpha.3` prerelease** adds numerical built-ins but
 remains compatible with published `v0.0.6-alpha.2`. See
 [alpha.3 publication verification](../releases/v0.0.6-alpha.3-validation.md).
 
-## Scarp-first CLI (retained by published v0.0.6-alpha.5)
+## Scarp-first CLI (retained by published v0.0.6-alpha.6)
 
 The published alpha.2 prerelease adds no CLI commands: its new cache and
 dependency-invalidation features are opt-in Rust embedding APIs. The command
@@ -36,7 +36,7 @@ Published v0.0.6-alpha.1 adds static `inspect symbols` and `inspect references`
 commands, which are absent from older alpha.5 packages.
 
 The latest published prerelease is
-[v0.0.6-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5).
+[v0.0.6-alpha.6](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.6).
 It retains project-directory module inspection. The experimental C11 scalar
 source emitter is a Rust embedding API, **not** a Scarp CLI command;
 `scarp compile` still does not exist.

@@ -1,6 +1,7 @@
-# Immutable tuple development contract
+# Immutable tuple contract
 
-Status: **implemented in the combined alpha.6 candidate, under qualification**.
+Status: **published in v0.0.6-alpha.6**, 10 November 2026.
+See [exact-source verification](releases/v0.0.6-alpha.6-validation.md).
 Published v0.0.6-alpha.5 does not accept this syntax. See
 [proposal 0040](proposals/0040-immutable-tuples.md), the
 [baseline/risk audit](development/tuple-baseline-audit-2026-11-10.md), the

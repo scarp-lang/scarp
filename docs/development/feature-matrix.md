@@ -1,16 +1,17 @@
 # Feature completeness and development roadmap
 
 **Reviewed 2026-11-10.** The latest **published** GitHub prerelease is
-[v0.0.6-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5)
-(9 November 2026), from exact source
-`205e92f166f186c3905e5880d41c31717b697b8e`.
-Cargo declares `0.0.6-alpha.6`, the combined core-foundations development
-candidate; see [scope and gates](../releases/v0.0.6-alpha.6.md). Published alpha.5 includes deterministic `top_p` and
-`top_p_values`, centered `pearson_correlation`, and dependent integer
-bindings in the experimental ELF64 relocatable-object Rust API; see the
-[publication verification](../releases/v0.0.6-alpha.5-validation.md).
-Its [source candidate notes](../releases/v0.0.6-alpha.5.md) remain a
-historical snapshot and do not govern current publication status.
+[v0.0.6-alpha.6](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.6)
+(10 November 2026), from exact source `cdf6a3924ec2a36c7beca5a9aec4f01a0bce515e`.
+Cargo declares `0.0.6-alpha.6`, matching the published prerelease. It adds bounded
+program input, six scalar/text utilities and immutable structural tuples; see
+[publication verification](../releases/v0.0.6-alpha.6-validation.md) and
+[Rust API migration](../tuples.md). Its [candidate notes](../releases/v0.0.6-alpha.6.md)
+remain a historical preparation snapshot.
+
+Published alpha.5 introduced deterministic `top_p`, `top_p_values`, centered
+`pearson_correlation` and dependent integer bindings in the narrow ELF64 object
+API; see its [verification](../releases/v0.0.6-alpha.5-validation.md).
 
 Published alpha.4 introduced sampled numerical calculus, cosine similarity and
 the first narrow ELF64 object writer; alpha.3 introduced `topk`,
@@ -58,9 +59,9 @@ requires separate architecture and multiple implementation phases.
 | Scalar constants | Implemented by #71; annotations checked before evaluation | Approved constant intrinsics only after separate design | Shared expression typing/evaluation | P0 | M | Order/cycles, import visibility, task/node bounds | Constant guide |
 | Bitwise/radix/remainder | Implemented in main and published alpha.3; tests/bit_operations.rs covers full-width operations | No missing signed-i64 operator in this subset | Current lexer, parser, resolver and evaluator | P0 | M | All shift counts, overflow, precedence, module parity | Values/operators |
 | Strings | UTF-8 literals/equality, shared storage, bounded queries and construction | Normalization and richer text policy | Typed pure built-ins and work charging | P0 | M | Combining marks, emoji, empty input, limits | Text indexing contract |
-| Scalar/text foundations (alpha.6 candidate) | Six pure intrinsics for explicit decimal parsing/formatting, Unicode trim and literal replacement; absent from published alpha.5 | Char/byte types, split/join and general collections remain separate | Existing typed built-in registry and text/work budgets | P0 | M | Exact scalar round trips, invalid input, resource bounds, module/CLI parity | [Contract](../text-foundations.md) |
+| Scalar/text foundations (published alpha.6) | Six pure intrinsics for explicit decimal parsing/formatting, Unicode trim and literal replacement; absent from published alpha.5 | Char/byte types, split/join and general collections remain separate | Existing typed built-in registry and text/work budgets | P0 | M | Exact scalar round trips, invalid input, resource bounds, module/CLI parity | [Contract](../text-foundations.md) |
 | Characters and bytes | Missing | Distinct types, decoding and conversion rules | Type representation and allocation limits | P2 | L | Encoding/invalid sequences, host parity | Type proposal |
-| Immutable heterogeneous tuples | Implemented in the alpha.6 candidate; absent from published alpha.5 | Empty tuples, dynamic indices, destructuring and tuple constants deferred | Structural SourceType, tuple values, registry and bounded interpreter integration | P0 | L | Creation, projection, calls/modules, equality/display, quotas, spans and host migration | [Tuple contract](../tuples.md) |
+| Immutable heterogeneous tuples | Published alpha.6; absent from alpha.5 | Empty tuples, dynamic indices, destructuring and tuple constants deferred | Structural SourceType, tuple values, registry and bounded interpreter integration | P0 | L | Creation, projection, calls/modules, equality/display, quotas, spans and host migration | [Tuple contract](../tuples.md) |
 | Fixed typed arrays | Deferred; proposal 0036 | Types, literals, indexing and whole-value semantics | Composite source/value boundary | P1 | L | Length/index/type errors, quotas and modules | Array proposal |
 | Dynamic typed lists | Numeric vectors only | General element types and mutation policy | Composite types, allocation budgets | P2 | XL | Aliasing, shape, limits, retirement | Collection contract |
 | Maps/sets | Missing | Key equality/hash policy, deterministic iteration | Composite types and allocation accounting | P2 | XL | Collisions/order/limits, Unicode keys | Collection contract |
@@ -92,7 +93,7 @@ requires separate architecture and multiple implementation phases.
 | Sampled scientific calculus | Published v0.0.6-alpha.4: bounded `sample_area`, `sample_slopes` and `sample_cumulative_area` for finite samples | Adaptive integration, pointwise derivatives, higher-order schemes | Finite vector registry and execution budgets | P1 | M | Analytic linear oracle, irregular grid, overflow, subnormal, shape, work and allocation | [Sampled calculus contract](../sampled-calculus.md) |
 | General text/algorithms | Unicode length/codepoint/search/prefix/suffix implemented | General collection sorting/search | Allocation/work policy, collection types | P0 | M | Unicode semantics, deterministic search, limits | Standard library |
 | Formatting/JSON/serialization | Versioned module metadata JSON implemented | Language value JSON, general formatting and serialization | Error/composite values; bounded parsing | P1 | L | Escaping, schemas, invalid data, limits | Format/version policy |
-| Program line input | Implemented in the alpha.6 candidate; absent from published alpha.5 | Terminal prompts/ask explicitly deferred | Explicit BufRead capability, independent input quotas and existing work/text/output budgets | P0 | M | UTF-8/CRLF/EOF, purity, atomic replay, static nonexecution, injected readers, CLI and exact limits | [Compiler input contract](../program-input.md) |
+| Program line input | Published alpha.6; absent from alpha.5 | Terminal prompts/ask explicitly deferred | Explicit BufRead capability, independent input quotas and existing work/text/output budgets | P0 | M | UTF-8/CRLF/EOF, purity, atomic replay, static nonexecution, injected readers, CLI and exact limits | [Compiler input contract](../program-input.md) |
 | Filesystem/network/process I/O | Explicit source loader only | External capability model and structured errors | Effects, permissions, errors | P2 | XL | Denied access, roots, no ambient authority | Security model |
 | Dates/time/random/environment | Missing | Explicit nondeterministic host capabilities | Effects/host interfaces | P3 | L | Seed/replay, denied host calls | Capability APIs |
 | Numerical AI kernels | Published: vectors/tiles, stable softmax/loss/gradients, RMS, alpha.3 Top-K and temperature-controlled softmax, alpha.4 cosine similarity; published alpha.5 adds deterministic Top-P and Pearson correlation | Generalized tensors/broadcasting and shape types (proposal 0036) | Composite numeric type/shape design | P1 | XL | Reference models, shapes, budgets, precision | Tensor proposal |

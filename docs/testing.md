@@ -1,6 +1,6 @@
 # Test and validate changes
 
-For **alpha.6 candidate tuples**, run `cargo test --locked --offline --test tuples
+For **published alpha.6 tuples**, run `cargo test --locked --offline --test tuples
 --test tuples_modules_cli` and `cargo run --locked --offline --example tuple_types`.
 The [tuple contract](tuples.md) records exact source/shape/work limits, native
 rejection, schema migration and the Rust host compatibility boundary. The real
@@ -16,7 +16,7 @@ Compiler-owned `.srp`, exact `.stdout`, raw `.stdin` and error-code fixtures liv
 under [tests/fixtures/core-language](../tests/fixtures/core-language/README.md).
 Runtime failures require both output streams to remain empty.
 
-For the **alpha.6 candidate program-input slice**, run
+For the **published alpha.6 program-input slice**, run
 `cargo test --locked --offline --test program_input --test program_input_modules_cli`,
 `cargo run --locked --offline --example program_input`, and
 `python3 scripts/test_program_input.py target/debug/scarp`.
@@ -25,7 +25,7 @@ runner supplies raw `.stdin` companions, compares exact `.stdout`, and rejects
 orphaned fixtures. Package smoke tests repeat redirected input against extracted
 binaries and statically verify input programs; legacy `check` must never read
 stdin. See the [input contract](program-input.md). This feature is absent from
-published alpha.5. The combined release candidate also runs
+published alpha.5. The combined released source also runs
 `cargo test --locked --offline --test core_foundations_integration`: imported input,
 text parsing and tuple results, independent quotas, repeated execution and atomic errors.
 
@@ -38,8 +38,8 @@ benchmark measures distinct cold, warm token, warm syntax, and combined cache
 workloads without claiming a portable speedup. Also run
 `python3 -m unittest scripts/test_release_assets.py scripts/test_release_docs.py`;
 missing alpha.2 cache docs and stale metadata must fail native package checks.
-The current published compiler is **v0.0.6-alpha.5**; see its
-[source and asset verification](releases/v0.0.6-alpha.5-validation.md).
+The current published compiler is **v0.0.6-alpha.6**; see its
+[source and asset verification](releases/v0.0.6-alpha.6-validation.md).
 The [alpha.2 publication verification](releases/v0.0.6-alpha.2-validation.md)
 and [candidate gates](releases/v0.0.6-alpha.2-preparation.md) record the earlier
 cache milestone, not the latest download.

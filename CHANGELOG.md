@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.6-alpha.6 — development candidate, 2026-11-10
+## 0.0.6-alpha.6 — published GitHub prerelease, 2026-11-10
 
 - Add impure bounded `read_line()` with explicit Rust readers, redirected CLI
   stdin, UTF-8/CRLF/EOF diagnostics and independent line/byte/read limits.

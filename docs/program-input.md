@@ -1,7 +1,7 @@
-# Bounded program input: development contract
+# Bounded program input contract
 
-Status: **implemented in the alpha.6 candidate, not published in
-v0.0.6-alpha.5**. Integration and release validation remain separate gates.
+Status: **published in v0.0.6-alpha.6**, 10 November 2026.
+The older alpha.5 does not support input. See [publication verification](releases/v0.0.6-alpha.6-validation.md).
 This is the compiler-owned contract and regression-fixture reference. Public
 reference material belongs in Scarp Docs and lessons in Scarp by Example after
 integration. The preceding design is [PR #180](https://github.com/scarp-lang/scarp/pull/180).

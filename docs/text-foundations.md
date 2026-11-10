@@ -1,8 +1,7 @@
 # Bounded scalar/text foundations — alpha.6 contract
 
-These six pure intrinsics are implemented in the combined alpha.6 candidate.
-They are **absent from published v0.0.6-alpha.5**. Cargo declares
-alpha.6 for qualification; identify the exact source before using them.
+These six pure intrinsics are **published in v0.0.6-alpha.6** and absent from
+alpha.5. See [exact-source verification](releases/v0.0.6-alpha.6-validation.md).
 This engineering specification and regression example stay with the compiler.
 Public Docs/By Example adoption follows an integrated, compatibility-tested
 compiler revision; this PR does not publish learner pages or a release.
@@ -108,7 +107,7 @@ unchanged. Built-ins keep existing user-function shadowing rules.
 
 ## Hindi notes
 
-यह feature अभी draft branch में है; published alpha.5 binary में उपलब्ध नहीं है।
+ये सुविधाएँ v0.0.6-alpha.6 में उपलब्ध हैं; पुराने alpha.5 में नहीं हैं।
 `text_to_integer("42")` string से integer बनाता है और `integer_to_text(42)`
 वापस string देता है। Spaces हटाने के लिए `text_trim` अलग से लिखें। हिन्दी अंक,
 underscore और hexadecimal text इस decimal conversion में स्वीकार नहीं हैं।
