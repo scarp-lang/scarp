@@ -1,0 +1,9 @@
+// alpha.6 candidate tuples; published alpha.5 does not accept this syntax.
+import "modules/tuple_pairs.srp" as pairs;
+bind first: tuple<integer, string> = pairs.make(7, label: "नमस्ते");
+var value = first;
+print(value);
+value = pairs.advance(value);
+print(first, value, value[0]);
+print((42,), (42), (true, (-0.0, "line\nbreak")));
+print((1, [2.0, 3.0])[1][0], first == pairs.make(7, label: "नमस्ते"));

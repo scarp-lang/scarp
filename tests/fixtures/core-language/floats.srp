@@ -1,0 +1,2 @@
+bind speed: float = 2.5;
+print(speed * 4.0, 7.5 / 2.5, to_float(12), to_integer(8.0));

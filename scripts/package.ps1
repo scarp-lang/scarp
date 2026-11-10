@@ -8,11 +8,12 @@ param(
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 function Invoke-ScarpProcess {
-    param([string]$Executable, [string[]]$Arguments)
+    param([string]$Executable, [string[]]$Arguments, [byte[]]$InputBytes = @())
     $start = [System.Diagnostics.ProcessStartInfo]::new()
     $start.FileName = $Executable
     $start.UseShellExecute = $false
     $start.CreateNoWindow = $true
+    $start.RedirectStandardInput = $true
     $start.RedirectStandardOutput = $true
     $start.RedirectStandardError = $true
     foreach ($argument in $Arguments) { $start.ArgumentList.Add($argument) }
@@ -24,6 +25,10 @@ function Invoke-ScarpProcess {
         if (-not $process.Start()) { throw 'Could not start packaged executable' }
         $readOut = $process.StandardOutput.BaseStream.CopyToAsync($stdout)
         $readErr = $process.StandardError.BaseStream.CopyToAsync($stderr)
+        if ($InputBytes.Length -gt 0) {
+            $process.StandardInput.BaseStream.Write($InputBytes, 0, $InputBytes.Length)
+        }
+        $process.StandardInput.Close()
         $process.WaitForExit()
         [void]$readOut.GetAwaiter().GetResult()
         [void]$readErr.GetAwaiter().GetResult()
@@ -79,7 +84,7 @@ try {
     foreach ($directory in @('examples', 'docs')) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $directory) -Destination $packageRoot -Recurse
     }
-    if ($version -in @('0.0.5-alpha.2', '0.0.5-alpha.3', '0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5')) {
+    if ($version -in @('0.0.5-alpha.2', '0.0.5-alpha.3', '0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6')) {
         $releaseMetadataPath = Join-Path $projectRoot '.github/release-metadata.json'
         $releaseMetadata = Get-Content -LiteralPath $releaseMetadataPath -Raw | ConvertFrom-Json
         if ($releaseMetadata.schema_version -cne 1 -or $releaseMetadata.version -cne $version -or $releaseMetadata.documentation_repository -cne 'https://github.com/scarp-lang/scarp-docs') {
@@ -142,7 +147,7 @@ try {
         if ($staticNavigation.ExitCode -ne 0 -or $staticNavigation.Stderr.Length -ne 0) { throw 'Packaged navigation must not evaluate runtime arithmetic' }
     }
 
-    if ($version -in @('0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5')) {
+    if ($version -in @('0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6')) {
         # Exercise the actual extracted distributable, not a development binary.
         $projectPath = Join-Path $stagingRoot 'alpha4-project-smoke'
         $created = Invoke-ScarpProcess -Executable $executable -Arguments @('create', $projectPath)
@@ -153,7 +158,7 @@ try {
         if ($projectVerify.ExitCode -ne 0 -or $projectVerify.Stdout.Length -ne 0 -or $projectVerify.Stderr.Length -ne 0) {
             throw 'Packaged Scarp project static verification failed'
         }
-        if ($version -in @('0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5')) {
+        if ($version -in @('0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6')) {
             $projectModules = Invoke-ScarpProcess -Executable $executable -Arguments @('inspect', 'modules', '--json', $projectPath)
             if ($projectModules.ExitCode -ne 0 -or $projectModules.Stderr.Length -ne 0) {
                 throw 'Packaged project directory module inspection failed'
@@ -188,12 +193,16 @@ try {
     foreach ($exampleFile in $exampleSources) {
         $example = $exampleFile.BaseName
         $source = $exampleFile.FullName
-        $actual = Invoke-ScarpProcess -Executable $executable -Arguments @('run', $source)
+        $inputPath = Join-Path $extractedPackage "examples/$example.stdin"
+        $hasInput = Test-Path -LiteralPath $inputPath
+        $inputBytes = if ($hasInput) { [IO.File]::ReadAllBytes($inputPath) } else { [byte[]]@() }
+        $actual = Invoke-ScarpProcess -Executable $executable -Arguments @('run', $source) -InputBytes $inputBytes
         if ($actual.ExitCode -ne 0 -or $actual.Stderr.Length -ne 0) { throw "Packaged $example example failed" }
         $expected = [System.IO.File]::ReadAllBytes((Join-Path $extractedPackage "examples/$example.stdout"))
         if ([Convert]::ToBase64String($actual.Stdout) -cne [Convert]::ToBase64String($expected)) { throw "Packaged $example output differs" }
-        $checkOutput = & $executable check $source
-        if ($LASTEXITCODE -ne 0 -or $checkOutput) { throw "Packaged $example validation failed" }
+        $checkVerb = if ($hasInput) { 'verify' } else { 'check' }
+        $checked = Invoke-ScarpProcess -Executable $executable -Arguments @($checkVerb, $source)
+        if ($checked.ExitCode -ne 0 -or $checked.Stdout.Length -ne 0 -or $checked.Stderr.Length -ne 0) { throw "Packaged $example validation failed" }
         $inventory = Invoke-ScarpProcess -Executable $executable -Arguments @('modules', $source)
         if ($inventory.ExitCode -ne 0 -or $inventory.Stderr.Length -ne 0 -or -not [System.Text.Encoding]::UTF8.GetString($inventory.Stdout).StartsWith('modules: ')) {
             throw "Packaged $example static module inspection failed"
@@ -201,7 +210,8 @@ try {
         $json = Invoke-ScarpProcess -Executable $executable -Arguments @('modules', '--json', $source)
         if ($json.ExitCode -ne 0 -or $json.Stderr.Length -ne 0) { throw "Packaged $example JSON inspection failed" }
         $metadata = [System.Text.Encoding]::UTF8.GetString($json.Stdout) | ConvertFrom-Json -AsHashtable
-        if ($metadata.schema_version -ne 1 -or $metadata.entry -ne 0 -or $metadata.modules.Count -lt 1) {
+        $expectedSchema = if ($example -in @('tuples', 'core_input_tuple')) { 2 } else { 1 }
+        if ($metadata.schema_version -ne $expectedSchema -or $metadata.entry -ne 0 -or $metadata.modules.Count -lt 1) {
             throw "Packaged $example JSON schema failed"
         }
     }

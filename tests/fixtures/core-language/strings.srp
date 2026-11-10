@@ -1,0 +1,3 @@
+bind greeting = text_concat("नमस्ते", " 🌍");
+print(greeting);
+print(text_len("é🌍é"), text_slice("é🌍é", 1, 1), text_contains(greeting,"🌍"));

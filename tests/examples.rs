@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{fs, io::Cursor, path::Path};
 
 #[test]
 fn every_shipped_example_matches_its_expected_output() {
@@ -18,9 +18,20 @@ fn every_shipped_example_matches_its_expected_output() {
         let mut stderr = Vec::new();
         let program = scarp::modules::compile_file(path, scarp::modules::ModuleLimits::default())
             .unwrap_or_else(|error| panic!("{}", error.render()));
-        program
-            .execute(&mut actual, &mut stderr, scarp::ExecutionOptions::default())
-            .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+        let input_path = path.with_extension("stdin");
+        let result = if input_path.exists() {
+            let input = fs::read(&input_path).unwrap();
+            program.execute_with_input(
+                &mut Cursor::new(input),
+                &mut actual,
+                &mut stderr,
+                Default::default(),
+                Default::default(),
+            )
+        } else {
+            program.execute(&mut actual, &mut stderr, scarp::ExecutionOptions::default())
+        };
+        result.unwrap_or_else(|error| panic!("{}: {error}", path.display()));
         assert_eq!(actual, expected, "{}", path.display());
         assert!(stderr.is_empty(), "unexpected stderr: {}", path.display());
     }
@@ -28,7 +39,7 @@ fn every_shipped_example_matches_its_expected_output() {
         let path = entry.unwrap().path();
         if path
             .extension()
-            .is_some_and(|extension| extension == "stdout")
+            .is_some_and(|extension| extension == "stdout" || extension == "stdin")
         {
             assert!(
                 paths.contains(&path.with_extension("srp")),

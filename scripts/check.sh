@@ -54,7 +54,7 @@ cargo run --locked -- modules examples/module_inspection.srp
 cargo run --locked -- modules examples/constant_expressions.srp
 cargo run --locked -- run examples/typed_declarations.srp
 cargo run --locked -- check examples/typed_declarations.srp
-for example in scalar_conversions unicode_text symbol_navigation text_construction integer_collections bit_fields numerical_kernels root_mean_square collection_module topk_scores temperature_softmax sampled_calculus sample_cumulative_area cosine_similarity nucleus_selection pearson_correlation; do
+for example in scalar_conversions unicode_text symbol_navigation text_construction integer_collections bit_fields numerical_kernels root_mean_square collection_module topk_scores temperature_softmax sampled_calculus sample_cumulative_area cosine_similarity nucleus_selection pearson_correlation text_foundations; do
     cargo run --locked -- run "examples/$example.srp"
     cargo run --locked -- check "examples/$example.srp"
 done
@@ -63,3 +63,13 @@ cargo run --locked -- check examples/native_scalar_repeat.srp
 cargo run --locked -- run examples/inspection_json.srp
 cargo run --locked -- modules --json examples/inspection_json.srp
 cargo run --locked -- explain E0044
+
+cargo run --locked -- run examples/tuples.srp
+cargo run --locked -- check examples/tuples.srp
+cargo run --locked --example tuple_types
+cargo run --locked --example program_input
+cargo run --locked -- verify examples/program_input.srp
+cargo run --locked -- run examples/program_input.srp < examples/program_input.stdin
+
+cargo run --locked -- verify examples/core_input_tuple.srp
+cargo run --locked -- run examples/core_input_tuple.srp < examples/core_input_tuple.stdin

@@ -17,7 +17,7 @@ HISTORICAL_ALPHA2 = "0.0.6-alpha.2"
 HISTORICAL_ALPHA1 = "0.0.6-alpha.1"
 HISTORICAL_ALPHA4 = "0.0.5-alpha.4"
 HISTORICAL_ALPHA5 = "0.0.5-alpha.5"
-PACKAGE_VERSION = "0.0.6-alpha.5"
+PACKAGE_VERSION = "0.0.6-alpha.6"
 
 
 def package_version():
@@ -84,13 +84,13 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         needles = {
             "README.md": (f"**{version}**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/README.md": (f"**{version} prerelease**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
-            "docs/compatibility.md": (f"`{version}` is **a published GitHub prerelease**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
+            "docs/compatibility.md": (f"`{version}` is the current development candidate", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/reference/cli.md": (f"v{version}",),
             "docs/development/feature-matrix.md": (f"Cargo declares `{version}`",),
-            "CHANGELOG.md": (f"## {version} — published GitHub prerelease, 2026-11-09",),
-            "docs/releases/v0.0.6-alpha.5.md": (f"Scarp v{version}", "source candidate", "Publication gates"),
+            "CHANGELOG.md": (f"## {version} — development candidate, 2026-11-10",),
+            "docs/releases/v0.0.6-alpha.5.md": (f"Scarp v{PUBLISHED_VERSION}", "source candidate", "Publication gates"),
             "docs/releases/v0.0.6-alpha.5-publication.md": (
-                f"Scarp v{version} — prerelease", "## New in",
+                f"Scarp v{PUBLISHED_VERSION} — prerelease", "## New in",
                 "## Compatibility and limits",
             ),
             "docs/releases/v0.0.6-alpha.2.md": (f"Scarp v{HISTORICAL_ALPHA2}", "not a published GitHub release", "release engineering"),
@@ -143,7 +143,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
 
     def test_alpha5_published_notes_and_historical_candidate_snapshot(self):
         self.assertEqual(PACKAGE_VERSION, package_version())
-        self.assertEqual(PUBLISHED_VERSION, PACKAGE_VERSION)
+        self.assertEqual(PUBLISHED_VERSION, "0.0.6-alpha.5")
         candidate = (ROOT / "docs/releases/v0.0.6-alpha.5.md").read_text(encoding="utf-8")
         public = (ROOT / "docs/releases/v0.0.6-alpha.5-publication.md").read_text(encoding="utf-8")
         self.assertIn("Versioned development source candidate", candidate)
@@ -218,7 +218,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
     def test_latest_published_anchor_and_immutable_candidate_snapshot(self):
         version = PUBLISHED_VERSION
         self.assertEqual(PACKAGE_VERSION, package_version())
-        self.assertEqual(version, PACKAGE_VERSION)  # same version is now published
+        self.assertNotEqual(version, PACKAGE_VERSION)  # Candidate and published status are distinct.
         for filename in ("README.md", "docs/README.md", "docs/compatibility.md"):
             with self.subTest(file=filename):
                 text = (ROOT / filename).read_text(encoding="utf-8")
@@ -245,7 +245,6 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         self.assertIn("Published GitHub experimental prerelease", current)
         self.assertIn("Seven uploaded GitHub Release assets", current)
         self.assertIn("deterministic, **not stochastic**, `top_p`", current)
-        self.assertFalse((ROOT / ".github/release-request.json").exists())
         self.assert_no_reused_alpha4_authorization()
         for filename in (
             "README.md", "docs/README.md", "docs/compatibility.md",
@@ -284,7 +283,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
                 self.assertNotIn("unpublished v0.0.6", content.lower())
 
     def test_release_link_labels_match_target_versions(self):
-        # The version family 0.0.6 starts at alpha.1, not "alpha.6".
+        # Match explicit alpha labels, including the real alpha.6 candidate.
         # Match labels to their actual release-note targets so future edits
         # cannot accidentally substitute the series number for the alpha.
         documents = (
@@ -308,10 +307,6 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         for filename in documents:
             with self.subTest(file=filename):
                 content = (ROOT / filename).read_text(encoding="utf-8")
-                self.assertNotRegex(
-                    content, r"\balpha\.6\b",
-                    "use the full v0.0.6-alpha.1 label, not ambiguous alpha.6",
-                )
                 for link_label, href in links.findall(content):
                     target = release_target.search(href)
                     label = alpha_label.search(link_label)

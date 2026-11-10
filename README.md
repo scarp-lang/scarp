@@ -1,5 +1,11 @@
 # Scarp
 
+**0.0.6-alpha.6** is the current development candidate for bounded program
+input, six scalar/text utilities and immutable heterogeneous tuples. See the
+[candidate scope](docs/releases/v0.0.6-alpha.6.md), [input contract](docs/program-input.md),
+[text contract](docs/text-foundations.md) and [tuple/Rust API migration](docs/tuples.md).
+Publication status is recorded separately after exact-source verification.
+
 **0.0.6-alpha.5** is the **latest published experimental GitHub prerelease**
 (9 November 2026), from exact source
 `205e92f166f186c3905e5880d41c31717b697b8e`.

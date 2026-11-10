@@ -10,6 +10,7 @@ pub(super) struct ProgramTypes {
     bindings: Vec<TypeId>,
     functions: Vec<TypeId>,
     builtins: BTreeMap<Builtin, TypeId>,
+    input: Option<TypeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,6 +68,7 @@ impl TypedExpression<'_> {
                     Some(ResolvedCall::Builtin(builtin)) => {
                         self.types.builtins.get(&builtin).copied()
                     }
+                    Some(ResolvedCall::ReadLine) => self.types.input,
                     None => None,
                 };
                 TypedNode {
@@ -187,7 +189,7 @@ impl ResolvedProgram {
     }
 }
 
-fn failure(error: TypeRegistryError, span: Span) -> Diagnostic {
+pub(super) fn failure(error: TypeRegistryError, span: Span) -> Diagnostic {
     Diagnostic::new(DiagnosticKind::TypeComplexity, span, error.to_string()).with_help(
         "reduce semantic type/signature complexity or adjust TypeLimits in the embedding compiler",
     )
@@ -195,37 +197,52 @@ fn failure(error: TypeRegistryError, span: Span) -> Diagnostic {
 
 pub(super) fn build(
     program: &ResolvedProgram,
-    limits: TypeLimits,
+    mut registry: TypeRegistryBuilder,
 ) -> Result<ProgramTypes, Diagnostic> {
-    let initial = program
-        .metadata
-        .first()
-        .map(|function| function.span)
-        .or_else(|| program.statements.first().map(|operation| operation.span))
-        .unwrap_or_default();
-    let mut registry = TypeRegistryBuilder::new(limits).map_err(|error| failure(error, initial))?;
     let mut functions = Vec::with_capacity(program.metadata.len());
     for function in &program.metadata {
+        let signature = TypeKind::Function {
+            parameters: function
+                .parameters
+                .iter()
+                .map(|parameter| {
+                    parameter
+                        .kind
+                        .intern(&mut registry)
+                        .map_err(|e| failure(e, parameter.span))
+                })
+                .collect::<Result<Vec<_>, _>>()?
+                .into(),
+            result: function
+                .result
+                .intern(&mut registry)
+                .map_err(|e| failure(e, function.span))?,
+            effect: if function.pure {
+                FunctionEffect::Pure
+            } else {
+                FunctionEffect::Impure
+            },
+        };
         let id = registry
-            .intern(TypeKind::Function {
-                parameters: function
-                    .parameters
-                    .iter()
-                    .map(|parameter| parameter.kind.id())
-                    .collect(),
-                result: function.result.id(),
-                effect: if function.pure {
-                    FunctionEffect::Pure
-                } else {
-                    FunctionEffect::Impure
-                },
-            })
+            .intern(signature)
             .map_err(|error| failure(error, function.span))?;
         functions.push(id);
     }
     let mut builtins = BTreeMap::new();
+    let mut input = None;
     for (_, expression) in expressions(program) {
         for (index, call) in expression.calls.iter().enumerate() {
+            if matches!(call, Some(ResolvedCall::ReadLine)) && input.is_none() {
+                input = Some(
+                    registry
+                        .intern(TypeKind::Function {
+                            parameters: Vec::new().into(),
+                            result: ValueType::String.id(),
+                            effect: FunctionEffect::Impure,
+                        })
+                        .map_err(|error| failure(error, expression.syntax.nodes()[index].span))?,
+                );
+            }
             if let Some(ResolvedCall::Builtin(builtin)) = call {
                 if let std::collections::btree_map::Entry::Vacant(entry) = builtins.entry(*builtin)
                 {
@@ -237,10 +254,19 @@ pub(super) fn build(
             }
         }
     }
+    let bindings = program
+        .slot_types
+        .iter()
+        .map(|kind| {
+            kind.intern(&mut registry)
+                .map_err(|e| failure(e, Span::default()))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(ProgramTypes {
         registry: registry.finish(),
-        bindings: program.slot_types.iter().map(|kind| kind.id()).collect(),
+        bindings,
         functions,
         builtins,
+        input,
     })
 }

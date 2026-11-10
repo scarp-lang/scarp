@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 mod functions;
 mod type_info;
-pub(crate) use crate::types::require_exact as require_type;
-use crate::types::{TypeId, TypeLimits};
+
+use crate::types::{SourceType, TypeId, TypeLimits, TypeRegistryBuilder};
 pub use type_info::{ExpressionContext, TypedExpression, TypedNode};
 #[cfg(test)]
 mod retirement_audit;
@@ -27,7 +27,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct ResolvedProgram {
     pub(crate) statements: Vec<ResolvedOperation>,
-    slot_types: Vec<ValueType>,
+    slot_types: Vec<SourceType>,
     statement_count: usize,
     pub(crate) functions: Vec<ResolvedFunction>,
     metadata: Vec<FunctionInfo>,
@@ -51,7 +51,7 @@ impl ResolvedProgram {
     }
 
     /// Inferred types in declaration/slot order, including declarations in blocks.
-    pub fn binding_types(&self) -> &[ValueType] {
+    pub fn binding_types(&self) -> &[SourceType] {
         &self.slot_types
     }
 }
@@ -126,7 +126,7 @@ pub(crate) enum ResolvedArgument {
 pub(crate) struct ResolvedExpression {
     pub syntax: Expression,
     pub slots: Vec<Option<usize>>,
-    pub kind: ValueType,
+    pub kind: SourceType,
     pub types: Vec<TypeId>,
     pub calls: Vec<Option<ResolvedCall>>,
 }
@@ -139,6 +139,11 @@ pub(crate) enum ResolvedCall {
         parameters: Vec<usize>,
     },
     Builtin(Builtin),
+    ReadLine,
+}
+
+pub(crate) fn is_builtin_name(name: &str) -> bool {
+    name == "read_line" || Builtin::from_name(name).is_some()
 }
 
 /// Static function signature and call-graph information. Spans are source bytes.
@@ -147,7 +152,7 @@ pub struct FunctionInfo {
     pub name: String,
     pub span: Span,
     pub parameters: Vec<ParameterInfo>,
-    pub result: ValueType,
+    pub result: SourceType,
     pub pure: bool,
     pub contracts: Vec<ContractInfo>,
     pub callees: Vec<String>,
@@ -157,7 +162,7 @@ pub struct FunctionInfo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParameterInfo {
     pub name: String,
-    pub kind: ValueType,
+    pub kind: SourceType,
     pub span: Span,
     pub default: Option<Span>,
 }
@@ -250,7 +255,7 @@ struct Binding {
     slot: usize,
     declaration: Span,
     mutable: bool,
-    kind: ValueType,
+    kind: SourceType,
     repeat_index: bool,
     parameter: bool,
 }
@@ -266,6 +271,8 @@ pub fn resolve_with_type_limits(
     program: Program,
     limits: TypeLimits,
 ) -> Result<ResolvedProgram, Diagnostic> {
+    let mut registry =
+        TypeRegistryBuilder::new(limits).map_err(|e| type_info::failure(e, Span::default()))?;
     let mut declarations = Vec::new();
     let mut statements = Vec::new();
     let mut metadata: Vec<FunctionInfo> = Vec::new();
@@ -315,12 +322,12 @@ pub fn resolve_with_type_limits(
                     .iter()
                     .map(|p| ParameterInfo {
                         name: p.name.clone(),
-                        kind: p.kind,
+                        kind: p.kind.clone(),
                         span: p.span,
                         default: p.default.as_ref().map(|e| e.nodes()[e.root()].span),
                     })
                     .collect(),
-                result: function.result,
+                result: function.result.clone(),
                 pure: function.pure,
                 contracts: function
                     .contracts
@@ -340,9 +347,9 @@ pub fn resolve_with_type_limits(
     }
     let functions = declarations
         .into_iter()
-        .map(|f| resolve_function(f, &metadata, &names))
+        .map(|f| resolve_function(f, &metadata, &names, &mut registry))
         .collect::<Result<Vec<_>, _>>()?;
-    let mut resolver = Resolver::new(&metadata, &names);
+    let mut resolver = Resolver::new(&metadata, &names, &mut registry);
     resolver.statement_list(statements)?;
     let statement_count = resolver
         .statements
@@ -362,7 +369,7 @@ pub fn resolve_with_type_limits(
         metadata,
         type_info: type_info::ProgramTypes::default(),
     };
-    result.type_info = type_info::build(&result, limits)?;
+    result.type_info = type_info::build(&result, registry)?;
     build_call_graph(&mut result);
     #[cfg(test)]
     if let Err(error) = retirement_audit::audit(&result) {
@@ -372,13 +379,14 @@ pub fn resolve_with_type_limits(
 }
 
 struct Resolver<'a> {
+    registry: &'a mut TypeRegistryBuilder,
     scopes: Vec<Scope>,
     statements: Vec<ResolvedOperation>,
-    slot_types: Vec<ValueType>,
+    slot_types: Vec<SourceType>,
     loops: Vec<LoopContext>,
     functions: &'a [FunctionInfo],
     names: &'a HashMap<String, usize>,
-    result: Option<(ValueType, Span)>,
+    result: Option<(SourceType, Span)>,
     pure: bool,
 }
 
@@ -390,8 +398,13 @@ struct LoopContext {
 }
 
 impl<'a> Resolver<'a> {
-    fn new(functions: &'a [FunctionInfo], names: &'a HashMap<String, usize>) -> Self {
+    fn new(
+        functions: &'a [FunctionInfo],
+        names: &'a HashMap<String, usize>,
+        registry: &'a mut TypeRegistryBuilder,
+    ) -> Self {
         Self {
+            registry,
             scopes: vec![HashMap::new()],
             statements: Vec::new(),
             slot_types: Vec::new(),
@@ -403,8 +416,15 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn expression(&self, syntax: Expression) -> Result<ResolvedExpression, Diagnostic> {
-        resolve_expression(syntax, &self.scopes, self.functions, self.names, self.pure)
+    fn expression(&mut self, syntax: Expression) -> Result<ResolvedExpression, Diagnostic> {
+        resolve_expression(
+            syntax,
+            &self.scopes,
+            self.functions,
+            self.names,
+            self.pure,
+            self.registry,
+        )
     }
 
     fn binding_name(&self, name: &str, span: Span) -> Result<(), Diagnostic> {
@@ -439,7 +459,7 @@ impl<'a> Resolver<'a> {
                     ))
                 }
                 Statement::Return { value, span } => {
-                    let (expected, declaration) = self.result.ok_or_else(|| {
+                    let (expected, declaration) = self.result.clone().ok_or_else(|| {
                         Diagnostic::new(
                             DiagnosticKind::InvalidReturn,
                             span,
@@ -447,9 +467,9 @@ impl<'a> Resolver<'a> {
                         )
                     })?;
                     let value = value.map(|v| self.expression(v)).transpose()?;
-                    match (&value, expected) {
-                        (None, ValueType::Unit) => {}
-                        (Some(value), kind) if kind != ValueType::Unit && value.kind == kind => {}
+                    match (&value, &expected) {
+                        (None, kind) if *kind == ValueType::Unit => {}
+                        (Some(value), kind) if *kind != ValueType::Unit && &value.kind == kind => {}
                         _ => {
                             let mut error = Diagnostic::new(
                                 DiagnosticKind::InvalidReturn,
@@ -505,7 +525,7 @@ impl<'a> Resolver<'a> {
                 } => {
                     let count = self.expression(count)?;
                     let count_span = count.syntax.nodes()[count.syntax.root()].span;
-                    require_type(count.kind, ValueType::Integer, count_span).map_err(|error| {
+                    require_type(&count.kind, ValueType::Integer, count_span).map_err(|error| {
                         error.with_help(
                             "repeat needs an integer count: repeat 5 as index { statements }",
                         )
@@ -513,8 +533,10 @@ impl<'a> Resolver<'a> {
                     self.binding_name(&index, index_span)?;
                     let count_slot = self.slot_types.len();
                     let index_slot = count_slot + 1;
-                    self.slot_types
-                        .extend([ValueType::Integer, ValueType::Integer]);
+                    self.slot_types.extend([
+                        SourceType::from(ValueType::Integer),
+                        SourceType::from(ValueType::Integer),
+                    ]);
                     self.emit(
                         ResolvedStatement::RepeatInit {
                             count,
@@ -543,7 +565,7 @@ impl<'a> Resolver<'a> {
                             slot: index_slot,
                             declaration: index_span,
                             mutable: false,
-                            kind: ValueType::Integer,
+                            kind: ValueType::Integer.into(),
                             repeat_index: true,
                             parameter: false,
                         },
@@ -569,7 +591,7 @@ impl<'a> Resolver<'a> {
                 } => {
                     let condition = self.expression(condition)?;
                     let condition_span = condition.syntax.nodes()[condition.syntax.root()].span;
-                    require_type(condition.kind, ValueType::Boolean, condition_span).map_err(|error|
+                    require_type(&condition.kind, ValueType::Boolean, condition_span).map_err(|error|
                         error.with_help("while needs a boolean guard; compare values, for example while index < count { statements }"))?;
                     let start = self.emit(
                         ResolvedStatement::JumpIfFalse {
@@ -630,7 +652,7 @@ impl<'a> Resolver<'a> {
                     for branch in branches {
                         let condition = self.expression(branch.condition)?;
                         let condition_span = condition.syntax.nodes()[condition.syntax.root()].span;
-                        require_type(condition.kind, ValueType::Boolean, condition_span)?;
+                        require_type(&condition.kind, ValueType::Boolean, condition_span)?;
                         let guard = self.emit(
                             ResolvedStatement::JumpIfFalse {
                                 condition,
@@ -680,15 +702,15 @@ impl<'a> Resolver<'a> {
                     }
                     // Resolve before insertion: a shadowing initializer sees the outer name.
                     let value = self.expression(initializer)?;
-                    require_value(value.kind, span)?;
+                    require_value(&value.kind, span)?;
                     require_annotation(
                         annotation,
-                        value.kind,
+                        &value.kind,
                         value.syntax.nodes()[value.syntax.root()].span,
                     )?;
                     let slot = self.slot_types.len();
-                    let kind = value.kind;
-                    self.slot_types.push(kind);
+                    let kind = value.kind.clone();
+                    self.slot_types.push(kind.clone());
                     self.scopes
                         .last_mut()
                         .expect("a file scope always exists")
@@ -751,7 +773,7 @@ impl<'a> Resolver<'a> {
                         } else if binding.parameter { "parameters are immutable; copy the parameter into a local var to change a local value" } else { "declare this binding with var to allow assignment" }));
                     }
                     let slot = binding.slot;
-                    let expected_type = binding.kind;
+                    let expected_type = binding.kind.clone();
                     let declaration = binding.declaration;
                     let value = self.expression(value)?;
                     match operator {
@@ -780,7 +802,7 @@ impl<'a> Resolver<'a> {
                             let (expected, found) = if expected_type.is_numeric() {
                                 (expected_type, value.kind)
                             } else {
-                                (ValueType::Integer, expected_type)
+                                (ValueType::Integer.into(), expected_type)
                             };
                             return Err(type_mismatch(operator_span, expected, found)
                                 .with_related(declaration, "the target binding is declared here"));
@@ -884,7 +906,7 @@ impl<'a> Resolver<'a> {
                 PrintArgument::Expression(expression) => {
                     let expression = self.expression(expression)?;
                     require_value(
-                        expression.kind,
+                        &expression.kind,
                         expression.syntax.nodes()[expression.syntax.root()].span,
                     )?;
                     Ok(ResolvedArgument::Expression(expression))
@@ -919,58 +941,102 @@ fn resolve_expression(
     functions: &[FunctionInfo],
     names: &HashMap<String, usize>,
     pure: bool,
+    registry: &mut TypeRegistryBuilder,
 ) -> Result<ResolvedExpression, Diagnostic> {
     let mut slots = Vec::with_capacity(syntax.nodes().len());
     let mut calls = Vec::with_capacity(syntax.nodes().len());
-    let mut types: Vec<TypeId> = Vec::with_capacity(syntax.nodes().len());
+    let mut types: Vec<SourceType> = Vec::with_capacity(syntax.nodes().len());
     for node in syntax.nodes() {
         let mut call = None;
         let (kind, slot) = match &node.kind {
+            ExpressionKind::Tuple { elements } => {
+                let mut members = Vec::new();
+                for &element in elements {
+                    require_value(&types[element], syntax.nodes()[element].span)?;
+                    members.push(types[element].clone());
+                }
+                let kind = SourceType::tuple(members).ok_or_else(|| {
+                    Diagnostic::new(
+                        DiagnosticKind::TupleLimit,
+                        node.span,
+                        "tuple shape exceeds arity, depth or structural-node limits",
+                    )
+                })?;
+                (kind, None)
+            }
             ExpressionKind::Integers { elements } => {
                 for &element in elements {
                     require_type(
-                        types[element],
+                        &types[element],
                         ValueType::Integer,
                         syntax.nodes()[element].span,
                     )?;
                 }
-                (ValueType::Integers.id(), None)
+                (SourceType::from(ValueType::Integers), None)
             }
             ExpressionKind::Vector { elements } => {
                 for &element in elements {
                     require_type(
-                        types[element],
+                        &types[element],
                         ValueType::Float,
                         syntax.nodes()[element].span,
                     )?;
                 }
-                (ValueType::Vector.id(), None)
+                (SourceType::from(ValueType::Vector), None)
             }
             ExpressionKind::Index {
                 vector,
                 index,
                 operator_span,
+                source_literal,
             } => {
+                if let Some(elements) = types[*vector].tuple_elements() {
+                    let mut literal = *index;
+                    while let ExpressionKind::Group { expression } = syntax.nodes()[literal].kind {
+                        literal = expression;
+                    }
+                    let index_span = syntax.nodes()[*index].span;
+                    let element = match (&syntax.nodes()[literal].kind, source_literal) {
+                        (ExpressionKind::Integer(n), true) => {
+                            usize::try_from(*n).ok().and_then(|n| elements.get(n))
+                        }
+                        _ => None,
+                    }
+                    .ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::TupleIndex,
+                            index_span,
+                            "tuple index must be a nonnegative integer literal within its arity",
+                        )
+                        .with_help(
+                            "use t[0], t[1], ...; dynamic and computed tuple indices are deferred",
+                        )
+                    })?;
+                    slots.push(None);
+                    calls.push(None);
+                    types.push(element.clone());
+                    continue;
+                }
                 if !matches!(
-                    types[*vector].primitive(),
+                    types[*vector].as_primitive(),
                     Some(ValueType::Vector | ValueType::Integers)
                 ) {
                     return Err(crate::value::type_mismatch(
                         *operator_span,
                         ValueType::Vector,
-                        types[*vector],
+                        &types[*vector],
                     ));
                 }
                 require_type(
-                    types[*index],
+                    &types[*index],
                     ValueType::Integer,
                     syntax.nodes()[*index].span,
                 )?;
                 (
-                    if types[*vector] == ValueType::Integers.id() {
-                        ValueType::Integer.id()
+                    if types[*vector] == ValueType::Integers {
+                        SourceType::from(ValueType::Integer)
                     } else {
-                        ValueType::Float.id()
+                        SourceType::from(ValueType::Float)
                     },
                     None,
                 )
@@ -982,6 +1048,26 @@ fn resolve_expression(
             } => {
                 // Preserve existing user function names; kernels occupy call
                 // position only when no user declaration has this name.
+                if name == "read_line" && !names.contains_key(name) {
+                    if !arguments.is_empty() {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::CallArguments,
+                            *function_span,
+                            "read_line requires zero arguments",
+                        ));
+                    }
+                    if pure {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::ImpureFunction,
+                            *function_span,
+                            "pure expressions cannot read program input",
+                        ));
+                    }
+                    slots.push(None);
+                    calls.push(Some(ResolvedCall::ReadLine));
+                    types.push(ValueType::String.into());
+                    continue;
+                }
                 if let Some(builtin) =
                     Builtin::from_name(name).filter(|_| !names.contains_key(name))
                 {
@@ -999,7 +1085,7 @@ fn resolve_expression(
                         arguments.iter().zip(parameters).enumerate()
                     {
                         require_type(
-                            types[argument.expression],
+                            &types[argument.expression],
                             expected,
                             syntax.nodes()[argument.expression].span,
                         )
@@ -1019,7 +1105,7 @@ fn resolve_expression(
                     }
                     slots.push(None);
                     calls.push(Some(ResolvedCall::Builtin(builtin)));
-                    types.push(builtin.result_type().id());
+                    types.push(builtin.result_type().into());
                     continue;
                 }
                 let &id = names.get(name).ok_or_else(|| {
@@ -1081,8 +1167,8 @@ fn resolve_expression(
                         ));
                     }
                     require_type(
-                        types[argument.expression],
-                        function.parameters[parameter].kind,
+                        &types[argument.expression],
+                        &function.parameters[parameter].kind,
                         syntax.nodes()[argument.expression].span,
                     )
                     .map_err(|error| {
@@ -1110,13 +1196,13 @@ fn resolve_expression(
                     function: id,
                     parameters,
                 });
-                (function.result.id(), None)
+                (function.result.clone(), None)
             }
 
-            ExpressionKind::Integer(_) => (ValueType::Integer.id(), None),
-            ExpressionKind::Float(_) => (ValueType::Float.id(), None),
-            ExpressionKind::Boolean(_) => (ValueType::Boolean.id(), None),
-            ExpressionKind::String(_) => (ValueType::String.id(), None),
+            ExpressionKind::Integer(_) => (SourceType::from(ValueType::Integer), None),
+            ExpressionKind::Float(_) => (SourceType::from(ValueType::Float), None),
+            ExpressionKind::Boolean(_) => (SourceType::from(ValueType::Boolean), None),
+            ExpressionKind::String(_) => (SourceType::from(ValueType::String), None),
             ExpressionKind::Name(name) => {
                 if names.contains_key(name) && lookup(scopes, name).is_none() {
                     return Err(Diagnostic::new(
@@ -1127,15 +1213,15 @@ fn resolve_expression(
                 }
                 check_name(name, node.span)?;
                 let binding = lookup(scopes, name).ok_or_else(|| unknown_name(name, node.span))?;
-                (binding.kind.id(), Some(binding.slot))
+                (binding.kind.clone(), Some(binding.slot))
             }
-            ExpressionKind::Group { expression } => (types[*expression], None),
+            ExpressionKind::Group { expression } => (types[*expression].clone(), None),
             ExpressionKind::BitNot {
                 operand,
                 operator_span,
             } => {
-                require_type(types[*operand], ValueType::Integer, *operator_span)?;
-                (ValueType::Integer.id(), None)
+                require_type(&types[*operand], ValueType::Integer, *operator_span)?;
+                (SourceType::from(ValueType::Integer), None)
             }
             ExpressionKind::Negate {
                 operand,
@@ -1145,17 +1231,17 @@ fn resolve_expression(
                     return Err(type_mismatch(
                         *operator_span,
                         ValueType::Integer,
-                        types[*operand],
+                        &types[*operand],
                     ));
                 }
-                (types[*operand], None)
+                (types[*operand].clone(), None)
             }
             ExpressionKind::Not {
                 operand,
                 operator_span,
             } => {
-                require_type(types[*operand], ValueType::Boolean, *operator_span)?;
-                (ValueType::Boolean.id(), None)
+                require_type(&types[*operand], ValueType::Boolean, *operator_span)?;
+                (SourceType::from(ValueType::Boolean), None)
             }
             ExpressionKind::Logical {
                 left,
@@ -1163,9 +1249,9 @@ fn resolve_expression(
                 operator_span,
                 ..
             } => {
-                require_type(types[*left], ValueType::Boolean, *operator_span)?;
-                require_type(types[*right], ValueType::Boolean, *operator_span)?;
-                (ValueType::Boolean.id(), None)
+                require_type(&types[*left], ValueType::Boolean, *operator_span)?;
+                require_type(&types[*right], ValueType::Boolean, *operator_span)?;
+                (SourceType::from(ValueType::Boolean), None)
             }
             ExpressionKind::Binary {
                 left,
@@ -1175,22 +1261,22 @@ fn resolve_expression(
             } => {
                 match operator {
                     BinaryOperator::Equal | BinaryOperator::NotEqual => {
-                        require_value(types[*left], *operator_span)?;
+                        require_value(&types[*left], *operator_span)?;
                     }
                     operator if operator.is_integer_only() => {
-                        require_type(types[*left], ValueType::Integer, *operator_span)?;
+                        require_type(&types[*left], ValueType::Integer, *operator_span)?;
                     }
                     _ => {
                         if !types[*left].is_numeric() {
                             return Err(type_mismatch(
                                 *operator_span,
                                 ValueType::Integer,
-                                types[*left],
+                                &types[*left],
                             ));
                         }
                     }
                 }
-                require_type(types[*right], types[*left], *operator_span).map_err(|error| {
+                require_type(&types[*right], &types[*left], *operator_span).map_err(|error| {
                     error
                         .with_related(
                             syntax.nodes()[*left].span,
@@ -1202,9 +1288,9 @@ fn resolve_expression(
                         )
                 })?;
                 let kind = if operator.is_comparison() {
-                    ValueType::Boolean.id()
+                    SourceType::from(ValueType::Boolean)
                 } else {
-                    types[*left]
+                    types[*left].clone()
                 };
                 (kind, None)
             }
@@ -1213,9 +1299,15 @@ fn resolve_expression(
         slots.push(slot);
         calls.push(call);
     }
-    let kind = types[syntax.root()]
-        .primitive()
-        .expect("source types have a supported runtime representation");
+    let kind = types[syntax.root()].clone();
+    let types = types
+        .iter()
+        .zip(syntax.nodes())
+        .map(|(kind, node)| {
+            kind.intern(registry)
+                .map_err(|e| type_info::failure(e, node.span))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(ResolvedExpression {
         syntax,
         slots,
@@ -1235,11 +1327,33 @@ pub(crate) fn resolve_standalone(
 pub(crate) fn resolve_closed_expression(
     syntax: Expression,
 ) -> Result<ResolvedExpression, Diagnostic> {
-    resolve_expression(syntax, &[], &[], &HashMap::new(), false)
+    resolve_expression(
+        syntax,
+        &[],
+        &[],
+        &HashMap::new(),
+        false,
+        &mut TypeRegistryBuilder::new(TypeLimits::default())
+            .map_err(|e| type_info::failure(e, Span::default()))?,
+    )
 }
 
-fn require_value(kind: impl Into<TypeId>, span: Span) -> Result<(), Diagnostic> {
-    if kind.into() == ValueType::Unit.id() {
+pub(crate) fn require_type(
+    found: impl Into<SourceType>,
+    expected: impl Into<SourceType>,
+    span: Span,
+) -> Result<(), Diagnostic> {
+    let found = found.into();
+    let expected = expected.into();
+    if found == expected {
+        Ok(())
+    } else {
+        Err(type_mismatch(span, expected, found))
+    }
+}
+
+fn require_value(kind: impl Into<SourceType>, span: Span) -> Result<(), Diagnostic> {
+    if kind.into() == ValueType::Unit {
         Err(Diagnostic::new(
             DiagnosticKind::InvalidReturn,
             span,
@@ -1252,7 +1366,7 @@ fn require_value(kind: impl Into<TypeId>, span: Span) -> Result<(), Diagnostic> 
 
 pub(crate) fn require_annotation(
     annotation: Option<crate::ast::TypeAnnotation>,
-    found: ValueType,
+    found: impl Into<SourceType>,
     span: Span,
 ) -> Result<(), Diagnostic> {
     if let Some(annotation) = annotation {

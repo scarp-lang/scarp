@@ -1,5 +1,10 @@
 # Embed Scarp in a Rust application
 
+The unreleased tuple branch migrates primitive-only AST/signature/value-kind
+fields to structural `SourceType` and adds `ExecutionOptions.max_tuple_bytes`.
+See the [explicit Rust migration table](tuples.md#rust-api-and-metadata-migration)
+and executable `examples/tuple_types.rs`; published alpha.5 retains its old API.
+
 Unreleased development adds bounded [constant compilation](constant-expressions.md)
 to module resolution. Existing entry points use default ConstantLimits; additive
 loader/native-path/resolve APIs let hosts select them. Source-only scarp::compile

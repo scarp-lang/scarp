@@ -29,6 +29,12 @@ try {
     Invoke-Cargo -CargoArguments @('doc', '--locked', '--no-deps')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--example', 'interned_types')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--example', 'symbol_index')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--example', 'tuple_types')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', 'examples/tuples.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'check', 'examples/tuples.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--example', 'program_input')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/program_input.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/core_input_tuple.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', 'examples/hello.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'tokens', 'examples/hello.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', 'examples/arithmetic.srp')
@@ -58,7 +64,7 @@ try {
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'modules', 'examples/constant_expressions.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', 'examples/typed_declarations.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'check', 'examples/typed_declarations.srp')
-    foreach ($example in @('scalar_conversions', 'unicode_text', 'text_construction', 'symbol_navigation', 'integer_collections', 'bit_fields', 'numerical_kernels', 'root_mean_square', 'collection_module', 'topk_scores', 'temperature_softmax', 'sampled_calculus', 'sample_cumulative_area', 'cosine_similarity', 'nucleus_selection', 'pearson_correlation')) {
+    foreach ($example in @('scalar_conversions', 'unicode_text', 'text_construction', 'symbol_navigation', 'integer_collections', 'bit_fields', 'numerical_kernels', 'root_mean_square', 'collection_module', 'topk_scores', 'temperature_softmax', 'sampled_calculus', 'sample_cumulative_area', 'cosine_similarity', 'nucleus_selection', 'pearson_correlation', 'text_foundations')) {
         Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', "examples/$example.srp")
         Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'check', "examples/$example.srp")
     }

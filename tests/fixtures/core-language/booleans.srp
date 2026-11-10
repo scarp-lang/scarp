@@ -1,0 +1,1 @@
+print(3 < 4, 3 == 4, not false, true and false, true or 1/0 == 0);

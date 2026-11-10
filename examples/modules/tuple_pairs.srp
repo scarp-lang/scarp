@@ -1,0 +1,8 @@
+pub pure funcra make(number: integer, label: string = "pair") -> tuple<integer, string> {
+    return (number, label);
+}
+pub pure funcra advance(value: tuple<integer, string>) -> tuple<integer, string>
+    ensures result[0] == value[0] + 1;
+{
+    return (value[0] + 1, value[1]);
+}

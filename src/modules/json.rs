@@ -23,7 +23,28 @@ fn span(out: &mut impl io::Write, file: &SourceFile, value: Span) -> io::Result<
 }
 
 impl ModuleProgram {
-    /// Write schema-version-1 JSON with deterministic order and file-local byte spans.
+    /// Primitive-only module metadata stays schema 1; structural tuple signatures use schema 2.
+    pub fn inspection_schema_version(&self) -> u32 {
+        let composite = self
+            .modules
+            .iter()
+            .flat_map(|m| &m.symbols)
+            .any(|s| match &s.kind {
+                SymbolKind::Constant(kind) => kind.as_primitive().is_none(),
+                SymbolKind::Function {
+                    parameters, result, ..
+                } => {
+                    result.as_primitive().is_none()
+                        || parameters.iter().any(|p| p.as_primitive().is_none())
+                }
+            });
+        if composite {
+            2
+        } else {
+            1
+        }
+    }
+    /// Write versioned JSON (schema 1 for primitives, schema 2 for tuple signatures) with deterministic order and file-local byte spans.
     /// No source contents, constant values or default expressions are emitted.
     /// Writer errors preserve their kind and may leave a partial byte stream.
     ///
@@ -38,7 +59,11 @@ impl ModuleProgram {
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn write_inspection_json(&self, out: &mut impl io::Write) -> io::Result<()> {
-        out.write_all(b"{\"schema_version\":1,\"entry\":0,\"modules\":[")?;
+        write!(
+            out,
+            "{{\"schema_version\":{},\"entry\":0,\"modules\":[",
+            self.inspection_schema_version()
+        )?;
         for (index, module) in self.modules.iter().enumerate() {
             if index != 0 {
                 out.write_all(b",")?;

@@ -89,7 +89,11 @@ impl ScalarProgramIr {
     }
 
     pub(super) fn lower(program: &ResolvedProgram) -> Result<Self, Diagnostic> {
-        let slots = program.binding_types().to_vec();
+        let slots = program
+            .binding_types()
+            .iter()
+            .map(|kind| kind.as_primitive().ok_or_else(|| invalid(Span::default())))
+            .collect::<Result<Vec<_>, _>>()?;
         if slots.len() > 256 || program.statements.len() > MAX_PROGRAM_STEPS {
             return Err(invalid(Span::default()));
         }

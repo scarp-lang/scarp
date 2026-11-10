@@ -1,5 +1,34 @@
 # Test and validate changes
 
+For **alpha.6 candidate tuples**, run `cargo test --locked --offline --test tuples
+--test tuples_modules_cli` and `cargo run --locked --offline --example tuple_types`.
+The [tuple contract](tuples.md) records exact source/shape/work limits, native
+rejection, schema migration and the Rust host compatibility boundary. The real
+`examples/tuples.srp` and negative `tests/fixtures/tuples` corpus run in tests;
+package smoke checks require schema 2 for this tuple interface and schema 1 for
+all existing primitive examples.
+The core-language conformance suite runs **18 ordinary source programs** through
+module compilation and explicit input execution: Hello World, bindings, integer
+and float arithmetic, booleans, Unicode text, user input, conditionals, loops,
+functions, recursion, imports, type/syntax errors, EOF, runtime failures, quotas
+and purity. Run `cargo test --locked --offline --test core_language_conformance`.
+Compiler-owned `.srp`, exact `.stdout`, raw `.stdin` and error-code fixtures live
+under [tests/fixtures/core-language](../tests/fixtures/core-language/README.md).
+Runtime failures require both output streams to remain empty.
+
+For the **alpha.6 candidate program-input slice**, run
+`cargo test --locked --offline --test program_input --test program_input_modules_cli`,
+`cargo run --locked --offline --example program_input`, and
+`python3 scripts/test_program_input.py target/debug/scarp`.
+The oracle covers seeded Unicode lines and real Unix PTYs. The shared example
+runner supplies raw `.stdin` companions, compares exact `.stdout`, and rejects
+orphaned fixtures. Package smoke tests repeat redirected input against extracted
+binaries and statically verify input programs; legacy `check` must never read
+stdin. See the [input contract](program-input.md). This feature is absent from
+published alpha.5. The combined release candidate also runs
+`cargo test --locked --offline --test core_foundations_integration`: imported input,
+text parsing and tuple results, independent quotas, repeated execution and atomic errors.
+
 For the **published v0.0.6-alpha.2 prerelease** (and continued source development), exercise
 `--test module_invalidation --test module_cache --test module_token_cache
 --test module_syntax_cache` and
@@ -9,9 +38,11 @@ benchmark measures distinct cold, warm token, warm syntax, and combined cache
 workloads without claiming a portable speedup. Also run
 `python3 -m unittest scripts/test_release_assets.py scripts/test_release_docs.py`;
 missing alpha.2 cache docs and stale metadata must fail native package checks.
-The current published binary is alpha.2. See
-[publication verification](releases/v0.0.6-alpha.2-validation.md)
-and the historical [candidate gates](releases/v0.0.6-alpha.2-preparation.md).
+The current published compiler is **v0.0.6-alpha.5**; see its
+[source and asset verification](releases/v0.0.6-alpha.5-validation.md).
+The [alpha.2 publication verification](releases/v0.0.6-alpha.2-validation.md)
+and [candidate gates](releases/v0.0.6-alpha.2-preparation.md) record the earlier
+cache milestone, not the latest download.
 
 For the post-v0.0.6-alpha.1 version-guarded editor adapter (issue #116), run
 `cargo test --locked --offline --test editor_snapshot` and

@@ -4,6 +4,7 @@ use crate::{
     ast::{BinaryOperator, OutputTarget},
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     evaluator::{self, Evaluation, Workspace},
+    input::InputState,
     limits::{Budget, ExecutionOptions},
     resolver::{
         ResolvedArgument, ResolvedCall, ResolvedExpression, ResolvedOperation, ResolvedProgram,
@@ -104,11 +105,12 @@ impl<'a> Frame<'a> {
     }
 }
 
-pub(super) fn prepare(
-    program: &ResolvedProgram,
+pub(super) fn prepare<'a>(
+    program: &'a ResolvedProgram,
     capture: bool,
     options: ExecutionOptions,
-) -> Result<Vec<OutputEvent<'_>>, Diagnostic> {
+    input: &mut InputState<'_>,
+) -> Result<Vec<OutputEvent<'a>>, Diagnostic> {
     if program.binding_count() > options.max_live_slots {
         return Err(limit(
             Span::default(),
@@ -134,7 +136,8 @@ pub(super) fn prepare(
     }];
     let mut budget = Budget::new(options.limits.max_steps)
         .with_vector_bytes(options.max_vector_bytes)
-        .with_text_bytes(options.max_text_bytes);
+        .with_text_bytes(options.max_text_bytes)
+        .with_tuple_bytes(options.max_tuple_bytes);
     let mut events = Vec::new();
     let mut calls = 0_u64;
     let mut prints = 0;
@@ -149,6 +152,10 @@ pub(super) fn prepare(
                     .workspace
                     .resume(expression, &frame.environment, &mut budget)?
                 {
+                    Evaluation::ReadLine(span) => {
+                        let value = input.read_line(&mut budget, span)?;
+                        frame.workspace.accept(value);
+                    }
                     Evaluation::Call {
                         node,
                         arguments,
@@ -294,6 +301,12 @@ pub(super) fn prepare(
                                 }
                             }
                             Completion::Output => {
+                                if let Some(tuple) = value.as_tuple() {
+                                    budget.charge(
+                                        tuple.work(),
+                                        frame.output.as_ref().unwrap().span,
+                                    )?;
+                                }
                                 if let Some(tile) = value.as_tile() {
                                     // Formatting visits cells and row delimiters,
                                     // including rows of a zero-width tile.
@@ -610,6 +623,7 @@ fn charge_capture(
     // Validation applies the same limit without formatting or retaining values.
     let payload = match value {
         PrintValue::String(text) => text.len(),
+        PrintValue::Value(Value::Tuple(tuple)) => tuple.capture_bytes(),
         PrintValue::Value(Value::String(text)) => text.len(),
         PrintValue::Value(Value::Vector(vector)) => vector.len().saturating_mul(8),
         PrintValue::Value(Value::Integers(vector)) => vector.len().saturating_mul(8),
