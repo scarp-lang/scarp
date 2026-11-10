@@ -1,5 +1,14 @@
 # Test and validate changes
 
+The core-language conformance suite runs **18 ordinary source programs** through
+module compilation and explicit input execution: Hello World, bindings, integer
+and float arithmetic, booleans, Unicode text, user input, conditionals, loops,
+functions, recursion, imports, type/syntax errors, EOF, runtime failures, quotas
+and purity. Run `cargo test --locked --offline --test core_language_conformance`.
+Compiler-owned `.srp`, exact `.stdout`, raw `.stdin` and error-code fixtures live
+under [tests/fixtures/core-language](../tests/fixtures/core-language/README.md).
+Runtime failures require both output streams to remain empty.
+
 For the **unreleased program-input development slice**, run
 `cargo test --locked --offline --test program_input --test program_input_modules_cli`,
 `cargo run --locked --offline --example program_input`, and

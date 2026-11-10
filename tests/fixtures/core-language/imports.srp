@@ -1,0 +1,2 @@
+import "support/math.srp" as math;
+print(math.twice(math.base));

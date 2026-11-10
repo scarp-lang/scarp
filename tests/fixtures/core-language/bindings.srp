@@ -1,0 +1,5 @@
+bind start: integer = 4;
+var total = start;
+total += 3;
+{ bind total = 20; print(total); }
+print(start, total);
