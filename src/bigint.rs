@@ -14,6 +14,7 @@ use crate::{
 
 mod advanced;
 mod number_theory;
+mod radix;
 mod modular;
 
 const BASE: u64 = 1_000_000_000;
