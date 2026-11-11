@@ -27,7 +27,10 @@ fn exact_integer_builtins_have_pure_typed_signatures() {
         assert_eq!(B::from_name(name), Some(builtin));
         assert_eq!(builtin.result_type(), ValueType::Integer);
         assert_eq!(builtin.parameter_types().len(), arity);
-        assert!(builtin.parameter_types().iter().all(|kind| *kind == ValueType::Integer));
+        assert!(builtin
+            .parameter_types()
+            .iter()
+            .all(|kind| *kind == ValueType::Integer));
         assert_eq!(
             numeric::evaluate(builtin, &[], 100).unwrap_err().kind,
             Kind::CallArguments,
