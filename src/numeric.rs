@@ -107,6 +107,9 @@ pub enum Builtin {
     BigIntPow,
     BigIntBitLength,
     BigIntToText,
+    BigIntGcd,
+    BigIntLcm,
+    BigIntSqrt,
 }
 
 impl Builtin {
@@ -133,6 +136,9 @@ impl Builtin {
             "bigint_pow" => Self::BigIntPow,
             "bigint_bit_length" => Self::BigIntBitLength,
             "bigint_to_text" => Self::BigIntToText,
+            "bigint_gcd" => Self::BigIntGcd,
+            "bigint_lcm" => Self::BigIntLcm,
+            "bigint_sqrt" => Self::BigIntSqrt,
             "integer_to_text" => Self::IntegerToText,
             "float_to_text" => Self::FloatToText,
             "text_to_integer" => Self::TextToInteger,
@@ -225,6 +231,8 @@ impl Builtin {
             | Self::BigIntBitLength
             | Self::BigIntToText => &[ValueType::BigInt],
             Self::BigIntPow => &[ValueType::BigInt, Integer],
+            Self::BigIntGcd | Self::BigIntLcm => &[ValueType::BigInt, ValueType::BigInt],
+            Self::BigIntSqrt => &[ValueType::BigInt],
             Self::IntegerToText => &[Integer],
             Self::FloatToText => &[Float],
             Self::TextToInteger | Self::TextToFloat | Self::TextTrim => &[String],
@@ -287,9 +295,13 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
-            Self::BigInt | Self::BigIntFromInteger | Self::BigIntAbs | Self::BigIntPow => {
-                ValueType::BigInt
-            }
+            Self::BigInt
+            | Self::BigIntFromInteger
+            | Self::BigIntAbs
+            | Self::BigIntPow
+            | Self::BigIntGcd
+            | Self::BigIntLcm
+            | Self::BigIntSqrt => ValueType::BigInt,
             Self::BigIntBitLength => ValueType::Integer,
             Self::BigIntToText => ValueType::String,
             Self::BigIntToInteger => ValueType::Integer,
@@ -368,6 +380,9 @@ impl Builtin {
                 | Self::BigIntPow
                 | Self::BigIntBitLength
                 | Self::BigIntToText
+                | Self::BigIntGcd
+                | Self::BigIntLcm
+                | Self::BigIntSqrt
         )
     }
 
@@ -1039,6 +1054,9 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::BigIntPow
         | Builtin::BigIntBitLength
         | Builtin::BigIntToText
+        | Builtin::BigIntGcd
+        | Builtin::BigIntLcm
+        | Builtin::BigIntSqrt
         | Builtin::IntegerToText
         | Builtin::FloatToText
         | Builtin::TextToInteger
