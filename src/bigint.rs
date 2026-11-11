@@ -15,6 +15,7 @@ use crate::{
 mod advanced;
 mod modular;
 mod number_theory;
+mod radix;
 
 const BASE: u64 = 1_000_000_000;
 /// Initial implementation ceiling; hosts may select a smaller per-value limit.
