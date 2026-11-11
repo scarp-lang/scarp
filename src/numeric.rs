@@ -345,7 +345,10 @@ impl Builtin {
     }
 
     fn is_bigint(self) -> bool {
-        matches!(self, Self::BigInt | Self::BigIntFromInteger | Self::BigIntToInteger | Self::BigIntAbs)
+        matches!(
+            self,
+            Self::BigInt | Self::BigIntFromInteger | Self::BigIntToInteger | Self::BigIntAbs
+        )
     }
 
     fn is_scalar_text(self) -> bool {
