@@ -277,8 +277,13 @@ pub(super) fn prepare<'a>(
                                 frame.environment[index_slot] = Value::Integer(0);
                             }
                             Completion::Update(slot, operator, previous, span) => {
-                                frame.environment[slot] =
-                                    evaluator::apply_binary(operator, &previous, &value, span)?;
+                                frame.environment[slot] = evaluator::apply_binary_with_budget(
+                                    operator,
+                                    &previous,
+                                    &value,
+                                    &mut budget,
+                                    span,
+                                )?;
                             }
                             Completion::Guard(target, span) => {
                                 if !value.require_boolean(span)? {
