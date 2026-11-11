@@ -42,13 +42,18 @@ impl BigInt {
         budget: &mut Budget,
         span: Span,
     ) -> Result<Vec<u32>, Diagnostic> {
-        let more = width.checked_sub(words.len()).ok_or_else(|| allocation(span))?;
+        let more = width
+            .checked_sub(words.len())
+            .ok_or_else(|| allocation(span))?;
         budget.charge(width as u64, span)?;
         budget.charge_bigint_allocation(
-            more.checked_mul(std::mem::size_of::<u32>()).ok_or_else(|| allocation(span))?,
+            more.checked_mul(std::mem::size_of::<u32>())
+                .ok_or_else(|| allocation(span))?,
             span,
         )?;
-        words.try_reserve_exact(more).map_err(|_| allocation(span))?;
+        words
+            .try_reserve_exact(more)
+            .map_err(|_| allocation(span))?;
         words.resize(width, 0);
         if self.negative {
             let mut carry = true;
@@ -62,11 +67,7 @@ impl BigInt {
     }
 
     /// Decode signed two's-complement words to canonical decimal limbs.
-    fn from_twos(
-        mut words: Vec<u32>,
-        budget: &mut Budget,
-        span: Span,
-    ) -> Result<Self, Diagnostic> {
+    fn from_twos(mut words: Vec<u32>, budget: &mut Budget, span: Span) -> Result<Self, Diagnostic> {
         budget.charge(words.len() as u64 + 1, span)?;
         let negative = words.last().is_some_and(|word| word & 0x8000_0000 != 0);
         if negative {
@@ -109,7 +110,10 @@ impl BigInt {
     ) -> Result<Self, Diagnostic> {
         let left = self.magnitude_words(budget, span)?;
         let right = other.magnitude_words(budget, span)?;
-        let width = left.len().max(right.len()).checked_add(1)
+        let width = left
+            .len()
+            .max(right.len())
+            .checked_add(1)
             .ok_or_else(|| allocation(span))?;
         let mut left = self.padded_twos(left, width, budget, span)?;
         let right = other.padded_twos(right, width, budget, span)?;
@@ -125,11 +129,7 @@ impl BigInt {
     }
 
     /// Infinite signed bitwise NOT: mathematically -x-1.
-    pub(crate) fn bitwise_not(
-        &self,
-        budget: &mut Budget,
-        span: Span,
-    ) -> Result<Self, Diagnostic> {
+    pub(crate) fn bitwise_not(&self, budget: &mut Budget, span: Span) -> Result<Self, Diagnostic> {
         budget.check_bigint_digits(self.decimal_digits(), span)?;
         let minus_one = Self::from_integer(-1, budget, span)?;
         add(&self.negated(), &minus_one, budget, span)
