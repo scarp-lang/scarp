@@ -252,7 +252,9 @@ impl Builtin {
             Self::BigIntPowMod => &[ValueType::BigInt, Integer, ValueType::BigInt],
             Self::BigIntFromRadix => &[String, Integer],
             Self::BigIntToRadix => &[ValueType::BigInt, Integer],
-            Self::BigIntAnd | Self::BigIntOr | Self::BigIntXor => &[ValueType::BigInt, ValueType::BigInt],
+            Self::BigIntAnd | Self::BigIntOr | Self::BigIntXor => {
+                &[ValueType::BigInt, ValueType::BigInt]
+            }
             Self::BigIntNot => &[ValueType::BigInt],
             Self::BigIntShl | Self::BigIntShr => &[ValueType::BigInt, Integer],
             Self::BigIntGcd | Self::BigIntLcm => &[ValueType::BigInt, ValueType::BigInt],
