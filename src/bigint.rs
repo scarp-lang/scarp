@@ -13,6 +13,7 @@ use crate::{
 };
 
 mod advanced;
+mod bitwise;
 mod modular;
 mod number_theory;
 mod radix;
