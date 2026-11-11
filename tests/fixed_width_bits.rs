@@ -64,7 +64,10 @@ fn fixed_width_intrinsics_register_exact_pure_integer_signatures() {
         "bind wrong: boolean=bits_count_ones(1);",
     ] {
         let kind = scarp::compile(source).unwrap_err().kind;
-        assert!(matches!(kind, Kind::TypeMismatch | Kind::CallArguments), "{source}");
+        assert!(
+            matches!(kind, Kind::TypeMismatch | Kind::CallArguments),
+            "{source}"
+        );
     }
 }
 
@@ -82,9 +85,18 @@ fn bit_counts_observe_full_signed_i64_two_complement_pattern() {
         (0x1234_5678, 13, 35, 3),
     ] {
         let actual = [
-            call(B::BitsCountOnes, &[value], 1).unwrap().as_integer().unwrap(),
-            call(B::BitsLeadingZeros, &[value], 1).unwrap().as_integer().unwrap(),
-            call(B::BitsTrailingZeros, &[value], 1).unwrap().as_integer().unwrap(),
+            call(B::BitsCountOnes, &[value], 1)
+                .unwrap()
+                .as_integer()
+                .unwrap(),
+            call(B::BitsLeadingZeros, &[value], 1)
+                .unwrap()
+                .as_integer()
+                .unwrap(),
+            call(B::BitsTrailingZeros, &[value], 1)
+                .unwrap()
+                .as_integer()
+                .unwrap(),
         ];
         assert_eq!(actual, [count, leading, trailing], "value={value}");
     }
@@ -102,14 +114,29 @@ fn reverse_and_byte_swap_keep_exact_signed_bit_patterns() {
         0x0123_4567_89ab_cdef,
         0x0000_0000_80ff_aa55,
     ] {
-        let reverse = call(B::BitsReverse, &[value], 1).unwrap().as_integer().unwrap();
-        let swap = call(B::BitsSwapBytes, &[value], 1).unwrap().as_integer().unwrap();
+        let reverse = call(B::BitsReverse, &[value], 1)
+            .unwrap()
+            .as_integer()
+            .unwrap();
+        let swap = call(B::BitsSwapBytes, &[value], 1)
+            .unwrap()
+            .as_integer()
+            .unwrap();
         assert_eq!(reverse, (value as u64).reverse_bits() as i64);
         assert_eq!(swap, (value as u64).swap_bytes() as i64);
-        assert_eq!(call(B::BitsReverse, &[reverse], 1).unwrap(), Value::Integer(value));
-        assert_eq!(call(B::BitsSwapBytes, &[swap], 1).unwrap(), Value::Integer(value));
+        assert_eq!(
+            call(B::BitsReverse, &[reverse], 1).unwrap(),
+            Value::Integer(value)
+        );
+        assert_eq!(
+            call(B::BitsSwapBytes, &[swap], 1).unwrap(),
+            Value::Integer(value)
+        );
     }
-    assert_eq!(call(B::BitsReverse, &[1], 1).unwrap(), Value::Integer(i64::MIN));
+    assert_eq!(
+        call(B::BitsReverse, &[1], 1).unwrap(),
+        Value::Integer(i64::MIN)
+    );
     assert_eq!(
         call(B::BitsSwapBytes, &[0x0102_0304_0506_0708], 1).unwrap(),
         Value::Integer(0x0807_0605_0403_0201)
@@ -171,7 +198,10 @@ fn seeded_pattern_oracle_checks_bit_counts_reverse_and_byte_swap() {
         state ^= state >> 7;
         state ^= state << 17;
         let bits = state as i64;
-        let ones = call(B::BitsCountOnes, &[bits], 1).unwrap().as_integer().unwrap();
+        let ones = call(B::BitsCountOnes, &[bits], 1)
+            .unwrap()
+            .as_integer()
+            .unwrap();
         assert_eq!(ones, i64::from(state.count_ones()));
         let leading = call(B::BitsLeadingZeros, &[bits], 1)
             .unwrap()
@@ -183,9 +213,15 @@ fn seeded_pattern_oracle_checks_bit_counts_reverse_and_byte_swap() {
             .unwrap();
         assert_eq!(leading, i64::from(state.leading_zeros()));
         assert_eq!(trailing, i64::from(state.trailing_zeros()));
-        let flipped = call(B::BitsReverse, &[bits], 1).unwrap().as_integer().unwrap();
+        let flipped = call(B::BitsReverse, &[bits], 1)
+            .unwrap()
+            .as_integer()
+            .unwrap();
         assert_eq!(flipped as u64, state.reverse_bits());
-        let bytes = call(B::BitsSwapBytes, &[bits], 1).unwrap().as_integer().unwrap();
+        let bytes = call(B::BitsSwapBytes, &[bits], 1)
+            .unwrap()
+            .as_integer()
+            .unwrap();
         assert_eq!(bytes as u64, state.swap_bytes());
     }
 }
@@ -239,15 +275,13 @@ fn invalid_rotation_counts_report_argument_spans_and_preserve_atomic_output() {
             assert!(expected.help.unwrap().contains("between 0 and 63"));
 
             let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-            let RunError::Diagnostic(actual) =
-                scarp::run_with_io_and_options(
-                    &source,
-                    &mut stdout,
-                    &mut stderr,
-                    ExecutionOptions::default(),
-                )
-                .unwrap_err()
-            else {
+            let RunError::Diagnostic(actual) = scarp::run_with_io_and_options(
+                &source,
+                &mut stdout,
+                &mut stderr,
+                ExecutionOptions::default(),
+            )
+            .unwrap_err() else {
                 panic!("expected a diagnostic");
             };
             assert_eq!(actual.kind, Kind::InvalidShift);
@@ -258,9 +292,7 @@ fn invalid_rotation_counts_report_argument_spans_and_preserve_atomic_output() {
     for builtin in ROTATIONS {
         for invalid in [-1, 64, i64::MAX, i64::MIN] {
             assert_eq!(
-                call(builtin, &[i64::MIN, invalid], 1)
-                    .unwrap_err()
-                    .kind,
+                call(builtin, &[i64::MIN, invalid], 1).unwrap_err().kind,
                 Kind::InvalidShift
             );
         }
@@ -289,13 +321,9 @@ fn exact_work_budget_and_mismatched_host_types_are_checked() {
             Kind::ExecutionLimit
         );
         assert_eq!(
-            numeric::evaluate(
-                builtin,
-                &[Value::Integer(1), Value::Boolean(true)],
-                100
-            )
-            .unwrap_err()
-            .kind,
+            numeric::evaluate(builtin, &[Value::Integer(1), Value::Boolean(true)], 100)
+                .unwrap_err()
+                .kind,
             Kind::TypeMismatch
         );
     }
