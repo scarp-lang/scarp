@@ -103,7 +103,7 @@ macro_rules! diagnostic_catalogue {
 diagnostic_catalogue! {
     InvalidCharacter => ("E0001", "Invalid source character. Use the documented punctuation and ASCII identifiers; write Unicode text inside strings or comments."),
     UnterminatedString => ("E0002", "Unterminated string. Close the double quote before a physical newline or end of input; use escaped newline text inside a string."),
-    InvalidEscape => ("E0003", "Invalid string escape. Supported escapes are backslash, double quote, n, t and r after a backslash; write Unicode characters directly in UTF-8."),
+    InvalidEscape => ("E0003", "Invalid string escape. Use backslash, double quote, n, t or r after a backslash, or \\u{HEX} with one to six ASCII hexadecimal digits for a Unicode scalar value."),
     UnexpectedToken => ("E0004", "Unexpected syntax or invalid binding type. Check punctuation, required initializers, braces and primitive type names at the highlighted token."),
     UnknownStatement => ("E0005", "Unknown statement form. Use bind/var, supported output forms and documented control flow; migrate old let declarations to bind or var."),
     InvalidInteger => ("E0006", "Invalid integer literal or magnitude outside signed 64-bit range. Use decimal, 0x hexadecimal or 0b binary digits from -9223372036854775808 through 9223372036854775807; the minimum magnitude requires direct unary minus. Radix literals do not support separators or fractional parts."),
