@@ -34,20 +34,12 @@ pub(super) fn evaluate(
         Builtin::BigIntGcd => args[0]
             .as_bigint()
             .expect("typed bigint")
-            .gcd(
-                args[1].as_bigint().expect("typed bigint"),
-                budget,
-                span,
-            )
+            .gcd(args[1].as_bigint().expect("typed bigint"), budget, span)
             .map(Value::BigInt),
         Builtin::BigIntLcm => args[0]
             .as_bigint()
             .expect("typed bigint")
-            .lcm(
-                args[1].as_bigint().expect("typed bigint"),
-                budget,
-                span,
-            )
+            .lcm(args[1].as_bigint().expect("typed bigint"), budget, span)
             .map(Value::BigInt),
         Builtin::BigIntSqrt => args[0]
             .as_bigint()
