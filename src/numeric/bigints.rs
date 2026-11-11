@@ -75,6 +75,39 @@ pub(super) fn evaluate(
                 argument_span(1),
             )
             .map(Value::String),
+        Builtin::BigIntAnd | Builtin::BigIntOr | Builtin::BigIntXor => {
+            use crate::bigint::bitwise::BitwiseOperation;
+            let operation = match function {
+                Builtin::BigIntAnd => BitwiseOperation::And,
+                Builtin::BigIntOr => BitwiseOperation::Or,
+                _ => BitwiseOperation::Xor,
+            };
+            args[0]
+                .as_bigint()
+                .expect("typed bigint")
+                .bitwise(
+                    args[1].as_bigint().expect("typed bigint"),
+                    operation,
+                    budget,
+                    span,
+                )
+                .map(Value::BigInt)
+        }
+        Builtin::BigIntNot => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .bitwise_not(budget, argument_span(0))
+            .map(Value::BigInt),
+        Builtin::BigIntShl | Builtin::BigIntShr => {
+            let value = args[0].as_bigint().expect("typed bigint");
+            let count = args[1].as_integer().expect("typed integer");
+            if function == Builtin::BigIntShl {
+                value.shift_left(count, budget, argument_span(1))
+            } else {
+                value.shift_right(count, budget, argument_span(1))
+            }
+            .map(Value::BigInt)
+        }
         _ => {
             let value = args[0].as_bigint().expect("typed bigint");
             budget.check_bigint_digits(value.decimal_digits(), argument_span(0))?;
