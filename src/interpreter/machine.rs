@@ -303,7 +303,10 @@ pub(super) fn prepare<'a>(
                             }
                             Completion::Output => {
                                 if let Some(number) = value.as_bigint() {
-                                    budget.charge(number.decimal_digits() as u64, frame.output.as_ref().unwrap().span)?;
+                                    budget.charge(
+                                        number.decimal_digits() as u64,
+                                        frame.output.as_ref().unwrap().span,
+                                    )?;
                                 }
                                 if let Some(tuple) = value.as_tuple() {
                                     budget.charge(
@@ -628,7 +631,8 @@ fn charge_capture(
     let payload = match value {
         PrintValue::String(text) => text.len(),
         PrintValue::Value(Value::Tuple(tuple)) => tuple.capture_bytes(),
-        PrintValue::Value(Value::BigInt(number)) => number.payload_bytes()
+        PrintValue::Value(Value::BigInt(number)) => number
+            .payload_bytes()
             .max(number.decimal_digits() + usize::from(number.is_negative())),
         PrintValue::Value(Value::String(text)) => text.len(),
         PrintValue::Value(Value::Vector(vector)) => vector.len().saturating_mul(8),
