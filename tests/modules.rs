@@ -611,6 +611,8 @@ fn default_file_count_and_depth_boundaries_are_enforced_iteratively() {
             max_vector_bytes: 0,
             max_tuple_bytes: ExecutionOptions::default().max_tuple_bytes,
             max_text_bytes: 0,
+            max_bigint_digits: 0,
+            max_bigint_bytes: 0,
         })
         .unwrap();
     assert_eq!(
