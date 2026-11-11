@@ -15,9 +15,17 @@ fn valid_radix(radix: i64, span: Span) -> Result<u64, Diagnostic> {
     Ok(radix as u64)
 }
 
-fn append_text_byte(output: &mut Vec<u8>, byte: u8, budget: &mut Budget, span: Span) -> Result<(), Diagnostic> {
+fn append_text_byte(
+    output: &mut Vec<u8>,
+    byte: u8,
+    budget: &mut Budget,
+    span: Span,
+) -> Result<(), Diagnostic> {
     if output.len() >= crate::value::MAX_TEXT_BYTES {
-        return Err(crate::limits::text_construction(span, "radix text result exceeds the per-value size limit"));
+        return Err(crate::limits::text_construction(
+            span,
+            "radix text result exceeds the per-value size limit",
+        ));
     }
     budget.charge_text_allocation(1, span)?;
     output.try_reserve_exact(1).map_err(|_| {
@@ -80,7 +88,9 @@ impl BigInt {
                 // Account for one newly materialized magnitude limb before
                 // any fallible capacity reservation, regardless of Vec growth.
                 budget.charge_bigint_allocation(std::mem::size_of::<u32>(), text_span)?;
-                limbs.try_reserve_exact(1).map_err(|_| allocation(text_span))?;
+                limbs
+                    .try_reserve_exact(1)
+                    .map_err(|_| allocation(text_span))?;
                 limbs.push(carry as u32);
             }
         }
@@ -118,7 +128,12 @@ impl BigInt {
                 remainder = current % base;
             }
             normalize(&mut scratch);
-            append_text_byte(&mut reversed, ALPHABET[remainder as usize], budget, value_span)?;
+            append_text_byte(
+                &mut reversed,
+                ALPHABET[remainder as usize],
+                budget,
+                value_span,
+            )?;
         }
         if self.negative {
             append_text_byte(&mut reversed, b'-', budget, value_span)?;
