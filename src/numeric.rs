@@ -207,7 +207,10 @@ impl Builtin {
         match self {
             Self::BigInt => &[String],
             Self::BigIntFromInteger => &[Integer],
-            Self::BigIntToInteger | Self::BigIntAbs | Self::BigIntBitLength | Self::BigIntToText => &[ValueType::BigInt],
+            Self::BigIntToInteger
+            | Self::BigIntAbs
+            | Self::BigIntBitLength
+            | Self::BigIntToText => &[ValueType::BigInt],
             Self::BigIntPow => &[ValueType::BigInt, Integer],
             Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
             Self::SampleArea | Self::SampleSlopes | Self::SampleCumulativeArea => &[Vector, Vector],
@@ -267,7 +270,9 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
-            Self::BigInt | Self::BigIntFromInteger | Self::BigIntAbs | Self::BigIntPow => ValueType::BigInt,
+            Self::BigInt | Self::BigIntFromInteger | Self::BigIntAbs | Self::BigIntPow => {
+                ValueType::BigInt
+            }
             Self::BigIntToInteger | Self::BigIntBitLength => ValueType::Integer,
             Self::BigIntToText => ValueType::String,
             Self::Variance
@@ -348,8 +353,13 @@ impl Builtin {
     fn is_bigint(self) -> bool {
         matches!(
             self,
-            Self::BigInt | Self::BigIntFromInteger | Self::BigIntToInteger | Self::BigIntAbs
-                | Self::BigIntPow | Self::BigIntBitLength | Self::BigIntToText
+            Self::BigInt
+                | Self::BigIntFromInteger
+                | Self::BigIntToInteger
+                | Self::BigIntAbs
+                | Self::BigIntPow
+                | Self::BigIntBitLength
+                | Self::BigIntToText
         )
     }
 }
