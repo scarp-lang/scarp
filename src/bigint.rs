@@ -12,6 +12,8 @@ use crate::{
     value::{Value, ValueType},
 };
 
+mod advanced;
+
 const BASE: u64 = 1_000_000_000;
 /// Initial implementation ceiling; hosts may select a smaller per-value limit.
 pub const MAX_BIGINT_DIGITS: usize = 1_000_000;
