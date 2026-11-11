@@ -7,8 +7,8 @@ use crate::{
 };
 
 mod correlation;
-mod integers;
 mod integer_scalar;
+mod integers;
 mod kernels;
 mod nucleus;
 mod parse_format;
