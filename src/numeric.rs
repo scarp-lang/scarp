@@ -99,6 +99,9 @@ pub enum Builtin {
     TextToFloat,
     TextTrim,
     TextReplace,
+    TextLower,
+    TextUpper,
+    TextReverse,
 }
 
 impl Builtin {
@@ -124,6 +127,9 @@ impl Builtin {
             "text_to_float" => Self::TextToFloat,
             "text_trim" => Self::TextTrim,
             "text_replace" => Self::TextReplace,
+            "text_lower" => Self::TextLower,
+            "text_upper" => Self::TextUpper,
+            "text_reverse" => Self::TextReverse,
             "variance" => Self::Variance,
             "stddev" => Self::StdDev,
             "cosine_similarity" => Self::CosineSimilarity,
@@ -205,7 +211,7 @@ impl Builtin {
         match self {
             Self::IntegerToText => &[Integer],
             Self::FloatToText => &[Float],
-            Self::TextToInteger | Self::TextToFloat | Self::TextTrim => &[String],
+            Self::TextToInteger | Self::TextToFloat | Self::TextTrim | Self::TextLower | Self::TextUpper | Self::TextReverse => &[String],
             Self::TextReplace => &[String, String, String],
             Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
             Self::SampleArea | Self::SampleSlopes | Self::SampleCumulativeArea => &[Vector, Vector],
@@ -265,7 +271,13 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
-            Self::IntegerToText | Self::FloatToText | Self::TextTrim | Self::TextReplace => {
+            Self::IntegerToText
+            | Self::FloatToText
+            | Self::TextTrim
+            | Self::TextReplace
+            | Self::TextLower
+            | Self::TextUpper
+            | Self::TextReverse => {
                 ValueType::String
             }
             Self::TextToInteger => ValueType::Integer,
@@ -624,6 +636,9 @@ pub(crate) fn evaluate_with_spans(
             | Builtin::TextRepeat
             | Builtin::TextTrim
             | Builtin::TextReplace
+            | Builtin::TextLower
+            | Builtin::TextUpper
+            | Builtin::TextReverse
     ) {
         return text::evaluate(function, args, budget, span, argument_span);
     }
