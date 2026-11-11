@@ -10,6 +10,7 @@ pub(super) struct ProgramTypes {
     bindings: Vec<TypeId>,
     functions: Vec<TypeId>,
     builtins: BTreeMap<Builtin, TypeId>,
+    divmod: Option<TypeId>,
     input: Option<TypeId>,
 }
 
@@ -69,6 +70,7 @@ impl TypedExpression<'_> {
                         self.types.builtins.get(&builtin).copied()
                     }
                     Some(ResolvedCall::ReadLine) => self.types.input,
+                    Some(ResolvedCall::BigIntDivMod) => self.types.divmod,
                     None => None,
                 };
                 TypedNode {
@@ -229,6 +231,7 @@ pub(super) fn build(
         functions.push(id);
     }
     let mut builtins = BTreeMap::new();
+    let mut divmod = None;
     let mut input = None;
     for (_, expression) in expressions(program) {
         for (index, call) in expression.calls.iter().enumerate() {
@@ -241,6 +244,29 @@ pub(super) fn build(
                             effect: FunctionEffect::Impure,
                         })
                         .map_err(|error| failure(error, expression.syntax.nodes()[index].span))?,
+                );
+            }
+            if matches!(call, Some(ResolvedCall::BigIntDivMod)) && divmod.is_none() {
+                let span = expression.syntax.nodes()[index].span;
+                let result = crate::types::SourceType::tuple(vec![
+                    ValueType::BigInt.into(),
+                    ValueType::BigInt.into(),
+                ])
+                .expect("bounded two-element BigInt tuple")
+                .intern(&mut registry)
+                .map_err(|error| failure(error, span))?;
+                divmod = Some(
+                    registry
+                        .intern(TypeKind::Function {
+                            parameters: vec![
+                                ValueType::BigInt.id(),
+                                ValueType::BigInt.id(),
+                            ]
+                            .into(),
+                            result,
+                            effect: FunctionEffect::Pure,
+                        })
+                        .map_err(|error| failure(error, span))?,
                 );
             }
             if let Some(ResolvedCall::Builtin(builtin)) = call {
@@ -267,6 +293,7 @@ pub(super) fn build(
         bindings,
         functions,
         builtins,
+        divmod,
         input,
     })
 }
