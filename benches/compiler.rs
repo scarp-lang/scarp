@@ -240,7 +240,7 @@ fn main() {
         for _ in 1..4096 {
             assert_eq!(registry.intern(signature()).unwrap(), first);
         }
-        assert_eq!(registry.len(), 9);
+        assert_eq!(registry.len(), PrimitiveType::ALL.len() + 1);
         black_box(registry.finish());
     });
 }
