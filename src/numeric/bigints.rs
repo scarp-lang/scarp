@@ -53,9 +53,7 @@ pub(super) fn evaluate(
                 Builtin::BigIntBitLength => value
                     .bit_length(budget, argument_span(0))
                     .map(Value::Integer),
-                Builtin::BigIntToText => value
-                    .to_text(budget, argument_span(0))
-                    .map(Value::String),
+                Builtin::BigIntToText => value.to_text(budget, argument_span(0)).map(Value::String),
                 _ => unreachable!("checked bigint dispatch"),
             }
         }
