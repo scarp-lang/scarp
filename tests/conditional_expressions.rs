@@ -5,7 +5,7 @@ use scarp::{
         cache::{SyntaxCache, SyntaxCacheLimits},
         MemorySourceLoader, ModuleLimits,
     },
-    parser::MAX_EXPRESSION_DEPTH,
+    parser::{MAX_BLOCK_DEPTH, MAX_EXPRESSION_DEPTH},
     ExecutionOptions, InputLimits, RunError,
 };
 
@@ -199,10 +199,10 @@ fn unselected_allocations_and_long_elif_chains_do_not_consume_runtime_quotas() {
 
 #[test]
 fn conditional_nesting_shares_the_expression_limit_on_small_host_stacks() {
-    std::thread::Builder::new()
-        .stack_size(256 * 1024)
+    let programs = std::thread::Builder::new()
+        .stack_size(512 * 1024)
         .spawn(|| {
-            for mixed in [false, true] {
+            [false, true].map(|mixed| {
                 let mut expression = "1".to_string();
                 for level in 0..MAX_EXPRESSION_DEPTH {
                     expression = if mixed && level % 2 == 1 {
@@ -211,17 +211,29 @@ fn conditional_nesting_shares_the_expression_limit_on_small_host_stacks() {
                         format!("if true {{ {expression} }} else {{ 0 }}")
                     };
                 }
-                assert_eq!(run(&format!("print({expression});")), "1\n");
-                let source = format!("print(if true {{ {expression} }} else {{ 0 }});");
+                let blocks_open = "{".repeat(MAX_BLOCK_DEPTH);
+                let blocks_close = "}".repeat(MAX_BLOCK_DEPTH);
+                let source = format!("{blocks_open}print({expression});{blocks_close}");
+                let program = scarp::parse(&source).unwrap();
+                let too_deep = format!(
+                    "{blocks_open}print(if true {{ {expression} }} else {{ 0 }});{blocks_close}"
+                );
                 assert_eq!(
-                    scarp::parse(&source).unwrap_err().kind,
+                    scarp::parse(&too_deep).unwrap_err().kind,
                     Kind::ExpressionNesting
                 );
-            }
+                program
+            })
         })
         .unwrap()
         .join()
         .unwrap();
+    for program in programs {
+        let program = scarp::resolver::resolve(program).unwrap();
+        let mut out = Vec::new();
+        scarp::interpreter::execute(&program, &mut out).unwrap();
+        assert_eq!(out, b"1\n");
+    }
 }
 
 #[test]
