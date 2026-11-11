@@ -32,7 +32,10 @@ fn failure(src: &str, opts: ExecutionOptions, kind: Kind) {
     };
     assert_eq!(actual.kind, kind, "{actual:?}");
     assert_eq!(scarp::check_with_options(src, opts).unwrap_err(), actual);
-    assert!(out.is_empty() && err.is_empty(), "all outputs must remain buffered");
+    assert!(
+        out.is_empty() && err.is_empty(),
+        "all outputs must remain buffered"
+    );
 }
 
 #[test]
@@ -42,7 +45,10 @@ fn sixty_five_thousand_five_hundred_thirty_six_bit_value_is_exact() {
     assert!(scarp::check_with_options(&src, options()).is_ok());
     let mut output = Vec::new();
     scarp::run_with_options(&src, &mut output, options()).unwrap();
-    assert_eq!(String::from_utf8(output).unwrap(), "65536 65536\ntrue\n65536\n");
+    assert_eq!(
+        String::from_utf8(output).unwrap(),
+        "65536 65536\ntrue\n65536\n"
+    );
 }
 
 #[test]
