@@ -9,7 +9,9 @@ fn overflow(span: Span, operation: &str) -> Diagnostic {
         span,
         format!("{operation} result exceeds the signed 64-bit integer range"),
     )
-    .with_help("use an operation whose exact result fits -9223372036854775808..=9223372036854775807")
+    .with_help(
+        "use an operation whose exact result fits -9223372036854775808..=9223372036854775807",
+    )
 }
 
 pub(super) fn evaluate(
@@ -23,7 +25,9 @@ pub(super) fn evaluate(
     budget.charge(1, span)?;
     let left = args[0].require_integer(at(0))?;
     let result = match function {
-        Builtin::IntegerAbs => left.checked_abs().ok_or_else(|| overflow(at(0), "integer_abs"))?,
+        Builtin::IntegerAbs => left
+            .checked_abs()
+            .ok_or_else(|| overflow(at(0), "integer_abs"))?,
         Builtin::IntegerSign => left.signum(),
         Builtin::IntegerGcd | Builtin::IntegerLcm => {
             let right = args[1].require_integer(at(1))?;
