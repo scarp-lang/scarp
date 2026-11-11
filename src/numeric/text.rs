@@ -38,9 +38,7 @@ pub(super) fn evaluate(
                     argument_span(0),
                     "text_from_codepoint requires a valid Unicode scalar value",
                 )
-                .with_help(
-                    "use an integer in 0..=0x10FFFF, excluding 0xD800..=0xDFFF (surrogates)",
-                )
+                .with_help("use an integer in 0..=0x10FFFF, excluding 0xD800..=0xDFFF (surrogates)")
             })?;
         budget.charge(1, span)?;
         let mut result = reserve(scalar.len_utf8(), budget, span)?;
