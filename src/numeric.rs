@@ -232,9 +232,7 @@ impl Builtin {
             | Self::TextCount
             | Self::TextContains
             | Self::TextStartsWith
-            | Self::TextEndsWith => {
-                &[String, String]
-            }
+            | Self::TextEndsWith => &[String, String],
             Self::Length
             | Self::Sum
             | Self::Mean
@@ -281,9 +279,7 @@ impl Builtin {
             | Self::FloatToText
             | Self::TextTrim
             | Self::TextReplace
-            | Self::TextFromCodepoint => {
-                ValueType::String
-            }
+            | Self::TextFromCodepoint => ValueType::String,
             Self::TextToInteger => ValueType::Integer,
             Self::TextToFloat => ValueType::Float,
             Self::Variance
