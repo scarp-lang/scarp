@@ -3,11 +3,12 @@
 //! The default cache entry point still loads, lexes, parses and validates
 //! the entire graph through the trusted SourceLoader. Optional front-end
 //! caches can skip lexing/parsing on exact per-source hits, but the loader
-//! and graph validation always run. The expensive link/type/constant
-//! resolution result can be reused ONLY if every original byte, source label,
-//! resolved per-import target and caller-owned revision matches exactly.
+//! and graph validation always run. [`CompilationCache`] reuses a program
+//! when every source byte, display label, resolved per-import target and
+//! caller-owned revision matches exactly. [`EditorCompilationCache`] can
+//! bind new revisions to a verified, byte-identical graph and editor index.
 //!
-//! Separate opt-in caches also cover tokens, syntax trees and constant evaluation.
+//! Opt-in caches also cover tokens, syntax trees, constant evaluation and editor snapshots.
 
 use super::invalidation::{EditImpact, InvalidationError, InvalidationSnapshot};
 use super::{
@@ -19,9 +20,14 @@ use crate::types::TypeLimits;
 use std::{collections::VecDeque, error::Error, fmt, sync::Arc};
 
 mod constants;
+mod editor;
 mod syntax;
 mod tokens;
 pub use constants::{ConstantCache, ConstantCacheLimits, ConstantCacheStats};
+pub use editor::{
+    CachedEditorProgram, EditorCacheLimits, EditorCacheStats, EditorCompilationCache,
+    EditorCompileError, EditorCompileLimits,
+};
 pub use syntax::{SyntaxCache, SyntaxCacheLimits, SyntaxCacheStats};
 pub use tokens::{TokenCache, TokenCacheLimits, TokenCacheStats};
 
@@ -66,7 +72,7 @@ impl Default for CacheLimits {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CacheStatus {
-    /// Full graph was loaded and parsed, but semantic resolution was reused.
+    /// The current graph was validated and a prior compilation result reused.
     Hit,
     /// Semantic resolution ran and the successful output was retained.
     Stored,
@@ -153,42 +159,43 @@ impl Entry {
             return false;
         }
 
-        let original_sources = self.program.sources();
-        if original_sources.entry != graph.sources.entry
-            || original_sources.files().len() != graph.sources.files().len()
-            || self.program.modules().len() != graph.modules.len()
+        same_source_graph(&self.program, graph)
+    }
+}
+
+fn same_source_graph(program: &ModuleProgram, graph: &ModuleGraph) -> bool {
+    let original_sources = program.sources();
+    if original_sources.entry != graph.sources.entry
+        || original_sources.files().len() != graph.sources.files().len()
+        || program.modules().len() != graph.modules.len()
+    {
+        return false;
+    }
+
+    for (id, module) in graph.modules.iter().enumerate() {
+        let old = &program.modules()[id];
+        if old.identity != module.identity
+            || old.source != id
+            || original_sources.files()[id].name != graph.sources.files()[id].name
+            || original_sources.source(id) != graph.sources.source(id)
         {
             return false;
         }
 
-        for (id, module) in graph.modules.iter().enumerate() {
-            let old = &self.program.modules()[id];
-            if old.identity != module.identity
-                || old.source != id
-                || original_sources.files()[id].name != graph.sources.files()[id].name
-                || original_sources.source(id) != graph.sources.source(id)
-            {
+        // Per-import targets matter even when the unique dependency sets agree.
+        let Some(old_imports) = program.imports_in(id) else {
+            return false;
+        };
+        if old_imports.len() != module.dependencies.len() {
+            return false;
+        }
+        for (old_import, (_, new_target)) in old_imports.iter().zip(&module.dependencies) {
+            if old_import.target != *new_target {
                 return false;
-            }
-
-            // Import declarations are compared in original order, not just
-            // deduplicated dependency sets. A -> [A,A,B] and A -> [A,B,B]
-            // have identical unique targets but different semantics.
-            let old_imports = match self.program.imports_in(id) {
-                Some(imports) => imports,
-                None => return false,
-            };
-            if old_imports.len() != module.dependencies.len() {
-                return false;
-            }
-            for (old_import, (_, new_target)) in old_imports.iter().zip(&module.dependencies) {
-                if old_import.target != *new_target {
-                    return false;
-                }
             }
         }
-        true
     }
+    true
 }
 
 /// Caller-owned FIFO of whole-graph successful compilation results.

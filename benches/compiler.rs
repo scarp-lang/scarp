@@ -4,14 +4,16 @@ use scarp::{
         self,
         cache::{
             CacheLimits, CacheStatus, CachedCompileOptions, CompilationCache, ConstantCache,
-            ConstantCacheLimits, SyntaxCache, SyntaxCacheLimits, TokenCache, TokenCacheLimits,
+            ConstantCacheLimits, EditorCacheLimits, EditorCompilationCache, EditorCompileLimits,
+            SyntaxCache, SyntaxCacheLimits, TokenCache, TokenCacheLimits,
         },
+        symbols::editor::EditorSnapshot,
         ConstantLimits, MemorySourceLoader, ModuleLimits,
     },
     types::{FunctionEffect, PrimitiveType, TypeKind, TypeLimits, TypeRegistryBuilder},
     ExecutionOptions,
 };
-use std::{hint::black_box, time::Instant};
+use std::{hint::black_box, sync::Arc, time::Instant};
 
 fn measure(name: &str, bytes: usize, iterations: u32, mut work: impl FnMut()) {
     for sample in 1..=3 {
@@ -89,6 +91,40 @@ fn measure_constant_edits(original: &MemorySourceLoader, files: &[(&str, &str)],
             black_box(resolve_cached(graph, &mut constants));
         },
     );
+}
+
+fn measure_editor_revision_refresh(loader: &MemorySourceLoader, bytes: usize, iterations: u32) {
+    let limits = EditorCompileLimits::default();
+    let mut syntax = SyntaxCache::new(SyntaxCacheLimits::default());
+    let mut load = || {
+        modules::load_with_syntax_cache("main.srp", loader, ModuleLimits::default(), &mut syntax)
+            .unwrap()
+    };
+    let mut editor = EditorCompilationCache::new(EditorCacheLimits::default());
+    let first = editor.resolve(load(), limits, |_| Some(0), None).unwrap();
+    let next = editor.resolve(load(), limits, |_| Some(1), None).unwrap();
+    assert_eq!(next.status, CacheStatus::Hit);
+    assert!(Arc::ptr_eq(&first.program, &next.program));
+    assert!(first.snapshot.ensure_current(&[1; 4]).is_err());
+    assert!(next.snapshot.ensure_current(&[1; 4]).is_ok());
+
+    // Both measurements start with the same warm AST cache.
+    let mut revision = 1;
+    measure("editor_revision_rebuild_4files", bytes, iterations, || {
+        revision += 1;
+        let indexed = modules::resolve_indexed(load(), limits.index_limits).unwrap();
+        let snapshot =
+            EditorSnapshot::new(indexed.index(), &[revision; 4], limits.editor_limits).unwrap();
+        black_box((indexed, snapshot));
+    });
+    measure("editor_revision_cache_4files", bytes, iterations, || {
+        revision += 1;
+        let result = editor
+            .resolve(load(), limits, |_| Some(revision), None)
+            .unwrap();
+        assert_eq!(result.status, CacheStatus::Hit);
+        black_box(result);
+    });
 }
 
 fn main() {
@@ -272,6 +308,7 @@ fn main() {
             black_box(compile_indexed());
         },
     );
+    measure_editor_revision_refresh(&loader, input_bytes, iterations);
     measure("inspection_json_4files", size, iterations, || {
         json.clear();
         program.write_inspection_json(black_box(&mut json)).unwrap();
