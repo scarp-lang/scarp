@@ -211,7 +211,12 @@ impl Builtin {
         match self {
             Self::IntegerToText => &[Integer],
             Self::FloatToText => &[Float],
-            Self::TextToInteger | Self::TextToFloat | Self::TextTrim | Self::TextLower | Self::TextUpper | Self::TextReverse => &[String],
+            Self::TextToInteger
+            | Self::TextToFloat
+            | Self::TextTrim
+            | Self::TextLower
+            | Self::TextUpper
+            | Self::TextReverse => &[String],
             Self::TextReplace => &[String, String, String],
             Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
             Self::SampleArea | Self::SampleSlopes | Self::SampleCumulativeArea => &[Vector, Vector],
@@ -991,6 +996,9 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::TextToFloat
         | Builtin::TextTrim
         | Builtin::TextReplace
+        | Builtin::TextLower
+        | Builtin::TextUpper
+        | Builtin::TextReverse
         | Builtin::Variance
         | Builtin::StdDev
         | Builtin::CosineSimilarity
