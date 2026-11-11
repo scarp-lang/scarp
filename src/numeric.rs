@@ -278,10 +278,13 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
-            Self::BigInt | Self::BigIntFromInteger | Self::BigIntAbs | Self::BigIntPow
-            | Self::BigIntGcd | Self::BigIntLcm | Self::BigIntSqrt => {
-                ValueType::BigInt
-            }
+            Self::BigInt
+            | Self::BigIntFromInteger
+            | Self::BigIntAbs
+            | Self::BigIntPow
+            | Self::BigIntGcd
+            | Self::BigIntLcm
+            | Self::BigIntSqrt => ValueType::BigInt,
             Self::BigIntToInteger | Self::BigIntBitLength => ValueType::Integer,
             Self::BigIntToText => ValueType::String,
             Self::Variance
