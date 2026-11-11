@@ -97,6 +97,9 @@ pub enum Builtin {
     BigIntFromInteger,
     BigIntToInteger,
     BigIntAbs,
+    BigIntPow,
+    BigIntBitLength,
+    BigIntToText,
 }
 
 impl Builtin {
@@ -120,6 +123,9 @@ impl Builtin {
             "bigint_from_integer" => Self::BigIntFromInteger,
             "bigint_to_integer" => Self::BigIntToInteger,
             "bigint_abs" => Self::BigIntAbs,
+            "bigint_pow" => Self::BigIntPow,
+            "bigint_bit_length" => Self::BigIntBitLength,
+            "bigint_to_text" => Self::BigIntToText,
             "variance" => Self::Variance,
             "stddev" => Self::StdDev,
             "cosine_similarity" => Self::CosineSimilarity,
@@ -201,7 +207,11 @@ impl Builtin {
         match self {
             Self::BigInt => &[String],
             Self::BigIntFromInteger => &[Integer],
-            Self::BigIntToInteger | Self::BigIntAbs => &[ValueType::BigInt],
+            Self::BigIntToInteger
+            | Self::BigIntAbs
+            | Self::BigIntBitLength
+            | Self::BigIntToText => &[ValueType::BigInt],
+            Self::BigIntPow => &[ValueType::BigInt, Integer],
             Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
             Self::SampleArea | Self::SampleSlopes | Self::SampleCumulativeArea => &[Vector, Vector],
             Self::IntsLength | Self::IntsSum | Self::IntsToVector => &[Integers],
@@ -260,8 +270,11 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
-            Self::BigInt | Self::BigIntFromInteger | Self::BigIntAbs => ValueType::BigInt,
-            Self::BigIntToInteger => ValueType::Integer,
+            Self::BigInt | Self::BigIntFromInteger | Self::BigIntAbs | Self::BigIntPow => {
+                ValueType::BigInt
+            }
+            Self::BigIntToInteger | Self::BigIntBitLength => ValueType::Integer,
+            Self::BigIntToText => ValueType::String,
             Self::Variance
             | Self::StdDev
             | Self::SampleArea
@@ -340,7 +353,13 @@ impl Builtin {
     fn is_bigint(self) -> bool {
         matches!(
             self,
-            Self::BigInt | Self::BigIntFromInteger | Self::BigIntToInteger | Self::BigIntAbs
+            Self::BigInt
+                | Self::BigIntFromInteger
+                | Self::BigIntToInteger
+                | Self::BigIntAbs
+                | Self::BigIntPow
+                | Self::BigIntBitLength
+                | Self::BigIntToText
         )
     }
 }
@@ -975,6 +994,9 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::BigIntFromInteger
         | Builtin::BigIntToInteger
         | Builtin::BigIntAbs
+        | Builtin::BigIntPow
+        | Builtin::BigIntBitLength
+        | Builtin::BigIntToText
         | Builtin::Variance
         | Builtin::StdDev
         | Builtin::CosineSimilarity
