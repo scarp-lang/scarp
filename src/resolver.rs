@@ -1216,6 +1216,35 @@ fn resolve_expression(
                 (binding.kind.clone(), Some(binding.slot))
             }
             ExpressionKind::Group { expression } => (types[*expression].clone(), None),
+            ExpressionKind::Conditional {
+                branches,
+                otherwise,
+            } => {
+                let first = branches[0].result;
+                let kind = &types[first];
+                let first_span = syntax.nodes()[first].span;
+                require_value(kind, first_span)?;
+                for branch in branches {
+                    require_type(
+                        &types[branch.condition],
+                        ValueType::Boolean,
+                        syntax.nodes()[branch.condition].span,
+                    )?;
+                }
+                for result in branches
+                    .iter()
+                    .skip(1)
+                    .map(|branch| branch.result)
+                    .chain(std::iter::once(*otherwise))
+                {
+                    require_type(&types[result], kind, syntax.nodes()[result].span).map_err(
+                        |error| {
+                            error.with_related(first_span, "the first branch has this result type")
+                        },
+                    )?;
+                }
+                (kind.clone(), None)
+            }
             ExpressionKind::BitNot {
                 operand,
                 operator_span,

@@ -115,6 +115,15 @@ impl Work {
                 }
                 self.nodes -= 1;
                 match &node.kind {
+                    ExpressionKind::Conditional { .. } => {
+                        return Err(Diagnostic::new(
+                            Kind::ModuleSyntax,
+                            node.span,
+                            "conditional expressions are not supported in module constants",
+                        )
+                        .with_related(declaration.span, "constant initialized here")
+                        .with_help("evaluate the conditional inside a function or entry script"))
+                    }
                     ExpressionKind::UserCall { function_span, .. } => {
                         return Err(Diagnostic::new(
                             Kind::ModuleSyntax,

@@ -234,6 +234,15 @@ fn expression_nodes_preserve_spans_and_postorder_invariants() {
     assert_eq!(&source[root.span.start..root.span.end], "-(1 + 2) * 3");
     for (id, node) in expression.nodes().iter().enumerate() {
         match &node.kind {
+            ExpressionKind::Conditional {
+                branches,
+                otherwise,
+            } => {
+                assert!(*otherwise < id);
+                for branch in branches {
+                    assert!(branch.condition < id && branch.result < id);
+                }
+            }
             ExpressionKind::UserCall { arguments, .. } => {
                 for argument in arguments {
                     assert!(argument.expression < id);

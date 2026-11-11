@@ -5,16 +5,17 @@ use std::collections::VecDeque;
 
 use crate::{
     ast::{
-        AssignmentOperator, BinaryOperator, CallArgument, ConditionalBranch, Contract, Expression,
-        ExpressionKind, ExpressionNode, FunctionDeclaration, LogicalOperator, OutputTarget,
-        Parameter, PrintArgument, Program, Statement,
+        AssignmentOperator, BinaryOperator, CallArgument, ConditionalBranch,
+        ConditionalExpressionBranch, Contract, Expression, ExpressionKind, ExpressionNode,
+        FunctionDeclaration, LogicalOperator, OutputTarget, Parameter, PrintArgument, Program,
+        Statement,
     },
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     lexer::{Token, TokenKind},
     value::{FiniteFloat, ValueType, MAX_VECTOR_LENGTH},
 };
 
-/// Maximum nested expression parentheses, excluding the output call itself.
+/// Maximum expression nesting, excluding the output call itself.
 pub const MAX_EXPRESSION_DEPTH: usize = 64;
 
 /// Maximum nested statement blocks, independent of expression parentheses.
@@ -1292,6 +1293,9 @@ impl Parser<'_> {
             }
             Some(TokenKind::LeftBracket) => self.vector_literal(nodes, depth),
             Some(TokenKind::LeftParen) => self.group_expression(nodes, depth),
+            Some(TokenKind::Identifier(name)) if name == "if" => {
+                self.conditional_expression(nodes, depth)
+            }
             Some(TokenKind::Identifier(name))
                 if !matches!(
                     name.as_str(),
@@ -1305,6 +1309,57 @@ impl Parser<'_> {
             }
             _ => self.atom(nodes),
         }
+    }
+
+    fn conditional_expression(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+    ) -> Result<usize, ParseError> {
+        let opening = self.current().unwrap().span;
+        self.expression_depth(depth, opening)?;
+        let depth = depth + 1;
+        let mut branches = Vec::new();
+        loop {
+            self.advance(); // if or elif
+            let condition = self.logical_or(nodes, depth)?;
+            let (result, _) = self.conditional_result(nodes, depth)?;
+            branches.push(ConditionalExpressionBranch { condition, result });
+            if !self.keyword("elif") {
+                break;
+            }
+        }
+        if !self.keyword("else") {
+            return Err(self
+                .expected("'else' in a conditional expression")
+                .with_help("finish the conditional expression with else { expression }"));
+        }
+        self.advance();
+        let (otherwise, end) = self.conditional_result(nodes, depth)?;
+        Ok(push(
+            nodes,
+            ExpressionKind::Conditional {
+                branches,
+                otherwise,
+            },
+            Span::new(opening.start, end),
+        ))
+    }
+
+    fn conditional_result(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+    ) -> Result<(usize, usize), ParseError> {
+        self.punctuation(TokenKind::LeftBrace, "'{' before conditional result")?;
+        let result = self.logical_or(nodes, depth)?;
+        let end = self
+            .punctuation(
+                TokenKind::RightBrace,
+                "'}' after one conditional result expression",
+            )?
+            .end;
+        Ok((result, end))
     }
 
     fn group_expression(

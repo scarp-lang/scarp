@@ -109,7 +109,7 @@ diagnostic_catalogue! {
     InvalidInteger => ("E0006", "Invalid integer literal or magnitude outside signed 64-bit range. Use decimal, 0x hexadecimal or 0b binary digits from -9223372036854775808 through 9223372036854775807; the minimum magnitude requires direct unary minus. Radix literals do not support separators or fractional parts."),
     ArithmeticOverflow => ("E0007", "Integer arithmetic overflow. Every evaluated intermediate result must fit signed 64-bit, including negation and minimum-integer division by -1. Reduce the operands; a later operation cannot undo an overflow."),
     DivisionByZero => ("E0008", "Division by zero. Supply a nonzero divisor; either sign of floating zero is invalid. Only selected runtime or constant branches are evaluated."),
-    ExpressionNesting => ("E0009", "Expression nesting limit exceeded. Reduce nested groups, unary forms or calls; long flat operator sequences are handled iteratively."),
+    ExpressionNesting => ("E0009", "Expression nesting limit exceeded. Reduce nested groups, unary forms, calls or conditional expressions; long flat operator sequences are handled iteratively."),
     UnknownName => ("E0010", "Unknown or inaccessible binding. Declare the name in the current lexical scope before use; functions cannot capture entry-script bindings, and constant initializers cannot read runtime values."),
     DuplicateBinding => ("E0011", "Duplicate binding or module alias collision. Choose a distinct name or a nested lexical scope, and follow the related declaration site."),
     ReservedName => ("E0012", "Reserved binding name. Choose a name outside the language keywords and output forms; identifiers are case-sensitive ASCII names."),

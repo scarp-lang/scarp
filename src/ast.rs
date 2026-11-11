@@ -204,7 +204,19 @@ pub struct ExpressionNode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConditionalExpressionBranch {
+    /// Index of the boolean condition in the containing expression.
+    pub condition: usize,
+    /// Index of the result expression in the containing expression.
+    pub result: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExpressionKind {
+    Conditional {
+        branches: Vec<ConditionalExpressionBranch>,
+        otherwise: usize,
+    },
     Tuple {
         elements: Vec<usize>,
     },
