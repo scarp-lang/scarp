@@ -1,6 +1,4 @@
-use scarp::{
-    diagnostics::DiagnosticKind as Kind, ExecutionOptions, RunError,
-};
+use scarp::{diagnostics::DiagnosticKind as Kind, ExecutionOptions, RunError};
 
 fn run(source: &str) -> String {
     let mut output = Vec::new();
@@ -16,8 +14,14 @@ fn diagnostic(source: &str, options: ExecutionOptions, kind: Kind) {
         panic!("expected typed diagnostic")
     };
     assert_eq!(error.kind, kind);
-    assert!(stdout.is_empty() && stderr.is_empty(), "output must be atomic");
-    assert_eq!(scarp::check_with_options(source, options).unwrap_err(), error);
+    assert!(
+        stdout.is_empty() && stderr.is_empty(),
+        "output must be atomic"
+    );
+    assert_eq!(
+        scarp::check_with_options(source, options).unwrap_err(),
+        error
+    );
 }
 
 #[test]
@@ -85,13 +89,19 @@ fn intermediate_product_and_shared_work_limits_cannot_be_bypassed() {
     // six-digit exact BigInt, which correctly exceeds this 3-digit cap.
     diagnostic(
         "print(\"pending\"); print(bigint_pow_mod(bigint(\"998\"),2,bigint(\"999\")));",
-        ExecutionOptions { max_bigint_digits: 3, ..ExecutionOptions::default() },
+        ExecutionOptions {
+            max_bigint_digits: 3,
+            ..ExecutionOptions::default()
+        },
         Kind::BigIntLimit,
     );
     diagnostic(
         "print(\"pending\"); print(bigint_pow_mod(bigint(\"2\"),1000,bigint(\"1009\")));",
         ExecutionOptions {
-            limits: scarp::ExecutionLimits { max_steps: 30, ..scarp::ExecutionLimits::default() },
+            limits: scarp::ExecutionLimits {
+                max_steps: 30,
+                ..scarp::ExecutionLimits::default()
+            },
             ..ExecutionOptions::default()
         },
         Kind::ExecutionLimit,
