@@ -44,15 +44,14 @@ pub(super) fn evaluate(
 
             if function == Builtin::IntegerGcd {
                 i64::try_from(a).map_err(|_| overflow(span, "integer_gcd"))?
-            } else if a == 0 {
-                // lcm(0, 0) and lcm(0, x) are zero.
-                0
             } else {
-                // Dividing first avoids the intermediate signed overflow.
-                // Both magnitudes are at most 2^63, so this u128 product
-                // is at most 2^126 and cannot overflow.
-                let multiple =
-                    u128::from(left.unsigned_abs() / a) * u128::from(right.unsigned_abs());
+                // Dividing first avoids intermediate signed overflow. A zero
+                // GCD means both inputs are zero, so their LCM is also zero.
+                // Magnitudes are at most 2^63: the product fits in u128.
+                let multiple = match left.unsigned_abs().checked_div(a) {
+                    Some(quotient) => u128::from(quotient) * u128::from(right.unsigned_abs()),
+                    None => 0,
+                };
                 i64::try_from(multiple).map_err(|_| overflow(span, "integer_lcm"))?
             }
         }
