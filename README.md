@@ -1,15 +1,18 @@
 # Scarp
 
-**0.0.6-alpha.6** is the **latest published experimental GitHub prerelease**
-(10 November 2026), from exact source `cdf6a3924ec2a36c7beca5a9aec4f01a0bce515e`.
-It adds [bounded input](docs/program-input.md), [scalar/text utilities](docs/text-foundations.md)
-and [immutable tuples with a Rust API migration](docs/tuples.md).
+**0.0.6-alpha.7** is the **latest published experimental GitHub prerelease**
+(11 November 2026), from exact source `b1c1fd232b418267d95520c69ee563ac99ecae30`.
+It adds typed conditional expressions and Unicode scalar string escapes.
 The latest published prerelease is
-[0.0.6-alpha.6](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.6),
+[0.0.6-alpha.7](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.7),
 with seven verified assets for Windows x64, Linux x64 and macOS Apple Silicon.
-See [public notes](docs/releases/v0.0.6-alpha.6-publication.md) and
-[exact-source publication verification](docs/releases/v0.0.6-alpha.6-validation.md).
-The [candidate snapshot](docs/releases/v0.0.6-alpha.6.md) preserves preparation history.
+See [public notes](docs/releases/v0.0.6-alpha.7-publication.md) and
+[exact-source publication verification](docs/releases/v0.0.6-alpha.7-validation.md).
+
+**0.0.6-alpha.6** added [bounded input](docs/program-input.md),
+[scalar/text utilities](docs/text-foundations.md) and
+[immutable tuples with a Rust API migration](docs/tuples.md).
+[Alpha.6 verification](docs/releases/v0.0.6-alpha.6-validation.md)
 
 **0.0.6-alpha.5** is an **earlier published experimental GitHub prerelease**
 (9 November 2026), from exact source
@@ -83,9 +86,7 @@ module inspection and an opt-in experimental C11 scalar emitter for Rust hosts.
 See [alpha.5 release notes](docs/releases/v0.0.5-alpha.5.md) and the
 [publication record](docs/releases/v0.0.5-alpha.5-validation.md).
 
-Scarp is an experimental programming language implemented in Rust. The latest
-published **0.0.6-alpha.6** prerelease was published on 10 November 2026 from
-exact source `cdf6a3924ec2a36c7beca5a9aec4f01a0bce515e`. The compiler provides a lexer,
+Scarp is an experimental programming language implemented in Rust. The compiler provides a lexer,
 parser, typed resolver, interpreter, source modules, finite binary64 numerics
 and a Scarp-first CLI. The bounded `create`, `launch` and project-directory
 `verify` workflow remains available. Syntax and APIs are not stable.
