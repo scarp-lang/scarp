@@ -282,9 +282,7 @@ impl Builtin {
             | Self::TextReplace
             | Self::TextLower
             | Self::TextUpper
-            | Self::TextReverse => {
-                ValueType::String
-            }
+            | Self::TextReverse => ValueType::String,
             Self::TextToInteger => ValueType::Integer,
             Self::TextToFloat => ValueType::Float,
             Self::Variance
