@@ -37,7 +37,10 @@ fn bigint_tuple_snapshots_cannot_hide_decimal_capture_work() {
     };
     assert_eq!(actual, expected);
     assert_eq!(actual.kind, Kind::CaptureLimit);
-    assert!(out.is_empty() && err.is_empty(), "output must remain atomic");
+    assert!(
+        out.is_empty() && err.is_empty(),
+        "output must remain atomic"
+    );
 }
 
 #[test]
