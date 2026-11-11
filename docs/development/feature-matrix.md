@@ -3,8 +3,8 @@
 **Reviewed 2026-11-10.** The latest **published** GitHub prerelease is
 [v0.0.6-alpha.6](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.6)
 (10 November 2026), from exact source `cdf6a3924ec2a36c7beca5a9aec4f01a0bce515e`.
-Cargo declares `0.0.6-alpha.6`, matching the published prerelease. It adds bounded
-program input, six scalar/text utilities and immutable structural tuples; see
+Cargo declares `0.0.6-alpha.7` for the next candidate. The published alpha.6 adds
+bounded program input, six scalar/text utilities and immutable structural tuples. See
 [publication verification](../releases/v0.0.6-alpha.6-validation.md) and
 [Rust API migration](../tuples.md). Its [candidate notes](../releases/v0.0.6-alpha.6.md)
 remain a historical preparation snapshot.

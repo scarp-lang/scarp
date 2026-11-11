@@ -1,0 +1,9 @@
+bind score = 73;
+bind label = if score >= 90 {
+    "\u{1F44B}"
+} elif score >= 60 {
+    "\u{0928}\u{092E}\u{0938}\u{094D}\u{0924}\u{0947} \u{1F44B}"
+} else {
+    text_repeat("unreached", -1)
+};
+print(label, if true { 7 } else { 1 / 0 });
