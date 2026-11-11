@@ -187,9 +187,9 @@ fn transformed_strings_count_as_new_payloads_without_mutating_inputs() {
 
 #[test]
 fn failed_expansion_discards_both_streams_and_preserves_diagnostic() {
-    let source = "print(\"ok\"); eprint(\"err\"); print(text_lower(\"İ\"));";
+    let source = "print(\"ok\"); eprint(\"err\"); bind s=\"İ\"; print(text_lower(s));";
     let options = ExecutionOptions {
-        max_text_bytes: 9,
+        max_text_bytes: 4,
         ..ExecutionOptions::default()
     };
     let expected = scarp::check_with_options(source, options).unwrap_err();
