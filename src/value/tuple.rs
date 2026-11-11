@@ -86,6 +86,9 @@ fn value_work(value: &Value) -> u64 {
             .saturating_mul(32)
             .saturating_add(t.height() as u64)
             .saturating_add(16),
+        Value::BigInt(n) => u64::try_from(n.decimal_digits())
+            .unwrap_or(u64::MAX)
+            .saturating_add(u64::from(n.is_negative())),
         _ => 32,
     }
 }
@@ -96,6 +99,9 @@ fn value_capture(value: &Value) -> usize {
         Value::Vector(v) => v.len().saturating_mul(8),
         Value::Integers(v) => v.len().saturating_mul(8),
         Value::Tile(t) => t.len().saturating_mul(8).saturating_add(16),
+        Value::BigInt(n) => n
+            .payload_bytes()
+            .max(n.decimal_digits().saturating_add(usize::from(n.is_negative()))),
         _ => 8,
     }
 }
@@ -132,5 +138,24 @@ impl fmt::Display for TupleValue {
             f.write_char(',')?;
         }
         f.write_char(')')
+    }
+}
+
+#[cfg(test)]
+mod bigint_tuple_budgets {
+    use super::{TupleValue, Value};
+    use crate::numeric::{self, Builtin};
+
+    #[test]
+    fn nested_bigint_is_charged_by_magnitude_not_scalar_placeholder() {
+        let text = "9".repeat(500);
+        let number = numeric::evaluate(Builtin::BigInt, &[Value::from(text.as_str())], 1000)
+            .expect("bounded exact input");
+        let inner = TupleValue::new(vec![number]).expect("tuple of bigint");
+        assert!(inner.work() >= 500, "inner work covers BigInt decimal formatting");
+        assert!(inner.capture_bytes() >= 500, "inner capture covers decimal magnitude");
+        let outer = TupleValue::new(vec![Value::Tuple(inner)]).expect("nested tuple");
+        assert!(outer.work() >= 500, "nested work cannot bypass BigInt charge");
+        assert!(outer.capture_bytes() >= 500, "nested capture cannot bypass BigInt charge");
     }
 }
