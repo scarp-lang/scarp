@@ -31,6 +31,29 @@ pub(super) fn evaluate(
                 argument_span(1),
             )
             .map(Value::BigInt),
+        Builtin::BigIntGcd => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .gcd(
+                args[1].as_bigint().expect("typed bigint"),
+                budget,
+                span,
+            )
+            .map(Value::BigInt),
+        Builtin::BigIntLcm => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .lcm(
+                args[1].as_bigint().expect("typed bigint"),
+                budget,
+                span,
+            )
+            .map(Value::BigInt),
+        Builtin::BigIntSqrt => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .integer_sqrt(budget, argument_span(0))
+            .map(Value::BigInt),
         _ => {
             let value = args[0].as_bigint().expect("typed bigint");
             budget.check_bigint_digits(value.decimal_digits(), argument_span(0))?;
