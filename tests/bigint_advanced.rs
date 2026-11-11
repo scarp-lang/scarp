@@ -70,7 +70,7 @@ fn decimal_text_round_trips_exactly_and_interoperates_with_text() {
         100,
     )
     .unwrap();
-    let text = numeric::evaluate(Builtin::BigIntToText, &[value.clone()], 100).unwrap();
+    let text = numeric::evaluate(Builtin::BigIntToText, std::slice::from_ref(&value), 100).unwrap();
     assert_eq!(text.as_str(), Some("1000000000000000000000"));
     assert_eq!(
         numeric::evaluate(Builtin::BigIntBitLength, &[value], 100).unwrap(),
