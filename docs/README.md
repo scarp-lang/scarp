@@ -114,6 +114,7 @@ experimental Rust-hosted C11 scalar emitter; see
 | [Top-K inference ranking](topk-selection.md) | Select deterministic ranked model candidates and original scores using two published typed built-ins |
 | [Top-P nucleus ranking](nucleus-selection.md) | Rank a deterministic normalized probability prefix with stable tie ordering; published alpha.5, not random sampling |
 | [Pearson correlation](pearson-correlation.md) | Compute centered finite vector correlation with independent scaling and strict input limits; published alpha.5 |
+| [Median and quantiles](order-statistics.md) | Compute bounded order statistics over visible finite vector windows in development source |
 | [Temperature softmax](temperature-softmax.md) | Adjust finite logit probabilities and log probabilities without randomness or nonfinite values |
 | [Root mean square](root-mean-square.md) | Use the published v0.0.6-alpha.1 finite RMS reduction, visible windows and exact work/allocation rules |
 | [Your first numerical program](tutorials/numerical-program.md) | Build a small typed numerical calculation and compare probabilities safely |

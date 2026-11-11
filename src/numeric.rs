@@ -10,6 +10,7 @@ mod correlation;
 mod integers;
 mod kernels;
 mod nucleus;
+mod order_statistics;
 mod parse_format;
 mod samples;
 mod scalar_text;
@@ -99,6 +100,8 @@ pub enum Builtin {
     TextToFloat,
     TextTrim,
     TextReplace,
+    Median,
+    Quantile,
 }
 
 impl Builtin {
@@ -128,6 +131,8 @@ impl Builtin {
             "stddev" => Self::StdDev,
             "cosine_similarity" => Self::CosineSimilarity,
             "pearson_correlation" => Self::PearsonCorrelation,
+            "median" => Self::Median,
+            "quantile" => Self::Quantile,
             "sample_area" => Self::SampleArea,
             "sample_slopes" => Self::SampleSlopes,
             "sample_cumulative_area" => Self::SampleCumulativeArea,
@@ -208,6 +213,8 @@ impl Builtin {
             Self::TextToInteger | Self::TextToFloat | Self::TextTrim => &[String],
             Self::TextReplace => &[String, String, String],
             Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
+            Self::Median => &[Vector],
+            Self::Quantile => &[Vector, Float],
             Self::SampleArea | Self::SampleSlopes | Self::SampleCumulativeArea => &[Vector, Vector],
             Self::IntsLength | Self::IntsSum | Self::IntsToVector => &[Integers],
             Self::IntsWindow | Self::IntsSet => &[Integers, Integer, Integer],
@@ -274,7 +281,9 @@ impl Builtin {
             | Self::StdDev
             | Self::SampleArea
             | Self::CosineSimilarity
-            | Self::PearsonCorrelation => ValueType::Float,
+            | Self::PearsonCorrelation
+            | Self::Median
+            | Self::Quantile => ValueType::Float,
             Self::IntsLength | Self::IntsSum => ValueType::Integer,
             Self::IntsWindow
             | Self::IntsJoin
@@ -651,6 +660,9 @@ pub(crate) fn evaluate_with_spans(
     if function == Builtin::PearsonCorrelation {
         return correlation::evaluate(args, budget, span, argument_span);
     }
+    if matches!(function, Builtin::Median | Builtin::Quantile) {
+        return order_statistics::evaluate(function, args, budget, span, argument_span);
+    }
     if matches!(
         function,
         Builtin::SampleArea | Builtin::SampleSlopes | Builtin::SampleCumulativeArea
@@ -980,6 +992,8 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::StdDev
         | Builtin::CosineSimilarity
         | Builtin::PearsonCorrelation
+        | Builtin::Median
+        | Builtin::Quantile
         | Builtin::SampleArea
         | Builtin::SampleSlopes
         | Builtin::SampleCumulativeArea
