@@ -248,22 +248,11 @@ pub(super) fn build(
             }
             if matches!(call, Some(ResolvedCall::BigIntDivMod)) && divmod.is_none() {
                 let span = expression.syntax.nodes()[index].span;
-                let result = crate::types::SourceType::tuple(vec![
-                    ValueType::BigInt.into(),
-                    ValueType::BigInt.into(),
-                ])
-                .expect("bounded two-element BigInt tuple")
-                .intern(&mut registry)
-                .map_err(|error| failure(error, span))?;
                 divmod = Some(
                     registry
                         .intern(TypeKind::Function {
-                            parameters: vec![
-                                ValueType::BigInt.id(),
-                                ValueType::BigInt.id(),
-                            ]
-                            .into(),
-                            result,
+                            parameters: vec![ValueType::BigInt.id(), ValueType::BigInt.id()].into(),
+                            result: expression.types[index],
                             effect: FunctionEffect::Pure,
                         })
                         .map_err(|error| failure(error, span))?,

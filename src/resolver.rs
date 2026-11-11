@@ -1088,11 +1088,9 @@ fn resolve_expression(
                             syntax.nodes()[argument.expression].span,
                         )?;
                     }
-                    let kind = SourceType::tuple(vec![
-                        ValueType::BigInt.into(),
-                        ValueType::BigInt.into(),
-                    ])
-                    .expect("two primitive members form a valid source tuple");
+                    let kind =
+                        SourceType::tuple(vec![ValueType::BigInt.into(), ValueType::BigInt.into()])
+                            .expect("two primitive members form a valid source tuple");
                     slots.push(None);
                     calls.push(Some(ResolvedCall::BigIntDivMod));
                     types.push(kind);

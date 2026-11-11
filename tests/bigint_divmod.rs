@@ -1,5 +1,8 @@
 use scarp::{
-    diagnostics::DiagnosticKind as Kind,
+    ast::ExpressionKind,
+    diagnostics::{Diagnostic, DiagnosticKind as Kind},
+    modules::{self, MemorySourceLoader, ModuleLimits},
+    types::{FunctionEffect, PrimitiveType, TypeKind},
     ExecutionLimits, ExecutionOptions, RunError,
 };
 
@@ -9,7 +12,7 @@ fn run(source: &str) -> String {
     String::from_utf8(stdout).expect("UTF-8 output")
 }
 
-fn fails_atomically(source: &str, options: ExecutionOptions, expected: Kind) {
+fn fails_atomically(source: &str, options: ExecutionOptions, expected: Kind) -> Diagnostic {
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let RunError::Diagnostic(error) =
         scarp::run_with_io_and_options(source, &mut stdout, &mut stderr, options)
@@ -18,8 +21,15 @@ fn fails_atomically(source: &str, options: ExecutionOptions, expected: Kind) {
         panic!("expected typed diagnostic")
     };
     assert_eq!(error.kind, expected);
-    assert!(stdout.is_empty() && stderr.is_empty(), "outputs remain atomic");
-    assert_eq!(scarp::check_with_options(source, options).unwrap_err(), error);
+    assert!(
+        stdout.is_empty() && stderr.is_empty(),
+        "outputs remain atomic"
+    );
+    assert_eq!(
+        scarp::check_with_options(source, options).unwrap_err(),
+        error
+    );
+    error
 }
 
 #[test]
@@ -83,18 +93,23 @@ fn divmod_refuses_wrong_types_or_arity_at_compile_time() {
         "bigint_divmod(bigint(\"7\"),3.0)",
         "bigint_divmod(left:bigint(\"7\"),right:bigint(\"3\"))",
     ] {
-        assert!(scarp::compile(&format!("print({expression});")).is_err(), "{expression}");
+        assert!(
+            scarp::compile(&format!("print({expression});")).is_err(),
+            "{expression}"
+        );
     }
-    assert!(scarp::compile("bind x:tuple<bigint,integer>=bigint_divmod(bigint(\"7\"),bigint(\"3\"));").is_err());
+    assert!(scarp::compile(
+        "bind x:tuple<bigint,integer>=bigint_divmod(bigint(\"7\"),bigint(\"3\"));"
+    )
+    .is_err());
 }
 
 #[test]
 fn divmod_is_atomic_for_division_zero_and_resource_exhaustion() {
-    fails_atomically(
-        "print(\"pending\"); print(bigint_divmod(bigint(\"7\"),bigint(\"0\")));",
-        ExecutionOptions::default(),
-        Kind::DivisionByZero,
-    );
+    let zero =
+        r#"print("pending"); eprint("pending"); print(bigint_divmod(bigint("7"),bigint("0")));"#;
+    let error = fails_atomically(zero, ExecutionOptions::default(), Kind::DivisionByZero);
+    assert_eq!(&zero[error.span.start..error.span.end], r#"bigint("0")"#);
     let source = "print(\"pending\"); print(bigint_divmod(bigint(\"7777777\"),bigint(\"7\")));";
     fails_atomically(
         source,
@@ -112,14 +127,13 @@ fn divmod_is_atomic_for_division_zero_and_resource_exhaustion() {
         },
         Kind::BigIntLimit,
     );
-    fails_atomically(
-        source,
-        ExecutionOptions {
-            max_bigint_bytes: 4,
-            ..ExecutionOptions::default()
-        },
-        Kind::BigIntLimit,
-    );
+    let operands_only = ExecutionOptions {
+        max_bigint_bytes: 8,
+        ..ExecutionOptions::default()
+    };
+    scarp::check_with_options(r#"print(bigint("7777777"),bigint("7"));"#, operands_only).unwrap();
+    let error = fails_atomically(source, operands_only, Kind::BigIntLimit);
+    assert_eq!(&source[error.span.start..error.span.end], r#"bigint("7")"#);
     fails_atomically(
         source,
         ExecutionOptions {
@@ -136,5 +150,54 @@ fn divmod_is_atomic_for_division_zero_and_resource_exhaustion() {
 #[test]
 fn typed_divmod_is_available_under_the_main_compiler_strict_tuple_model() {
     let source = "bind pair:tuple<bigint,bigint>=bigint_divmod(bigint(\"256\"),bigint(\"16\")); print(pair[0]==bigint(\"16\"),pair[1]==bigint(\"0\"));";
+    let program = scarp::compile(source).unwrap();
+    let (kind, signature) = program
+        .typed_expressions()
+        .find_map(|expr| {
+            expr.nodes()
+                .find(|node| matches!(node.syntax, ExpressionKind::UserCall { name, .. } if name == "bigint_divmod"))
+                .map(|node| (node.kind, node.call_signature.unwrap()))
+        })
+        .unwrap();
+    let bigint = PrimitiveType::BigInt.id();
+    assert!(
+        matches!(program.type_registry().get(kind), Some(TypeKind::Tuple(elements))
+            if elements.as_ref() == [bigint, bigint])
+    );
+    assert!(
+        matches!(program.type_registry().get(signature), Some(TypeKind::Function { parameters, result, effect: FunctionEffect::Pure })
+            if parameters.as_ref() == [bigint, bigint] && *result == kind)
+    );
     assert_eq!(run(source), "true true\n");
+}
+
+#[test]
+fn imported_divmod_preserves_tuple_type_and_conditional_evaluation() {
+    let mut loader = MemorySourceLoader::new();
+    loader
+        .insert(
+            "main.srp",
+            r#"
+                import "lib.srp" as lib;
+                bind a=bigint("-7");
+                print(if true { lib.split(a,bigint("\u{33}")) }
+                    else { bigint_divmod(a,bigint("0")) });
+            "#,
+        )
+        .unwrap();
+    loader
+        .insert(
+            "lib.srp",
+            "pub pure funcra split(a:bigint,b:bigint)->tuple<bigint,bigint> {return bigint_divmod(a,b);}",
+        )
+        .unwrap();
+    let program =
+        modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap();
+    program.check(ExecutionOptions::default()).unwrap();
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    program
+        .execute(&mut out, &mut err, ExecutionOptions::default())
+        .unwrap();
+    assert_eq!(out, b"(-2, -1)\n");
+    assert!(err.is_empty());
 }
