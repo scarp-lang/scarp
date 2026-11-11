@@ -46,6 +46,17 @@ pub(super) fn evaluate(
             .expect("typed bigint")
             .integer_sqrt(budget, argument_span(0))
             .map(Value::BigInt),
+        Builtin::BigIntPowMod => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .pow_mod(
+                args[1].as_integer().expect("typed integer"),
+                args[2].as_bigint().expect("typed bigint"),
+                budget,
+                argument_span(1),
+                argument_span(2),
+            )
+            .map(Value::BigInt),
         _ => {
             let value = args[0].as_bigint().expect("typed bigint");
             budget.check_bigint_digits(value.decimal_digits(), argument_span(0))?;
