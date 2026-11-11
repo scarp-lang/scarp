@@ -49,11 +49,7 @@ impl BigInt {
     /// Initial guess 10^ceil(d/2) is strictly above sqrt(n) for d decimal
     /// digits. The single-digit case avoids an oversized intermediate when
     /// the configured BigInt limit is itself only one digit.
-    pub(crate) fn integer_sqrt(
-        &self,
-        budget: &mut Budget,
-        span: Span,
-    ) -> Result<Self, Diagnostic> {
+    pub(crate) fn integer_sqrt(&self, budget: &mut Budget, span: Span) -> Result<Self, Diagnostic> {
         if self.is_negative() {
             return Err(Diagnostic::new(
                 DiagnosticKind::NumericDomain,
