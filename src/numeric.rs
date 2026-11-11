@@ -104,6 +104,8 @@ pub enum Builtin {
     BigIntLcm,
     BigIntSqrt,
     BigIntPowMod,
+    BigIntFromRadix,
+    BigIntToRadix,
 }
 
 impl Builtin {
@@ -134,6 +136,8 @@ impl Builtin {
             "bigint_lcm" => Self::BigIntLcm,
             "bigint_sqrt" => Self::BigIntSqrt,
             "bigint_pow_mod" => Self::BigIntPowMod,
+            "bigint_from_radix" => Self::BigIntFromRadix,
+            "bigint_to_radix" => Self::BigIntToRadix,
             "variance" => Self::Variance,
             "stddev" => Self::StdDev,
             "cosine_similarity" => Self::CosineSimilarity,
@@ -221,6 +225,8 @@ impl Builtin {
             | Self::BigIntToText => &[ValueType::BigInt],
             Self::BigIntPow => &[ValueType::BigInt, Integer],
             Self::BigIntPowMod => &[ValueType::BigInt, Integer, ValueType::BigInt],
+            Self::BigIntFromRadix => &[String, Integer],
+            Self::BigIntToRadix => &[ValueType::BigInt, Integer],
             Self::BigIntGcd | Self::BigIntLcm => &[ValueType::BigInt, ValueType::BigInt],
             Self::BigIntSqrt => &[ValueType::BigInt],
             Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
@@ -288,9 +294,10 @@ impl Builtin {
             | Self::BigIntGcd
             | Self::BigIntLcm
             | Self::BigIntSqrt
-            | Self::BigIntPowMod => ValueType::BigInt,
+            | Self::BigIntPowMod
+            | Self::BigIntFromRadix => ValueType::BigInt,
             Self::BigIntToInteger | Self::BigIntBitLength => ValueType::Integer,
-            Self::BigIntToText => ValueType::String,
+            Self::BigIntToText | Self::BigIntToRadix => ValueType::String,
             Self::Variance
             | Self::StdDev
             | Self::SampleArea
@@ -380,6 +387,8 @@ impl Builtin {
                 | Self::BigIntLcm
                 | Self::BigIntSqrt
                 | Self::BigIntPowMod
+                | Self::BigIntFromRadix
+                | Self::BigIntToRadix
         )
     }
 }
@@ -1021,6 +1030,8 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::BigIntLcm
         | Builtin::BigIntSqrt
         | Builtin::BigIntPowMod
+        | Builtin::BigIntFromRadix
+        | Builtin::BigIntToRadix
         | Builtin::Variance
         | Builtin::StdDev
         | Builtin::CosineSimilarity

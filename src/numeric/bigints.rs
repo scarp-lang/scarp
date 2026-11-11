@@ -57,6 +57,24 @@ pub(super) fn evaluate(
                 argument_span(2),
             )
             .map(Value::BigInt),
+        Builtin::BigIntFromRadix => BigInt::from_radix(
+            args[0].as_str().expect("typed string"),
+            args[1].as_integer().expect("typed integer"),
+            budget,
+            argument_span(0),
+            argument_span(1),
+        )
+        .map(Value::BigInt),
+        Builtin::BigIntToRadix => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .to_radix(
+                args[1].as_integer().expect("typed integer"),
+                budget,
+                argument_span(0),
+                argument_span(1),
+            )
+            .map(Value::String),
         _ => {
             let value = args[0].as_bigint().expect("typed bigint");
             budget.check_bigint_digits(value.decimal_digits(), argument_span(0))?;
