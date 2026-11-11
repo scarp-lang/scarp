@@ -18,9 +18,21 @@ fn output(source: &str) -> String {
 #[test]
 fn new_intrinsics_have_checked_public_names_and_types() {
     for (name, kind, parameters) in [
-        ("text_from_codepoint", B::TextFromCodepoint, &[ValueType::Integer][..]),
-        ("text_rfind", B::TextRFind, &[ValueType::String, ValueType::String][..]),
-        ("text_count", B::TextCount, &[ValueType::String, ValueType::String][..]),
+        (
+            "text_from_codepoint",
+            B::TextFromCodepoint,
+            &[ValueType::Integer][..],
+        ),
+        (
+            "text_rfind",
+            B::TextRFind,
+            &[ValueType::String, ValueType::String][..],
+        ),
+        (
+            "text_count",
+            B::TextCount,
+            &[ValueType::String, ValueType::String][..],
+        ),
     ] {
         assert_eq!(B::from_name(name), Some(kind));
         assert_eq!(kind.parameter_types(), parameters);
@@ -30,7 +42,10 @@ fn new_intrinsics_have_checked_public_names_and_types() {
             ValueType::Integer
         };
         assert_eq!(kind.result_type(), expected_result);
-        assert_eq!(numeric::evaluate(kind, &[], 100).unwrap_err().kind, Kind::CallArguments);
+        assert_eq!(
+            numeric::evaluate(kind, &[], 100).unwrap_err().kind,
+            Kind::CallArguments
+        );
     }
     for source in [
         "print(text_from_codepoint(true));",
@@ -49,8 +64,8 @@ fn new_intrinsics_have_checked_public_names_and_types() {
 #[test]
 fn codepoint_constructor_inverts_existing_unicode_scalar_query() {
     for codepoint in [
-        0, 1, 9, 10, 65, 127, 128, 255, 0x7ff, 0x800, 0x301, 0xd7ff, 0xe000, 0xffff,
-        0x10000, 0x1f30d, 0x10ffff,
+        0, 1, 9, 10, 65, 127, 128, 255, 0x7ff, 0x800, 0x301, 0xd7ff, 0xe000, 0xffff, 0x10000,
+        0x1f30d, 0x10ffff,
     ] {
         let scalar = char::from_u32(codepoint).unwrap();
         let expected = scalar.to_string();
@@ -71,7 +86,16 @@ fn codepoint_constructor_inverts_existing_unicode_scalar_query() {
 
 #[test]
 fn invalid_unicode_values_reject_surrogates_negative_and_overflow() {
-    for scalar in [-1, i64::MIN, 0xd800, 0xdbff, 0xdc00, 0xdfff, 0x110000, i64::MAX] {
+    for scalar in [
+        -1,
+        i64::MIN,
+        0xd800,
+        0xdbff,
+        0xdc00,
+        0xdfff,
+        0x110000,
+        i64::MAX,
+    ] {
         let error = host(
             B::TextFromCodepoint,
             &[Value::Integer(scalar)],
@@ -197,7 +221,10 @@ fn exact_work_limits_apply_before_search_and_unicode_materialization() {
         );
     }
     let cp = [Value::Integer(233)]; // UTF-8 two bytes; one dispatch + two output bytes
-    assert_eq!(host(B::TextFromCodepoint, &cp, 3, 2).unwrap().as_str(), Some("é"));
+    assert_eq!(
+        host(B::TextFromCodepoint, &cp, 3, 2).unwrap().as_str(),
+        Some("é")
+    );
     assert_eq!(
         host(B::TextFromCodepoint, &cp, 2, 2).unwrap_err().kind,
         Kind::ExecutionLimit
@@ -236,7 +263,10 @@ fn source_execution_returns_codepoints_and_precise_reverse_positions() {
         "3 2 🌍\n"
     );
     assert_eq!(output("print(text_from_codepoint(0));"), "\0\n");
-    assert_eq!(output("print(text_count(\"\",\"\"),text_rfind(\"\",\"\"));"), "1 0\n");
+    assert_eq!(
+        output("print(text_count(\"\",\"\"),text_rfind(\"\",\"\"));"),
+        "1 0\n"
+    );
 }
 
 #[test]
@@ -266,13 +296,10 @@ fn runtime_failures_keep_stdout_and_stderr_empty_and_source_spans_precise() {
     assert_eq!(expected.kind, Kind::NumericDomain);
     assert_eq!(&source[expected.span.start..expected.span.end], "55296");
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    let RunError::Diagnostic(actual) = scarp::run_with_io_and_options(
-        source,
-        &mut out,
-        &mut err,
-        ExecutionOptions::default(),
-    )
-    .unwrap_err() else {
+    let RunError::Diagnostic(actual) =
+        scarp::run_with_io_and_options(source, &mut out, &mut err, ExecutionOptions::default())
+            .unwrap_err()
+    else {
         panic!("expected a diagnostic");
     };
     assert_eq!(actual, expected);
