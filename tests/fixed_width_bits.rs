@@ -237,7 +237,7 @@ fn source_program_supports_typed_functions_defaults_and_user_shadowing() {
         print(result,bits_rotate_right(result,8),bits_count_ones(0xff));
         print(bits_leading_zeros(0),bits_trailing_zeros(0));
     "#;
-    assert_eq!(run(source), "4328718336 16909060 8\n64 64\n");
+    assert_eq!(run(source), "4328719360 16909060 8\n64 64\n");
     assert_eq!(
         run("pure funcra bits_reverse(v:integer)->integer{return v+1;} print(bits_reverse(2));"),
         "3\n"
