@@ -5,7 +5,12 @@ use scarp::{
     ExecutionOptions, RunError,
 };
 
-fn host(function: B, source: &str, steps: u64, bytes: usize) -> Result<Value, scarp::diagnostics::Diagnostic> {
+fn host(
+    function: B,
+    source: &str,
+    steps: u64,
+    bytes: usize,
+) -> Result<Value, scarp::diagnostics::Diagnostic> {
     numeric::evaluate_with_text_limit(function, &[Value::from(source)], steps, bytes)
 }
 
@@ -48,12 +53,21 @@ fn unicode_case_conversion_is_scalar_based_and_may_expand() {
         ("É", "é", "É"),
         ("🌍123", "🌍123", "🌍123"),
     ] {
-        assert_eq!(host(B::TextLower, original, 10_000, 100).unwrap().as_str(), Some(lower));
-        assert_eq!(host(B::TextUpper, original, 10_000, 100).unwrap().as_str(), Some(upper));
+        assert_eq!(
+            host(B::TextLower, original, 10_000, 100).unwrap().as_str(),
+            Some(lower)
+        );
+        assert_eq!(
+            host(B::TextUpper, original, 10_000, 100).unwrap().as_str(),
+            Some(upper)
+        );
     }
     // Per-scalar Unicode mappings do not promise locale-specific case folding
     // or normalization of decomposed characters.
-    assert_eq!(host(B::TextLower, "A\u{301}", 100, 100).unwrap().as_str(), Some("a\u{301}"));
+    assert_eq!(
+        host(B::TextLower, "A\u{301}", 100, 100).unwrap().as_str(),
+        Some("a\u{301}")
+    );
 }
 
 #[test]
@@ -70,7 +84,9 @@ fn reverse_preserves_valid_utf8_and_reverses_scalar_not_grapheme_order() {
         );
     }
     assert_eq!(
-        host(B::TextReverse, "a\u{301}b", 100, 100).unwrap().as_str(),
+        host(B::TextReverse, "a\u{301}b", 100, 100)
+            .unwrap()
+            .as_str(),
         Some("b\u{301}a"),
     );
 }
@@ -100,20 +116,38 @@ fn transforms_work_in_typed_functions_and_preserve_user_shadowing() {
 #[test]
 fn case_expansion_charges_exact_output_bytes() {
     let source = "İ"; // two UTF-8 input bytes, three lowercase output bytes
-    assert_eq!(host(B::TextLower, source, 7, 3).unwrap().as_str(), Some("i\u{307}"));
-    assert_eq!(host(B::TextLower, source, 6, 3).unwrap_err().kind, Kind::ExecutionLimit);
-    assert_eq!(host(B::TextLower, source, 7, 2).unwrap_err().kind, Kind::TextConstruction);
+    assert_eq!(
+        host(B::TextLower, source, 7, 3).unwrap().as_str(),
+        Some("i\u{307}")
+    );
+    assert_eq!(
+        host(B::TextLower, source, 6, 3).unwrap_err().kind,
+        Kind::ExecutionLimit
+    );
+    assert_eq!(
+        host(B::TextLower, source, 7, 2).unwrap_err().kind,
+        Kind::TextConstruction
+    );
     assert_eq!(host(B::TextUpper, "ß", 6, 2).unwrap().as_str(), Some("SS"));
 }
 
 #[test]
 fn reverse_charges_work_and_exact_output_bytes() {
     assert_eq!(host(B::TextReverse, "é", 4, 2).unwrap().as_str(), Some("é"));
-    assert_eq!(host(B::TextReverse, "é", 3, 2).unwrap_err().kind, Kind::ExecutionLimit);
-    assert_eq!(host(B::TextReverse, "é", 4, 1).unwrap_err().kind, Kind::TextConstruction);
+    assert_eq!(
+        host(B::TextReverse, "é", 3, 2).unwrap_err().kind,
+        Kind::ExecutionLimit
+    );
+    assert_eq!(
+        host(B::TextReverse, "é", 4, 1).unwrap_err().kind,
+        Kind::TextConstruction
+    );
     // The empty result still charges the minimum one unit per work phase.
     assert_eq!(host(B::TextReverse, "", 2, 0).unwrap().as_str(), Some(""));
-    assert_eq!(host(B::TextReverse, "", 1, 0).unwrap_err().kind, Kind::ExecutionLimit);
+    assert_eq!(
+        host(B::TextReverse, "", 1, 0).unwrap_err().kind,
+        Kind::ExecutionLimit
+    );
 }
 
 #[test]
@@ -145,7 +179,10 @@ fn transformed_strings_count_as_new_payloads_without_mutating_inputs() {
         max_text_bytes: 5,
         ..ExecutionOptions::default()
     };
-    assert_eq!(scarp::check_with_options(source, options).unwrap_err().kind, Kind::TextConstruction);
+    assert_eq!(
+        scarp::check_with_options(source, options).unwrap_err().kind,
+        Kind::TextConstruction
+    );
 }
 
 #[test]
