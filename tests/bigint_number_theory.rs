@@ -15,7 +15,10 @@ fn failure(source: &str, options: ExecutionOptions, expected: Kind) {
     };
     assert_eq!(error.kind, expected);
     assert!(stdout.is_empty() && stderr.is_empty());
-    assert_eq!(scarp::check_with_options(source, options).unwrap_err(), error);
+    assert_eq!(
+        scarp::check_with_options(source, options).unwrap_err(),
+        error
+    );
 }
 
 #[test]
@@ -86,10 +89,17 @@ fn number_theory_errors_are_typed_and_atomic() {
     );
     failure(
         "print(\"pending\"); print(bigint_lcm(bigint(\"999\"),bigint(\"998\")));",
-        ExecutionOptions { max_bigint_digits: 3, ..ExecutionOptions::default() },
+        ExecutionOptions {
+            max_bigint_digits: 3,
+            ..ExecutionOptions::default()
+        },
         Kind::BigIntLimit,
     );
-    for expr in ["bigint_gcd(1,bigint(\"2\"))", "bigint_lcm(bigint(\"2\"), 3)", "bigint_sqrt(16)"] {
+    for expr in [
+        "bigint_gcd(1,bigint(\"2\"))",
+        "bigint_lcm(bigint(\"2\"), 3)",
+        "bigint_sqrt(16)",
+    ] {
         assert!(scarp::compile(&format!("print({expr});")).is_err());
     }
 }
@@ -101,7 +111,11 @@ fn sqrt_with_a_one_decimal_digit_quota_does_not_need_an_extra_digit() {
     scarp::run_with_options(
         source,
         &mut stdout,
-        ExecutionOptions { max_bigint_digits: 1, ..ExecutionOptions::default() },
-    ).unwrap();
+        ExecutionOptions {
+            max_bigint_digits: 1,
+            ..ExecutionOptions::default()
+        },
+    )
+    .unwrap();
     assert_eq!(String::from_utf8(stdout).unwrap(), "3\n");
 }
