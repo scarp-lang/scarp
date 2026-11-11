@@ -239,7 +239,9 @@ impl Builtin {
             Self::BigIntPowMod => &[ValueType::BigInt, Integer, ValueType::BigInt],
             Self::BigIntFromRadix => &[String, Integer],
             Self::BigIntToRadix => &[ValueType::BigInt, Integer],
-            Self::BigIntAnd | Self::BigIntOr | Self::BigIntXor => &[ValueType::BigInt, ValueType::BigInt],
+            Self::BigIntAnd | Self::BigIntOr | Self::BigIntXor => {
+                &[ValueType::BigInt, ValueType::BigInt]
+            }
             Self::BigIntNot => &[ValueType::BigInt],
             Self::BigIntShl | Self::BigIntShr => &[ValueType::BigInt, Integer],
             Self::BigIntGcd | Self::BigIntLcm => &[ValueType::BigInt, ValueType::BigInt],
@@ -310,8 +312,13 @@ impl Builtin {
             | Self::BigIntLcm
             | Self::BigIntSqrt
             | Self::BigIntPowMod
-            | Self::BigIntFromRadix | Self::BigIntAnd | Self::BigIntOr | Self::BigIntXor
-            | Self::BigIntNot | Self::BigIntShl | Self::BigIntShr => ValueType::BigInt,
+            | Self::BigIntFromRadix
+            | Self::BigIntAnd
+            | Self::BigIntOr
+            | Self::BigIntXor
+            | Self::BigIntNot
+            | Self::BigIntShl
+            | Self::BigIntShr => ValueType::BigInt,
             Self::BigIntToInteger | Self::BigIntBitLength => ValueType::Integer,
             Self::BigIntToText | Self::BigIntToRadix => ValueType::String,
             Self::Variance
