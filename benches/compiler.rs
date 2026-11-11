@@ -3,10 +3,10 @@ use scarp::{
     modules::{
         self,
         cache::{
-            CacheLimits, CacheStatus, CachedCompileOptions, CompilationCache, SyntaxCache,
-            SyntaxCacheLimits, TokenCache, TokenCacheLimits,
+            CacheLimits, CacheStatus, CachedCompileOptions, CompilationCache, ConstantCache,
+            ConstantCacheLimits, SyntaxCache, SyntaxCacheLimits, TokenCache, TokenCacheLimits,
         },
-        MemorySourceLoader, ModuleLimits,
+        ConstantLimits, MemorySourceLoader, ModuleLimits,
     },
     types::{FunctionEffect, PrimitiveType, TypeKind, TypeLimits, TypeRegistryBuilder},
     ExecutionOptions,
@@ -23,6 +23,74 @@ fn measure(name: &str, bytes: usize, iterations: u32, mut work: impl FnMut()) {
         println!("{name},{bytes},{iterations},{sample},{mean:.3}");
     }
 }
+
+fn measure_constant_edits(original: &MemorySourceLoader, files: &[(&str, &str)], iterations: u32) {
+    let mut edited = MemorySourceLoader::new();
+    for &(name, source) in files {
+        let replacement = if name == "right.srp" {
+            r#"import "base.srp" as base; pub bind value: integer=base.value*3;"#
+        } else {
+            source
+        };
+        assert_eq!(source.len(), replacement.len());
+        edited.insert(name, replacement).unwrap();
+    }
+    let load = |source: &MemorySourceLoader, syntax: &mut SyntaxCache| {
+        modules::load_with_syntax_cache("main.srp", source, ModuleLimits::default(), syntax)
+            .unwrap()
+    };
+    let resolve_cached = |graph, constants: &mut ConstantCache| {
+        modules::resolve_with_constant_cache(
+            graph,
+            ConstantLimits::default(),
+            TypeLimits::default(),
+            constants,
+        )
+        .unwrap()
+    };
+    let mut cold_syntax = SyntaxCache::new(SyntaxCacheLimits::default());
+    let mut warm_syntax = SyntaxCache::new(SyntaxCacheLimits::default());
+    let mut constants = ConstantCache::new(ConstantCacheLimits::default());
+    for (source, expected) in [(original, b"1537\n"), (&edited, b"2049\n")] {
+        let cold = modules::resolve(load(source, &mut cold_syntax)).unwrap();
+        let warm = resolve_cached(load(source, &mut warm_syntax), &mut constants);
+        assert_eq!(cold.constant_dependencies(), warm.constant_dependencies());
+        for program in [cold, warm] {
+            let (mut out, mut err) = (Vec::new(), Vec::new());
+            program
+                .execute(&mut out, &mut err, ExecutionOptions::default())
+                .unwrap();
+            assert_eq!(&*out, expected);
+            assert!(err.is_empty());
+        }
+    }
+    assert_eq!(constants.stats().hits, 515);
+    assert_eq!(constants.stats().misses, 517);
+
+    // Both paths alternate the same two source versions with warm AST caches.
+    let bytes = files.iter().map(|(_, text)| text.len()).sum();
+    let mut cold_edits = [original, &edited].into_iter().cycle();
+    measure(
+        "module_constant_edits_cold_4files",
+        bytes,
+        iterations,
+        || {
+            let graph = load(cold_edits.next().unwrap(), &mut cold_syntax);
+            black_box(modules::resolve(graph).unwrap());
+        },
+    );
+    let mut warm_edits = [original, &edited].into_iter().cycle();
+    measure(
+        "module_constant_edits_warm_4files",
+        bytes,
+        iterations,
+        || {
+            let graph = load(warm_edits.next().unwrap(), &mut warm_syntax);
+            black_box(resolve_cached(graph, &mut constants));
+        },
+    );
+}
+
 fn main() {
     let iterations = if std::env::args().any(|arg| arg == "--quick") {
         3
@@ -116,6 +184,7 @@ fn main() {
         black_box(resolved);
     });
     assert!(syntax_cache.stats().hits >= 4);
+    measure_constant_edits(&loader, &files, iterations);
 
     let mut token_cache = TokenCache::new(TokenCacheLimits::default());
     modules::load_with_token_cache(
