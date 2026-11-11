@@ -8,6 +8,7 @@ use crate::{
 
 mod correlation;
 mod integers;
+mod integer_scalar;
 mod kernels;
 mod nucleus;
 mod parse_format;
@@ -41,6 +42,10 @@ pub enum Builtin {
     IntsFromVector,
     ToFloat,
     ToInteger,
+    IntegerAbs,
+    IntegerSign,
+    IntegerGcd,
+    IntegerLcm,
     TextConcat,
     TextSlice,
     TextRepeat,
@@ -144,6 +149,10 @@ impl Builtin {
             "ints_from_vector" => Self::IntsFromVector,
             "to_float" => Self::ToFloat,
             "to_integer" => Self::ToInteger,
+            "integer_abs" => Self::IntegerAbs,
+            "integer_sign" => Self::IntegerSign,
+            "integer_gcd" => Self::IntegerGcd,
+            "integer_lcm" => Self::IntegerLcm,
             "text_concat" => Self::TextConcat,
             "text_slice" => Self::TextSlice,
             "text_repeat" => Self::TextRepeat,
@@ -216,6 +225,8 @@ impl Builtin {
             Self::IntsFromVector => &[Vector],
             Self::ToFloat => &[Integer],
             Self::ToInteger => &[Float],
+            Self::IntegerAbs | Self::IntegerSign => &[Integer],
+            Self::IntegerGcd | Self::IntegerLcm => &[Integer, Integer],
             Self::TextLength | Self::TextBytes => &[String],
             Self::TextCodepoint | Self::TextRepeat => &[String, Integer],
             Self::TextSlice => &[String, Integer, Integer],
@@ -284,6 +295,10 @@ impl Builtin {
             | Self::TopK
             | Self::TopP => ValueType::Integers,
             Self::ToInteger
+            | Self::IntegerAbs
+            | Self::IntegerSign
+            | Self::IntegerGcd
+            | Self::IntegerLcm
             | Self::TextLength
             | Self::TextBytes
             | Self::TextCodepoint
@@ -635,6 +650,12 @@ pub(crate) fn evaluate_with_spans(
             | Builtin::TextToFloat
     ) {
         return parse_format::evaluate(function, args, budget, span, argument_span);
+    }
+    if matches!(
+        function,
+        Builtin::IntegerAbs | Builtin::IntegerSign | Builtin::IntegerGcd | Builtin::IntegerLcm
+    ) {
+        return integer_scalar::evaluate(function, args, budget, span, argument_span);
     }
     if function.is_scalar_text() {
         return scalar_text::evaluate(function, args, budget, span, argument_span);
@@ -996,6 +1017,10 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::IntsFromVector
         | Builtin::ToFloat
         | Builtin::ToInteger
+        | Builtin::IntegerAbs
+        | Builtin::IntegerSign
+        | Builtin::IntegerGcd
+        | Builtin::IntegerLcm
         | Builtin::TextConcat
         | Builtin::TextSlice
         | Builtin::TextRepeat
