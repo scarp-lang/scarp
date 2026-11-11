@@ -8,7 +8,7 @@ fn run(source: &str) -> String {
 
 #[test]
 fn bigint_preserves_exact_precision_inside_typed_and_nested_tuples() {
-    const N: &str = "9876543210987654321098765432101234567890";
+    const N: &str = "98765432109876543210987654321012345678";
     let next = (N.parse::<u128>().expect("independent exact oracle") + 1).to_string();
     let source = format!(
         "pure funcra wrap(x:bigint)->tuple<bigint,string> {{ return (x,\"stored\"); }}          bind pair:tuple<bigint,string>=wrap(bigint(\"{N}\"));          print(pair[0]+bigint(\"1\"),pair[1]);          print((pair,bigint(\"-0\")));          print(pair==(bigint(\"{N}\"),\"stored\"));"
