@@ -14,8 +14,14 @@ fn fail(source: &str, options: ExecutionOptions, kind: Kind) {
         panic!("expected diagnostic")
     };
     assert_eq!(error.kind, kind);
-    assert!(stdout.is_empty() && stderr.is_empty(), "outputs must be atomic");
-    assert_eq!(scarp::check_with_options(source, options).unwrap_err(), error);
+    assert!(
+        stdout.is_empty() && stderr.is_empty(),
+        "outputs must be atomic"
+    );
+    assert_eq!(
+        scarp::check_with_options(source, options).unwrap_err(),
+        error
+    );
 }
 
 #[test]
@@ -57,8 +63,16 @@ fn radix_conversion_supports_typed_functions_and_text_operations() {
 #[test]
 fn malformed_radix_digits_and_invalid_base_are_rejected() {
     for (text, radix) in [
-        ("", 10), ("+", 16), ("-", 2), ("0x10", 16), ("1_0", 2), ("9", 8),
-        ("g", 16), ("１２", 10), (" 1", 10), ("1 ", 10),
+        ("", 10),
+        ("+", 16),
+        ("-", 2),
+        ("0x10", 16),
+        ("1_0", 2),
+        ("9", 8),
+        ("g", 16),
+        ("１２", 10),
+        (" 1", 10),
+        ("1 ", 10),
     ] {
         let source = format!("print(\"pending\"); print(bigint_from_radix(\"{text}\",{radix}));");
         fail(&source, ExecutionOptions::default(), Kind::InvalidBigInt);
@@ -83,28 +97,43 @@ fn malformed_radix_digits_and_invalid_base_are_rejected() {
 fn radix_limits_bound_input_work_scratch_and_text() {
     fail(
         "print(\"pending\"); print(bigint_from_radix(\"000\",10));",
-        ExecutionOptions { max_bigint_digits: 2, ..ExecutionOptions::default() },
+        ExecutionOptions {
+            max_bigint_digits: 2,
+            ..ExecutionOptions::default()
+        },
         Kind::BigIntLimit,
     );
     fail(
         "print(\"pending\"); print(bigint_from_radix(\"ff\",16));",
-        ExecutionOptions { max_bigint_bytes: 0, ..ExecutionOptions::default() },
+        ExecutionOptions {
+            max_bigint_bytes: 0,
+            ..ExecutionOptions::default()
+        },
         Kind::BigIntLimit,
     );
     fail(
         "print(\"pending\"); print(bigint_to_radix(bigint(\"255\"),2));",
-        ExecutionOptions { max_text_bytes: 7, ..ExecutionOptions::default() },
+        ExecutionOptions {
+            max_text_bytes: 7,
+            ..ExecutionOptions::default()
+        },
         Kind::TextConstruction,
     );
     fail(
         "print(\"pending\"); print(bigint_to_radix(bigint(\"4294967296\"),16));",
-        ExecutionOptions { max_bigint_bytes: 8, ..ExecutionOptions::default() },
+        ExecutionOptions {
+            max_bigint_bytes: 8,
+            ..ExecutionOptions::default()
+        },
         Kind::BigIntLimit,
     );
     fail(
         "print(\"pending\"); print(bigint_from_radix(\"FFFFFFFFFFFFFFFFFFFFFFFF\",16));",
         ExecutionOptions {
-            limits: scarp::ExecutionLimits { max_steps: 20, ..scarp::ExecutionLimits::default() },
+            limits: scarp::ExecutionLimits {
+                max_steps: 20,
+                ..scarp::ExecutionLimits::default()
+            },
             ..ExecutionOptions::default()
         },
         Kind::ExecutionLimit,
