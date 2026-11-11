@@ -26,7 +26,8 @@ fn exact_integer_builtins_have_pure_typed_signatures() {
     ] {
         assert_eq!(B::from_name(name), Some(builtin));
         assert_eq!(builtin.result_type(), ValueType::Integer);
-        assert_eq!(builtin.parameter_types(), &vec![ValueType::Integer; arity]);
+        assert_eq!(builtin.parameter_types().len(), arity);
+        assert!(builtin.parameter_types().iter().all(|kind| *kind == ValueType::Integer));
         assert_eq!(
             numeric::evaluate(builtin, &[], 100).unwrap_err().kind,
             Kind::CallArguments,
@@ -43,7 +44,10 @@ fn exact_integer_builtins_have_pure_typed_signatures() {
         "bind a: boolean=integer_sign(0);",
     ] {
         let kind = scarp::compile(source).unwrap_err().kind;
-        assert!(matches!(kind, Kind::TypeMismatch | Kind::CallArguments), "{source}");
+        assert!(
+            matches!(kind, Kind::TypeMismatch | Kind::CallArguments),
+            "{source}"
+        );
     }
 }
 
@@ -118,7 +122,10 @@ fn integer_overflow_is_explicit_for_unrepresentable_magnitudes() {
 fn work_budgets_charge_each_euclidean_remainder() {
     for builtin in [B::IntegerAbs, B::IntegerSign] {
         assert!(host(builtin, &[5], 1).is_ok());
-        assert_eq!(host(builtin, &[5], 0).unwrap_err().kind, Kind::ExecutionLimit);
+        assert_eq!(
+            host(builtin, &[5], 0).unwrap_err().kind,
+            Kind::ExecutionLimit
+        );
     }
     for builtin in [B::IntegerGcd, B::IntegerLcm] {
         assert!(host(builtin, &[54, 24], 3).is_ok());
@@ -206,7 +213,9 @@ fn incompatible_host_types_and_unsupported_native_emitters_are_rejected() {
     for function in [B::IntegerAbs, B::IntegerSign, B::IntegerGcd, B::IntegerLcm] {
         let arguments = vec![Value::Boolean(false); function.parameter_types().len()];
         assert_eq!(
-            numeric::evaluate(function, &arguments, 100).unwrap_err().kind,
+            numeric::evaluate(function, &arguments, 100)
+                .unwrap_err()
+                .kind,
             Kind::TypeMismatch
         );
     }
@@ -215,7 +224,10 @@ fn incompatible_host_types_and_unsupported_native_emitters_are_rejected() {
         "print(integer_gcd(12,8));",
         "print(integer_lcm(12,8));",
     ] {
-        assert_eq!(scarp::c_backend::emit_c(source).unwrap_err().kind, Kind::NativeUnsupported);
+        assert_eq!(
+            scarp::c_backend::emit_c(source).unwrap_err().kind,
+            Kind::NativeUnsupported
+        );
         assert_eq!(
             scarp::native_object::emit_elf64_integer_kernel(source)
                 .unwrap_err()
