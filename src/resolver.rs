@@ -1297,7 +1297,7 @@ fn resolve_expression(
                     operator
                         if operator.is_integer_only()
                             && !(*operator == BinaryOperator::Remainder
-                                && types[*left] == ValueType::BigInt.id()) =>
+                                && types[*left] == ValueType::BigInt) =>
                     {
                         require_type(&types[*left], ValueType::Integer, *operator_span)?;
                     }
