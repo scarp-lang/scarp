@@ -9,6 +9,7 @@ import unittest
 import zipfile
 import hashlib
 import json
+import re
 import subprocess
 
 spec = importlib.util.spec_from_file_location(
@@ -218,17 +219,19 @@ class ReleaseAssets(unittest.TestCase):
                 f"{digest}  {archive.name}\n", encoding="utf-8"
             )
 
-    def alpha6_core_files(self):
+    def core_release_files(self, version):
         root = Path(__file__).resolve().parents[1]
         files = {str(path.relative_to(root)): path.read_bytes()
                  for directory in (root / "docs", root / "examples")
                  for path in directory.rglob("*") if path.is_file()}
-        files[verifier.METADATA_MEMBER] = (root / verifier.METADATA_SOURCE).read_bytes()
+        metadata = json.loads((root / verifier.METADATA_SOURCE).read_bytes())
+        metadata["version"] = version
+        files[verifier.METADATA_MEMBER] = json.dumps(metadata).encode()
         return files
 
     def test_alpha6_core_requires_input_tuple_and_prior_assets(self):
         version = "0.0.6-alpha.6"
-        files = self.alpha6_core_files()
+        files = self.core_release_files(version)
         self.build(version=version, extra_files=files)
         self.assertEqual(len(verifier.verify(self.directory, version, COMMIT).splitlines()), 3)
         for member in (
@@ -244,13 +247,28 @@ class ReleaseAssets(unittest.TestCase):
                     verifier.verify(self.directory, version, COMMIT)
 
     def test_alpha6_core_rejects_stale_metadata_despite_valid_archive_digests(self):
-        files = self.alpha6_core_files()
-        metadata = json.loads(files[verifier.METADATA_MEMBER])
-        metadata["version"] = "0.0.6-alpha.5"
-        files[verifier.METADATA_MEMBER] = json.dumps(metadata).encode()
+        files = self.core_release_files("0.0.6-alpha.5")
         self.build(version="0.0.6-alpha.6", extra_files=files)
         with self.assertRaisesRegex(ValueError, "invalid release metadata"):
             verifier.verify(self.directory, "0.0.6-alpha.6", COMMIT)
+
+    def test_alpha7_requires_candidate_and_inherited_assets(self):
+        version = "0.0.6-alpha.7"
+        files = self.core_release_files(version)
+        self.build(version=version, extra_files=files)
+        self.assertEqual(len(verifier.verify(self.directory, version, COMMIT).splitlines()), 3)
+        for member in (
+            verifier.METADATA_MEMBER,
+            "docs/releases/v0.0.6-alpha.7-publication.md",
+            "examples/conditional_unicode.srp",
+            "examples/conditional_unicode.stdout",
+            "examples/core_input_tuple.stdin",
+        ):
+            with self.subTest(member=member):
+                damaged = {name: data for name, data in files.items() if name != member}
+                self.build(version=version, omit=member, extra_files=damaged)
+                with self.assertRaisesRegex(ValueError, "missing " + re.escape(member)):
+                    verifier.verify(self.directory, version, COMMIT)
 
     def test_alpha6_4_requires_scientific_and_native_release_assets(self):
         version = "0.0.6-alpha.4"

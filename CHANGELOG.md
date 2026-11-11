@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.6-alpha.7 — prerelease candidate
+
+- Add typed conditional expressions with exact branch result types and lazy
+  evaluation, including tuple values and function arguments and returns.
+- Decode Unicode scalar escapes written as `\u{HEX}` with one to six ASCII hex
+  digits. Malformed escapes and non-scalar values report `E0003`.
+
 ## 0.0.6-alpha.6 — published GitHub prerelease, 2026-11-10
 
 - Add impure bounded `read_line()` with explicit Rust readers, redirected CLI
