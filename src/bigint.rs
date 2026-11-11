@@ -13,7 +13,7 @@ use crate::{
 };
 
 mod advanced;
-mod bitwise;
+pub(crate) mod bitwise;
 mod modular;
 mod number_theory;
 mod radix;
