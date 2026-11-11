@@ -43,10 +43,7 @@ impl BigInt {
             .saturating_mul(3)
             .saturating_add((exponent % 10) * 3 / 10)
             .saturating_add(1);
-        budget.check_bigint_digits(
-            usize::try_from(lower_digits).unwrap_or(usize::MAX),
-            span,
-        )?;
+        budget.check_bigint_digits(usize::try_from(lower_digits).unwrap_or(usize::MAX), span)?;
 
         let mut power = Self::from_integer(1, budget, span)?;
         let mut factor = self.clone();
@@ -66,11 +63,7 @@ impl BigInt {
     /// Magnitude bit width, including negative values; zero has width zero.
     /// Divide decimal limbs by 2^32, not by 2 bit by bit. Work and scratch
     /// capacity are prepaid using an integer upper bound (4 bits per digit).
-    pub(crate) fn bit_length(
-        &self,
-        budget: &mut Budget,
-        span: Span,
-    ) -> Result<i64, Diagnostic> {
+    pub(crate) fn bit_length(&self, budget: &mut Budget, span: Span) -> Result<i64, Diagnostic> {
         budget.check_bigint_digits(self.decimal_digits(), span)?;
         let n = self.limbs.len();
         if n <= 2 {
@@ -109,11 +102,7 @@ impl BigInt {
     }
 
     /// Canonical decimal string with resource charging before construction.
-    pub(crate) fn to_text(
-        &self,
-        budget: &mut Budget,
-        span: Span,
-    ) -> Result<Arc<str>, Diagnostic> {
+    pub(crate) fn to_text(&self, budget: &mut Budget, span: Span) -> Result<Arc<str>, Diagnostic> {
         budget.check_bigint_digits(self.decimal_digits(), span)?;
         let bytes = self
             .decimal_digits()
@@ -122,9 +111,9 @@ impl BigInt {
         budget.charge_text_allocation(bytes, span)?;
         budget.charge(u64::try_from(bytes).unwrap_or(u64::MAX), span)?;
         let mut result = String::new();
-        result.try_reserve_exact(bytes).map_err(|_| {
-            crate::limits::text_construction(span, "could not reserve bigint text")
-        })?;
+        result
+            .try_reserve_exact(bytes)
+            .map_err(|_| crate::limits::text_construction(span, "could not reserve bigint text"))?;
         if self.negative {
             result.push('-');
         }
