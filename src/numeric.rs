@@ -100,6 +100,9 @@ pub enum Builtin {
     BigIntPow,
     BigIntBitLength,
     BigIntToText,
+    BigIntGcd,
+    BigIntLcm,
+    BigIntSqrt,
 }
 
 impl Builtin {
@@ -126,6 +129,9 @@ impl Builtin {
             "bigint_pow" => Self::BigIntPow,
             "bigint_bit_length" => Self::BigIntBitLength,
             "bigint_to_text" => Self::BigIntToText,
+            "bigint_gcd" => Self::BigIntGcd,
+            "bigint_lcm" => Self::BigIntLcm,
+            "bigint_sqrt" => Self::BigIntSqrt,
             "variance" => Self::Variance,
             "stddev" => Self::StdDev,
             "cosine_similarity" => Self::CosineSimilarity,
@@ -212,6 +218,8 @@ impl Builtin {
             | Self::BigIntBitLength
             | Self::BigIntToText => &[ValueType::BigInt],
             Self::BigIntPow => &[ValueType::BigInt, Integer],
+            Self::BigIntGcd | Self::BigIntLcm => &[ValueType::BigInt, ValueType::BigInt],
+            Self::BigIntSqrt => &[ValueType::BigInt],
             Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
             Self::SampleArea | Self::SampleSlopes | Self::SampleCumulativeArea => &[Vector, Vector],
             Self::IntsLength | Self::IntsSum | Self::IntsToVector => &[Integers],
@@ -270,7 +278,8 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
-            Self::BigInt | Self::BigIntFromInteger | Self::BigIntAbs | Self::BigIntPow => {
+            Self::BigInt | Self::BigIntFromInteger | Self::BigIntAbs | Self::BigIntPow
+            | Self::BigIntGcd | Self::BigIntLcm | Self::BigIntSqrt => {
                 ValueType::BigInt
             }
             Self::BigIntToInteger | Self::BigIntBitLength => ValueType::Integer,
@@ -360,6 +369,9 @@ impl Builtin {
                 | Self::BigIntPow
                 | Self::BigIntBitLength
                 | Self::BigIntToText
+                | Self::BigIntGcd
+                | Self::BigIntLcm
+                | Self::BigIntSqrt
         )
     }
 }
@@ -997,6 +1009,9 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::BigIntPow
         | Builtin::BigIntBitLength
         | Builtin::BigIntToText
+        | Builtin::BigIntGcd
+        | Builtin::BigIntLcm
+        | Builtin::BigIntSqrt
         | Builtin::Variance
         | Builtin::StdDev
         | Builtin::CosineSimilarity
