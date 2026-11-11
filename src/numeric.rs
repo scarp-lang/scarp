@@ -103,6 +103,7 @@ pub enum Builtin {
     BigIntGcd,
     BigIntLcm,
     BigIntSqrt,
+    BigIntPowMod,
 }
 
 impl Builtin {
@@ -132,6 +133,7 @@ impl Builtin {
             "bigint_gcd" => Self::BigIntGcd,
             "bigint_lcm" => Self::BigIntLcm,
             "bigint_sqrt" => Self::BigIntSqrt,
+            "bigint_pow_mod" => Self::BigIntPowMod,
             "variance" => Self::Variance,
             "stddev" => Self::StdDev,
             "cosine_similarity" => Self::CosineSimilarity,
@@ -218,6 +220,7 @@ impl Builtin {
             | Self::BigIntBitLength
             | Self::BigIntToText => &[ValueType::BigInt],
             Self::BigIntPow => &[ValueType::BigInt, Integer],
+            Self::BigIntPowMod => &[ValueType::BigInt, Integer, ValueType::BigInt],
             Self::BigIntGcd | Self::BigIntLcm => &[ValueType::BigInt, ValueType::BigInt],
             Self::BigIntSqrt => &[ValueType::BigInt],
             Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
@@ -284,7 +287,7 @@ impl Builtin {
             | Self::BigIntPow
             | Self::BigIntGcd
             | Self::BigIntLcm
-            | Self::BigIntSqrt => ValueType::BigInt,
+            | Self::BigIntSqrt | Self::BigIntPowMod => ValueType::BigInt,
             Self::BigIntToInteger | Self::BigIntBitLength => ValueType::Integer,
             Self::BigIntToText => ValueType::String,
             Self::Variance
@@ -375,6 +378,7 @@ impl Builtin {
                 | Self::BigIntGcd
                 | Self::BigIntLcm
                 | Self::BigIntSqrt
+                | Self::BigIntPowMod
         )
     }
 }
@@ -1015,6 +1019,7 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::BigIntGcd
         | Builtin::BigIntLcm
         | Builtin::BigIntSqrt
+        | Builtin::BigIntPowMod
         | Builtin::Variance
         | Builtin::StdDev
         | Builtin::CosineSimilarity
