@@ -302,6 +302,19 @@ fn multiply(
     finish(result, left.negative != right.negative, budget, span)
 }
 
+/// Compute both signed truncating quotient and remainder using a single
+/// bounded division pass, with exactly the same semantics as `/` and `%`.
+/// The caller owns any additional tuple-construction quota.
+pub(crate) fn divmod(
+    left: &BigInt,
+    right: &BigInt,
+    budget: &mut Budget,
+    span: Span,
+) -> Result<(BigInt, BigInt), Diagnostic> {
+    budget.check_bigint_digits(left.decimal_digits().max(right.decimal_digits()), span)?;
+    divide(left, right, budget, span)
+}
+
 /// Long division, finding each base-10^9 quotient digit by binary search.
 /// Three prepaid reusable buffers; no allocation in the quotient/trial loops.
 fn divide(
