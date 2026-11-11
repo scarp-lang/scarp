@@ -6,6 +6,7 @@ use crate::{
     value::{finite_number, FiniteFloat, NumericVector, Value, ValueType, MAX_VECTOR_LENGTH},
 };
 
+mod bigints;
 mod correlation;
 mod integers;
 mod kernels;
@@ -99,6 +100,10 @@ pub enum Builtin {
     TextToFloat,
     TextTrim,
     TextReplace,
+    BigInt,
+    BigIntFromInteger,
+    BigIntToInteger,
+    BigIntAbs,
 }
 
 impl Builtin {
@@ -118,6 +123,10 @@ impl Builtin {
     }
     pub fn from_name(name: &str) -> Option<Self> {
         Some(match name {
+            "bigint" => Self::BigInt,
+            "bigint_from_integer" => Self::BigIntFromInteger,
+            "bigint_to_integer" => Self::BigIntToInteger,
+            "bigint_abs" => Self::BigIntAbs,
             "integer_to_text" => Self::IntegerToText,
             "float_to_text" => Self::FloatToText,
             "text_to_integer" => Self::TextToInteger,
@@ -203,6 +212,9 @@ impl Builtin {
     pub fn parameter_types(self) -> &'static [ValueType] {
         use ValueType::{Float, Integer, Integers, String, Tile, Vector};
         match self {
+            Self::BigInt => &[String],
+            Self::BigIntFromInteger => &[Integer],
+            Self::BigIntToInteger | Self::BigIntAbs => &[ValueType::BigInt],
             Self::IntegerToText => &[Integer],
             Self::FloatToText => &[Float],
             Self::TextToInteger | Self::TextToFloat | Self::TextTrim => &[String],
@@ -265,6 +277,8 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
+            Self::BigInt | Self::BigIntFromInteger | Self::BigIntAbs => ValueType::BigInt,
+            Self::BigIntToInteger => ValueType::Integer,
             Self::IntegerToText | Self::FloatToText | Self::TextTrim | Self::TextReplace => {
                 ValueType::String
             }
@@ -330,6 +344,10 @@ impl Builtin {
         )
     }
 
+    fn is_bigint(self) -> bool {
+        matches!(self, Self::BigInt | Self::BigIntFromInteger | Self::BigIntToInteger | Self::BigIntAbs)
+    }
+
     fn is_scalar_text(self) -> bool {
         matches!(
             self,
@@ -358,6 +376,24 @@ pub fn evaluate(
         function,
         arguments,
         &mut Budget::new(max_steps),
+        Span::default(),
+    )
+}
+
+/// Standalone built-in with all configured work and logical allocation budgets.
+pub fn evaluate_with_options(
+    function: Builtin,
+    arguments: &[Value],
+    options: crate::ExecutionOptions,
+) -> Result<Value, Diagnostic> {
+    evaluate_with_budget(
+        function,
+        arguments,
+        &mut Budget::new(options.limits.max_steps)
+            .with_vector_bytes(options.max_vector_bytes)
+            .with_text_bytes(options.max_text_bytes)
+            .with_tuple_bytes(options.max_tuple_bytes)
+            .with_bigint_limits(options.max_bigint_digits, options.max_bigint_bytes),
         Span::default(),
     )
 }
@@ -603,6 +639,9 @@ pub(crate) fn evaluate_with_spans(
                 value.kind(),
             ));
         }
+    }
+    if function.is_bigint() {
+        return bigints::evaluate(function, args, budget, span, argument_span);
     }
     if matches!(
         function,
@@ -970,6 +1009,10 @@ pub(crate) fn evaluate_with_spans(
             vector(values, span)
         }
         Builtin::Length
+        | Builtin::BigInt
+        | Builtin::BigIntFromInteger
+        | Builtin::BigIntToInteger
+        | Builtin::BigIntAbs
         | Builtin::IntegerToText
         | Builtin::FloatToText
         | Builtin::TextToInteger
