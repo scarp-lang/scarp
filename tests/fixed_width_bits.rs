@@ -144,15 +144,20 @@ fn reverse_and_byte_swap_keep_exact_signed_bit_patterns() {
 }
 
 fn expected_rotate(pattern: u64, count: u32, left: bool) -> i64 {
-    // Independent oracle constructed out of shifts, rather than rotate_*.
-    if count == 0 {
-        return pattern as i64;
+    // Bit-by-bit oracle, deliberately independent of rotate_* and of the
+    // shift-and-OR implementation it could otherwise reproduce.
+    let mut rotated = 0_u64;
+    for bit in 0..64_u32 {
+        if (pattern >> bit) & 1 != 0 {
+            let destination = if left {
+                (bit + count) % 64
+            } else {
+                (bit + 64 - count) % 64
+            };
+            rotated |= 1_u64 << destination;
+        }
     }
-    if left {
-        ((pattern << count) | (pattern >> (64 - count))) as i64
-    } else {
-        ((pattern >> count) | (pattern << (64 - count))) as i64
-    }
+    rotated as i64
 }
 
 #[test]
