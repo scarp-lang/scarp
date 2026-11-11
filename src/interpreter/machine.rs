@@ -137,7 +137,8 @@ pub(super) fn prepare<'a>(
     let mut budget = Budget::new(options.limits.max_steps)
         .with_vector_bytes(options.max_vector_bytes)
         .with_text_bytes(options.max_text_bytes)
-        .with_tuple_bytes(options.max_tuple_bytes);
+        .with_tuple_bytes(options.max_tuple_bytes)
+        .with_bigint_limits(options.max_bigint_digits, options.max_bigint_bytes);
     let mut events = Vec::new();
     let mut calls = 0_u64;
     let mut prints = 0;
@@ -301,6 +302,9 @@ pub(super) fn prepare<'a>(
                                 }
                             }
                             Completion::Output => {
+                                if let Some(number) = value.as_bigint() {
+                                    budget.charge(number.decimal_digits() as u64, frame.output.as_ref().unwrap().span)?;
+                                }
                                 if let Some(tuple) = value.as_tuple() {
                                     budget.charge(
                                         tuple.work(),
@@ -624,6 +628,8 @@ fn charge_capture(
     let payload = match value {
         PrintValue::String(text) => text.len(),
         PrintValue::Value(Value::Tuple(tuple)) => tuple.capture_bytes(),
+        PrintValue::Value(Value::BigInt(number)) => number.payload_bytes()
+            .max(number.decimal_digits() + usize::from(number.is_negative())),
         PrintValue::Value(Value::String(text)) => text.len(),
         PrintValue::Value(Value::Vector(vector)) => vector.len().saturating_mul(8),
         PrintValue::Value(Value::Integers(vector)) => vector.len().saturating_mul(8),
