@@ -220,9 +220,10 @@ impl Builtin {
         match self {
             Self::BigInt => &[String],
             Self::BigIntFromInteger => &[Integer],
-            Self::BigIntToInteger | Self::BigIntAbs | Self::BigIntBitLength | Self::BigIntToText => {
-                &[ValueType::BigInt]
-            }
+            Self::BigIntToInteger
+            | Self::BigIntAbs
+            | Self::BigIntBitLength
+            | Self::BigIntToText => &[ValueType::BigInt],
             Self::BigIntPow => &[ValueType::BigInt, Integer],
             Self::IntegerToText => &[Integer],
             Self::FloatToText => &[Float],
