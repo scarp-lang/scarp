@@ -15,7 +15,10 @@ fn fail(source: &str, options: ExecutionOptions, kind: Kind) {
     };
     assert_eq!(error.kind, kind);
     assert!(stdout.is_empty() && stderr.is_empty());
-    assert_eq!(scarp::check_with_options(source, options).unwrap_err(), error);
+    assert_eq!(
+        scarp::check_with_options(source, options).unwrap_err(),
+        error
+    );
 }
 
 #[test]
@@ -85,7 +88,10 @@ fn signed_bitwise_works_in_typed_functions() {
 
 #[test]
 fn invalid_shifts_types_and_resource_limits_are_explicit() {
-    for expr in ["bigint_shl(bigint(\"2\"),-1)", "bigint_shr(bigint(\"-1\"),-1)"] {
+    for expr in [
+        "bigint_shl(bigint(\"2\"),-1)",
+        "bigint_shr(bigint(\"-1\"),-1)",
+    ] {
         fail(
             &format!("print(\"pending\"); print({expr});"),
             ExecutionOptions::default(),
@@ -99,13 +105,19 @@ fn invalid_shifts_types_and_resource_limits_are_explicit() {
     );
     fail(
         "print(\"pending\"); print(bigint_and(bigint(\"255\"),bigint(\"127\")));",
-        ExecutionOptions { max_bigint_bytes: 8, ..ExecutionOptions::default() },
+        ExecutionOptions {
+            max_bigint_bytes: 8,
+            ..ExecutionOptions::default()
+        },
         Kind::BigIntLimit,
     );
     fail(
         "print(\"pending\"); print(bigint_shl(bigint(\"3\"),100));",
         ExecutionOptions {
-            limits: scarp::ExecutionLimits { max_steps: 40, ..scarp::ExecutionLimits::default() },
+            limits: scarp::ExecutionLimits {
+                max_steps: 40,
+                ..scarp::ExecutionLimits::default()
+            },
             ..ExecutionOptions::default()
         },
         Kind::ExecutionLimit,
