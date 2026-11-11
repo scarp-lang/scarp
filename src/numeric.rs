@@ -294,7 +294,8 @@ impl Builtin {
             | Self::BigIntGcd
             | Self::BigIntLcm
             | Self::BigIntSqrt
-            | Self::BigIntPowMod | Self::BigIntFromRadix => ValueType::BigInt,
+            | Self::BigIntPowMod
+            | Self::BigIntFromRadix => ValueType::BigInt,
             Self::BigIntToInteger | Self::BigIntBitLength => ValueType::Integer,
             Self::BigIntToText | Self::BigIntToRadix => ValueType::String,
             Self::Variance
