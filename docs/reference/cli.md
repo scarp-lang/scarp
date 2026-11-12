@@ -15,6 +15,9 @@ The optional directory defaults to the current project. `run FILE` and
 [manifest format and migration](../project-v2.md), [test report and fixture
 contracts](../project-testing.md), and [assertion syntax](../assertions.md).
 
+The follow-up test-report development branch adds `scarp test --json=v2`
+for [structured diagnostics](../project-testing.md#structured-failure-reports-follow-up-development).
+
 **v0.0.6-alpha.6 published prerelease:** `exec`/`run`/`launch` support redirected
 UTF-8 `read_line()` with `--max-input-line-bytes`, `--max-input-bytes` and
 `--max-input-reads`. `--max-tuple-bytes` limits new tuple payload. Terminal reads

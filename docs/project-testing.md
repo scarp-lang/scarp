@@ -133,6 +133,38 @@ unreleased development candidate, not in the published compiler. Custom
 execution-budget flags, retries, package installation and releases are not
 introduced by the test-reporting layer.
 
+### Structured failure reports (follow-up development)
+
+Use `scarp test --json=v2` when a CI job or editor needs diagnostic codes
+and source ranges. It accepts the same project path, `--filter`, `--list`,
+and `--require-tests` arguments as `--json`. Use one JSON flag per command.
+
+The outer report has `schema_version: 2` and the same modes, counts, path
+ordering, and case statuses as schema 1. A failed case has `phase` and
+`diagnostic` fields in place of the schema 1 `error` string.
+
+| `phase` | Cause |
+| --- | --- |
+| `compile` | Loading, parsing, linking, or statically checking the test or its imports failed |
+| `fixture` | The selected test compiled, but its sibling `.stdin` could not be safely opened or read |
+| `runtime` | The test failed during execution, including assertion failures and input decoding errors |
+
+`diagnostic` uses the compiler's schema 1 diagnostic envelope. It carries
+the original code, message, primary location, related locations, and help.
+Fixture setup errors have a null code and primary location. Source locations
+use project-relative paths with forward slashes, half-open UTF-8 byte spans,
+and one-based Unicode-scalar line and column positions. A location that cannot
+be represented as a contained project path is null. Diagnostic messages can
+contain source-derived text or host paths. The report omits source excerpts
+and program stdout and stderr.
+
+Messages are capped at 1600 Unicode scalar values. Help and each of the first
+eight related notes are capped at 512 scalar values. A location path longer
+than 4096 UTF-8 bytes is null. Discovery remains read-only. Passing and listed
+cases carry no failure fields. Project setup errors remain on stderr, while
+per-test failures and strict empty selections return status 1 with a complete
+JSON report.
+
 ## CI guard: require at least one test (unreleased stacked PR)
 
 The optional `--require-tests` flag makes a valid but empty suite fail.

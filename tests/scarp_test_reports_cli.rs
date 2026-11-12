@@ -75,6 +75,106 @@ fn machine_report_has_sorted_results_with_bounded_failure_details() {
 }
 
 #[test]
+fn v2_report_classifies_failures_and_keeps_unicode_source_coordinates() {
+    let ws = Workspace::new();
+    let root = project(&ws, "structured हिंदी");
+    let statement = r#"assert(false, "line\nnext");"#;
+    let line_prefix = "print(\"नमस्ते\"); ";
+    let source = format!("// heading\r\n{line_prefix}{statement}\r\n");
+    fs::write(root.join("tests/a हिंदी.srp"), &source).unwrap();
+    fs::write(root.join("tests/b.srp"), "print(missing_name);\n").unwrap();
+    fs::create_dir(root.join("tests/b.stdin")).unwrap();
+    fs::write(root.join("tests/c.srp"), "assert(true);\n").unwrap();
+    fs::create_dir(root.join("tests/c.stdin")).unwrap();
+    fs::write(root.join("tests/d.srp"), "print(\"separate output\");\n").unwrap();
+
+    let args = ["test", "--json=v2", "--require-tests"];
+    let result = cli(&args, &root);
+    assert_eq!(result.status.code(), Some(1), "{result:?}");
+    assert!(result.stderr.is_empty(), "{result:?}");
+    assert_eq!(result.stdout, cli(&args, &root).stdout);
+    let text = String::from_utf8(result.stdout).unwrap();
+    assert!(
+        text.starts_with(
+            "{\"schema_version\":2,\"mode\":\"run\",\"discovered\":4,\"passed\":1,\"failed\":3,"
+        ),
+        "{text}"
+    );
+    assert_eq!(text.lines().count(), 1);
+    assert!(!text.contains("separate output") && !text.contains("नमस्ते"));
+    assert!(!text.contains("\"error\":"));
+    assert!(text.contains("\"path\":\"tests/a हिंदी.srp\",\"status\":\"failed\",\"phase\":\"runtime\",\"diagnostic\":{\"schema_version\":1,\"severity\":\"error\",\"code\":\"E0065\""), "{text}");
+    assert!(text.contains(r#"line\\nnext"#), "{text}");
+    let start = source.find(statement).unwrap();
+    let column = line_prefix.chars().count() + 1;
+    assert!(text.contains(&format!(
+        "\"primary\":{{\"path\":\"tests/a हिंदी.srp\",\"span\":[{start},{}],\"start\":{{\"line\":2,\"column\":{column}}}",
+        start + statement.len(),
+    )), "{text}");
+    assert!(text.contains("\"path\":\"tests/b.srp\",\"status\":\"failed\",\"phase\":\"compile\""));
+    assert!(text.contains("\"code\":\"E0010\""));
+    assert!(text.contains("\"path\":\"tests/c.srp\",\"status\":\"failed\",\"phase\":\"fixture\",\"diagnostic\":{\"schema_version\":1,\"severity\":\"error\",\"code\":null"));
+    assert!(text.contains("\"primary\":null,\"related\":[],\"help\":null"));
+    assert!(text.ends_with("{\"path\":\"tests/d.srp\",\"status\":\"passed\"}]}\n"));
+}
+
+#[test]
+fn v2_report_keeps_imported_primary_and_related_locations_project_relative() {
+    let ws = Workspace::new();
+    let root = project(&ws, "import notes");
+    fs::write(
+        root.join("tests/cycle.srp"),
+        "import \"../src/one.srp\" as one;\n",
+    )
+    .unwrap();
+    fs::write(root.join("src/one.srp"), "import \"two.srp\" as two;\n").unwrap();
+    fs::write(root.join("src/two.srp"), "import \"one.srp\" as one;\n").unwrap();
+    let result = cli(&["test", "--json=v2"], &root);
+    assert_eq!(result.status.code(), Some(1), "{result:?}");
+    assert!(result.stderr.is_empty());
+    let text = String::from_utf8(result.stdout).unwrap();
+    assert!(
+        text.contains("\"primary\":{\"path\":\"src/two.srp\""),
+        "{text}"
+    );
+    assert!(text.contains("\"related\":[{\"message\":\"this import continues the cycle\",\"location\":{\"path\":\"src/one.srp\""), "{text}");
+}
+
+#[test]
+fn v2_report_caps_diagnostic_messages_without_losing_code_or_location() {
+    let ws = Workspace::new();
+    let root = project(&ws, "bounded");
+    let name = "z".repeat(8000);
+    fs::write(root.join("tests/bounded.srp"), format!("print({name});")).unwrap();
+    let result = cli(&["test", "--json=v2"], &root);
+    assert_eq!(result.status.code(), Some(1), "{result:?}");
+    assert!(result.stderr.is_empty());
+    let text = String::from_utf8(result.stdout).unwrap();
+    assert!(text.len() < 2400, "{}", text.len());
+    assert!(text.contains("\"code\":\"E0010\""));
+    assert!(text.contains("\"primary\":{\"path\":\"tests/bounded.srp\",\"span\":[6,8006]"));
+}
+
+#[test]
+fn v2_discovery_is_read_only_and_preserves_empty_filter_exit_status() {
+    let ws = Workspace::new();
+    let root = project(&ws, "listing v2");
+    fs::write(root.join("tests/unread.srp"), [0xff]).unwrap();
+    fs::create_dir(root.join("tests/unread.stdin")).unwrap();
+    let args = ["test", "--json=v2", "--list", "--require-tests"];
+    let listed = cli(&args, &root);
+    assert!(listed.status.success(), "{listed:?}");
+    assert!(listed.stderr.is_empty());
+    assert_eq!(String::from_utf8(listed.stdout).unwrap(), "{\"schema_version\":2,\"mode\":\"list\",\"discovered\":1,\"passed\":0,\"failed\":0,\"tests\":[{\"path\":\"tests/unread.srp\",\"status\":\"discovered\"}]}\n");
+    let mut filtered = args.to_vec();
+    filtered.extend(["--filter", "absent"]);
+    let empty = cli(&filtered, &root);
+    assert_eq!(empty.status.code(), Some(1), "{empty:?}");
+    assert!(empty.stderr.is_empty());
+    assert_eq!(String::from_utf8(empty.stdout).unwrap(), "{\"schema_version\":2,\"mode\":\"list\",\"discovered\":0,\"passed\":0,\"failed\":0,\"tests\":[]}\n");
+}
+
+#[test]
 fn listing_does_not_compile_or_execute_test_sources() {
     let ws = Workspace::new();
     let root = project(&ws, "listing");
@@ -186,6 +286,10 @@ fn invalid_project_and_unsupported_flags_do_not_emit_partial_json() {
     let root = project(&ws, "invalid");
     for args in [
         &["test", "--json", "--json"][..],
+        &["test", "--json=v2", "--json=v2"][..],
+        &["test", "--json=v2", "--json"][..],
+        &["test", "--json", "--json=v2"][..],
+        &["test", "--json=v3"][..],
         &["test", "--list", "--list"][..],
         &["test", "--json", "--unknown"][..],
         &["test", "--list", "--max-steps", "10"][..],
