@@ -33,6 +33,12 @@ pub enum Statement {
         expression: Expression,
         span: Span,
     },
+    /// A checked boolean condition, optionally with a bounded static message.
+    Assert {
+        condition: Expression,
+        message: Option<String>,
+        span: Span,
+    },
     Repeat {
         count: Expression,
         index: String,
@@ -103,7 +109,9 @@ impl Statement {
         match self {
             Self::Import { span, .. } | Self::Export { span, .. } => *span,
             Self::Function(function) => function.span,
-            Self::Return { span, .. } | Self::Call { span, .. } => *span,
+            Self::Return { span, .. } | Self::Call { span, .. } | Self::Assert { span, .. } => {
+                *span
+            },
             Self::Repeat { span, .. }
             | Self::While { span, .. }
             | Self::Break { span }
