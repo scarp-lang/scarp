@@ -79,7 +79,7 @@ fn tests_run_in_deterministic_filename_order_and_can_import_project_sources() {
     let result = command(&["test"], &root);
     assert!(result.status.success(), "{result:?}");
     assert_eq!(
-        String::from_utf8(result.stdout).unwrap(),
+        std::str::from_utf8(&result.stdout).unwrap(),
         "PASS tests/alpha.srp\nPASS tests/zeta.srp\n2 passed, 0 failed\n"
     );
     assert!(result.stderr.is_empty());
@@ -101,7 +101,7 @@ fn compilation_and_runtime_failures_both_fail_suite_without_leaking_program_outp
     let result = command(&["test"], &root);
     assert_eq!(result.status.code(), Some(1), "{result:?}");
     assert_eq!(
-        String::from_utf8(result.stdout).unwrap(),
+        std::str::from_utf8(&result.stdout).unwrap(),
         "PASS tests/1-pass.srp\nFAIL tests/2-error.srp\nFAIL tests/3-unknown.srp\n1 passed, 2 failed\n"
     );
     let details = String::from_utf8_lossy(&result.stderr);
