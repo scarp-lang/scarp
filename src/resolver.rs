@@ -139,11 +139,12 @@ pub(crate) enum ResolvedCall {
         parameters: Vec<usize>,
     },
     Builtin(Builtin),
+    BigIntDivMod,
     ReadLine,
 }
 
 pub(crate) fn is_builtin_name(name: &str) -> bool {
-    name == "read_line" || Builtin::from_name(name).is_some()
+    name == "read_line" || name == "bigint_divmod" || Builtin::from_name(name).is_some()
 }
 
 /// Static function signature and call-graph information. Spans are source bytes.
@@ -1068,6 +1069,31 @@ fn resolve_expression(
                     slots.push(None);
                     calls.push(Some(ResolvedCall::ReadLine));
                     types.push(ValueType::String.into());
+                    continue;
+                }
+                // Composite numerical intrinsic: its return type is structural,
+                // so it must not pretend to be a primitive-only Builtin.
+                if name == "bigint_divmod" && !names.contains_key(name) {
+                    if arguments.len() != 2 || arguments.iter().any(|a| a.label.is_some()) {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::CallArguments,
+                            *function_span,
+                            "bigint_divmod requires two positional bigint arguments",
+                        ));
+                    }
+                    for argument in arguments {
+                        require_type(
+                            &types[argument.expression],
+                            ValueType::BigInt,
+                            syntax.nodes()[argument.expression].span,
+                        )?;
+                    }
+                    let kind =
+                        SourceType::tuple(vec![ValueType::BigInt.into(), ValueType::BigInt.into()])
+                            .expect("two primitive members form a valid source tuple");
+                    slots.push(None);
+                    calls.push(Some(ResolvedCall::BigIntDivMod));
+                    types.push(kind);
                     continue;
                 }
                 if let Some(builtin) =

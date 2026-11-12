@@ -6,7 +6,7 @@ use crate::{
     limits::Budget,
     numeric::{self, Builtin},
     resolver::{self, ResolvedCall, ResolvedExpression},
-    value::{finite_number, type_mismatch, Value, ValueType},
+    value::{finite_number, type_mismatch, TupleValue, Value, ValueType},
 };
 
 /// Evaluate a standalone integer expression, preserving the v0.0.1 return type.
@@ -39,6 +39,7 @@ enum Task {
     Tuple(usize, Span),
     Index(Span),
     Builtin(Builtin, usize, Span),
+    BigIntDivMod(usize, Span),
     UserCall(usize, usize, Span),
     ReadLine(Span),
     Visit(usize),
@@ -109,6 +110,7 @@ impl Workspace {
                 | Task::BitNot(span)
                 | Task::Index(span)
                 | Task::Builtin(_, _, span)
+                | Task::BigIntDivMod(_, span)
                 | Task::Negate(span)
                 | Task::Not(span)
                 | Task::Boolean(span)
@@ -126,6 +128,9 @@ impl Workspace {
                                 Some(ResolvedCall::ReadLine) => Task::ReadLine(node.span),
                                 Some(ResolvedCall::Builtin(builtin)) => {
                                     Task::Builtin(*builtin, index, node.span)
+                                }
+                                Some(ResolvedCall::BigIntDivMod) => {
+                                    Task::BigIntDivMod(index, node.span)
                                 }
                                 _ => Task::UserCall(index, arguments.len(), node.span),
                             });
@@ -225,32 +230,7 @@ impl Workspace {
                         }
                     }
                 }
-                Task::Tuple(count, span) => {
-                    budget.charge(count as u64, span)?;
-                    let start = values.len() - count;
-                    let bytes = crate::value::TupleValue::allocation_bytes(&values[start..])
-                        .ok_or_else(|| {
-                            Diagnostic::new(
-                                DiagnosticKind::TupleAllocation,
-                                span,
-                                "tuple allocation size overflow",
-                            )
-                        })?;
-                    budget.charge_tuple_allocation(bytes, span)?;
-                    let mut elements = Vec::new();
-                    elements.try_reserve_exact(count).map_err(|_| {
-                        Diagnostic::new(
-                            DiagnosticKind::TupleAllocation,
-                            span,
-                            "could not reserve tuple storage",
-                        )
-                    })?;
-                    elements.extend(values.drain(start..));
-                    let tuple = crate::value::TupleValue::new(elements).ok_or_else(|| {
-                        Diagnostic::new(DiagnosticKind::TupleLimit, span, "invalid tuple shape")
-                    })?;
-                    values.push(Value::Tuple(tuple));
-                }
+                Task::Tuple(count, span) => finish_tuple(values, count, budget, span)?,
                 Task::Vector(count, integers, span) => {
                     budget.charge(count as u64, span)?;
                     let start = values.len() - count;
@@ -338,6 +318,24 @@ impl Workspace {
                     )?;
                     values.truncate(start);
                     values.push(value);
+                }
+                Task::BigIntDivMod(node, span) => {
+                    let ExpressionKind::UserCall { arguments, .. } =
+                        &expression.syntax.nodes()[node].kind
+                    else {
+                        unreachable!("resolved bigint_divmod call")
+                    };
+                    debug_assert_eq!(arguments.len(), 2);
+                    let start = values.len() - 2;
+                    let (quotient, remainder) = crate::bigint::divmod(
+                        values[start].as_bigint().expect("typed bigint"),
+                        values[start + 1].as_bigint().expect("typed bigint"),
+                        budget,
+                        expression.syntax.nodes()[arguments[1].expression].span,
+                    )?;
+                    values.truncate(start);
+                    values.extend([Value::BigInt(quotient), Value::BigInt(remainder)]);
+                    finish_tuple(values, 2, budget, span)?;
                 }
                 Task::ReadLine(span) => return Ok(Evaluation::ReadLine(span)),
                 Task::UserCall(node, count, span) => {
@@ -530,6 +528,37 @@ pub(crate) fn apply_binary(
         BinaryOperator::Equal | BinaryOperator::NotEqual => unreachable!("equality handled above"),
     };
     result.map(Value::Integer).ok_or_else(|| overflow(span))
+}
+
+fn finish_tuple(
+    values: &mut Vec<Value>,
+    count: usize,
+    budget: &mut Budget,
+    span: Span,
+) -> Result<(), Diagnostic> {
+    budget.charge(count as u64, span)?;
+    let start = values.len() - count;
+    let bytes = TupleValue::allocation_bytes(&values[start..]).ok_or_else(|| {
+        Diagnostic::new(
+            DiagnosticKind::TupleAllocation,
+            span,
+            "tuple allocation size overflow",
+        )
+    })?;
+    budget.charge_tuple_allocation(bytes, span)?;
+    let mut elements = Vec::new();
+    elements.try_reserve_exact(count).map_err(|_| {
+        Diagnostic::new(
+            DiagnosticKind::TupleAllocation,
+            span,
+            "could not reserve tuple storage",
+        )
+    })?;
+    elements.extend(values.drain(start..));
+    let tuple = TupleValue::new(elements)
+        .ok_or_else(|| Diagnostic::new(DiagnosticKind::TupleLimit, span, "invalid tuple shape"))?;
+    values.push(Value::Tuple(tuple));
+    Ok(())
 }
 
 fn overflow(span: Span) -> Diagnostic {

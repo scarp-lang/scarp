@@ -64,11 +64,13 @@ def main():
             q = quotient(a, b)
             r = a - q*b
             source.append(f'{{ bind a=bigint("{a}"); bind b=bigint("{b}"); '
-                          'print(a+b,a-b,a*b,a/b,a%b,a<b,a<=b,a>b,a>=b,a==b,a!=b); }')
-            values = [a+b, a-b, a*b, q, r, a < b, a <= b, a > b, a >= b, a == b, a != b]
+                          'bind qr=bigint_divmod(a,b); '
+                          'print(a+b,a-b,a*b,a/b,a%b,a<b,a<=b,a>b,a>=b,a==b,a!=b,'
+                          'qr[0],qr[1],qr[0]*b+qr[1]==a); }')
+            values = [a+b, a-b, a*b, q, r, a < b, a <= b, a > b, a >= b, a == b, a != b, q, r, True]
             expected.append(" ".join(str(value).lower() for value in values) + "\n")
         execute(binary, "\n".join(source), "".join(expected))
-    print(f"Python oracle passed: {len(pairs)} pairs, {len(pairs)*11} arithmetic/comparison results; exec/check parity and static verify")
+    print(f"Python oracle passed: {len(pairs)} pairs, {len(pairs)*14} arithmetic/comparison/divmod results; exec/check parity and static verify")
     if args.large:
         # Explicitly bounded exception to Python's decimal-conversion guard.
         # Only these generated fixtures use the larger controlled limit.
