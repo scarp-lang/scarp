@@ -259,3 +259,39 @@ fn assertion_diagnostic_is_explained_by_cli() {
     assert!(result.status.success(), "{result:?}");
     assert!(String::from_utf8_lossy(&result.stdout).contains("assert"));
 }
+
+#[test]
+fn escaped_failure_message_cannot_insert_extra_diagnostic_lines() {
+    let ws = Workspace::new();
+    let source = ws.source(
+        "escaped-message.srp",
+        "assert(false, \"line\\nwith\\ttabs\");\n",
+    );
+    let result = file_cli("exec", &source);
+    assert_eq!(result.status.code(), Some(1), "{result:?}");
+    let text = String::from_utf8_lossy(&result.stderr);
+    assert!(text.contains("E0062"), "{text}");
+    assert!(text.contains("line\\nwith\\ttabs"), "{text}");
+    assert!(!text.contains("line\nwith\ttabs"), "{text}");
+}
+
+#[test]
+fn experimental_c_backend_explicitly_rejects_assertion_statements() {
+    let failure = scarp::c_backend::emit_c("assert(true);").unwrap_err();
+    assert_eq!(
+        failure.kind,
+        scarp::diagnostics::DiagnosticKind::NativeUnsupported
+    );
+}
+
+#[test]
+fn parser_and_source_rebasing_retain_real_assertion_spans() {
+    let source = "print(\"नमस्ते\");\nassert(false, \"check\");\n";
+    let parsed = scarp::parse(source).unwrap();
+    assert_eq!(parsed.statements.len(), 2);
+    let span = parsed.statements[1].span();
+    let location = scarp::diagnostics::location(source, span.start);
+    assert_eq!(location.line, 2);
+    assert_eq!(location.column, 1);
+    assert_eq!(&source[span.start..span.start + 6], "assert");
+}
