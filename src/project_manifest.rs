@@ -303,9 +303,10 @@ pub fn parse(source: &str) -> Result<Manifest, String> {
         ));
     }
     if kind != "application" {
-        return Err(parser
-            .lexer
-            .error(kind_offset, "only project type 'application' is currently supported"));
+        return Err(parser.lexer.error(
+            kind_offset,
+            "only project type 'application' is currently supported",
+        ));
     }
     Ok(Manifest {
         name,
