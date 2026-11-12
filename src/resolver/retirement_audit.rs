@@ -57,7 +57,11 @@ fn audit_frame(
                     read_slots(value, &state)?;
                 }
             }
-            ResolvedStatement::Call { expression } => {
+            ResolvedStatement::Call { expression }
+            | ResolvedStatement::Assert {
+                condition: expression,
+                ..
+            } => {
                 read_slots(expression, &state)?;
                 successors.push(pc + 1);
             }
