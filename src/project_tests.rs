@@ -114,8 +114,10 @@ fn write_report(
             "{{\"path\":{},\"status\":\"{status}\"",
             quote_json(&case.path)
         )?;
-        if let Some(error) = &case.error {
-            write!(stdout, ",\"error\":{}", quote_json(error))?;
+        if !list_only {
+            if let Some(error) = &case.error {
+                write!(stdout, ",\"error\":{}", quote_json(error))?;
+            }
         }
         write!(stdout, "}}")?;
     }
@@ -273,5 +275,6 @@ mod tests {
         let listed = String::from_utf8(listed).unwrap();
         assert!(listed.contains("\"mode\":\"list\""));
         assert!(listed.contains("\"status\":\"discovered\""));
+        assert!(!listed.contains("\"error\""));
     }
 }
