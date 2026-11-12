@@ -308,6 +308,15 @@ fn main() -> ExitCode {
     ExitCode::from(status)
 }
 
+// Activate project execution only when the directory actually contains a
+// manifest. Otherwise preserve legacy "run" usage errors and the original
+// "could not read DIRECTORY" single-file diagnostic.
+fn has_project_manifest(directory: &Path) -> bool {
+    directory.is_dir()
+        && (fs::symlink_metadata(directory.join(project::MANIFEST_V2)).is_ok()
+            || fs::symlink_metadata(directory.join(project::MANIFEST)).is_ok())
+}
+
 fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl Write) -> u8 {
     if args.is_empty() {
         return write_output(output.write_all(HELP.as_bytes()), errors);
@@ -486,7 +495,11 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
     // A source path keeps the historical single-file run behavior. A directory
     // (or no argument) uses the project-aware launch path with identical budgets.
     if args.first().is_some_and(|command| command == "run")
-        && (args.len() == 1 || args.last().is_some_and(|path| Path::new(path).is_dir()))
+        && ((args.len() == 1 && has_project_manifest(Path::new(".")))
+            || (args.len() > 1
+                && args
+                    .last()
+                    .is_some_and(|path| has_project_manifest(Path::new(path)))))
     {
         let mut forwarded = args.clone();
         forwarded[0] = OsString::from("launch");
