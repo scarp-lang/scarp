@@ -116,7 +116,10 @@ fn JSON_metadata_escapes_quotes_and_keeps_unicode_readable() {
     let result = cli(&["project", "info", "--json"], &root);
     assert!(result.status.success(), "{result:?}");
     let json = std::str::from_utf8(&result.stdout).unwrap();
-    assert!(json.contains("\"name\":\"a \\\"quoted\\\" हिंदी\""), "{json}");
+    assert!(
+        json.contains("\"name\":\"a \\\"quoted\\\" हिंदी\""),
+        "{json}"
+    );
     assert!(json.contains("\"version\":\"2.3.4-rc.1+git.9\""), "{json}");
 }
 
@@ -198,7 +201,11 @@ fn rejects_symlinked_manifests_and_outside_entrypoints() {
 
     fs::remove_file(&manifest_path).unwrap();
     let external_manifest = ws.child("external-manifest");
-    fs::write(&external_manifest, "project \"linked\" { version: \"1.0.0\" entry: \"src/main.srp\" type: \"application\" }").unwrap();
+    fs::write(
+        &external_manifest,
+        "project \"linked\" { version: \"1.0.0\" entry: \"src/main.srp\" type: \"application\" }",
+    )
+    .unwrap();
     symlink(&external_manifest, &manifest_path).unwrap();
     let linked = cli(&["project", "info"], &root);
     assert_eq!(linked.status.code(), Some(1), "{linked:?}");
