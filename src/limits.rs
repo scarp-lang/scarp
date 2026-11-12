@@ -90,6 +90,7 @@ pub(crate) struct BudgetAmounts {
     vector_bytes: usize,
     text_bytes: usize,
     tuple_bytes: usize,
+    array_bytes: usize,
 }
 
 impl BudgetAmounts {
@@ -99,6 +100,7 @@ impl BudgetAmounts {
             vector_bytes: self.vector_bytes - after.vector_bytes,
             text_bytes: self.text_bytes - after.text_bytes,
             tuple_bytes: self.tuple_bytes - after.tuple_bytes,
+            array_bytes: self.array_bytes - after.array_bytes,
         }
     }
 }
@@ -222,6 +224,7 @@ impl Budget {
             vector_bytes: self.vector_remaining,
             text_bytes: self.text_remaining,
             tuple_bytes: self.tuple_remaining,
+            array_bytes: self.array_remaining,
         }
     }
 
@@ -233,6 +236,7 @@ impl Budget {
             || spent.vector_bytes > self.vector_remaining
             || spent.text_bytes > self.text_remaining
             || spent.tuple_bytes > self.tuple_remaining
+            || spent.array_bytes > self.array_remaining
         {
             return false;
         }
@@ -240,7 +244,33 @@ impl Budget {
         self.vector_remaining -= spent.vector_bytes;
         self.text_remaining -= spent.text_bytes;
         self.tuple_remaining -= spent.tuple_bytes;
+        self.array_remaining -= spent.array_bytes;
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replay_charges_array_storage_and_keeps_all_ledgers_on_failure() {
+        let span = Span::default();
+        let mut evaluated = Budget::new(6).with_array_bytes(8);
+        let before = evaluated.remaining_amounts();
+        evaluated.charge(3, span).unwrap();
+        evaluated.charge_array_allocation(8, span).unwrap();
+        let spent = before.spent(evaluated.remaining_amounts());
+
+        let mut exact = Budget::new(3).with_array_bytes(8);
+        assert!(exact.try_replay(spent));
+        assert_eq!(exact.remaining, 0);
+        assert_eq!(exact.array_remaining, 0);
+
+        let mut too_small = Budget::new(3).with_array_bytes(7);
+        assert!(!too_small.try_replay(spent));
+        assert_eq!(too_small.remaining, 3);
+        assert_eq!(too_small.array_remaining, 7);
     }
 }
 

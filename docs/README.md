@@ -80,6 +80,8 @@ Rust API/schema migration before adopting that source.
 
 **Development fixed arrays:** [immutable fixed-size arrays](fixed-arrays.md)
 support homogeneous structural types, checked indexing and module interfaces.
+[Development scalar utilities](scalar-utilities.md) cover Unicode scalar
+transforms and checked operations on the signed 64-bit `integer` type.
 
 ## Guides and what each adds
 

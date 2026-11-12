@@ -1,0 +1,4 @@
+pub pure funcra labels(text: string = "नमवनA") -> array<string, 3> {
+    bind globe = text_from_codepoint(0x1f30d);
+    return [array: text_upper("Straße"), text_lower("İ"), text_concat(text_reverse(text), globe)];
+}
