@@ -20,11 +20,12 @@ enum Stage {
     Ensures(usize),
     Done,
 }
-enum Completion {
+enum Completion<'a> {
     Store(usize),
     RepeatCount(usize, usize, Span),
     Update(usize, BinaryOperator, Value, Span),
     Guard(usize, Span),
+    Assert(Span, Option<&'a str>),
     Discard,
     Return,
     Contract(bool, Span),
@@ -52,7 +53,7 @@ struct Frame<'a> {
     pc: usize,
     stage: Stage,
     expression: Option<&'a ResolvedExpression>,
-    completion: Completion,
+    completion: Completion<'a>,
     workspace: Workspace,
     output: Option<PendingOutput<'a>>,
     result: Value,
@@ -71,7 +72,7 @@ impl<'a> Frame<'a> {
             std::mem::take(&mut self.workspace),
         )
     }
-    fn start(&mut self, expression: &'a ResolvedExpression, completion: Completion) {
+    fn start(&mut self, expression: &'a ResolvedExpression, completion: Completion<'a>) {
         self.workspace.start(expression);
         self.expression = Some(expression);
         self.completion = completion;
@@ -286,6 +287,20 @@ pub(super) fn prepare<'a>(
                             }
                             Completion::Discard => {}
                             Completion::Return => frame.finish(program, value),
+                            Completion::Assert(span, message) => {
+                                if !value.require_boolean(span)? {
+                                    let description = match message {
+                                        Some(message) => format!("assertion failed: {message:?}"),
+                                        None => "assertion failed".into(),
+                                    };
+                                    return Err(Diagnostic::new(
+                                        DiagnosticKind::AssertionFailure,
+                                        span,
+                                        description,
+                                    )
+                                    .with_help("review the tested condition and its inputs"));
+                                }
+                            }
                             Completion::Contract(post, span) => {
                                 if !value.require_boolean(span)? {
                                     let name = &program.functions()[frame.function.unwrap()].name;
@@ -524,6 +539,12 @@ pub(super) fn prepare<'a>(
                         }
                         ResolvedStatement::Call { expression } => {
                             frame.start(expression, Completion::Discard)
+                        }
+                        ResolvedStatement::Assert { condition, message } => {
+                            frame.start(
+                                condition,
+                                Completion::Assert(operation.span, message.as_deref()),
+                            );
                         }
                         ResolvedStatement::Return { value: Some(value) } => {
                             frame.start(value, Completion::Return)

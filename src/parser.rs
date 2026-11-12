@@ -8,7 +8,7 @@ use crate::{
         AssignmentOperator, BinaryOperator, CallArgument, ConditionalBranch,
         ConditionalExpressionBranch, Contract, Expression, ExpressionKind, ExpressionNode,
         FunctionDeclaration, LogicalOperator, OutputTarget, Parameter, PrintArgument, Program,
-        Statement,
+        Statement, MAX_ASSERT_MESSAGE_BYTES,
     },
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     lexer::{Token, TokenKind},
@@ -442,6 +442,9 @@ impl Parser<'_> {
                 {
                     statements.push(self.output_statement()?);
                 }
+                TokenKind::Identifier(name) if name == "assert" => {
+                    statements.push(self.assertion()?);
+                }
                 TokenKind::Identifier(name) if name == "let" => {
                     let modifier = self.tokens.get(self.cursor + 1).filter(
                         |next| matches!(&next.kind, TokenKind::Identifier(name) if name == "mut"),
@@ -812,6 +815,49 @@ impl Parser<'_> {
             contracts,
             statements,
             span: Span::new(start, body.end),
+        })
+    }
+
+    /// `assert(boolean_expression);` or `assert(condition, "message");`.
+    /// The message is static, bounded and never treated as executable code.
+    fn assertion(&mut self) -> Result<Statement, ParseError> {
+        let start = self
+            .current()
+            .expect("assert keyword is present")
+            .span
+            .start;
+        self.advance();
+        self.punctuation(TokenKind::LeftParen, "'(' after assert")?;
+        let condition = self.expression()?;
+        let message = if self.at(&TokenKind::Comma) {
+            self.advance();
+            let text = match self.current() {
+                Some(Token {
+                    kind: TokenKind::String(text),
+                    ..
+                }) => text.clone(),
+                _ => return Err(self.expected("a quoted assertion message")),
+            };
+            if text.len() > MAX_ASSERT_MESSAGE_BYTES {
+                return Err(ParseError::new(
+                    DiagnosticKind::CallArguments,
+                    self.current().expect("quoted message is present").span,
+                    format!("assertion message exceeds {MAX_ASSERT_MESSAGE_BYTES} UTF-8 bytes"),
+                ));
+            }
+            self.advance();
+            Some(text)
+        } else {
+            None
+        };
+        self.punctuation(TokenKind::RightParen, "')' after assert")?;
+        let end = self
+            .punctuation(TokenKind::Semicolon, "';' after assert")?
+            .end;
+        Ok(Statement::Assert {
+            condition,
+            message,
+            span: Span::new(start, end),
         })
     }
 

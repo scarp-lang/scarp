@@ -166,7 +166,8 @@ pub(super) fn build_call_graph(program: &mut ResolvedProgram) {
                 | ResolvedStatement::Update { value, .. }
                 | ResolvedStatement::Return { value: Some(value) } => expressions.push(value),
                 ResolvedStatement::Call { expression } => expressions.push(expression),
-                ResolvedStatement::JumpIfFalse { condition, .. } => expressions.push(condition),
+                ResolvedStatement::Assert { condition, .. }
+                | ResolvedStatement::JumpIfFalse { condition, .. } => expressions.push(condition),
                 ResolvedStatement::RepeatInit { count, .. } => expressions.push(count),
                 ResolvedStatement::Output { arguments, .. } => {
                     expressions.extend(arguments.iter().filter_map(|a| match a {

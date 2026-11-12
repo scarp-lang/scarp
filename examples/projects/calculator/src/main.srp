@@ -1,0 +1,3 @@
+import "math.srp" as math;
+
+print(math.add(2, 3));

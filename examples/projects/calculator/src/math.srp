@@ -1,0 +1,3 @@
+pub pure funcra add(left: integer, right: integer) -> integer {
+    return left + right;
+}

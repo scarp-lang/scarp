@@ -78,6 +78,22 @@ website deployment remain separate.
 in published alpha.6 and absent from alpha.5. Review the structural
 Rust API/schema migration before adopting that source.
 
+## Unreleased development documentation
+
+The following guides describe **draft, unmerged compiler work** and are
+**not features of the published v0.0.6-alpha.7 release**:
+
+- [Declarative project manifest](project-v2.md) — draft PR #217.
+- [Project test runner and JSON reporting](project-testing.md) — drafts
+  #218 and #220.
+- [Read-only project metadata](project-info.md) — draft PR #219.
+- [Native source-language assertions](assertions.md) — draft PR #221:
+  `assert(boolean_condition);` or an optional bounded literal message.
+
+These guides specify development branch behavior only. Feature availability
+must be verified against the exact compiler commit; no merging, tagging,
+or publication is implied by their presence here.
+
 ## Guides and what each adds
 
 The [feature-completeness matrix](development/feature-matrix.md) distinguishes

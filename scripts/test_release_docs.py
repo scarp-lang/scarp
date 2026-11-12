@@ -18,7 +18,7 @@ HISTORICAL_ALPHA2 = "0.0.6-alpha.2"
 HISTORICAL_ALPHA1 = "0.0.6-alpha.1"
 HISTORICAL_ALPHA4 = "0.0.5-alpha.4"
 HISTORICAL_ALPHA5 = "0.0.5-alpha.5"
-PACKAGE_VERSION = "0.0.6-alpha.7"
+PACKAGE_VERSION = "0.0.6-alpha.8"
 
 
 def package_version():
@@ -229,7 +229,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
     def test_latest_published_anchor_and_immutable_candidate_snapshot(self):
         version = PUBLISHED_VERSION
         self.assertEqual(PACKAGE_VERSION, package_version())
-        self.assertEqual(version, PACKAGE_VERSION)
+        self.assertNotEqual(version, PACKAGE_VERSION)
         self.assertFalse((ROOT / ".github/release-request.json").exists())
         for filename in ("README.md", "docs/README.md", "docs/compatibility.md"):
             with self.subTest(file=filename):

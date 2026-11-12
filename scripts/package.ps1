@@ -84,7 +84,7 @@ try {
     foreach ($directory in @('examples', 'docs')) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $directory) -Destination $packageRoot -Recurse
     }
-    if ($version -in @('0.0.5-alpha.2', '0.0.5-alpha.3', '0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7')) {
+    if ($version -in @('0.0.5-alpha.2', '0.0.5-alpha.3', '0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7', '0.0.6-alpha.8')) {
         $releaseMetadataPath = Join-Path $projectRoot '.github/release-metadata.json'
         $releaseMetadata = Get-Content -LiteralPath $releaseMetadataPath -Raw | ConvertFrom-Json
         if ($releaseMetadata.schema_version -cne 1 -or $releaseMetadata.version -cne $version -or $releaseMetadata.documentation_repository -cne 'https://github.com/scarp-lang/scarp-docs') {
@@ -147,7 +147,7 @@ try {
         if ($staticNavigation.ExitCode -ne 0 -or $staticNavigation.Stderr.Length -ne 0) { throw 'Packaged navigation must not evaluate runtime arithmetic' }
     }
 
-    if ($version -in @('0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7')) {
+    if ($version -in @('0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7', '0.0.6-alpha.8')) {
         # Exercise the actual extracted distributable, not a development binary.
         $projectPath = Join-Path $stagingRoot 'alpha4-project-smoke'
         $created = Invoke-ScarpProcess -Executable $executable -Arguments @('create', $projectPath)
@@ -158,7 +158,7 @@ try {
         if ($projectVerify.ExitCode -ne 0 -or $projectVerify.Stdout.Length -ne 0 -or $projectVerify.Stderr.Length -ne 0) {
             throw 'Packaged Scarp project static verification failed'
         }
-        if ($version -in @('0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7')) {
+        if ($version -in @('0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7', '0.0.6-alpha.8')) {
             $projectModules = Invoke-ScarpProcess -Executable $executable -Arguments @('inspect', 'modules', '--json', $projectPath)
             if ($projectModules.ExitCode -ne 0 -or $projectModules.Stderr.Length -ne 0) {
                 throw 'Packaged project directory module inspection failed'
@@ -184,6 +184,49 @@ try {
         if ($invalid.ExitCode -ne 1 -or $invalid.Stdout.Length -ne 0) { throw 'Packaged project traversal rejected incorrectly' }
         $failure = [Text.Encoding]::UTF8.GetString($invalid.Stderr) | ConvertFrom-Json -ErrorAction Stop
         if ($failure.schema_version -ne 1) { throw 'Packaged project traversal JSON schema differs' }
+    }
+    if ($version -eq '0.0.6-alpha.8') {
+        $modernProject = Join-Path $stagingRoot 'Scarp calculator smoke'
+        $initialized = Invoke-ScarpProcess -Executable $executable -Arguments @('init', $modernProject)
+        if ($initialized.ExitCode -ne 0 -or $initialized.Stderr.Length -ne 0) {
+            throw 'Packaged declarative project initialization failed'
+        }
+        $example = Join-Path $extractedPackage 'examples/projects/calculator'
+        foreach ($directory in @('src', 'tests')) {
+            Get-ChildItem -LiteralPath (Join-Path $example $directory) -File | ForEach-Object {
+                Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $modernProject $directory)
+            }
+        }
+        $info = Invoke-ScarpProcess -Executable $executable -Arguments @('project', 'info', '--json', $modernProject)
+        $projectMetadata = [Text.Encoding]::UTF8.GetString($info.Stdout) | ConvertFrom-Json -ErrorAction Stop
+        if ($info.ExitCode -ne 0 -or $info.Stderr.Length -ne 0 -or $projectMetadata.schema_version -ne 1 -or $projectMetadata.manifest -cne 'scarp.project' -or $projectMetadata.format -cne 'v2' -or $projectMetadata.entry -cne 'src/main.srp') {
+            throw 'Packaged project info schema or metadata differs'
+        }
+        $verified = Invoke-ScarpProcess -Executable $executable -Arguments @('verify', $modernProject)
+        if ($verified.ExitCode -ne 0 -or $verified.Stdout.Length -ne 0 -or $verified.Stderr.Length -ne 0) {
+            throw 'Packaged calculator static verification failed'
+        }
+        $executed = Invoke-ScarpProcess -Executable $executable -Arguments @('run', $modernProject)
+        if ($executed.ExitCode -ne 0 -or $executed.Stderr.Length -ne 0 -or [Text.Encoding]::UTF8.GetString($executed.Stdout) -cne "5`n") {
+            throw 'Packaged calculator execution failed'
+        }
+        $listed = Invoke-ScarpProcess -Executable $executable -Arguments @('test', '--json', '--list', '--require-tests', $modernProject)
+        $discovery = [Text.Encoding]::UTF8.GetString($listed.Stdout) | ConvertFrom-Json -ErrorAction Stop
+        if ($listed.ExitCode -ne 0 -or $listed.Stderr.Length -ne 0 -or $discovery.schema_version -ne 1 -or $discovery.mode -cne 'list' -or $discovery.discovered -ne 2 -or $discovery.tests[0].path -cne 'tests/addition.srp' -or $discovery.tests[1].path -cne 'tests/input.srp') {
+            throw 'Packaged project test discovery failed'
+        }
+        $arguments = @('test', '--json', '--require-tests', '--filter', 'input', $modernProject)
+        $tested = Invoke-ScarpProcess -Executable $executable -Arguments $arguments
+        $suite = [Text.Encoding]::UTF8.GetString($tested.Stdout) | ConvertFrom-Json -ErrorAction Stop
+        if ($tested.ExitCode -ne 0 -or $tested.Stderr.Length -ne 0 -or $suite.schema_version -ne 1 -or $suite.mode -cne 'run' -or $suite.discovered -ne 1 -or $suite.passed -ne 1 -or $suite.tests[0].path -cne 'tests/input.srp') {
+            throw 'Packaged filtered fixture-backed test failed'
+        }
+        [IO.File]::WriteAllText((Join-Path $modernProject 'tests/input.stdin'), "17`n24`n", [Text.UTF8Encoding]::new($false))
+        $failed = Invoke-ScarpProcess -Executable $executable -Arguments $arguments
+        $failure = [Text.Encoding]::UTF8.GetString($failed.Stdout) | ConvertFrom-Json -ErrorAction Stop
+        if ($failed.ExitCode -ne 1 -or $failed.Stderr.Length -ne 0 -or $failure.failed -ne 1 -or $failure.tests[0].error -notmatch 'E0065') {
+            throw 'Packaged assertion failure did not report E0065'
+        }
     }
     $canonicalInspect = Invoke-ScarpProcess -Executable $executable -Arguments @('inspect', 'modules', '--json', '--diagnostic-format=json', (Join-Path $extractedPackage 'examples/hello.srp'))
     $inventory = [System.Text.Encoding]::UTF8.GetString($canonicalInspect.Stdout) | ConvertFrom-Json -ErrorAction Stop

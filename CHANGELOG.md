@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.6-alpha.8 — development candidate
+
+- Add bounded declarative `scarp.project` manifests, `scarp init`, project
+  `run` and `verify`, and read-only `project info` with optional JSON.
+- Run immediate project tests with `scarp test`, including read-only listing,
+  JSON reports, strict empty-suite checks, filename filtering, and bounded
+  per-test UTF-8 stdin fixtures.
+- Add typed Boolean assertions with optional static messages and source-located
+  `E0065` failures. `assert` becomes reserved. Rust hosts with exhaustive
+  matches on `Statement` or `DiagnosticKind` must handle the new variants.
+- Preserve legacy manifests, `create`, `launch`, and single-file execution.
+
 ## 0.0.6-alpha.7 — published GitHub prerelease, 2026-11-11
 
 - Add typed conditional expressions with exact branch result types and lazy

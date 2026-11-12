@@ -9,6 +9,11 @@ with seven verified assets for Windows x64, Linux x64 and macOS Apple Silicon.
 See [public notes](docs/releases/v0.0.6-alpha.7-publication.md) and
 [exact-source publication verification](docs/releases/v0.0.6-alpha.7-validation.md).
 
+The **0.0.6-alpha.8 development candidate** adds declarative projects, project
+testing, and Boolean assertions. Build the candidate from source and try the
+[calculator project](examples/projects/calculator/README.md). See the
+[candidate preparation notes](docs/releases/v0.0.6-alpha.8-preparation.md) for scope.
+
 **0.0.6-alpha.6** added [bounded input](docs/program-input.md),
 [scalar/text utilities](docs/text-foundations.md) and
 [immutable tuples with a Rust API migration](docs/tuples.md).
@@ -469,6 +474,8 @@ describe immutable snapshots; branch names can move.
 ## Support Scarp development
 
 Scarp is open source and free to use. You can [support its independent development on GitHub Sponsors](https://github.com/sponsors/sanskarIN) (monthly or one-time) to help with compiler work, testing, documentation, and tooling. Sponsorship does not unlock language features or determine the roadmap.
+
+You can also support development through [Buy Me a Coffee](https://buymeacoffee.com/sanskarIN).
 
 ## License
 

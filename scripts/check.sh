@@ -73,3 +73,10 @@ cargo run --locked -- run examples/program_input.srp < examples/program_input.st
 
 cargo run --locked -- verify examples/core_input_tuple.srp
 cargo run --locked -- run examples/core_input_tuple.srp < examples/core_input_tuple.stdin
+
+project=examples/projects/calculator
+cargo run --locked -- project info --json "$project"
+cargo run --locked -- verify "$project"
+cargo run --locked -- run "$project"
+cargo run --locked -- test --list --require-tests "$project"
+cargo run --locked -- test --json --require-tests "$project"
