@@ -435,7 +435,10 @@ pure funcra check() -> integer {
 print(check());
 "#;
     let error = scarp::compile(source).unwrap_err();
-    assert_eq!(error.kind, scarp::diagnostics::DiagnosticKind::ImpureFunction);
+    assert_eq!(
+        error.kind,
+        scarp::diagnostics::DiagnosticKind::ImpureFunction
+    );
     let ws = Workspace::new();
     let file = ws.source("assert-impurity.srp", source);
     let output = file_cli("verify", &file);
