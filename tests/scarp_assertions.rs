@@ -361,7 +361,10 @@ fn public_ast_resolver_enforces_the_same_message_limit_as_the_parser() {
         _ => panic!("expected an assertion"),
     }
     let error = scarp::resolver::resolve(program).unwrap_err();
-    assert_eq!(error.kind, scarp::diagnostics::DiagnosticKind::CallArguments);
+    assert_eq!(
+        error.kind,
+        scarp::diagnostics::DiagnosticKind::CallArguments
+    );
     assert!(error.message.contains("256"), "{error}");
 
     let mut allowed = scarp::parse("assert(true);").unwrap();
