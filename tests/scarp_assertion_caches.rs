@@ -43,7 +43,7 @@ fn runtime_json(program: &modules::ModuleProgram) -> String {
     let mut json = Vec::new();
     diagnostic.write_json(&mut json).unwrap();
     let text = String::from_utf8(json).unwrap();
-    assert!(text.contains("\"code\":\"E0062\""), "{text}");
+    assert!(text.contains("\"code\":\"E0065\""), "{text}");
     assert!(text.contains("\"path\":\"lib.srp\""), "{text}");
     text
 }

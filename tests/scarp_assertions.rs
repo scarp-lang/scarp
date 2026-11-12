@@ -100,7 +100,7 @@ fn failing_assertion_is_a_dedicated_diagnostic_without_program_stdout() {
     assert_eq!(result.status.code(), Some(1), "{result:?}");
     assert!(result.stdout.is_empty(), "{result:?}");
     let stderr = String::from_utf8_lossy(&result.stderr);
-    assert!(stderr.contains("E0062"), "{stderr}");
+    assert!(stderr.contains("E0065"), "{stderr}");
     assert!(stderr.contains("a useful explanation"), "{stderr}");
     assert!(stderr.contains("failed.srp"), "{stderr}");
 
@@ -128,7 +128,7 @@ fn failed_nested_assertions_preserve_runtime_source_location() {
     assert_eq!(result.status.code(), Some(1), "{result:?}");
     assert!(result.stdout.is_empty());
     let diagnostic = String::from_utf8_lossy(&result.stderr);
-    assert!(diagnostic.contains("E0062"), "{diagnostic}");
+    assert!(diagnostic.contains("E0065"), "{diagnostic}");
     assert!(diagnostic.contains("math.srp"), "{diagnostic}");
     assert!(diagnostic.contains("must be positive"), "{diagnostic}");
 }
@@ -214,7 +214,7 @@ fn short_circuit_and_execution_budgets_remain_enforced() {
     let result = file_cli("exec", &fail);
     assert_eq!(result.status.code(), Some(1), "{result:?}");
     let diagnostic = String::from_utf8_lossy(&result.stderr);
-    assert!(diagnostic.contains("E0062"), "{diagnostic}");
+    assert!(diagnostic.contains("E0065"), "{diagnostic}");
     assert!(!diagnostic.contains("E0008"), "{diagnostic}");
 
     let limited = Command::new(env!("CARGO_BIN_EXE_scarp"))
@@ -242,14 +242,14 @@ fn project_test_reports_include_assertion_diagnostics() {
     let report = String::from_utf8_lossy(&result.stdout);
     assert!(report.contains("\"discovered\":2"), "{report}");
     assert!(report.contains("\"passed\":1,\"failed\":1"), "{report}");
-    assert!(report.contains("E0062"), "{report}");
+    assert!(report.contains("E0065"), "{report}");
     assert!(report.contains("important test failure"), "{report}");
 }
 
 #[test]
 fn assertion_diagnostic_is_explained_by_cli() {
     let ws = Workspace::new();
-    let result = cli(&["explain", "E0062"], &ws.0);
+    let result = cli(&["explain", "E0065"], &ws.0);
     assert!(result.status.success(), "{result:?}");
     assert!(String::from_utf8_lossy(&result.stdout).contains("assert"));
 }
@@ -264,7 +264,7 @@ fn escaped_failure_message_cannot_insert_extra_diagnostic_lines() {
     let result = file_cli("exec", &source);
     assert_eq!(result.status.code(), Some(1), "{result:?}");
     let text = String::from_utf8_lossy(&result.stderr);
-    assert!(text.contains("E0062"), "{text}");
+    assert!(text.contains("E0065"), "{text}");
     assert!(text.contains("line\\nwith\\ttabs"), "{text}");
     assert!(!text.contains("line\nwith\ttabs"), "{text}");
 }
@@ -306,7 +306,7 @@ fn json_diagnostics_preserve_assertion_code_and_utf8_source_location() {
     assert!(result.stdout.is_empty(), "{result:?}");
     let text = String::from_utf8_lossy(&result.stderr);
     assert!(text.contains("\"schema_version\":1"), "{text}");
-    assert!(text.contains("\"code\":\"E0062\""), "{text}");
+    assert!(text.contains("\"code\":\"E0065\""), "{text}");
     assert!(text.contains("\"span_encoding\":\"utf-8-bytes\""), "{text}");
     assert!(text.contains("\"line\":2,\"column\":1"), "{text}");
     assert!(text.contains("unicode-diagnostic.srp"), "{text}");
@@ -323,7 +323,7 @@ fn assertion_does_not_hide_underlying_predicate_runtime_errors() {
     assert_eq!(result.status.code(), Some(1), "{result:?}");
     let text = String::from_utf8_lossy(&result.stderr);
     assert!(text.contains("E0008"), "{text}");
-    assert!(!text.contains("E0062"), "{text}");
+    assert!(!text.contains("E0065"), "{text}");
 }
 
 #[test]

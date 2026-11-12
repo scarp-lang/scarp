@@ -32,8 +32,10 @@ The assertion operation itself does not emit output; any permitted calls
 inside its predicate retain their existing effects, input rules and failure
 semantics. In a pure function, normal purity restrictions still apply.
 A false predicate terminates execution with diagnostic
-**E0062 — AssertionFailure**, optionally including the quoted literal
-message. Diagnostics retain source spans, including imports and nested
+**E0065 — AssertionFailure**, optionally including the quoted literal
+message. Codes E0062–E0064 are reserved for the separate fixed-array
+feature, to keep error codes unambiguous when the branches are integrated.
+Diagnostics retain source spans, including imports and nested
 function calls, rather than silently discarding the failed location.
 Errors in the predicate itself (such as division by zero) keep their original
 diagnostics instead of being rewritten as failed assertions.
