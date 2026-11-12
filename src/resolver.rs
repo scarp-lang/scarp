@@ -528,10 +528,7 @@ impl<'a> Resolver<'a> {
                     let condition = self.expression(condition)?;
                     let condition_span = condition.syntax.nodes()[condition.syntax.root()].span;
                     require_type(&condition.kind, ValueType::Boolean, condition_span)?;
-                    self.emit(
-                        ResolvedStatement::Assert { condition, message },
-                        span,
-                    );
+                    self.emit(ResolvedStatement::Assert { condition, message }, span);
                 }
                 Statement::Repeat {
                     count,
