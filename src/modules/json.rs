@@ -23,28 +23,30 @@ fn span(out: &mut impl io::Write, file: &SourceFile, value: Span) -> io::Result<
 }
 
 impl ModuleProgram {
-    /// Primitive-only module metadata stays schema 1; structural tuple signatures use schema 2.
+    /// Inventory version: primitives use 1, tuple types use 2, and any array type uses 3.
     pub fn inspection_schema_version(&self) -> u32 {
-        let composite = self
+        let types = self
             .modules
             .iter()
             .flat_map(|m| &m.symbols)
-            .any(|s| match &s.kind {
-                SymbolKind::Constant(kind) => kind.as_primitive().is_none(),
+            .flat_map(|s| match &s.kind {
+                SymbolKind::Constant(kind) => std::iter::once(kind).chain([].iter()),
                 SymbolKind::Function {
                     parameters, result, ..
-                } => {
-                    result.as_primitive().is_none()
-                        || parameters.iter().any(|p| p.as_primitive().is_none())
-                }
+                } => std::iter::once(result).chain(parameters.iter()),
             });
-        if composite {
-            2
-        } else {
-            1
+        let mut version = 1;
+        for kind in types {
+            if kind.contains_array() {
+                return 3;
+            }
+            if kind.as_primitive().is_none() {
+                version = 2;
+            }
         }
+        version
     }
-    /// Write versioned JSON (schema 1 for primitives, schema 2 for tuple signatures) with deterministic order and file-local byte spans.
+    /// Write versioned JSON with deterministic order and file-local byte spans.
     /// No source contents, constant values or default expressions are emitted.
     /// Writer errors preserve their kind and may leave a partial byte stream.
     ///

@@ -3,15 +3,17 @@ use scarp::{
     modules::{
         self,
         cache::{
-            CacheLimits, CacheStatus, CachedCompileOptions, CompilationCache, SyntaxCache,
-            SyntaxCacheLimits, TokenCache, TokenCacheLimits,
+            CacheLimits, CacheStatus, CachedCompileOptions, CompilationCache, ConstantCache,
+            ConstantCacheLimits, EditorCacheLimits, EditorCompilationCache, EditorCompileLimits,
+            SyntaxCache, SyntaxCacheLimits, TokenCache, TokenCacheLimits,
         },
-        MemorySourceLoader, ModuleLimits,
+        symbols::editor::EditorSnapshot,
+        ConstantLimits, MemorySourceLoader, ModuleLimits,
     },
     types::{FunctionEffect, PrimitiveType, TypeKind, TypeLimits, TypeRegistryBuilder},
     ExecutionOptions,
 };
-use std::{hint::black_box, time::Instant};
+use std::{hint::black_box, sync::Arc, time::Instant};
 
 fn measure(name: &str, bytes: usize, iterations: u32, mut work: impl FnMut()) {
     for sample in 1..=3 {
@@ -23,6 +25,108 @@ fn measure(name: &str, bytes: usize, iterations: u32, mut work: impl FnMut()) {
         println!("{name},{bytes},{iterations},{sample},{mean:.3}");
     }
 }
+
+fn measure_constant_edits(original: &MemorySourceLoader, files: &[(&str, &str)], iterations: u32) {
+    let mut edited = MemorySourceLoader::new();
+    for &(name, source) in files {
+        let replacement = if name == "right.srp" {
+            r#"import "base.srp" as base; pub bind value: integer=base.value*3;"#
+        } else {
+            source
+        };
+        assert_eq!(source.len(), replacement.len());
+        edited.insert(name, replacement).unwrap();
+    }
+    let load = |source: &MemorySourceLoader, syntax: &mut SyntaxCache| {
+        modules::load_with_syntax_cache("main.srp", source, ModuleLimits::default(), syntax)
+            .unwrap()
+    };
+    let resolve_cached = |graph, constants: &mut ConstantCache| {
+        modules::resolve_with_constant_cache(
+            graph,
+            ConstantLimits::default(),
+            TypeLimits::default(),
+            constants,
+        )
+        .unwrap()
+    };
+    let mut cold_syntax = SyntaxCache::new(SyntaxCacheLimits::default());
+    let mut warm_syntax = SyntaxCache::new(SyntaxCacheLimits::default());
+    let mut constants = ConstantCache::new(ConstantCacheLimits::default());
+    for (source, expected) in [(original, b"1537\n"), (&edited, b"2049\n")] {
+        let cold = modules::resolve(load(source, &mut cold_syntax)).unwrap();
+        let warm = resolve_cached(load(source, &mut warm_syntax), &mut constants);
+        assert_eq!(cold.constant_dependencies(), warm.constant_dependencies());
+        for program in [cold, warm] {
+            let (mut out, mut err) = (Vec::new(), Vec::new());
+            program
+                .execute(&mut out, &mut err, ExecutionOptions::default())
+                .unwrap();
+            assert_eq!(&*out, expected);
+            assert!(err.is_empty());
+        }
+    }
+    assert_eq!(constants.stats().hits, 515);
+    assert_eq!(constants.stats().misses, 517);
+
+    // Both paths alternate the same two source versions with warm AST caches.
+    let bytes = files.iter().map(|(_, text)| text.len()).sum();
+    let mut cold_edits = [original, &edited].into_iter().cycle();
+    measure(
+        "module_constant_edits_cold_4files",
+        bytes,
+        iterations,
+        || {
+            let graph = load(cold_edits.next().unwrap(), &mut cold_syntax);
+            black_box(modules::resolve(graph).unwrap());
+        },
+    );
+    let mut warm_edits = [original, &edited].into_iter().cycle();
+    measure(
+        "module_constant_edits_warm_4files",
+        bytes,
+        iterations,
+        || {
+            let graph = load(warm_edits.next().unwrap(), &mut warm_syntax);
+            black_box(resolve_cached(graph, &mut constants));
+        },
+    );
+}
+
+fn measure_editor_revision_refresh(loader: &MemorySourceLoader, bytes: usize, iterations: u32) {
+    let limits = EditorCompileLimits::default();
+    let mut syntax = SyntaxCache::new(SyntaxCacheLimits::default());
+    let mut load = || {
+        modules::load_with_syntax_cache("main.srp", loader, ModuleLimits::default(), &mut syntax)
+            .unwrap()
+    };
+    let mut editor = EditorCompilationCache::new(EditorCacheLimits::default());
+    let first = editor.resolve(load(), limits, |_| Some(0), None).unwrap();
+    let next = editor.resolve(load(), limits, |_| Some(1), None).unwrap();
+    assert_eq!(next.status, CacheStatus::Hit);
+    assert!(Arc::ptr_eq(&first.program, &next.program));
+    assert!(first.snapshot.ensure_current(&[1; 4]).is_err());
+    assert!(next.snapshot.ensure_current(&[1; 4]).is_ok());
+
+    // Both measurements start with the same warm AST cache.
+    let mut revision = 1;
+    measure("editor_revision_rebuild_4files", bytes, iterations, || {
+        revision += 1;
+        let indexed = modules::resolve_indexed(load(), limits.index_limits).unwrap();
+        let snapshot =
+            EditorSnapshot::new(indexed.index(), &[revision; 4], limits.editor_limits).unwrap();
+        black_box((indexed, snapshot));
+    });
+    measure("editor_revision_cache_4files", bytes, iterations, || {
+        revision += 1;
+        let result = editor
+            .resolve(load(), limits, |_| Some(revision), None)
+            .unwrap();
+        assert_eq!(result.status, CacheStatus::Hit);
+        black_box(result);
+    });
+}
+
 fn main() {
     let iterations = if std::env::args().any(|arg| arg == "--quick") {
         3
@@ -116,6 +220,7 @@ fn main() {
         black_box(resolved);
     });
     assert!(syntax_cache.stats().hits >= 4);
+    measure_constant_edits(&loader, &files, iterations);
 
     let mut token_cache = TokenCache::new(TokenCacheLimits::default());
     modules::load_with_token_cache(
@@ -203,6 +308,7 @@ fn main() {
             black_box(compile_indexed());
         },
     );
+    measure_editor_revision_refresh(&loader, input_bytes, iterations);
     measure("inspection_json_4files", size, iterations, || {
         json.clear();
         program.write_inspection_json(black_box(&mut json)).unwrap();

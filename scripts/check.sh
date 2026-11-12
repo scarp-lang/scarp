@@ -66,6 +66,8 @@ cargo run --locked -- explain E0044
 
 cargo run --locked -- run examples/tuples.srp
 cargo run --locked -- check examples/tuples.srp
+cargo run --locked -- run examples/fixed_arrays.srp
+cargo run --locked -- check examples/fixed_arrays.srp
 cargo run --locked --example tuple_types
 cargo run --locked --example program_input
 cargo run --locked -- verify examples/program_input.srp
