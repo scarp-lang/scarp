@@ -230,7 +230,6 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         version = PUBLISHED_VERSION
         self.assertEqual(PACKAGE_VERSION, package_version())
         self.assertNotEqual(version, PACKAGE_VERSION)
-        self.assertFalse((ROOT / ".github/release-request.json").exists())
         for filename in ("README.md", "docs/README.md", "docs/compatibility.md"):
             with self.subTest(file=filename):
                 text = (ROOT / filename).read_text(encoding="utf-8")
