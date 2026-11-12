@@ -100,7 +100,6 @@ pub fn create(directory: &Path) -> Result<(), String> {
     result
 }
 
-
 /// Initialize a new project using the declarative `scarp.project` format.
 ///
 /// `create` remains the legacy v1 workflow and is intentionally unchanged.
@@ -114,7 +113,10 @@ pub fn init(directory: &Path) -> Result<(), String> {
         return Err("project name must be 1..96 UTF-8 bytes without separators or controls".into());
     }
     fs::create_dir(directory).map_err(|error| {
-        format!("could not create project directory '{}': {error}", directory.display())
+        format!(
+            "could not create project directory '{}': {error}",
+            directory.display()
+        )
     })?;
     let mut created_files = Vec::new();
     let mut created_directories = Vec::new();
