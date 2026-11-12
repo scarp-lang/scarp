@@ -1,9 +1,7 @@
-# Read-only project information (unreleased development)
+# Read-only project information
 
-This command is implemented in the unmerged project-info development
-branch, stacked on the test-runner branch (PR #218), which in turn
-depends on the declarative-project foundation (PR #217).
-**It is not yet available in a published Scarp compiler.**
+`scarp project info` is available in Scarp v0.0.6-alpha.8 and supports both
+declarative and legacy project manifests.
 
 ## Inspect a project
 
@@ -78,6 +76,3 @@ Incorrect command usage returns status 2. With `--json`, these errors
 still use human-readable stderr; JSON formatting currently applies only
 to successful metadata. Commands such as `scarp run`, `scarp verify`,
 `scarp test`, `scarp init` and `scarp launch` retain their interfaces.
-
-The development branch is subject to cross-platform CI and manual review,
-with no authorization for merging, tagging or releasing this feature.

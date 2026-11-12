@@ -1,9 +1,9 @@
 # Preparing a prerelease
 
 The latest published prerelease is
-[v0.0.6-alpha.7](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.7),
-published on **11 November 2026** from exact source `b1c1fd232b418267d95520c69ee563ac99ecae30`.
-See [postpublication verification](releases/v0.0.6-alpha.7-validation.md) for the
+[v0.0.6-alpha.8](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.8),
+published on **12 November 2026** from exact source `37253e7805c0ca594560700dd1deb3928458e60d`.
+See [postpublication verification](releases/v0.0.6-alpha.8-validation.md) for the
 annotated tag, independent source/control seven-job matrices and all seven assets.
 The fulfilled request is retired with this verification record. Future releases
 require their own authorization, exact source and fresh complete qualification.

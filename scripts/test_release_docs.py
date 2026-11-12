@@ -11,7 +11,7 @@ import json
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLISHED_VERSION = "0.0.6-alpha.7"
+PUBLISHED_VERSION = "0.0.6-alpha.8"
 ALPHA6_SOURCE = "cdf6a3924ec2a36c7beca5a9aec4f01a0bce515e"
 HISTORICAL_ALPHA3 = "0.0.6-alpha.3"
 HISTORICAL_ALPHA2 = "0.0.6-alpha.2"
@@ -89,7 +89,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
             "docs/reference/cli.md": (f"v{PUBLISHED_VERSION}",),
             "docs/development/feature-matrix.md": (f"Cargo declares `{version}`",),
             "CHANGELOG.md": (
-                f"## {PUBLISHED_VERSION} — published GitHub prerelease, 2026-11-11",
+                f"## {PUBLISHED_VERSION} — published GitHub prerelease, 2026-11-12",
                 "## 0.0.6-alpha.6 — published GitHub prerelease, 2026-11-10",
             ),
             f"docs/releases/v{version}-publication.md": (
@@ -98,8 +98,9 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
             ),
             f"docs/releases/v{PUBLISHED_VERSION}-validation.md": (
                 "Published GitHub experimental prerelease", "draft=false", "prerelease=true",
-                "b1c1fd232b418267d95520c69ee563ac99ecae30", "4712acbd01914b86ea2fdfcb904b24edf44e5f44", "441415412", "42987993233",
-                "fc584bd9eec7d2ce10a31892d418a1319543c669b5c36ef390761f885d11d319",
+                "37253e7805c0ca594560700dd1deb3928458e60d", "aea9ff1d34307ecc337a8ef4c5230e0a654b6a79",
+                "43223948596", "43223948699", "43225464363", "43225464511",
+                "SHA256SUMS",
             ),
             "docs/releases/v0.0.6-alpha.5.md": ("Scarp v0.0.6-alpha.5", "source candidate", "Publication gates"),
             "docs/releases/v0.0.6-alpha.5-publication.md": (
@@ -229,7 +230,6 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
     def test_latest_published_anchor_and_immutable_candidate_snapshot(self):
         version = PUBLISHED_VERSION
         self.assertEqual(PACKAGE_VERSION, package_version())
-        self.assertNotEqual(version, PACKAGE_VERSION)
         for filename in ("README.md", "docs/README.md", "docs/compatibility.md"):
             with self.subTest(file=filename):
                 text = (ROOT / filename).read_text(encoding="utf-8")

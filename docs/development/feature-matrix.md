@@ -1,9 +1,9 @@
 # Feature completeness and development roadmap
 
-Cargo declares `0.0.6-alpha.8` on the development candidate with project tests
-and assertions. Published alpha.7 introduced typed conditional expressions
-and Unicode scalar string escapes.
-[Release verification](../releases/v0.0.6-alpha.7-validation.md)
+Cargo declares `0.0.6-alpha.8`, the published prerelease with declarative
+projects, project tests, and assertions. Published alpha.7 introduced typed
+conditional expressions and Unicode scalar string escapes.
+[Alpha.8 verification](../releases/v0.0.6-alpha.8-validation.md)
 
 The published alpha.6 adds bounded program input, six scalar/text utilities and
 immutable structural tuples. See

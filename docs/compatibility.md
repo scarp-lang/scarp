@@ -1,5 +1,11 @@
 # Version and API compatibility
 
+`0.0.6-alpha.8` is **a published GitHub prerelease** (12 November 2026).
+It introduces declarative projects and the project test runner. Rename existing
+identifiers named `assert`. Rust hosts with exhaustive matches on `Statement`
+or `DiagnosticKind` need the new assertion variants.
+[Public notes](releases/v0.0.6-alpha.8-publication.md)
+
 `0.0.6-alpha.7` is **a published GitHub prerelease** (11 November 2026).
 Rust embedders with exhaustive matches on `ExpressionKind` must handle
 `Conditional`. Conditional expressions are available in interpreter code.
@@ -61,7 +67,7 @@ The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.6-alpha.7](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.7).
+[0.0.6-alpha.8](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.8).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a
