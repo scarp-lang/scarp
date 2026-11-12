@@ -821,7 +821,11 @@ impl Parser<'_> {
     /// `assert(boolean_expression);` or `assert(condition, "message");`.
     /// The message is static, bounded and never treated as executable code.
     fn assertion(&mut self) -> Result<Statement, ParseError> {
-        let start = self.current().expect("assert keyword is present").span.start;
+        let start = self
+            .current()
+            .expect("assert keyword is present")
+            .span
+            .start;
         self.advance();
         self.punctuation(TokenKind::LeftParen, "'(' after assert")?;
         let condition = self.expression()?;
@@ -847,7 +851,9 @@ impl Parser<'_> {
             None
         };
         self.punctuation(TokenKind::RightParen, "')' after assert")?;
-        let end = self.punctuation(TokenKind::Semicolon, "';' after assert")?.end;
+        let end = self
+            .punctuation(TokenKind::Semicolon, "';' after assert")?
+            .end;
         Ok(Statement::Assert {
             condition,
             message,
