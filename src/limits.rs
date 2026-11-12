@@ -2,6 +2,8 @@
 
 use crate::diagnostics::{Diagnostic, DiagnosticKind, Span};
 
+const DEFAULT_ARRAY_BYTES: usize = 8 * 1024 * 1024;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExecutionLimits {
     /// Program instructions and expression tasks, including backward jumps.
@@ -40,6 +42,8 @@ pub struct ExecutionOptions {
     pub max_text_bytes: usize,
     /// Cumulative immutable tuple member/structural payload, independent of text/vectors.
     pub max_tuple_bytes: usize,
+    /// Cumulative immutable fixed-array backing and type payload, independent of other values.
+    pub max_array_bytes: usize,
 }
 
 impl Default for ExecutionOptions {
@@ -53,6 +57,7 @@ impl Default for ExecutionOptions {
             max_vector_bytes: 8 * 1024 * 1024,
             max_text_bytes: 8 * 1024 * 1024,
             max_tuple_bytes: 8 * 1024 * 1024,
+            max_array_bytes: DEFAULT_ARRAY_BYTES,
         }
     }
 }
@@ -75,6 +80,29 @@ pub(crate) struct Budget {
     text_limit: usize,
     tuple_remaining: usize,
     tuple_limit: usize,
+    array_remaining: usize,
+    array_limit: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct BudgetAmounts {
+    steps: u64,
+    vector_bytes: usize,
+    text_bytes: usize,
+    tuple_bytes: usize,
+    array_bytes: usize,
+}
+
+impl BudgetAmounts {
+    pub fn spent(self, after: Self) -> Self {
+        Self {
+            steps: self.steps - after.steps,
+            vector_bytes: self.vector_bytes - after.vector_bytes,
+            text_bytes: self.text_bytes - after.text_bytes,
+            tuple_bytes: self.tuple_bytes - after.tuple_bytes,
+            array_bytes: self.array_bytes - after.array_bytes,
+        }
+    }
 }
 
 impl Budget {
@@ -88,6 +116,8 @@ impl Budget {
             text_limit: usize::MAX,
             tuple_remaining: 8 * 1024 * 1024,
             tuple_limit: 8 * 1024 * 1024,
+            array_remaining: DEFAULT_ARRAY_BYTES,
+            array_limit: DEFAULT_ARRAY_BYTES,
         }
     }
 
@@ -125,6 +155,27 @@ impl Budget {
             return Err(Diagnostic::new(DiagnosticKind::TupleAllocation, span, format!("cumulative tuple allocation limit of {} bytes exceeded", self.tuple_limit)).with_help("reduce tuple construction or raise --max-tuple-bytes / ExecutionOptions.max_tuple_bytes"));
         }
         self.tuple_remaining -= bytes;
+        Ok(())
+    }
+
+    pub fn with_array_bytes(mut self, bytes: usize) -> Self {
+        self.array_remaining = bytes;
+        self.array_limit = bytes;
+        self
+    }
+
+    pub fn charge_array_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
+        self.array_remaining = self.array_remaining.checked_sub(bytes).ok_or_else(|| {
+            Diagnostic::new(
+                DiagnosticKind::ArrayAllocation,
+                span,
+                format!(
+                    "cumulative fixed array allocation limit of {} bytes exceeded",
+                    self.array_limit
+                ),
+            )
+            .with_help("reuse immutable arrays or raise --max-array-bytes / ExecutionOptions.max_array_bytes")
+        })?;
         Ok(())
     }
 
@@ -166,9 +217,64 @@ impl Budget {
         self.remaining -= amount;
         Ok(())
     }
+
+    pub fn remaining_amounts(&self) -> BudgetAmounts {
+        BudgetAmounts {
+            steps: self.remaining,
+            vector_bytes: self.vector_remaining,
+            text_bytes: self.text_remaining,
+            tuple_bytes: self.tuple_remaining,
+            array_bytes: self.array_remaining,
+        }
+    }
+
+    /// Replay work and allocations from a successful evaluation of the same
+    /// input. If any allowance is insufficient, leave all budgets untouched so
+    /// the caller can run the evaluator and report its first failing span.
+    pub fn try_replay(&mut self, spent: BudgetAmounts) -> bool {
+        if spent.steps > self.remaining
+            || spent.vector_bytes > self.vector_remaining
+            || spent.text_bytes > self.text_remaining
+            || spent.tuple_bytes > self.tuple_remaining
+            || spent.array_bytes > self.array_remaining
+        {
+            return false;
+        }
+        self.remaining -= spent.steps;
+        self.vector_remaining -= spent.vector_bytes;
+        self.text_remaining -= spent.text_bytes;
+        self.tuple_remaining -= spent.tuple_bytes;
+        self.array_remaining -= spent.array_bytes;
+        true
+    }
 }
 
 pub(crate) fn text_construction(span: Span, message: impl Into<String>) -> Diagnostic {
     Diagnostic::new(DiagnosticKind::TextConstruction, span, message)
         .with_help("use nonnegative repetition counts and smaller strings; raise --max-text-bytes / ExecutionOptions.max_text_bytes for the cumulative payload quota")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replay_charges_array_storage_and_keeps_all_ledgers_on_failure() {
+        let span = Span::default();
+        let mut evaluated = Budget::new(6).with_array_bytes(8);
+        let before = evaluated.remaining_amounts();
+        evaluated.charge(3, span).unwrap();
+        evaluated.charge_array_allocation(8, span).unwrap();
+        let spent = before.spent(evaluated.remaining_amounts());
+
+        let mut exact = Budget::new(3).with_array_bytes(8);
+        assert!(exact.try_replay(spent));
+        assert_eq!(exact.remaining, 0);
+        assert_eq!(exact.array_remaining, 0);
+
+        let mut too_small = Budget::new(3).with_array_bytes(7);
+        assert!(!too_small.try_replay(spent));
+        assert_eq!(too_small.remaining, 3);
+        assert_eq!(too_small.array_remaining, 7);
+    }
 }

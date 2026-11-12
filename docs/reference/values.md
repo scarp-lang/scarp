@@ -23,23 +23,25 @@ compilation; ordinary script bindings retain runtime behavior.
 | Boolean | `true`, `false` | v0.0.2 and later; explicit booleans without truthiness |
 | String | `"Scarp"`, `""`, `"line\nbreak"` | UTF-8 text; v0.0.3 adds tab/CR to the three older escapes |
 
+The development interpreter also supports [fixed arrays](../fixed-arrays.md)
+and [tuples](../tuples.md). Fixed arrays infer one exact element type and retain
+their length in the type. Tuples retain a type per member.
+
 Development bindings infer their kind from the initializer. Mutable assignment
 must preserve that kind. Strings do not automatically convert to integers, and
 integers do not automatically become strings for arithmetic.
 
 The [alpha](../floats.md) adds finite binary64 float values.
-The alpha.2 candidate adds [numerical vectors](../vectors.md); general collections
-and user-defined values remain unavailable.
-Local type annotations and explicit conversions are not implemented. On the
-[function system in beta.3](../functions.md), parameter and result types are
-mandatory; they do not change primitive value or operator rules.
+The alpha.2 candidate adds [numerical vectors](../vectors.md).
+Use [local type annotations](../variables.md) to declare an exact binding type.
+[Function declarations](../functions.md) require parameter and result types.
 
 ## Precedence and associativity
 
 | Order, strongest first | Syntax | Behavior |
 | --- | --- | --- |
 | Grouping | `(expression)` | Evaluate the grouped expression |
-| Indexing | `expression[index]` | Zero-based checked vector access before unary minus |
+| Indexing | `expression[index]` | Zero-based checked collection access before unary minus. Tuple indices must be literals. |
 | Unary minus/bit complement | `-primary`, `~primary` | Numeric negation; `~` is integer-only |
 | Multiplication/division/remainder | `*`, `/`, `%` | Left-associative; `%` requires integers |
 | Addition/subtraction | `+`, `-` | Left-associative same-type numeric arithmetic |
@@ -79,7 +81,8 @@ and evaluates to `3`.
 
 The range is `-9223372036854775808` through `9223372036854775807`. Leading zeros
 are accepted as decimal; `0x`/`0X` and `0b`/`0B` introduce hexadecimal
-and binary integers. Digit separators are unsupported. Floats have separate
+and binary integers. Digit separators are unsupported in numeric expressions.
+Decimal array type lengths accept `_` between digit groups. Floats have separate
 decimal and scientific notation rules.
 
 The minimum value needs a special literal rule. Its magnitude

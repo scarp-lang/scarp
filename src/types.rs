@@ -1,6 +1,9 @@
 //! Semantic type identities. Source-language legality is checked separately.
 mod source;
-pub use source::{SourceType, TupleType, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH};
+pub use source::{
+    ArrayType, SourceType, TupleType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH,
+    MAX_EXPANDED_VALUE_NODES, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH,
+};
 
 use std::{
     collections::HashMap,
@@ -54,10 +57,8 @@ impl PrimitiveType {
     pub(crate) fn is_numeric(self) -> bool {
         matches!(self, Self::Integer | Self::Float)
     }
-}
-impl fmt::Display for PrimitiveType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
+    pub(crate) const fn name(self) -> &'static str {
+        match self {
             Self::Unit => "unit",
             Self::Integer => "integer",
             Self::Float => "float",
@@ -66,7 +67,12 @@ impl fmt::Display for PrimitiveType {
             Self::Tile => "tile",
             Self::Boolean => "boolean",
             Self::String => "string",
-        })
+        }
+    }
+}
+impl fmt::Display for PrimitiveType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
     }
 }
 
@@ -126,8 +132,8 @@ pub enum FunctionEffect {
     Impure,
 }
 
-// Children are IDs rather than owned subtrees. Source tuples use Tuple; other
-// composite descriptors remain tooling-only until their value contracts are implemented.
+// Children are IDs rather than owned subtrees. Fixed arrays use Sequence
+// with a length; a length-free Sequence remains a tooling descriptor.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeKind {
     Primitive(PrimitiveType),

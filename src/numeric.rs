@@ -6,7 +6,9 @@ use crate::{
     value::{finite_number, FiniteFloat, NumericVector, Value, ValueType, MAX_VECTOR_LENGTH},
 };
 
+mod bits;
 mod correlation;
+mod integer_scalar;
 mod integers;
 mod kernels;
 mod nucleus;
@@ -99,6 +101,23 @@ pub enum Builtin {
     TextToFloat,
     TextTrim,
     TextReplace,
+    TextLower,
+    TextUpper,
+    TextReverse,
+    TextFromCodepoint,
+    TextRFind,
+    TextCount,
+    BitsCountOnes,
+    BitsLeadingZeros,
+    BitsTrailingZeros,
+    BitsReverse,
+    BitsSwapBytes,
+    BitsRotateLeft,
+    BitsRotateRight,
+    IntegerAbs,
+    IntegerSign,
+    IntegerGcd,
+    IntegerLcm,
 }
 
 impl Builtin {
@@ -124,6 +143,9 @@ impl Builtin {
             "text_to_float" => Self::TextToFloat,
             "text_trim" => Self::TextTrim,
             "text_replace" => Self::TextReplace,
+            "text_lower" => Self::TextLower,
+            "text_upper" => Self::TextUpper,
+            "text_reverse" => Self::TextReverse,
             "variance" => Self::Variance,
             "stddev" => Self::StdDev,
             "cosine_similarity" => Self::CosineSimilarity,
@@ -144,13 +166,27 @@ impl Builtin {
             "ints_from_vector" => Self::IntsFromVector,
             "to_float" => Self::ToFloat,
             "to_integer" => Self::ToInteger,
+            "bits_count_ones" => Self::BitsCountOnes,
+            "bits_leading_zeros" => Self::BitsLeadingZeros,
+            "bits_trailing_zeros" => Self::BitsTrailingZeros,
+            "bits_reverse" => Self::BitsReverse,
+            "bits_swap_bytes" => Self::BitsSwapBytes,
+            "bits_rotate_left" => Self::BitsRotateLeft,
+            "bits_rotate_right" => Self::BitsRotateRight,
+            "integer_abs" => Self::IntegerAbs,
+            "integer_sign" => Self::IntegerSign,
+            "integer_gcd" => Self::IntegerGcd,
+            "integer_lcm" => Self::IntegerLcm,
             "text_concat" => Self::TextConcat,
             "text_slice" => Self::TextSlice,
             "text_repeat" => Self::TextRepeat,
             "text_len" => Self::TextLength,
             "text_bytes" => Self::TextBytes,
             "text_codepoint" => Self::TextCodepoint,
+            "text_from_codepoint" => Self::TextFromCodepoint,
             "text_find" => Self::TextFind,
+            "text_rfind" => Self::TextRFind,
+            "text_count" => Self::TextCount,
             "text_contains" => Self::TextContains,
             "text_starts_with" => Self::TextStartsWith,
             "text_ends_with" => Self::TextEndsWith,
@@ -205,7 +241,12 @@ impl Builtin {
         match self {
             Self::IntegerToText => &[Integer],
             Self::FloatToText => &[Float],
-            Self::TextToInteger | Self::TextToFloat | Self::TextTrim => &[String],
+            Self::TextToInteger
+            | Self::TextToFloat
+            | Self::TextTrim
+            | Self::TextLower
+            | Self::TextUpper
+            | Self::TextReverse => &[String],
             Self::TextReplace => &[String, String, String],
             Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
             Self::SampleArea | Self::SampleSlopes | Self::SampleCumulativeArea => &[Vector, Vector],
@@ -216,13 +257,25 @@ impl Builtin {
             Self::IntsFromVector => &[Vector],
             Self::ToFloat => &[Integer],
             Self::ToInteger => &[Float],
+            Self::BitsCountOnes
+            | Self::BitsLeadingZeros
+            | Self::BitsTrailingZeros
+            | Self::BitsReverse
+            | Self::BitsSwapBytes => &[Integer],
+            Self::BitsRotateLeft | Self::BitsRotateRight => &[Integer, Integer],
+            Self::IntegerAbs | Self::IntegerSign => &[Integer],
+            Self::IntegerGcd | Self::IntegerLcm => &[Integer, Integer],
             Self::TextLength | Self::TextBytes => &[String],
+            Self::TextFromCodepoint => &[Integer],
             Self::TextCodepoint | Self::TextRepeat => &[String, Integer],
             Self::TextSlice => &[String, Integer, Integer],
             Self::TextConcat => &[String, String],
-            Self::TextFind | Self::TextContains | Self::TextStartsWith | Self::TextEndsWith => {
-                &[String, String]
-            }
+            Self::TextFind
+            | Self::TextRFind
+            | Self::TextCount
+            | Self::TextContains
+            | Self::TextStartsWith
+            | Self::TextEndsWith => &[String, String],
             Self::Length
             | Self::Sum
             | Self::Mean
@@ -265,10 +318,22 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
-            Self::IntegerToText | Self::FloatToText | Self::TextTrim | Self::TextReplace => {
-                ValueType::String
-            }
-            Self::TextToInteger => ValueType::Integer,
+            Self::IntegerToText
+            | Self::FloatToText
+            | Self::TextTrim
+            | Self::TextReplace
+            | Self::TextLower
+            | Self::TextUpper
+            | Self::TextReverse
+            | Self::TextFromCodepoint => ValueType::String,
+            Self::TextToInteger
+            | Self::BitsCountOnes
+            | Self::BitsLeadingZeros
+            | Self::BitsTrailingZeros
+            | Self::BitsReverse
+            | Self::BitsSwapBytes
+            | Self::BitsRotateLeft
+            | Self::BitsRotateRight => ValueType::Integer,
             Self::TextToFloat => ValueType::Float,
             Self::Variance
             | Self::StdDev
@@ -284,10 +349,16 @@ impl Builtin {
             | Self::TopK
             | Self::TopP => ValueType::Integers,
             Self::ToInteger
+            | Self::IntegerAbs
+            | Self::IntegerSign
+            | Self::IntegerGcd
+            | Self::IntegerLcm
             | Self::TextLength
             | Self::TextBytes
             | Self::TextCodepoint
-            | Self::TextFind => ValueType::Integer,
+            | Self::TextFind
+            | Self::TextRFind
+            | Self::TextCount => ValueType::Integer,
             Self::ToFloat => ValueType::Float,
             Self::TextConcat | Self::TextSlice | Self::TextRepeat => ValueType::String,
             Self::TextContains | Self::TextStartsWith | Self::TextEndsWith => ValueType::Boolean,
@@ -339,6 +410,8 @@ impl Builtin {
                 | Self::TextBytes
                 | Self::TextCodepoint
                 | Self::TextFind
+                | Self::TextRFind
+                | Self::TextCount
                 | Self::TextContains
                 | Self::TextStartsWith
                 | Self::TextEndsWith
@@ -606,6 +679,18 @@ pub(crate) fn evaluate_with_spans(
     }
     if matches!(
         function,
+        Builtin::BitsCountOnes
+            | Builtin::BitsLeadingZeros
+            | Builtin::BitsTrailingZeros
+            | Builtin::BitsReverse
+            | Builtin::BitsSwapBytes
+            | Builtin::BitsRotateLeft
+            | Builtin::BitsRotateRight
+    ) {
+        return bits::evaluate(function, args, budget, span, argument_span);
+    }
+    if matches!(
+        function,
         Builtin::IntsLength
             | Builtin::IntsSum
             | Builtin::IntsWindow
@@ -624,6 +709,10 @@ pub(crate) fn evaluate_with_spans(
             | Builtin::TextRepeat
             | Builtin::TextTrim
             | Builtin::TextReplace
+            | Builtin::TextLower
+            | Builtin::TextUpper
+            | Builtin::TextReverse
+            | Builtin::TextFromCodepoint
     ) {
         return text::evaluate(function, args, budget, span, argument_span);
     }
@@ -635,6 +724,12 @@ pub(crate) fn evaluate_with_spans(
             | Builtin::TextToFloat
     ) {
         return parse_format::evaluate(function, args, budget, span, argument_span);
+    }
+    if matches!(
+        function,
+        Builtin::IntegerAbs | Builtin::IntegerSign | Builtin::IntegerGcd | Builtin::IntegerLcm
+    ) {
+        return integer_scalar::evaluate(function, args, budget, span, argument_span);
     }
     if function.is_scalar_text() {
         return scalar_text::evaluate(function, args, budget, span, argument_span);
@@ -976,6 +1071,9 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::TextToFloat
         | Builtin::TextTrim
         | Builtin::TextReplace
+        | Builtin::TextLower
+        | Builtin::TextUpper
+        | Builtin::TextReverse
         | Builtin::Variance
         | Builtin::StdDev
         | Builtin::CosineSimilarity
@@ -996,13 +1094,27 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::IntsFromVector
         | Builtin::ToFloat
         | Builtin::ToInteger
+        | Builtin::BitsCountOnes
+        | Builtin::BitsLeadingZeros
+        | Builtin::BitsTrailingZeros
+        | Builtin::BitsReverse
+        | Builtin::BitsSwapBytes
+        | Builtin::BitsRotateLeft
+        | Builtin::BitsRotateRight
+        | Builtin::IntegerAbs
+        | Builtin::IntegerSign
+        | Builtin::IntegerGcd
+        | Builtin::IntegerLcm
         | Builtin::TextConcat
         | Builtin::TextSlice
         | Builtin::TextRepeat
         | Builtin::TextLength
         | Builtin::TextBytes
         | Builtin::TextCodepoint
+        | Builtin::TextFromCodepoint
         | Builtin::TextFind
+        | Builtin::TextRFind
+        | Builtin::TextCount
         | Builtin::TextContains
         | Builtin::TextStartsWith
         | Builtin::TextEndsWith
