@@ -130,8 +130,8 @@ fn filtered_execution_does_not_read_unselected_bad_fixtures() {
     let root = ws.project();
     fs::write(root.join("tests/selected.srp"), "assert(read_line() == \"yes\");").unwrap();
     fs::write(root.join("tests/selected.stdin"), b"yes\n").unwrap();
-    fs::write(root.join("tests/unselected.srp"), "assert(true);").unwrap();
-    fs::create_dir(root.join("tests/unselected.stdin")).unwrap();
+    fs::write(root.join("tests/ignored.srp"), "assert(true);").unwrap();
+    fs::create_dir(root.join("tests/ignored.stdin")).unwrap();
     let filtered = cli(&root, &["test", "--json", "--filter", "selected.srp"]);
     assert!(filtered.status.success(), "{filtered:?}");
     let json = String::from_utf8(filtered.stdout).unwrap();
