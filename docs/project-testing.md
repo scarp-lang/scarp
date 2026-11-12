@@ -77,6 +77,56 @@ return exit code 2. No tests found reports an explicit zero-test message and
 returns success; CI consumers should check this message if a nonempty suite
 is required. A missing `tests/` directory is an error.
 
+## Discovery and structured reports (unreleased stacked PR)
+
+The additional test-reporting branch adds two optional flags:
+
+```sh
+scarp test --list calculator        # Read-only test discovery
+scarp test --json calculator        # Execute and return JSON
+scarp test --json --list calculator # Read-only discovery as JSON
+```
+
+`--list` inspects the same validated manifest, entrypoint and immediate
+`tests/*.srp` files as a normal test run, including symlink and 64-test
+limits. It **does not compile or execute any Scarp test source**. Plain-text
+listing prints the sorted relative filenames followed by the test count.
+For empty suites it prints an explicit zero-discovered message.
+
+`--json` produces one JSON object on stdout, followed by a newline.
+Schema-version-1 example for a successful and failed test:
+
+```json
+{
+  "schema_version": 1,
+  "mode": "run",
+  "discovered": 2,
+  "passed": 1,
+  "failed": 1,
+  "tests": [
+    { "path": "tests/add.srp", "status": "passed" },
+    { "path": "tests/error.srp", "status": "failed", "error": "bounded compiler or runtime diagnostic" }
+  ]
+}
+```
+
+The mode is `"run"` or `"list"`. Listing entries have status
+`"discovered"` and counts of zero passed/failed. JSON paths are project-root
+relative and properly escaped. When a test fails, its diagnostic is truncated
+to at most 1600 Unicode scalar values and stored in its `error` field.
+The test program's own output is captured, **not inserted into JSON**;
+per-test runtime/compile failures return status 1 but still produce a complete
+result object. An empty suite reports discovered=0 and returns status 0;
+CI users who require tests must explicitly check this count.
+
+Unsafe project/test paths, malformed manifests, missing tests directories
+and invalid CLI arguments produce an error on stderr and **no JSON stdout**.
+The `--json` flag does not make these setup errors machine-readable yet.
+The normal human-readable `scarp test` format is unchanged.
+
+This development work does not implement an assertion language construct,
+custom execution-budget flags, retries, package installation, or a release.
+
 ## Limits and security
 
 - Discovery is nonrecursive and limited to 64 immediate `.srp` files.
