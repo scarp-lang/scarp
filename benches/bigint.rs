@@ -68,6 +68,7 @@ fn main() {
             for (name, suffix) in [
                 ("multiply", "bind result=a*b;"),
                 ("divide", "bind result=a/b;"),
+                ("remainder", "bind result=a%b;"),
             ] {
                 measure(name, digits, &format!("{prefix}{suffix}"), repeats, options);
             }
