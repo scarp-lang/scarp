@@ -1,7 +1,9 @@
 # Proposal 0041 — Immutable fixed-size arrays
 
 Status **proposed for review**. Baseline `d2c475ecffd3d5f70e060b097b323cda31f72d80`
-after the published alpha.6 tuple migration. This specifies the review gate in
+after the published alpha.6 tuple migration. The review also checked the
+published alpha.7 compiler and its main branch at
+`c6c9409deff0f8979792590366b284e804311d6c`. This specifies the review gate in
 [#118](https://github.com/scarp-lang/scarp/issues/118) and narrows the array
 portion of [proposal 0036](0036-composite-values-and-tensor-boundaries.md).
 
@@ -57,8 +59,10 @@ integer collection or tile. An empty array retains its complete element type.
 - Reuse postfix `value[index]`. The index is a checked `integer` expression
   evaluated once after the receiver. Reject negative or out-of-range indices
   at the index expression's byte span before access. Use a checked integer
-  conversion and checked access on every target. Tuple projection still
-  requires a literal index. No implicit indexing coercion or array slicing.
+  conversion and checked access on every target. Apply the same runtime
+  bounds rule to literal and computed array indices. Static verification
+  checks the receiver and index types. Tuple projection still requires a
+  literal index. No implicit indexing coercion or array slicing.
 - `==` and `!=` require exact structural type on both operands. Precharge
   conservative traversal work before comparing the elements in order.
   Primitive comparisons keep existing behavior, including signed-zero
@@ -90,8 +94,10 @@ resolver must enforce them before allocating backing storage.
 | Cumulative array payload | 8 MiB initially, per execution across all frames. Proposed `ExecutionOptions.max_array_bytes` and `--max-array-bytes` |
 
 Use checked addition and multiplication. An empty array still contributes
-element-type depth and metadata even though it has no element values. The
-expanded-shape cap prevents a small type and shared payload from implying
+element-type depth and metadata. Validate each nested type against its own
+expanded-shape cap before combining it into the enclosing type, including
+when an enclosing array has length zero. The expanded-shape cap prevents a
+small type and shared payload from implying
 unbounded comparison or formatting work. Numeric/text payloads still use
 their existing limits. Keep tuple-only shape limits and the behavior of
 `tuple_depth()` for existing values. Both the parser and host constructors
@@ -100,9 +106,11 @@ independent ceiling. Validate the combined type budget during parsing, before
 accumulating child descriptors beyond it.
 
 Charge construction work for each member and its bounded metadata processing.
-Charge new backing storage, fixed array metadata and bounded retained type
-metadata against the array quota before reservation. Use fallible reservation
-for variable-size storage. Move elements from the evaluator stack only after
+The proposed logical allocation charge is the fixed array storage record plus
+`length × size_of::<Value>()` plus `type_nodes × size_of::<SourceType>()`.
+Compute and charge it before reservation, including the fixed and type
+components for an empty array. Use fallible reservation for variable-size
+storage. Move elements from the evaluator stack only after
 preflighting the charge. Clones and projections share storage and pay their
 normal operation work without recharging owned backing. Shared descendants
 still contribute their visible bytes and work at capture, equality and
@@ -125,8 +133,9 @@ allocation constraints on Rust 1.74.
   `ExecutionOptions` literal migration. Host construction validates arity,
   homogeneity, type shape and zero length. Host accessors return borrowed
   slices/types and preserve immutable sharing.
-- When an array occurs anywhere in an exposed signature, propose module
-  inspection schema 3 with canonical `array<T, N>` type strings. Keep
+- When an array occurs anywhere inside a type serialized by module
+  inspection, propose schema 3 with canonical `array<T, N>` type strings.
+  This includes a private declaration if it appears in the inventory. Keep
   primitive-only and tuple-only inventories byte-identical (schema 1 and 2).
   An array used only in a body does not alter inventory version. Test schema
   negotiation with downstream consumers before publication. Symbol/reference
@@ -140,6 +149,12 @@ allocation constraints on Rust 1.74.
   array-valued function. Preserve scalar artifact/output behavior.
 
 ## Implementation and acceptance
+
+Before implementation, confirm the contextual literal grammar and the common
+runtime bounds rule for literal and computed indices. Confirm the proposed
+numeric ceilings, checked backing-storage charge and independent nested-type
+validation. Confirm schema 3 selection and review it with the compiler
+inventory consumers. These decisions remain pending maintainer approval.
 
 Keep grammar, type and value implementation in one coherent, independently
 reviewable branch after this contract is accepted. The parser, AST span
