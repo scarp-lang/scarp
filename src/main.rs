@@ -485,7 +485,10 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             _ => None,
         };
         let Some(destination) = destination else {
-            let _ = writeln!(errors, "error: expected zero or one project directory\n\n{TEST_HELP}");
+            let _ = writeln!(
+                errors,
+                "error: expected zero or one project directory\n\n{TEST_HELP}"
+            );
             return 2;
         };
         return project_tests::run(destination, output, errors);
