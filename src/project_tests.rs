@@ -254,8 +254,14 @@ mod tests {
             "{\"schema_version\":1,\"mode\":\"run\",\"discovered\":0,\"passed\":0,\"failed\":0,\"tests\":[]}\n"
         );
         let cases = vec![
-            Case { path: "tests/a\".srp".into(), error: None },
-            Case { path: "tests/b.srp".into(), error: Some("bad\nmessage".into()) },
+            Case {
+                path: "tests/a\".srp".into(),
+                error: None,
+            },
+            Case {
+                path: "tests/b.srp".into(),
+                error: Some("bad\nmessage".into()),
+            },
         ];
         let mut out = Vec::new();
         write_report(&mut out, 2, 1, 1, false, &cases).unwrap();
