@@ -169,7 +169,8 @@ Reject existing paths and do not install packages or run any source.
 Use scarp verify DIRECTORY and scarp run DIRECTORY afterwards.
 ";
 
-const TEST_HELP: &str = "Usage: scarp test [--json] [--list] [--require-tests] [--] [project-directory]
+const TEST_HELP: &str =
+    "Usage: scarp test [--json] [--list] [--require-tests] [--] [project-directory]
 
 Run the immediate tests/*.srp files, or list them without source execution.
 Without a directory argument, use the current project directory.
