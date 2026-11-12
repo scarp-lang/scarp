@@ -67,10 +67,22 @@ fn assertion_failure_is_reported_in_json_without_leaking_program_output() {
     assert_eq!(report.status.code(), Some(1), "{report:?}");
     assert!(report.stderr.is_empty(), "{report:?}");
     let json = String::from_utf8(report.stdout).unwrap();
-    assert!(json.starts_with("{\"schema_version\":1,\"mode\":\"run\""), "{json}");
-    assert!(json.contains("\"discovered\":2,\"passed\":1,\"failed\":1"), "{json}");
-    assert!(json.contains("\"path\":\"tests/a-pass.srp\",\"status\":\"passed\""), "{json}");
-    assert!(json.contains("\"path\":\"tests/z-fail.srp\",\"status\":\"failed\""), "{json}");
+    assert!(
+        json.starts_with("{\"schema_version\":1,\"mode\":\"run\""),
+        "{json}"
+    );
+    assert!(
+        json.contains("\"discovered\":2,\"passed\":1,\"failed\":1"),
+        "{json}"
+    );
+    assert!(
+        json.contains("\"path\":\"tests/a-pass.srp\",\"status\":\"passed\""),
+        "{json}"
+    );
+    assert!(
+        json.contains("\"path\":\"tests/z-fail.srp\",\"status\":\"failed\""),
+        "{json}"
+    );
     assert!(json.contains("E0065"), "{json}");
     assert!(json.contains("expected failure"), "{json}");
     assert!(!json.contains("sensitive program output"), "{json}");
@@ -79,7 +91,10 @@ fn assertion_failure_is_reported_in_json_without_leaking_program_output() {
     assert!(listing.status.success(), "{listing:?}");
     let listing = String::from_utf8(listing.stdout).unwrap();
     assert!(listing.contains("\"mode\":\"list\""), "{listing}");
-    assert!(listing.contains("\"discovered\":2,\"passed\":0,\"failed\":0"), "{listing}");
+    assert!(
+        listing.contains("\"discovered\":2,\"passed\":0,\"failed\":0"),
+        "{listing}"
+    );
     assert!(!listing.contains("E0065"), "{listing}");
 }
 
