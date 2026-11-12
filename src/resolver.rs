@@ -70,6 +70,10 @@ pub(crate) enum ResolvedStatement {
     Call {
         expression: ResolvedExpression,
     },
+    Assert {
+        condition: ResolvedExpression,
+        message: Option<String>,
+    },
     RepeatInit {
         count: ResolvedExpression,
         count_slot: usize,
@@ -515,6 +519,19 @@ impl<'a> Resolver<'a> {
                     }
                     let expression = self.expression(expression)?;
                     self.emit(ResolvedStatement::Call { expression }, span);
+                }
+                Statement::Assert {
+                    condition,
+                    message,
+                    span,
+                } => {
+                    let condition = self.expression(condition)?;
+                    let condition_span = condition.syntax.nodes()[condition.syntax.root()].span;
+                    require_type(&condition.kind, ValueType::Boolean, condition_span)?;
+                    self.emit(
+                        ResolvedStatement::Assert { condition, message },
+                        span,
+                    );
                 }
                 Statement::Repeat {
                     count,
@@ -1434,6 +1451,7 @@ pub(crate) fn check_name(name: &str, span: Span) -> Result<(), Diagnostic> {
             | "return"
             | "needs"
             | "ensures"
+            | "assert"
     ) {
         Err(Diagnostic::new(
             DiagnosticKind::ReservedName,
