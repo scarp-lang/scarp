@@ -394,3 +394,52 @@ fn parser_counts_assertion_message_bytes_not_unicode_scalar_characters() {
     assert_eq!(result.status.code(), Some(1), "{result:?}");
     assert!(String::from_utf8_lossy(&result.stderr).contains("256"));
 }
+
+#[test]
+fn call_graph_includes_functions_called_only_inside_assertions() {
+    let source = r#"pure funcra ready(value: integer) -> boolean {
+    return value >= 0;
+}
+pure funcra guarded(value: integer) -> integer {
+    assert(ready(value));
+    return value;
+}
+print(guarded(5));
+"#;
+    let program = scarp::compile(source).unwrap();
+    let guarded = program
+        .functions()
+        .iter()
+        .find(|function| function.name == "guarded")
+        .unwrap();
+    assert!(guarded.callees.contains(&"ready".to_owned()));
+    assert_eq!(guarded.callees.len(), 1);
+
+    let ws = Workspace::new();
+    let file = ws.source("assert-call-graph.srp", source);
+    let executed = file_cli("run", &file);
+    assert!(executed.status.success(), "{executed:?}");
+    assert_eq!(executed.stdout, b"5\n");
+}
+
+#[test]
+fn assertions_in_pure_functions_preserve_impure_call_rejection() {
+    let source = r#"funcra side_effect() -> boolean {
+    print("no execution");
+    return true;
+}
+pure funcra check() -> integer {
+    assert(side_effect());
+    return 1;
+}
+print(check());
+"#;
+    let error = scarp::compile(source).unwrap_err();
+    assert_eq!(error.kind, scarp::diagnostics::DiagnosticKind::ImpureFunction);
+    let ws = Workspace::new();
+    let file = ws.source("assert-impurity.srp", source);
+    let output = file_cli("verify", &file);
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("E0025"));
+}
