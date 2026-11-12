@@ -34,7 +34,7 @@ Commands:
   project info [--json] [directory]  Display validated project metadata
   launch <directory>               Execute a Scarp project entrypoint
   run [directory|file.srp]          Run a project or legacy source file
-  test [--json] [--list] [--require-tests] [directory]  Run or list project tests
+  test [--json] [--list] [--require-tests] [--filter SUBSTRING] [directory]  Project tests
   inspect ast <file.srp>           Show the parsed syntax tree (development)
   inspect modules [--json] <file.srp|directory>  Inspect statically checked modules
   explain E####                   Explain a real diagnostic code
@@ -56,6 +56,7 @@ Examples:
   scarp test --json modern-demo
   scarp test --list modern-demo
   scarp test --require-tests modern-demo
+  scarp test --filter math modern-demo
   scarp launch demo
   scarp verify examples/hello.srp
   scarp inspect tokens examples/hello.srp
@@ -170,7 +171,7 @@ Use scarp verify DIRECTORY and scarp run DIRECTORY afterwards.
 ";
 
 const TEST_HELP: &str =
-    "Usage: scarp test [--json] [--list] [--require-tests] [--] [project-directory]
+    "Usage: scarp test [--json] [--list] [--require-tests] [--filter SUBSTRING] [--] [project-directory]
 
 Run the immediate tests/*.srp files, or list them without source execution.
 Without a directory argument, use the current project directory.
@@ -178,8 +179,11 @@ Without a directory argument, use the current project directory.
 are bounded and embedded in the JSON rather than printed separately.
 --list reports discovered tests without compiling or running them; combine
 --json --list to obtain a machine-readable discovery report.
---require-tests returns exit status 1 when no test files are discovered, even
-for --list/--json; the zero-test report remains visible for CI tooling.
+--require-tests returns exit status 1 when no selected test files are discovered,
+even for --list/--json; the zero-test report remains visible for CI tooling.
+--filter SUBSTRING selects filenames containing a case-sensitive UTF-8 substring.
+It does not support regex/globs; use 1..128 bytes, no leading dash, separators,
+colon or control characters. An empty selection reports zero tests.
 Files are sorted lexicographically, limited to 64, and checked for symlinks.
 Tests run only trusted Scarp code with existing deterministic default budgets.
 Interactive stdin and ordinary program stdout are not forwarded.
@@ -552,10 +556,12 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         let mut json = false;
         let mut list_only = false;
         let mut require_tests = false;
+        let mut filter: Option<String> = None;
         let mut separator = false;
         let mut directory = None;
         let mut invalid = false;
-        for arg in args.iter().skip(1) {
+        let mut arguments = args.iter().skip(1);
+        while let Some(arg) = arguments.next() {
             if !separator && arg == "--" {
                 separator = true;
             } else if !separator && arg == "--json" {
@@ -573,6 +579,16 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                     invalid = true;
                 }
                 require_tests = true;
+            } else if !separator && arg == "--filter" {
+                if filter.is_some() {
+                    invalid = true;
+                }
+                match arguments.next().and_then(|value| value.to_str()) {
+                    Some(value) if project_tests::valid_filter(value) => {
+                        filter = Some(value.to_owned());
+                    }
+                    _ => invalid = true,
+                }
             } else if (!separator && arg.to_string_lossy().starts_with('-')) || directory.is_some()
             {
                 invalid = true;
@@ -594,6 +610,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             json,
             list_only,
             require_tests,
+            filter.as_deref(),
         );
     }
     if args
