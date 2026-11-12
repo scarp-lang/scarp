@@ -74,17 +74,18 @@ fn literal_filter_runs_only_matching_sources_and_keeps_json_schema() {
 fn filtering_is_case_sensitive_and_does_not_match_tests_prefix() {
     let ws = Workspace::new();
     let root = ws.project();
-    fs::write(root.join("tests/Math.srp"), "print(1);").unwrap();
-    fs::write(root.join("tests/math.srp"), "print(2);").unwrap();
+    // These names are distinct even on case-insensitive Windows/macOS filesystems.
+    fs::write(root.join("tests/Math-upper.srp"), "print(1);").unwrap();
+    fs::write(root.join("tests/math-lower.srp"), "print(2);").unwrap();
     fs::write(root.join("tests/other.srp"), "print(3);").unwrap();
 
     let uppercase = run(&root, &["test", "--list", "--filter", "Math"]);
     assert!(uppercase.status.success(), "{uppercase:?}");
-    assert_eq!(uppercase.stdout, b"tests/Math.srp\n1 tests discovered\n");
+    assert_eq!(uppercase.stdout, b"tests/Math-upper.srp\n1 tests discovered\n");
 
     let lower = run(&root, &["test", "--filter", "math", "--list"]);
     assert!(lower.status.success(), "{lower:?}");
-    assert_eq!(lower.stdout, b"tests/math.srp\n1 tests discovered\n");
+    assert_eq!(lower.stdout, b"tests/math-lower.srp\n1 tests discovered\n");
 
     // The relative directory label is never searched.
     let prefix = run(&root, &["test", "--filter", "tests/", "--list"]);
