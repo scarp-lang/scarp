@@ -25,6 +25,7 @@ enum Completion {
     RepeatCount(usize, usize, Span),
     Update(usize, BinaryOperator, Value, Span),
     Guard(usize, Span),
+    Assert(Span, Option<String>),
     Discard,
     Return,
     Contract(bool, Span),
@@ -286,6 +287,20 @@ pub(super) fn prepare<'a>(
                             }
                             Completion::Discard => {}
                             Completion::Return => frame.finish(program, value),
+                            Completion::Assert(span, message) => {
+                                if !value.require_boolean(span)? {
+                                    let description = match message {
+                                        Some(message) => format!("assertion failed: {message:?}"),
+                                        None => "assertion failed".into(),
+                                    };
+                                    return Err(Diagnostic::new(
+                                        DiagnosticKind::AssertionFailure,
+                                        span,
+                                        description,
+                                    )
+                                    .with_help("review the tested condition and its inputs"));
+                                }
+                            }
                             Completion::Contract(post, span) => {
                                 if !value.require_boolean(span)? {
                                     let name = &program.functions()[frame.function.unwrap()].name;
@@ -524,6 +539,12 @@ pub(super) fn prepare<'a>(
                         }
                         ResolvedStatement::Call { expression } => {
                             frame.start(expression, Completion::Discard)
+                        }
+                        ResolvedStatement::Assert { condition, message } => {
+                            frame.start(
+                                condition,
+                                Completion::Assert(operation.span, message.clone()),
+                            );
                         }
                         ResolvedStatement::Return { value: Some(value) } => {
                             frame.start(value, Completion::Return)
