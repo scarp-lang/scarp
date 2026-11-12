@@ -102,6 +102,7 @@ schema-v1 JSON error envelope when requested with
 | `scarp run DIRECTORY` | Execute declared project entry using existing interpreter |
 | `scarp run` | Execute the project in the current directory |
 | `scarp verify DIRECTORY` | Compile and type-check project without runtime execution |
+| `scarp test [DIRECTORY]` | Execute nonrecursive `tests/*.srp` test programs (stacked development PR #218) |
 | `scarp launch DIRECTORY` | Existing explicit project command, now resolves both manifests |
 | `scarp create DIRECTORY` | Retained legacy v1 project initialization |
 | `scarp run FILE.srp` | Retained single-file interpreter workflow |
@@ -136,10 +137,12 @@ name takes precedence; avoid shipping both manifests.
 ## Not implemented
 
 No package registry, dependency resolution, lockfile, remote installation,
-`scarp test` discovery, `scarp fmt` formatting, native build or source
+`scarp fmt` formatting, native build or source
 workspace discovery is added here. The empty dependencies block reserves
-syntax without pretending those features work. Broader standard-library
-and tooling features require independent, tested development slices.
+syntax without pretending those features work. The separate [project test
+runner](project-testing.md) defines the development-only `scarp test`
+workflow. Broader standard-library and tooling features require independent,
+tested development slices.
 
 CI must pass on Windows, Linux, macOS and Rust 1.74 before this format can
 be considered ready for merge. This change does not publish a release.
