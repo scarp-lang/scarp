@@ -4,6 +4,14 @@
 //! interpolate values, open files, or access a package registry.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Manifest {
+    pub name: String,
+    pub version: String,
+    pub entry: String,
+    pub kind: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Kind {
     Word(String),
     Text(String),
@@ -205,7 +213,7 @@ pub fn valid_entry(value: &str) -> bool {
 
 /// Parse a bounded UTF-8 manifest. Dependencies are recognized only as an
 /// empty block until a reproducible local dependency specification exists.
-pub fn parse(source: &str) -> Result<String, String> {
+pub fn parse(source: &str) -> Result<Manifest, String> {
     let mut parser = Parser {
         lexer: Lexer {
             src: source,
@@ -295,7 +303,12 @@ pub fn parse(source: &str) -> Result<String, String> {
             .lexer
             .error(0, "only project type 'application' is currently supported"));
     }
-    Ok(entry)
+    Ok(Manifest {
+        name,
+        version,
+        entry,
+        kind,
+    })
 }
 
 #[cfg(test)]
@@ -310,8 +323,11 @@ mod tests {
 
     #[test]
     fn parses_a_real_project_without_executing_it() {
-        let entry = parse(GOOD).unwrap();
-        assert_eq!(entry, "src/main.srp");
+        let manifest = parse(GOOD).unwrap();
+        assert_eq!(manifest.entry, "src/main.srp");
+        assert_eq!(manifest.name, "unicode नमस्ते");
+        assert_eq!(manifest.version, "0.1.0-beta.2+build.4");
+        assert_eq!(manifest.kind, "application");
     }
 
     #[test]
