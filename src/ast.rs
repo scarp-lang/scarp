@@ -111,7 +111,7 @@ impl Statement {
             Self::Function(function) => function.span,
             Self::Return { span, .. } | Self::Call { span, .. } | Self::Assert { span, .. } => {
                 *span
-            },
+            }
             Self::Repeat { span, .. }
             | Self::While { span, .. }
             | Self::Break { span }
