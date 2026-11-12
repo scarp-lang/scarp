@@ -1,4 +1,5 @@
 mod project;
+mod project_manifest;
 
 use std::{
     env,
@@ -26,8 +27,10 @@ Commands:
   exec <file.srp>                  Execute a Scarp program
   verify <file.srp|directory>      Perform static source or project validation
   inspect tokens <file.srp>        Inspect lexer tokens and source locations
-  create <directory>               Create a new runnable Scarp project
+  create <directory>               Create a legacy Scarp.project app
+  init <directory>                 Initialize a new scarp.project app
   launch <directory>               Execute a Scarp project entrypoint
+  run [directory|file.srp]          Run a project or legacy source file
   inspect ast <file.srp>           Show the parsed syntax tree (development)
   inspect modules [--json] <file.srp|directory>  Inspect statically checked modules
   explain E####                   Explain a real diagnostic code
@@ -42,6 +45,8 @@ Options:
 Examples:
   scarp exec examples/hello.srp
   scarp create demo
+  scarp init modern-demo
+  scarp run modern-demo
   scarp launch demo
   scarp verify examples/hello.srp
   scarp inspect tokens examples/hello.srp
@@ -59,7 +64,7 @@ const VERIFY_HELP: &str =
     "Usage: scarp verify [--diagnostic-format=json|text] [--] <file.srp|project-directory>
 
 Statically validate the selected source file or an explicit Scarp project
-directory. Project mode validates Scarp.project and resolves its contained
+directory. Project mode validates scarp.project or legacy Scarp.project and resolves its contained
 entrypoint using the same safety checks as launch.
 The real compiler loads imports, resolves names/types and checks constants
 without executing runtime statements or writing artifacts.
@@ -119,7 +124,7 @@ const INSPECT_MODULES_HELP: &str =
 
 Statically check the source module graph and list real imports, dependencies,
 declarations and typed signatures without executing runtime statements.
-An explicit project directory resolves Scarp.project to its contained entrypoint.
+An explicit project directory resolves scarp.project or legacy Scarp.project.
 --json emits existing schema-version-1 module metadata; --diagnostic-format=json
 selects JSON stderr only for actual errors.
 ";
@@ -147,10 +152,18 @@ Reject existing directories (even empty ones); never overwrite existing files.
 No network access, package installation, or native build occurs.
 ";
 
+const INIT_HELP: &str = "Usage: scarp init [--] <new-directory>
+
+Initialize a new standalone application using the declarative scarp.project
+manifest, src/main.srp, README.md, .gitignore, tests/ and examples/.
+Reject existing paths and do not install packages or run any source.
+Use scarp verify DIRECTORY and scarp run DIRECTORY afterwards.
+";
+
 const LAUNCH_HELP: &str =
     "Usage: scarp launch [--diagnostic-format=json|text] [budget options] [--] <project-directory>
 
-Load Scarp.project from an explicit project directory, validate its entrypoint
+Load scarp.project or legacy Scarp.project from an explicit project directory, validate its entrypoint
 and execute the .srp file through the existing interpreter. The entrypoint
 must stay inside the project. Runtime budgets and diagnostic formats are
 identical to scarp exec. No implicit ancestor search or artifact generation.
@@ -302,6 +315,9 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
     // Canonical CLI routes reuse the existing Scarp library/lexer backends.
     // Existing entry points stay functional during an explicit migration window.
     match args.as_slice() {
+        [command, flag] if command == "init" && (flag == "--help" || flag == "-h") => {
+            return write_output(output.write_all(INIT_HELP.as_bytes()), errors);
+        }
         [command, flag] if command == "create" && (flag == "--help" || flag == "-h") => {
             return write_output(output.write_all(CREATE_HELP.as_bytes()), errors);
         }
@@ -324,6 +340,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                 Some("version") => Some(VERSION_HELP),
                 Some("diagnose") => Some(DIAGNOSE_HELP),
                 Some("create") => Some(CREATE_HELP),
+                Some("init") => Some(INIT_HELP),
                 Some("launch") => Some(LAUNCH_HELP),
                 _ => None,
             };
@@ -431,7 +448,9 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         }
         _ => {}
     }
-    if args.first().is_some_and(|command| command == "create") {
+    if args.first().is_some_and(|command| command == "create" || command == "init") {
+        let modern = args[0] == "init";
+        let command_help = if modern { INIT_HELP } else { CREATE_HELP };
         let destination = match args.as_slice() {
             [_, path] if !path.to_string_lossy().starts_with('-') => Some(path),
             [_, separator, path] if separator == "--" => Some(path),
@@ -440,12 +459,13 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         let Some(destination) = destination else {
             let _ = writeln!(
                 errors,
-                "error: expected a new project directory\n\n{CREATE_HELP}"
+                "error: expected a new project directory\n\n{command_help}"
             );
             return 2;
         };
         let destination = Path::new(destination);
-        return match project::create(destination) {
+        let created = if modern { project::init(destination) } else { project::create(destination) };
+        return match created {
             Ok(()) => write_output(
                 writeln!(output, "Created Scarp project: {}", destination.display()),
                 errors,
@@ -455,6 +475,18 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                 1
             }
         };
+    }
+    // A source path keeps the historical single-file run behavior. A directory
+    // (or no argument) uses the project-aware launch path with identical budgets.
+    if args.first().is_some_and(|command| command == "run")
+        && (args.len() == 1 || args.last().is_some_and(|path| Path::new(path).is_dir()))
+    {
+        let mut forwarded = args.clone();
+        forwarded[0] = OsString::from("launch");
+        if args.len() == 1 {
+            forwarded.push(OsString::from("."));
+        }
+        return dispatch(forwarded, output, errors);
     }
     if args.first().is_some_and(|command| command == "launch") {
         let mut forwarded = args.clone();
