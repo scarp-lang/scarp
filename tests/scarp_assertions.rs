@@ -194,10 +194,7 @@ fn assertion_messages_are_bounded_and_reserved_names_rejected() {
     let rejected = file_cli("verify", &long);
     assert_eq!(rejected.status.code(), Some(1), "{rejected:?}");
     assert!(String::from_utf8_lossy(&rejected.stderr).contains("256"));
-    for code in [
-        "bind assert = true;",
-        "funcra assert() -> unit { return; }",
-    ] {
+    for code in ["bind assert = true;", "funcra assert() -> unit { return; }"] {
         let source = ws.source("reserved.srp", code);
         let result = file_cli("verify", &source);
         assert_eq!(result.status.code(), Some(1), "{code}: {result:?}");
@@ -208,10 +205,7 @@ fn assertion_messages_are_bounded_and_reserved_names_rejected() {
 #[test]
 fn short_circuit_and_execution_budgets_remain_enforced() {
     let ws = Workspace::new();
-    let pass = ws.source(
-        "short-circuit-pass.srp",
-        "assert(true or (1 / 0 == 0));\n",
-    );
+    let pass = ws.source("short-circuit-pass.srp", "assert(true or (1 / 0 == 0));\n");
     assert!(file_cli("exec", &pass).status.success());
     let fail = ws.source(
         "short-circuit-fail.srp",
