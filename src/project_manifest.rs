@@ -171,8 +171,8 @@ fn valid_version(value: &str) -> bool {
                     || !part.starts_with('0'))
         })
     }
-    pre.is_none_or(|v| identifiers(v, true))
-        && build.is_none_or(|v| identifiers(v, false))
+    pre.map_or(true, |v| identifiers(v, true))
+        && build.map_or(true, |v| identifiers(v, false))
 }
 
 pub fn valid_entry(value: &str) -> bool {
