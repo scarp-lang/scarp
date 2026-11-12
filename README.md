@@ -466,6 +466,10 @@ Beta.3 published that work with CLI resource controls. Beta.2 binaries do not
 contain functions. Release notes
 describe immutable snapshots; branch names can move.
 
+## Support Scarp development
+
+Scarp is open source and free to use. You can [support its independent development on GitHub Sponsors](https://github.com/sponsors/sanskarIN) (monthly or one-time) to help with compiler work, testing, documentation, and tooling. Sponsorship does not unlock language features or determine the roadmap.
+
 ## License
 
 Original project code is licensed under the [Apache License 2.0](LICENSE).
