@@ -59,7 +59,7 @@ fn assertion_failure_is_reported_in_json_without_leaking_program_output() {
     .unwrap();
     fs::write(
         project.join("tests/z-fail.srp"),
-        "print(\"sensitive program output\"); assert(false, \"expected failure\");\n",
+        "print(\"sensitive program output\");\nassert(false, \"expected failure\");\n",
     )
     .unwrap();
 

@@ -115,6 +115,9 @@ The mode is `"run"` or `"list"`. Listing entries have status
 relative and properly escaped. When a test fails, its diagnostic is truncated
 to at most 1600 Unicode scalar values and stored in its `error` field.
 The test program's own output is captured, **not inserted into JSON**;
+compiler/runtime diagnostic text may still include an excerpt of the
+failing source line, including string literals written in that source.
+This is not a secrecy boundary for source code.
 per-test runtime/compile failures return status 1 but still produce a complete
 result object. An empty suite reports discovered=0 and returns status 0;
 CI users who require tests must explicitly check this count.
