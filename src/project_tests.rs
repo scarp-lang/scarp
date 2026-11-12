@@ -2,22 +2,23 @@
 //!
 //! Test files are ordinary Scarp programs in a project's immediate `tests/`
 //! directory. Exiting without a compiler or runtime error is a pass. This is
-//! not an assertion framework and does not execute files during discovery.
+//! not a separate assertion framework and does not execute files during discovery.
 
 use std::{
     fs,
-    io::Write,
+    io::{Cursor, Read, Write},
     path::{Path, PathBuf},
 };
 
 use scarp::{
     modules::{self, FileSourceLoader, ModuleLimits},
-    ExecutionOptions,
+    ExecutionOptions, InputLimits,
 };
 
 const MAX_TESTS: usize = 64;
 const FAILURE_DETAIL_CHARS: usize = 1600;
 const MAX_FILTER_BYTES: usize = 128;
+const MAX_STDIN_FIXTURE_BYTES: usize = 1024 * 1024;
 
 /// A filter is a literal substring of a single UTF-8 test filename, not a
 /// filesystem path, command option, regular expression, or glob.
@@ -86,6 +87,54 @@ fn suite(directory: &Path) -> Result<(FileSourceLoader, Vec<(String, PathBuf)>),
     let loader = FileSourceLoader::new(&root)
         .map_err(|error| format!("could not open trusted project loader: {error}"))?;
     Ok((loader, files))
+}
+
+
+/// Read the optional sibling test input without reading process stdin.
+///
+/// A missing fixture preserves the previous no-input execution contract.
+/// Malformed, oversized, or unsafe fixtures fail only their selected test;
+/// listing remains read-only and does not inspect fixture bytes.
+fn input_fixture(label: &str, test_path: &Path, root: &Path) -> Result<Option<Vec<u8>>, String> {
+    let path = test_path.with_extension("stdin");
+    let meta = match fs::symlink_metadata(&path) {
+        Ok(meta) => meta,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("{label}: cannot inspect .stdin fixture: {error}")),
+    };
+    if !meta.file_type().is_file() {
+        return Err(format!(
+            "{label}: .stdin fixture must be an ordinary file, not a symlink or directory"
+        ));
+    }
+    let canonical = fs::canonicalize(&path)
+        .map_err(|error| format!("{label}: cannot resolve .stdin fixture: {error}"))?;
+    if !canonical.starts_with(root) {
+        return Err(format!("{label}: .stdin fixture escapes the trusted project root"));
+    }
+    let file = fs::File::open(&canonical)
+        .map_err(|error| format!("{label}: cannot open .stdin fixture: {error}"))?;
+    let opened = file
+        .metadata()
+        .map_err(|error| format!("{label}: cannot stat .stdin fixture: {error}"))?;
+    if !opened.is_file() {
+        return Err(format!("{label}: .stdin fixture is not a regular file"));
+    }
+    if opened.len() > MAX_STDIN_FIXTURE_BYTES as u64 {
+        return Err(format!(
+            "{label}: .stdin fixture exceeds the 1 MiB input limit"
+        ));
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_STDIN_FIXTURE_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("{label}: cannot read .stdin fixture: {error}"))?;
+    if bytes.len() > MAX_STDIN_FIXTURE_BYTES {
+        return Err(format!(
+            "{label}: .stdin fixture grew beyond the 1 MiB input limit"
+        ));
+    }
+    Ok(Some(bytes))
 }
 
 /// One captured test outcome for a stable JSON report. The error text is
@@ -209,19 +258,34 @@ pub fn run(
     let mut passed = 0usize;
     let mut failed = 0usize;
     let mut cases = Vec::new();
-    for (label, _) in files {
+    for (label, test_path) in files {
         let mut program_stdout = Vec::new();
         let mut program_stderr = Vec::new();
         let result = modules::compile_with_loader(&label, &loader, ModuleLimits::default())
             .map_err(|error| error.to_string())
             .and_then(|program| {
-                program
-                    .execute(
-                        &mut program_stdout,
-                        &mut program_stderr,
-                        ExecutionOptions::default(),
-                    )
-                    .map_err(|error| error.to_string())
+                let fixture = input_fixture(&label, &test_path, loader.root())?;
+                match fixture {
+                    Some(bytes) => {
+                        let mut reader = Cursor::new(bytes);
+                        program
+                            .execute_with_input(
+                                &mut reader,
+                                &mut program_stdout,
+                                &mut program_stderr,
+                                ExecutionOptions::default(),
+                                InputLimits::default(),
+                            )
+                            .map_err(|error| error.to_string())
+                    }
+                    None => program
+                        .execute(
+                            &mut program_stdout,
+                            &mut program_stderr,
+                            ExecutionOptions::default(),
+                        )
+                        .map_err(|error| error.to_string()),
+                }
             });
         match result {
             Ok(()) => {

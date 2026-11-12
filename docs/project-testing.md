@@ -187,6 +187,56 @@ is 1. Without `--filter`, behavior and JSON schema remain unchanged.
 This filter is not in published alpha.7 and is kept separate from the
 original CI-qualified alpha.8 integration candidate.
 
+## Optional per-test stdin fixtures (separate unreleased stacked development PR)
+
+Scarp already has the `read_line()` intrinsic and a bounded
+`execute_with_input` embedding API. In the development-only test runner, a
+matching sibling fixture now supplies input to an individual test:
+
+```text
+calculator/
+  tests/
+    greeting.srp
+    greeting.stdin
+    arithmetic.srp
+```
+
+`tests/greeting.srp`:
+
+```scarp
+bind name = read_line();
+assert(name == "नमस्ते", "input fixture must match");
+```
+
+`tests/greeting.stdin` contains `नमस्ते` followed by an LF newline.
+Running `scarp test calculator` makes the fixture available **only** to
+`greeting.srp`, not to `arithmetic.srp`. A test with no fixture retains the
+existing no-input behavior: calling `read_line()` raises the compiler's
+normal input-unavailable diagnostic. Test processes never consume shell stdin.
+
+- Fixtures are optional `tests/NAME.stdin` companions to immediate
+  `tests/NAME.srp` files, with the same exact filename stem.
+- Each fixture must be an ordinary, contained file, not a symlink, directory,
+  or file outside the canonical project root. Bad fixtures fail their selected
+  test with a bounded diagnostic and preserve the complete JSON report.
+- Fixture size is limited to **1 MiB**, including line terminators; fixture
+  growth is checked during bounded reads. The interpreter independently
+  enforces its standard 64 KiB per-line, 1 MiB cumulative and 4096-read limits,
+  plus existing execution, text and allocation budgets.
+- Input bytes are interpreted by the existing Scarp `read_line()` behavior;
+  LF/CRLF, UTF-8 validation, EOF and all other runtime errors are unchanged.
+- `scarp test --list` remains read-only and does **not** open or inspect
+  `.stdin` files. Filename filtering examines and validates all `.srp`
+  entries first; only selected tests read their matching input fixtures.
+- `--json`, `--filter`, `--require-tests` and schema-version-1 reports
+  preserve their existing semantics. Fixture contents are never emitted as
+  program output into trusted PASS/FAIL or structured JSON streams. Diagnostics
+  may still contain source-line excerpts.
+
+This capability is **not** in published alpha.7 or the separately qualified
+alpha.8 project integration PR #225. It requires review and integration of its
+stacked dependencies before any release.
+
 ## Limits and security
 
 - Discovery is nonrecursive and limited to 64 immediate `.srp` files.
@@ -199,8 +249,9 @@ original CI-qualified alpha.8 integration candidate.
 - No subprocess, registry, install hook or network lookup is introduced.
 - Tests **do execute Scarp code** and may perform any capabilities available
   to that code. Only run test files you trust.
-- Interactive stdin is not passed to test programs. Ordinary program output
-  is captured rather than mixed with the trusted PASS/FAIL result stream.
+- Process stdin is never passed to tests; only an explicit validated sibling
+  `.stdin` fixture can supply input. Ordinary program output is captured rather
+  than mixed with the trusted PASS/FAIL result stream.
 - No test-specific per-case timeout or custom CLI budget flags are available
   yet; these must be added in a separate reviewed change.
 
