@@ -81,7 +81,10 @@ fn filtering_is_case_sensitive_and_does_not_match_tests_prefix() {
 
     let uppercase = run(&root, &["test", "--list", "--filter", "Math"]);
     assert!(uppercase.status.success(), "{uppercase:?}");
-    assert_eq!(uppercase.stdout, b"tests/Math-upper.srp\n1 tests discovered\n");
+    assert_eq!(
+        uppercase.stdout,
+        b"tests/Math-upper.srp\n1 tests discovered\n"
+    );
 
     let lower = run(&root, &["test", "--filter", "math", "--list"]);
     assert!(lower.status.success(), "{lower:?}");
