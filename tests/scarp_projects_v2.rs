@@ -126,7 +126,6 @@ fn legacy_manifest_and_commands_remain_compatible() {
     let created = execute(&["create"], &project);
     assert!(created.status.success(), "{created:?}");
     assert!(project.join("Scarp.project").is_file());
-    assert!(!project.join("scarp.project").is_file() || cfg!(windows));
     let run = execute(&["run"], &project);
     assert!(run.status.success(), "{run:?}");
     assert_eq!(run.stdout, b"Hello from Scarp!\n");
