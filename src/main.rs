@@ -34,7 +34,7 @@ Commands:
   project info [--json] [directory]  Display validated project metadata
   launch <directory>               Execute a Scarp project entrypoint
   run [directory|file.srp]          Run a project or legacy source file
-  test [directory]                 Execute the project's tests/*.srp files
+  test [--json] [--list] [directory]  Run or list project tests/*.srp files
   inspect ast <file.srp>           Show the parsed syntax tree (development)
   inspect modules [--json] <file.srp|directory>  Inspect statically checked modules
   explain E####                   Explain a real diagnostic code
@@ -53,6 +53,8 @@ Examples:
   scarp project info --json modern-demo
   scarp run modern-demo
   scarp test modern-demo
+  scarp test --json modern-demo
+  scarp test --list modern-demo
   scarp launch demo
   scarp verify examples/hello.srp
   scarp inspect tokens examples/hello.srp
@@ -166,17 +168,20 @@ Reject existing paths and do not install packages or run any source.
 Use scarp verify DIRECTORY and scarp run DIRECTORY afterwards.
 ";
 
-const TEST_HELP: &str = "Usage: scarp test [--] [project-directory]
+const TEST_HELP: &str = "Usage: scarp test [--json] [--list] [--] [project-directory]
 
-Discover and execute direct tests/*.srp source files in the selected project.
-Without a directory argument, test the current project directory.
-Tests run through the interpreter with its default deterministic budgets;
-a test passes if it compiles and executes without an error.
-Tests may run side-effecting Scarp code, so run only trusted project tests.
-Tests cannot read interactive stdin, and each program's ordinary output is
-captured, not emitted as test status. Dependencies are not installed.
-The tests directory must be a real directory, not a symlink.
-This command accepts no budget or diagnostic-format options yet.
+Run the immediate tests/*.srp files, or list them without source execution.
+Without a directory argument, use the current project directory.
+--json emits one schema-version-1 test report on stdout; failed test diagnostics
+are bounded and embedded in the JSON rather than printed separately.
+--list reports discovered tests without compiling or running them; combine
+--json --list to obtain a machine-readable discovery report.
+Files are sorted lexicographically, limited to 64, and checked for symlinks.
+Tests run only trusted Scarp code with existing deterministic default budgets.
+Interactive stdin and ordinary program stdout are not forwarded.
+A suite with no tests succeeds but reports an explicit zero-test result.
+Project/CLI errors go to stderr and do not output successful-report JSON.
+No dependency installation, per-test timeout, or custom budgets are supported.
 ";
 
 const PROJECT_HELP: &str = "Usage:
@@ -540,20 +545,44 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         };
     }
     if args.first().is_some_and(|command| command == "test") {
-        let destination = match args.as_slice() {
-            [_] => Some(Path::new(".")),
-            [_, path] if !path.to_string_lossy().starts_with('-') => Some(Path::new(path)),
-            [_, separator, path] if separator == "--" => Some(Path::new(path)),
-            _ => None,
-        };
-        let Some(destination) = destination else {
+        let mut json = false;
+        let mut list_only = false;
+        let mut separator = false;
+        let mut directory = None;
+        let mut invalid = false;
+        for arg in args.iter().skip(1) {
+            if !separator && arg == "--" {
+                separator = true;
+            } else if !separator && arg == "--json" {
+                if json {
+                    invalid = true;
+                }
+                json = true;
+            } else if !separator && arg == "--list" {
+                if list_only {
+                    invalid = true;
+                }
+                list_only = true;
+            } else if (!separator && arg.to_string_lossy().starts_with('-')) || directory.is_some() {
+                invalid = true;
+            } else {
+                directory = Some(Path::new(arg));
+            }
+        }
+        if invalid {
             let _ = writeln!(
                 errors,
-                "error: expected zero or one project directory\n\n{TEST_HELP}"
+                "error: expected at most one project directory and optional --json/--list flags\n\n{TEST_HELP}"
             );
             return 2;
-        };
-        return project_tests::run(destination, output, errors);
+        }
+        return project_tests::run(
+            directory.unwrap_or(Path::new(".")),
+            output,
+            errors,
+            json,
+            list_only,
+        );
     }
     if args
         .first()
