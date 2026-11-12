@@ -131,12 +131,16 @@ pub fn run(
     stderr: &mut impl Write,
     json: bool,
     list_only: bool,
+    require_tests: bool,
 ) -> u8 {
     let (loader, files) = match suite(directory) {
         Ok(suite) => suite,
         Err(error) => return report(error, stderr),
     };
     let discovered = files.len();
+    // Optional CI gate: a valid but empty suite must not silently pass.
+    // Preserve the original zero-test text or JSON report for inspection.
+    let empty_status = u8::from(require_tests && discovered == 0);
 
     if list_only {
         if json {
@@ -145,13 +149,13 @@ pub fn run(
                 .map(|(path, _)| Case { path, error: None })
                 .collect();
             return match write_report(stdout, discovered, 0, 0, true, &cases) {
-                Ok(()) => 0,
+                Ok(()) => empty_status,
                 Err(error) => report(error, stderr),
             };
         }
         if discovered == 0 {
             return match writeln!(stdout, "No .srp test files found in tests/ (0 discovered)") {
-                Ok(()) => 0,
+                Ok(()) => empty_status,
                 Err(error) => report(error, stderr),
             };
         }
@@ -171,7 +175,7 @@ pub fn run(
             stdout,
             "No .srp test files found in tests/ (0 passed, 0 failed)"
         ) {
-            Ok(()) => 0,
+            Ok(()) => empty_status,
             Err(error) => report(error, stderr),
         };
     }
@@ -235,7 +239,7 @@ pub fn run(
     }
 
     if failed == 0 {
-        0
+        empty_status
     } else {
         1
     }
