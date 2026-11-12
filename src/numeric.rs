@@ -113,6 +113,12 @@ pub enum Builtin {
     BigIntPowMod,
     BigIntFromRadix,
     BigIntToRadix,
+    BigIntAnd,
+    BigIntOr,
+    BigIntXor,
+    BigIntNot,
+    BigIntShl,
+    BigIntShr,
 }
 
 impl Builtin {
@@ -145,6 +151,12 @@ impl Builtin {
             "bigint_pow_mod" => Self::BigIntPowMod,
             "bigint_from_radix" => Self::BigIntFromRadix,
             "bigint_to_radix" => Self::BigIntToRadix,
+            "bigint_and" => Self::BigIntAnd,
+            "bigint_or" => Self::BigIntOr,
+            "bigint_xor" => Self::BigIntXor,
+            "bigint_not" => Self::BigIntNot,
+            "bigint_shl" => Self::BigIntShl,
+            "bigint_shr" => Self::BigIntShr,
             "integer_to_text" => Self::IntegerToText,
             "float_to_text" => Self::FloatToText,
             "text_to_integer" => Self::TextToInteger,
@@ -240,6 +252,11 @@ impl Builtin {
             Self::BigIntPowMod => &[ValueType::BigInt, Integer, ValueType::BigInt],
             Self::BigIntFromRadix => &[String, Integer],
             Self::BigIntToRadix => &[ValueType::BigInt, Integer],
+            Self::BigIntAnd | Self::BigIntOr | Self::BigIntXor => {
+                &[ValueType::BigInt, ValueType::BigInt]
+            }
+            Self::BigIntNot => &[ValueType::BigInt],
+            Self::BigIntShl | Self::BigIntShr => &[ValueType::BigInt, Integer],
             Self::BigIntGcd | Self::BigIntLcm => &[ValueType::BigInt, ValueType::BigInt],
             Self::BigIntSqrt => &[ValueType::BigInt],
             Self::IntegerToText => &[Integer],
@@ -312,7 +329,13 @@ impl Builtin {
             | Self::BigIntLcm
             | Self::BigIntSqrt
             | Self::BigIntPowMod
-            | Self::BigIntFromRadix => ValueType::BigInt,
+            | Self::BigIntFromRadix
+            | Self::BigIntAnd
+            | Self::BigIntOr
+            | Self::BigIntXor
+            | Self::BigIntNot
+            | Self::BigIntShl
+            | Self::BigIntShr => ValueType::BigInt,
             Self::BigIntBitLength => ValueType::Integer,
             Self::BigIntToText | Self::BigIntToRadix => ValueType::String,
             Self::BigIntToInteger => ValueType::Integer,
@@ -397,6 +420,12 @@ impl Builtin {
                 | Self::BigIntPowMod
                 | Self::BigIntFromRadix
                 | Self::BigIntToRadix
+                | Self::BigIntAnd
+                | Self::BigIntOr
+                | Self::BigIntXor
+                | Self::BigIntNot
+                | Self::BigIntShl
+                | Self::BigIntShr
         )
     }
 
@@ -1074,6 +1103,12 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::BigIntPowMod
         | Builtin::BigIntFromRadix
         | Builtin::BigIntToRadix
+        | Builtin::BigIntAnd
+        | Builtin::BigIntOr
+        | Builtin::BigIntXor
+        | Builtin::BigIntNot
+        | Builtin::BigIntShl
+        | Builtin::BigIntShr
         | Builtin::IntegerToText
         | Builtin::FloatToText
         | Builtin::TextToInteger
