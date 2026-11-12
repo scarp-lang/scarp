@@ -145,10 +145,7 @@ fn malformed_projects_and_duplicate_flag_do_not_report_success() {
 #[test]
 fn help_and_guide_document_the_new_flag() {
     let workspace = Workspace::new();
-    for args in [
-        &["test", "--help"][..],
-        &["guide", "test"][..],
-    ] {
+    for args in [&["test", "--help"][..], &["guide", "test"][..]] {
         let result = cli(args, &workspace.0);
         assert!(result.status.success(), "{args:?}: {result:?}");
         assert!(String::from_utf8_lossy(&result.stdout).contains("--require-tests"));
