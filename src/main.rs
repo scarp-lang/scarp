@@ -372,9 +372,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             return write_output(output.write_all(PROJECT_HELP.as_bytes()), errors);
         }
         [command, topic, flag]
-            if command == "project"
-                && topic == "info"
-                && (flag == "--help" || flag == "-h") =>
+            if command == "project" && topic == "info" && (flag == "--help" || flag == "-h") =>
         {
             return write_output(output.write_all(PROJECT_HELP.as_bytes()), errors);
         }
