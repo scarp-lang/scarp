@@ -13,10 +13,8 @@ struct Workspace(PathBuf);
 impl Workspace {
     fn new() -> Self {
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "scarp-project-v2-test-{}-{id}",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("scarp-project-v2-test-{}-{id}", std::process::id()));
         fs::create_dir(&path).unwrap();
         Self(path)
     }
@@ -144,7 +142,10 @@ fn malformed_manifest_is_rejected_with_no_application_stdout() {
         good.replace("0.1.0", "0.01.0"),
         good.replace("src/main.srp", "../escape.srp"),
         good.replace("src/main.srp", "src/./main.srp"),
-        good.replace("version: \"0.1.0\"", "version: \"0.1.0\"\n version: \"0.2.0\""),
+        good.replace(
+            "version: \"0.1.0\"",
+            "version: \"0.1.0\"\n version: \"0.2.0\"",
+        ),
         good.replace("dependencies {}", "dependencies { remote: \"script\" }"),
         good.replace("type: \"application\"", "type: \"unknown\""),
         good.replace("type: \"application\"", "unknown: \"value\""),
@@ -202,7 +203,11 @@ fn init_rejects_invalid_names_and_bad_cli_arguments() {
         let output = execute(&["init"], &workspace.child(name));
         assert_eq!(output.status.code(), Some(1), "{name}: {output:?}");
     }
-    for arguments in [&["init"][..], &["init", "a", "b"][..], &["init", "--oops"][..]] {
+    for arguments in [
+        &["init"][..],
+        &["init", "a", "b"][..],
+        &["init", "--oops"][..],
+    ] {
         let output = inside(arguments, &workspace.0);
         assert_eq!(output.status.code(), Some(2), "{arguments:?}: {output:?}");
     }
