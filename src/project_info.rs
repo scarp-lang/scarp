@@ -7,7 +7,7 @@ use std::io::{self, Write};
 
 use super::project::ProjectInfo;
 
-fn quote_json(value: &str) -> String {
+pub(crate) fn quote_json(value: &str) -> String {
     let mut quoted = String::with_capacity(value.len() + 2);
     quoted.push('"');
     for ch in value.chars() {
