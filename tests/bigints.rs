@@ -307,6 +307,62 @@ fn input_result_and_cumulative_scratch_limits_are_independent() {
 }
 
 #[test]
+fn remainder_reserves_only_the_limb_storage_it_uses() {
+    let dividend = -999_999_999_999_999_999_999_999_999_999_999_999_i128;
+    for (divisor, allowance) in [(7, 20), (17, 24), (1_000_000_003, 48)] {
+        // Four input limbs plus one or two divisor limbs. For a one-limb
+        // divisor only a nonzero remainder needs storage. General division
+        // retains two three-limb scratch buffers and no quotient buffer.
+        let source = format!(
+            "var a=bigint(\"{dividend}\"); bind original=a; a %= bigint(\"{divisor}\"); print(a,original);"
+        );
+        let options = ExecutionOptions {
+            max_bigint_bytes: allowance,
+            ..ExecutionOptions::default()
+        };
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        scarp::run_with_io_and_options(&source, &mut stdout, &mut stderr, options).unwrap();
+        assert_eq!(
+            stdout,
+            format!("{} {dividend}\n", dividend % divisor).as_bytes()
+        );
+        assert!(stderr.is_empty());
+        assert!(scarp::check_with_options(&source, options).is_ok());
+
+        let atomic = format!("print(\"pending\"); eprint(\"pending\"); {source}");
+        let failure = fail(
+            &atomic,
+            ExecutionOptions {
+                max_bigint_bytes: allowance - 1,
+                ..options
+            },
+        );
+        assert_eq!(failure.kind, Kind::BigIntLimit);
+    }
+}
+
+#[test]
+fn remainder_still_prepays_general_division_work() {
+    let source = r#"print("pending"); eprint("pending");
+print(bigint("999999999999999999999999999999999999") % bigint("1000000003"));"#;
+    let failure = fail(
+        source,
+        ExecutionOptions {
+            max_bigint_bytes: 48,
+            limits: ExecutionLimits {
+                max_steps: 100,
+                ..ExecutionLimits::default()
+            },
+            ..ExecutionOptions::default()
+        },
+    );
+    let operator = source.find('%').unwrap();
+    assert_eq!(failure.kind, Kind::ExecutionLimit);
+    assert_eq!(failure.span, Span::new(operator, operator + 1));
+}
+
+#[test]
 fn host_parser_has_exact_work_and_allocation_boundaries() {
     let arguments = [Value::from("1000000000")];
     let options = ExecutionOptions {

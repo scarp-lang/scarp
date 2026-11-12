@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.6-alpha.7 — prerelease candidate
+## 0.0.6-alpha.7 — published GitHub prerelease, 2026-11-11
 
 - Add typed conditional expressions with exact branch result types and lazy
   evaluation, including tuple values and function arguments and returns.
