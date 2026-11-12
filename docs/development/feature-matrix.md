@@ -1,14 +1,11 @@
 # Feature completeness and development roadmap
 
-Post-alpha.5 branch: [BigInt](../bigint.md) is implemented and tested only in
-PR #172. It is not in published alpha.5. Constants, bitwise operations, float
-coercion and native backend support remain outside the BigInt milestone.
+**Reviewed 2026-11-11.** Cargo declares `0.0.6-alpha.7`, matching the published
+prerelease with typed conditional expressions and Unicode scalar string escapes.
+[Release verification](../releases/v0.0.6-alpha.7-validation.md)
 
-**Reviewed 2026-11-10.** The latest **published** GitHub prerelease is
-[v0.0.6-alpha.6](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.6)
-(10 November 2026), from exact source `cdf6a3924ec2a36c7beca5a9aec4f01a0bce515e`.
-Cargo declares `0.0.6-alpha.7` for the next candidate. The published alpha.6 adds
-bounded program input, six scalar/text utilities and immutable structural tuples. See
+The published alpha.6 adds bounded program input, six scalar/text utilities and
+immutable structural tuples. See
 [publication verification](../releases/v0.0.6-alpha.6-validation.md) and
 [Rust API migration](../tuples.md). Its [candidate notes](../releases/v0.0.6-alpha.6.md)
 remain a historical preparation snapshot.
@@ -60,7 +57,6 @@ requires separate architecture and multiple implementation phases.
 | Lexical shadowing | Implemented | Rich pattern bindings | Resolver scopes | P2 | M | Shadowing initializer, duplicates, captures | Scope rules |
 | Assignments | =, +=, -=, *=, /=, %=, &=, |=, ^=, <<=, >>=, >>>= | General composite-value mutation requires design | Typed resolver and evaluator | P2 | M | Type preservation, overflow, shift bounds, atomic output | Operators |
 | Integer and finite-float math | Checked i64/binary64 and exact explicit conversions | Additional scalar math after domain design | Built-in registry and evaluator | P0 | S | Bounds, signed zero, loss of precision | Numeric reference |
-| BigInt (post-alpha.5 branch) | Exact signed runtime arithmetic, comparisons, explicit conversions, typed functions/modules, configurable limits | Constant folding, optimized large multiplication/division, native backend and decimal arithmetic | Independent safe-Rust magnitude engine and shared Budget | P1 | L | Seeded Rust/Python oracles, budgets, CLI/module parity, opt-in large fixtures | [BigInt](../bigint.md) |
 | Scalar constants | Implemented by #71; annotations checked before evaluation | Approved constant intrinsics only after separate design | Shared expression typing/evaluation | P0 | M | Order/cycles, import visibility, task/node bounds | Constant guide |
 | Bitwise/radix/remainder | Implemented in main and published alpha.3; tests/bit_operations.rs covers full-width operations | No missing signed-i64 operator in this subset | Current lexer, parser, resolver and evaluator | P0 | M | All shift counts, overflow, precedence, module parity | Values/operators |
 | Strings | UTF-8 literals/equality, shared storage, bounded queries and construction | Normalization and richer text policy | Typed pure built-ins and work charging | P0 | M | Combining marks, emoji, empty input, limits | Text indexing contract |
@@ -74,7 +70,8 @@ requires separate architecture and multiple implementation phases.
 | Records/structures | Missing | Declaration, fields, construction, access | Nominal/structural type decision | P1 | XL | Recursive/nested fields, visibility | Type-system proposal |
 | Enums/tagged variants | Missing | Constructors, pattern typing | Composite types and exhaustiveness | P1 | L | Exhaustive/redundant patterns, recursion | Variant/match design |
 | Generics/type aliases | Missing | Type parameters, constraints, monomorphization policy | Composite types and stable IR | P2 | XL | Substitution, recursion bounds, diagnostics | Type-system design |
-| Arithmetic/comparison/logic | Implemented; strict primitive kinds | Conditional expression form | Typed expression nodes | P1 | M | Precedence, short circuit, dead-branch typing | Expressions |
+| Arithmetic/comparison/logic | Strict primitive kinds and typed conditional expressions | Conditional expressions in constants or native emission | Typed expression nodes | P1 | M | Precedence, short circuit, dead-branch typing | Expressions |
+| BigInt (integration candidate) | Exact signed runtime arithmetic, comparisons, explicit conversions, typed functions/modules, configurable limits | Constant folding, optimized large multiplication/division, native backend and decimal arithmetic | Independent safe-Rust magnitude engine and shared Budget | P1 | L | Seeded Rust/Python oracles, budgets, CLI/module parity, opt-in large fixtures | [BigInt](../bigint.md) |
 | Indexing/slicing | Numeric vectors/windows and tile cells/lanes | General strings/collections and multidimensional syntax | Composite types; text scalar policy | P1 | L | Bounds, visible windows, backing lifetime | Collection guides |
 | If/while/repeat | Implemented and bounded | General collection iteration/ranges | Iterator/range type design | P1 | L | Empty/range bounds, controls, budgets | Iteration grammar |
 | Break/continue/early return | Implemented with retirement | Labeled control only if justified | CFG and scope cleanup | P2 | M | Nested exits, contracts, retirement | Control flow |

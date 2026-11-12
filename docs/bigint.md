@@ -1,10 +1,8 @@
 # Exact, bounded BigInt integers (development milestone)
 
-**Unreleased feature branch, after published alpha.5.** The published
-v0.0.6-alpha.5 binaries do not contain BigInt.
-Use a compiler built from this PR's exact source; a Cargo version printed as
-`0.0.6-alpha.5` alone does not identify its feature set. No new release/tag is
-created by this work. See the [design](proposals/bounded-bigint.md) and
+**Development branch based on published alpha.7.** Build the exact BigInt
+integration revision to run the examples here. Both the published compiler and
+this development branch report `0.0.6-alpha.7`. See the [design](proposals/bounded-bigint.md) and
 [Hindi guide](tutorials/bigint-hi.md).
 
 `integer` remains signed 64-bit, and `float` remains finite binary64. The separate
@@ -119,10 +117,13 @@ calculations. No allocation occurs inside multiplication or division loops.
 | Compare | Signed lexicographic magnitude, O(max(n,m)) worst case | max(n,m,1) |
 | Print | Direct decimal chunks, O(d), no conversion buffer | d |
 
-Division computes both quotient and remainder, even when selecting one. The
-allocation ledger charges both results and its reusable trial buffer. Capacity
-charges can exceed the normalized result's payload (for example an addition's
-carry limb); actual result digits are checked after normalization. Work counts
+The quotient operation `/` reserves the quotient and remainder buffers and,
+for general division, the reusable trial buffer. The remainder operation `%`
+keeps the same work charge and skips the quotient allocation. A single-limb
+divisor needs one result limb for a nonzero remainder. General remainder
+calculation retains its remainder and trial buffers. Capacity charges can
+exceed the normalized result's payload (for example an addition's carry limb).
+Actual result digits are checked after normalization. Work counts
 are deterministic implementation costs, not CPU instruction counts or timing
 guarantees. Large quadratic operations may be refused even when values fit the
 digit cap. No claim is made about practical million-digit general multiplication

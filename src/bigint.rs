@@ -302,13 +302,25 @@ fn multiply(
 }
 
 /// Long division, finding each base-10^9 quotient digit by binary search.
-/// Three prepaid reusable buffers; no allocation in the quotient/trial loops.
 fn divide(
     left: &BigInt,
     right: &BigInt,
     budget: &mut Budget,
     span: Span,
 ) -> Result<(BigInt, BigInt), Diagnostic> {
+    let (quotient, remainder) = divide_with_remainder(left, right, true, budget, span)?;
+    Ok((quotient.expect("requested quotient"), remainder))
+}
+
+/// The remainder-only path uses the same work charge and quotient-digit
+/// search. It keeps only the current digit and skips the quotient buffer.
+fn divide_with_remainder(
+    left: &BigInt,
+    right: &BigInt,
+    keep_quotient: bool,
+    budget: &mut Budget,
+    span: Span,
+) -> Result<(Option<BigInt>, BigInt), Diagnostic> {
     if right.is_zero() {
         return Err(
             Diagnostic::new(DiagnosticKind::DivisionByZero, span, "division by zero")
@@ -318,62 +330,77 @@ fn divide(
     let (n, m) = (left.limbs.len(), right.limbs.len());
     budget.charge(n.max(m).max(1) as u64, span)?;
     if magnitude_cmp(&left.limbs, &right.limbs) == Ordering::Less {
-        return Ok((finish(Vec::new(), false, budget, span)?, left.clone()));
+        let quotient = if keep_quotient {
+            Some(finish(Vec::new(), false, budget, span)?)
+        } else {
+            None
+        };
+        return Ok((quotient, left.clone()));
     }
-    if m == 1 {
-        budget.charge(n as u64, span)?;
-        let mut quotient = buffer(n, budget, span)?;
-        quotient.resize(n, 0);
+    let count = n - m + 1;
+    let work = if m == 1 {
+        n as u64
+    } else {
+        (count as u64)
+            .saturating_mul(m as u64)
+            .saturating_mul(64)
+            .saturating_add((n as u64).saturating_mul(4))
+    };
+    budget.charge(work, span)?;
+    let mut quotient = if keep_quotient {
+        let mut limbs = buffer(count, budget, span)?;
+        limbs.resize(count, 0);
+        Some(limbs)
+    } else {
+        None
+    };
+
+    let remainder = if m == 1 {
         let mut remainder = 0_u64;
         let divisor = u64::from(right.limbs[0]);
         for i in (0..n).rev() {
             let current = remainder * BASE + u64::from(left.limbs[i]);
-            quotient[i] = (current / divisor) as u32;
+            if let Some(quotient) = &mut quotient {
+                quotient[i] = (current / divisor) as u32;
+            }
             remainder = current % divisor;
         }
         let mut rest = buffer(usize::from(remainder != 0), budget, span)?;
         if remainder != 0 {
             rest.push(remainder as u32);
         }
-        return Ok((
-            finish(quotient, left.negative != right.negative, budget, span)?,
-            finish(rest, left.negative, budget, span)?,
-        ));
-    }
-    let count = n - m + 1;
-    budget.charge(
-        (count as u64)
-            .saturating_mul(m as u64)
-            .saturating_mul(64)
-            .saturating_add((n as u64).saturating_mul(4)),
-        span,
-    )?;
-    let mut quotient = buffer(count, budget, span)?;
-    quotient.resize(count, 0);
-    let capacity = m.checked_add(1).ok_or_else(|| allocation(span))?;
-    let mut remainder = buffer(capacity, budget, span)?;
-    remainder.extend_from_slice(&left.limbs[count..]);
-    normalize(&mut remainder);
-    let mut trial = buffer(capacity, budget, span)?;
-    for i in (0..count).rev() {
-        remainder.insert(0, left.limbs[i]);
+        rest
+    } else {
+        let capacity = m.checked_add(1).ok_or_else(|| allocation(span))?;
+        let mut remainder = buffer(capacity, budget, span)?;
+        remainder.extend_from_slice(&left.limbs[count..]);
         normalize(&mut remainder);
-        let (mut low, mut high) = (0_u32, (BASE - 1) as u32);
-        while low < high {
-            let digit = low + (high - low) / 2 + 1;
-            multiply_small(&right.limbs, digit, &mut trial);
-            if magnitude_cmp(&trial, &remainder) != Ordering::Greater {
-                low = digit;
-            } else {
-                high = digit - 1;
+        let mut trial = buffer(capacity, budget, span)?;
+        for i in (0..count).rev() {
+            remainder.insert(0, left.limbs[i]);
+            normalize(&mut remainder);
+            let (mut low, mut high) = (0_u32, (BASE - 1) as u32);
+            while low < high {
+                let digit = low + (high - low) / 2 + 1;
+                multiply_small(&right.limbs, digit, &mut trial);
+                if magnitude_cmp(&trial, &remainder) != Ordering::Greater {
+                    low = digit;
+                } else {
+                    high = digit - 1;
+                }
             }
+            if let Some(quotient) = &mut quotient {
+                quotient[i] = low;
+            }
+            multiply_small(&right.limbs, low, &mut trial);
+            subtract_magnitude(&mut remainder, &trial);
         }
-        quotient[i] = low;
-        multiply_small(&right.limbs, low, &mut trial);
-        subtract_magnitude(&mut remainder, &trial);
-    }
+        remainder
+    };
     Ok((
-        finish(quotient, left.negative != right.negative, budget, span)?,
+        quotient
+            .map(|limbs| finish(limbs, left.negative != right.negative, budget, span))
+            .transpose()?,
         finish(remainder, left.negative, budget, span)?,
     ))
 }
@@ -404,14 +431,9 @@ pub(crate) fn binary(
         Add => add(left, right, budget, span).map(Value::BigInt),
         Subtract => add(left, &right.negated(), budget, span).map(Value::BigInt),
         Multiply => multiply(left, right, budget, span).map(Value::BigInt),
-        Divide | Remainder => {
-            let (quotient, remainder) = divide(left, right, budget, span)?;
-            Ok(Value::BigInt(if operator == Divide {
-                quotient
-            } else {
-                remainder
-            }))
-        }
+        Divide => divide(left, right, budget, span).map(|(quotient, _)| Value::BigInt(quotient)),
+        Remainder => divide_with_remainder(left, right, false, budget, span)
+            .map(|(_, remainder)| Value::BigInt(remainder)),
         Equal | NotEqual | Less | LessEqual | Greater | GreaterEqual => {
             budget.charge(left.limbs.len().max(right.limbs.len()).max(1) as u64, span)?;
             let order = left.cmp(right);
