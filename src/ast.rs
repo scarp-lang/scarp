@@ -1,6 +1,7 @@
 //! The syntax tree for the currently supported language slice.
 
 use crate::diagnostics::Span;
+use crate::types::SourceType;
 use crate::value::FiniteFloat;
 
 mod rebase;
@@ -219,6 +220,11 @@ pub enum ExpressionKind {
     },
     Tuple {
         elements: Vec<usize>,
+    },
+    Array {
+        elements: Vec<usize>,
+        /// Present for a typed empty literal, absent for inferred elements.
+        empty_element_type: Option<SourceType>,
     },
     Integers {
         elements: Vec<usize>,

@@ -2,6 +2,8 @@
 
 use crate::diagnostics::{Diagnostic, DiagnosticKind, Span};
 
+const DEFAULT_ARRAY_BYTES: usize = 8 * 1024 * 1024;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ExecutionLimits {
     /// Program instructions and expression tasks, including backward jumps.
@@ -40,6 +42,8 @@ pub struct ExecutionOptions {
     pub max_text_bytes: usize,
     /// Cumulative immutable tuple member/structural payload, independent of text/vectors.
     pub max_tuple_bytes: usize,
+    /// Cumulative immutable fixed-array backing and type payload, independent of other values.
+    pub max_array_bytes: usize,
 }
 
 impl Default for ExecutionOptions {
@@ -53,6 +57,7 @@ impl Default for ExecutionOptions {
             max_vector_bytes: 8 * 1024 * 1024,
             max_text_bytes: 8 * 1024 * 1024,
             max_tuple_bytes: 8 * 1024 * 1024,
+            max_array_bytes: DEFAULT_ARRAY_BYTES,
         }
     }
 }
@@ -75,6 +80,8 @@ pub(crate) struct Budget {
     text_limit: usize,
     tuple_remaining: usize,
     tuple_limit: usize,
+    array_remaining: usize,
+    array_limit: usize,
 }
 
 impl Budget {
@@ -88,6 +95,8 @@ impl Budget {
             text_limit: usize::MAX,
             tuple_remaining: 8 * 1024 * 1024,
             tuple_limit: 8 * 1024 * 1024,
+            array_remaining: DEFAULT_ARRAY_BYTES,
+            array_limit: DEFAULT_ARRAY_BYTES,
         }
     }
 
@@ -125,6 +134,27 @@ impl Budget {
             return Err(Diagnostic::new(DiagnosticKind::TupleAllocation, span, format!("cumulative tuple allocation limit of {} bytes exceeded", self.tuple_limit)).with_help("reduce tuple construction or raise --max-tuple-bytes / ExecutionOptions.max_tuple_bytes"));
         }
         self.tuple_remaining -= bytes;
+        Ok(())
+    }
+
+    pub fn with_array_bytes(mut self, bytes: usize) -> Self {
+        self.array_remaining = bytes;
+        self.array_limit = bytes;
+        self
+    }
+
+    pub fn charge_array_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
+        self.array_remaining = self.array_remaining.checked_sub(bytes).ok_or_else(|| {
+            Diagnostic::new(
+                DiagnosticKind::ArrayAllocation,
+                span,
+                format!(
+                    "cumulative fixed array allocation limit of {} bytes exceeded",
+                    self.array_limit
+                ),
+            )
+            .with_help("reuse immutable arrays or raise --max-array-bytes / ExecutionOptions.max_array_bytes")
+        })?;
         Ok(())
     }
 

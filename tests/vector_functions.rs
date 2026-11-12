@@ -134,9 +134,7 @@ fn every_existing_budget_has_an_exact_vector_call_boundary() {
         max_calls: 1,
         max_live_slots: 2,
         max_capture_bytes: 80,
-        max_vector_bytes: ExecutionOptions::default().max_vector_bytes,
-        max_tuple_bytes: ExecutionOptions::default().max_tuple_bytes,
-        max_text_bytes: ExecutionOptions::default().max_text_bytes,
+        ..ExecutionOptions::default()
     };
     scarp::check_with_options(source, options).unwrap();
     for (options, kind) in [

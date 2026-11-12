@@ -1,6 +1,6 @@
 # Proposal 0041 — Immutable fixed-size arrays
 
-Status **proposed for review**. Baseline `d2c475ecffd3d5f70e060b097b323cda31f72d80`
+Status **approved for development**. Baseline `d2c475ecffd3d5f70e060b097b323cda31f72d80`
 after the published alpha.6 tuple migration. The review also checked the
 published alpha.7 compiler and its main branch at
 `c6c9409deff0f8979792590366b284e804311d6c`. This specifies the review gate in
@@ -28,8 +28,8 @@ token after `array` is a colon. `[array]` still reads an ordinary binding.
 `array[0]`, `array(0)` and `if array{}` keep their existing parses. Ordinary
 brackets still form a numerical vector. In type position the parser should
 reuse the tuple type-closing logic for `>>`, `>>>` and adjacent `=`.
-The length is a nonnegative base-10 integer literal with the usual decimal
-digit separators. Reject signs, radices, computed lengths and out-of-range
+The length is a nonnegative base-10 integer literal with optional underscores
+between digit groups. Reject signs, radices, computed lengths and out-of-range
 lengths at the original length span before constructing a type descriptor.
 
 ```text
@@ -82,16 +82,16 @@ structural equality includes both fields. Primitive type IDs and numerical
 collection kinds retain their meanings. A composite `TypeId` remains local to
 one registry. Descriptors with `length: None` remain tooling descriptors.
 
-The limits below are proposed initial ceilings. Each new constructor and the
+The limits below are the initial ceilings. Each new constructor and the
 resolver must enforce them before allocating backing storage.
 
-| Limit | Proposed contract |
+| Limit | Contract |
 | --- | --- |
 | Elements in one array | 0 through 4,096, checked before parsing/materializing excess elements |
 | Structural depth | 32 composite levels across both arrays and tuples, including typed empty arrays |
 | Structural metadata | 4,096 type nodes. An array counts its element type once. A tuple counts each member type |
 | Expanded value shape | 65,536 nodes. Count a primitive value as one, an array as `1 + length × child_nodes`, and a tuple as `1 + sum(member_nodes)` |
-| Cumulative array payload | 8 MiB initially, per execution across all frames. Proposed `ExecutionOptions.max_array_bytes` and `--max-array-bytes` |
+| Cumulative array payload | 8 MiB initially, per execution across all frames. `ExecutionOptions.max_array_bytes` and `--max-array-bytes` |
 
 Use checked addition and multiplication. An empty array still contributes
 element-type depth and metadata. Validate each nested type against its own
@@ -106,7 +106,7 @@ independent ceiling. Validate the combined type budget during parsing, before
 accumulating child descriptors beyond it.
 
 Charge construction work for each member and its bounded metadata processing.
-The proposed logical allocation charge is the fixed array storage record plus
+The logical allocation charge is the fixed array storage record plus
 `length × size_of::<Value>()` plus `type_nodes × size_of::<SourceType>()`.
 Compute and charge it before reservation, including the fixed and type
 components for an empty array. Use fallible reservation for variable-size
@@ -134,7 +134,7 @@ allocation constraints on Rust 1.74.
   homogeneity, type shape and zero length. Host accessors return borrowed
   slices/types and preserve immutable sharing.
 - When an array occurs anywhere inside a type serialized by module
-  inspection, propose schema 3 with canonical `array<T, N>` type strings.
+  inspection, use schema 3 with canonical `array<T, N>` type strings.
   This includes a private declaration if it appears in the inventory. Keep
   primitive-only and tuple-only inventories byte-identical (schema 1 and 2).
   An array used only in a body does not alter inventory version. Test schema
@@ -150,11 +150,11 @@ allocation constraints on Rust 1.74.
 
 ## Implementation and acceptance
 
-Before implementation, confirm the contextual literal grammar and the common
-runtime bounds rule for literal and computed indices. Confirm the proposed
-numeric ceilings, checked backing-storage charge and independent nested-type
-validation. Confirm schema 3 selection and review it with the compiler
-inventory consumers. These decisions remain pending maintainer approval.
+The maintainer approved the contextual literal grammar, runtime bounds rules,
+shape ceilings, backing-storage charge and schema 3 selection after the review
+in [#189](https://github.com/scarp-lang/scarp/pull/189). The implementation
+and examples are described in the [fixed-array guide](../fixed-arrays.md).
+Review schema 3 with downstream inventory consumers before publication.
 
 Keep grammar, type and value implementation in one coherent, independently
 reviewable branch after this contract is accepted. The parser, AST span

@@ -249,6 +249,7 @@ fn expression_nodes_preserve_spans_and_postorder_invariants() {
                 }
             }
             ExpressionKind::Tuple { elements }
+            | ExpressionKind::Array { elements, .. }
             | ExpressionKind::Vector { elements }
             | ExpressionKind::Integers { elements } => {
                 assert!(elements.iter().all(|element| *element < id))
