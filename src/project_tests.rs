@@ -35,12 +35,15 @@ fn suite(directory: &Path) -> Result<(FileSourceLoader, Vec<(String, PathBuf)>),
         return Err("project tests path must be an ordinary directory, not a symlink".into());
     }
     let mut files = Vec::new();
-    for entry in fs::read_dir(&test_dir)
-        .map_err(|error| format!("could not read project tests: {error}"))?
+    for entry in
+        fs::read_dir(&test_dir).map_err(|error| format!("could not read project tests: {error}"))?
     {
         let entry = entry.map_err(|error| format!("could not enumerate tests: {error}"))?;
         let path = entry.path();
-        if path.extension().map_or(true, |extension| extension != "srp") {
+        if path
+            .extension()
+            .map_or(true, |extension| extension != "srp")
+        {
             continue;
         }
         let kind = entry
@@ -56,7 +59,10 @@ fn suite(directory: &Path) -> Result<(FileSourceLoader, Vec<(String, PathBuf)>),
             .file_name()
             .into_string()
             .map_err(|_| "test filenames must be UTF-8")?;
-        if filename.chars().any(|ch| ch.is_control() || matches!(ch, ':' | '\\')) {
+        if filename
+            .chars()
+            .any(|ch| ch.is_control() || matches!(ch, ':' | '\\'))
+        {
             return Err("test filename contains unsafe characters".into());
         }
         files.push((format!("tests/{filename}"), path));
@@ -78,7 +84,10 @@ pub fn run(directory: &Path, stdout: &mut impl Write, stderr: &mut impl Write) -
         Err(error) => return report(error, stderr),
     };
     if files.is_empty() {
-        return match writeln!(stdout, "No .srp test files found in tests/ (0 passed, 0 failed)") {
+        return match writeln!(
+            stdout,
+            "No .srp test files found in tests/ (0 passed, 0 failed)"
+        ) {
             Ok(()) => 0,
             Err(error) => report(error, stderr),
         };
@@ -124,5 +133,9 @@ pub fn run(directory: &Path, stdout: &mut impl Write, stderr: &mut impl Write) -
     if let Err(error) = writeln!(stdout, "{passed} passed, {failed} failed") {
         return report(error, stderr);
     }
-    if failed == 0 { 0 } else { 1 }
+    if failed == 0 {
+        0
+    } else {
+        1
+    }
 }
