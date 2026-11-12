@@ -34,9 +34,15 @@ impl TupleValue {
             types.push(element.kind());
         }
         let kind = SourceType::tuple(types)?;
+        // A mixed tuple also traverses array type metadata during equality.
+        let metadata_work = if kind.contains_array() {
+            2 * kind.node_count() as u64
+        } else {
+            0
+        };
         let work = elements
             .iter()
-            .fold(1u64, |n, v| n.saturating_add(value_work(v)));
+            .fold(1 + metadata_work, |n, v| n.saturating_add(value_work(v)));
         let capture = elements.iter().fold(16usize, |n, v| {
             n.saturating_add(value_capture(v))
                 .saturating_add(std::mem::size_of::<Value>())
@@ -76,9 +82,10 @@ impl TupleValue {
             .checked_add(std::mem::size_of::<TupleStorage>())
     }
 }
-fn value_work(value: &Value) -> u64 {
+pub(super) fn value_work(value: &Value) -> u64 {
     match value {
         Value::Tuple(t) => t.work(),
+        Value::Array(a) => a.work(),
         Value::String(s) => (s.len() as u64).saturating_mul(6).saturating_add(2),
         Value::Vector(v) => (v.len() as u64).saturating_mul(32).saturating_add(2),
         Value::Integers(v) => (v.len() as u64).saturating_mul(24).saturating_add(12),
@@ -89,9 +96,10 @@ fn value_work(value: &Value) -> u64 {
         _ => 32,
     }
 }
-fn value_capture(value: &Value) -> usize {
+pub(super) fn value_capture(value: &Value) -> usize {
     match value {
         Value::Tuple(t) => t.capture_bytes(),
+        Value::Array(a) => a.capture_bytes(),
         Value::String(s) => s.len().saturating_mul(6).saturating_add(2),
         Value::Vector(v) => v.len().saturating_mul(8),
         Value::Integers(v) => v.len().saturating_mul(8),
@@ -99,6 +107,14 @@ fn value_capture(value: &Value) -> usize {
         _ => 8,
     }
 }
+pub(super) fn display_nested(value: &Value, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    if let Value::String(text) = value {
+        quoted(text, f)
+    } else {
+        fmt::Display::fmt(value, f)
+    }
+}
+
 fn quoted(text: &str, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.write_char('"')?;
     for ch in text.chars() {
@@ -122,11 +138,7 @@ impl fmt::Display for TupleValue {
             if index > 0 {
                 f.write_str(", ")?;
             }
-            if let Value::String(text) = value {
-                quoted(text, f)?;
-            } else {
-                value.fmt(f)?;
-            }
+            display_nested(value, f)?;
         }
         if self.len() == 1 {
             f.write_char(',')?;

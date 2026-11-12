@@ -130,7 +130,7 @@ Execute a checked Scarp source file with the existing interpreter.
 --diagnostic-format=json is available for real compiler errors.
 Execution-limit options: --max-steps, --max-prints, --max-call-depth, --max-calls,
 --max-live-slots, --max-capture-bytes, --max-vector-bytes, --max-text-bytes,
---max-tuple-bytes, --max-input-line-bytes, --max-input-bytes, --max-input-reads.
+--max-tuple-bytes, --max-array-bytes, --max-input-line-bytes, --max-input-bytes, --max-input-reads.
 Options precede the
 source path. -- before a filename permits filenames beginning with a dash.
 Program-argument forwarding and project entrypoint execution are not supported.
@@ -213,6 +213,7 @@ Function defaults: --max-call-depth 256, --max-calls 100000,
 Vector and tile buffers share this cumulative quota; retirement does not refund it.
 --max-text-bytes 8388608 limits cumulative new UTF-8 payload (1048576 bytes per string).
 --max-tuple-bytes 8388608 limits cumulative immutable tuple member/type payload.
+--max-array-bytes 8388608 limits cumulative immutable fixed-array member/type payload.
 String sharing and direct literal output do not allocate text payload; retirement gives no refund.
 Snapshot bytes are a logical storage cap, not an exact process-memory limit.
 Counts are unsigned decimal digits, zero is valid, and each option may occur once.
@@ -239,6 +240,7 @@ Function defaults: --max-call-depth 256, --max-calls 100000,
 Vector and tile buffers share this cumulative quota; retirement does not refund it.
 --max-text-bytes 8388608 limits cumulative new UTF-8 payload (1048576 bytes per string).
 --max-tuple-bytes 8388608 limits cumulative immutable tuple member/type payload.
+--max-array-bytes 8388608 limits cumulative immutable fixed-array member/type payload.
 String sharing and direct literal output do not allocate text payload; retirement gives no refund.
 All resource options take unsigned decimal counts, allow zero, and may occur once.
 Input-limit options are accepted, but check never reads stdin: a selected read_line
@@ -761,6 +763,7 @@ fn execution_limit_flag(flag: &str) -> bool {
             | "--max-vector-bytes"
             | "--max-text-bytes"
             | "--max-tuple-bytes"
+            | "--max-array-bytes"
             | "--max-input-line-bytes"
             | "--max-input-bytes"
             | "--max-input-reads"
@@ -877,6 +880,7 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
                     "--max-vector-bytes" => options.max_vector_bytes = value,
                     "--max-text-bytes" => options.max_text_bytes = value,
                     "--max-tuple-bytes" => options.max_tuple_bytes = value,
+                    "--max-array-bytes" => options.max_array_bytes = value,
                     "--max-input-line-bytes" => input_limits.max_line_bytes = value,
                     "--max-input-bytes" => input_limits.max_total_bytes = value,
                     "--max-input-reads" => input_limits.max_reads = value,
