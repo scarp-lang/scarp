@@ -76,14 +76,97 @@ fn suite(directory: &Path) -> Result<(FileSourceLoader, Vec<(String, PathBuf)>),
     Ok((loader, files))
 }
 
-/// Execute each discovered test using the real module compiler and bounded
-/// interpreter, without spawning subprocesses or forwarding interactive stdin.
-pub fn run(directory: &Path, stdout: &mut impl Write, stderr: &mut impl Write) -> u8 {
+/// One captured test outcome for a stable JSON report. The error text is
+/// bounded and is not mixed with the program's captured stdout or stderr.
+struct Case {
+    path: String,
+    error: Option<String>,
+}
+
+fn write_report(
+    stdout: &mut impl Write,
+    discovered: usize,
+    passed: usize,
+    failed: usize,
+    list_only: bool,
+    cases: &[Case],
+) -> std::io::Result<()> {
+    use super::project_info::quote_json;
+
+    let mode = if list_only { "list" } else { "run" };
+    write!(
+        stdout,
+        "{{\"schema_version\":1,\"mode\":\"{mode}\",\"discovered\":{discovered},\"passed\":{passed},\"failed\":{failed},\"tests\":["
+    )?;
+    for (index, case) in cases.iter().enumerate() {
+        if index != 0 {
+            write!(stdout, ",")?;
+        }
+        let status = if list_only {
+            "discovered"
+        } else if case.error.is_some() {
+            "failed"
+        } else {
+            "passed"
+        };
+        write!(
+            stdout,
+            "{{\"path\":{},\"status\":\"{status}\"",
+            quote_json(&case.path)
+        )?;
+        if let (false, Some(error)) = (list_only, &case.error) {
+            write!(stdout, ",\"error\":{}", quote_json(error))?;
+        }
+        write!(stdout, "}}")?;
+    }
+    writeln!(stdout, "]}}")
+}
+
+/// Discover direct project tests without compiling or executing anything,
+/// or execute them through the real compiler with the original default
+/// budgets. JSON reports emit one schema-version-1 result object.
+pub fn run(
+    directory: &Path,
+    stdout: &mut impl Write,
+    stderr: &mut impl Write,
+    json: bool,
+    list_only: bool,
+) -> u8 {
     let (loader, files) = match suite(directory) {
         Ok(suite) => suite,
         Err(error) => return report(error, stderr),
     };
-    if files.is_empty() {
+    let discovered = files.len();
+
+    if list_only {
+        if json {
+            let cases: Vec<_> = files
+                .into_iter()
+                .map(|(path, _)| Case { path, error: None })
+                .collect();
+            return match write_report(stdout, discovered, 0, 0, true, &cases) {
+                Ok(()) => 0,
+                Err(error) => report(error, stderr),
+            };
+        }
+        if discovered == 0 {
+            return match writeln!(stdout, "No .srp test files found in tests/ (0 discovered)") {
+                Ok(()) => 0,
+                Err(error) => report(error, stderr),
+            };
+        }
+        for (path, _) in files {
+            if let Err(error) = writeln!(stdout, "{path}") {
+                return report(error, stderr);
+            }
+        }
+        return match writeln!(stdout, "{discovered} tests discovered") {
+            Ok(()) => 0,
+            Err(error) => report(error, stderr),
+        };
+    }
+
+    if discovered == 0 && !json {
         return match writeln!(
             stdout,
             "No .srp test files found in tests/ (0 passed, 0 failed)"
@@ -95,6 +178,7 @@ pub fn run(directory: &Path, stdout: &mut impl Write, stderr: &mut impl Write) -
 
     let mut passed = 0usize;
     let mut failed = 0usize;
+    let mut cases = Vec::new();
     for (label, _) in files {
         let mut program_stdout = Vec::new();
         let mut program_stderr = Vec::new();
@@ -112,30 +196,83 @@ pub fn run(directory: &Path, stdout: &mut impl Write, stderr: &mut impl Write) -
         match result {
             Ok(()) => {
                 passed += 1;
-                if let Err(error) = writeln!(stdout, "PASS {label}") {
+                if json {
+                    cases.push(Case {
+                        path: label,
+                        error: None,
+                    });
+                } else if let Err(error) = writeln!(stdout, "PASS {label}") {
                     return report(error, stderr);
                 }
             }
             Err(error) => {
                 failed += 1;
-                if let Err(write_error) = writeln!(stdout, "FAIL {label}") {
-                    return report(write_error, stderr);
-                }
-                // Compiler-controlled error details are bounded; test output is
-                // captured but never printed as an untrusted status line.
                 let detail: String = error.chars().take(FAILURE_DETAIL_CHARS).collect();
-                if let Err(write_error) = writeln!(stderr, "{label}: {detail}") {
-                    return report(write_error, stderr);
+                if json {
+                    cases.push(Case {
+                        path: label,
+                        error: Some(detail),
+                    });
+                } else {
+                    if let Err(write_error) = writeln!(stdout, "FAIL {label}") {
+                        return report(write_error, stderr);
+                    }
+                    // Ordinary program output is not an authenticated status
+                    // line; include bounded compiler/runtime diagnostics only.
+                    if let Err(write_error) = writeln!(stderr, "{label}: {detail}") {
+                        return report(write_error, stderr);
+                    }
                 }
             }
         }
     }
-    if let Err(error) = writeln!(stdout, "{passed} passed, {failed} failed") {
+    if json {
+        if let Err(error) = write_report(stdout, discovered, passed, failed, false, &cases) {
+            return report(error, stderr);
+        }
+    } else if let Err(error) = writeln!(stdout, "{passed} passed, {failed} failed") {
         return report(error, stderr);
     }
+
     if failed == 0 {
         0
     } else {
         1
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn json_report_handles_empty_and_mixed_cases_without_inventing_diagnostics() {
+        let mut empty = Vec::new();
+        write_report(&mut empty, 0, 0, 0, false, &[]).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&empty).unwrap(),
+            "{\"schema_version\":1,\"mode\":\"run\",\"discovered\":0,\"passed\":0,\"failed\":0,\"tests\":[]}\n"
+        );
+        let cases = vec![
+            Case {
+                path: "tests/a\".srp".into(),
+                error: None,
+            },
+            Case {
+                path: "tests/b.srp".into(),
+                error: Some("bad\nmessage".into()),
+            },
+        ];
+        let mut out = Vec::new();
+        write_report(&mut out, 2, 1, 1, false, &cases).unwrap();
+        let output = String::from_utf8(out).unwrap();
+        assert!(output.contains("\"path\":\"tests/a\\\".srp\""));
+        assert!(output.contains("\"status\":\"failed\",\"error\":\"bad\\nmessage\""));
+        let mut listed = Vec::new();
+        write_report(&mut listed, 2, 0, 0, true, &cases).unwrap();
+        let listed = String::from_utf8(listed).unwrap();
+        assert!(listed.contains("\"mode\":\"list\""));
+        assert!(listed.contains("\"status\":\"discovered\""));
+        assert!(!listed.contains("\"error\""));
     }
 }
