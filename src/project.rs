@@ -232,7 +232,7 @@ pub fn entry_file(directory: &Path) -> Result<PathBuf, String> {
         }
         entry.to_owned()
     } else {
-        crate::project_manifest::parse(content)?.entry
+        crate::project_manifest::parse(content)?
     };
     let target = fs::canonicalize(root.join(&entry))
         .map_err(|error| format!("could not open project entry '{entry}': {error}"))?;
