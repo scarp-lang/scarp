@@ -13,10 +13,8 @@ struct Workspace(PathBuf);
 impl Workspace {
     fn new() -> Self {
         let serial = NEXT.fetch_add(1, Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
-            "scarp-test-filter-{}-{serial}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("scarp-test-filter-{}-{serial}", std::process::id()));
         fs::create_dir(&root).unwrap();
         Self(root)
     }
@@ -55,7 +53,10 @@ fn literal_filter_runs_only_matching_sources_and_keeps_json_schema() {
     fs::write(root.join("tests/math-mul.srp"), "assert(2 * 3 == 6);").unwrap();
     fs::write(root.join("tests/other.srp"), "print(1 / 0);").unwrap();
 
-    let selected = run(&root, &["test", "--filter", "math", "--json", "--require-tests"]);
+    let selected = run(
+        &root,
+        &["test", "--filter", "math", "--json", "--require-tests"],
+    );
     assert!(selected.status.success(), "{selected:?}");
     assert!(selected.stderr.is_empty(), "{selected:?}");
     let json = String::from_utf8(selected.stdout).unwrap();
@@ -117,12 +118,18 @@ fn empty_selection_is_success_by_default_and_failure_under_strict_guard() {
     fs::write(root.join("tests/exists.srp"), "print(99);").unwrap();
     let normal = run(&root, &["test", "--json", "--filter", "not-found"]);
     assert!(normal.status.success(), "{normal:?}");
-    let required = run(&root, &["test", "--json", "--filter", "not-found", "--require-tests"]);
+    let required = run(
+        &root,
+        &["test", "--json", "--filter", "not-found", "--require-tests"],
+    );
     assert_eq!(required.status.code(), Some(1), "{required:?}");
     assert_eq!(required.stdout, normal.stdout);
     assert!(required.stderr.is_empty());
     assert!(String::from_utf8_lossy(&normal.stdout).contains("\"discovered\":0"));
-    let listed = run(&root, &["test", "--filter", "not-found", "--list", "--require-tests"]);
+    let listed = run(
+        &root,
+        &["test", "--filter", "not-found", "--list", "--require-tests"],
+    );
     assert_eq!(listed.status.code(), Some(1), "{listed:?}");
     assert_eq!(
         listed.stdout,

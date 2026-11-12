@@ -30,7 +30,6 @@ pub fn valid_filter(value: &str) -> bool {
             .any(|ch| ch.is_control() || matches!(ch, '/' | '\\' | ':'))
 }
 
-
 fn report(error: impl std::fmt::Display, stderr: &mut impl Write) -> u8 {
     let _ = writeln!(stderr, "error: {error}");
     1
