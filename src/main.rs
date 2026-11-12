@@ -1,5 +1,6 @@
 mod project;
 mod project_manifest;
+mod project_tests;
 
 use std::{
     env,
@@ -31,6 +32,7 @@ Commands:
   init <directory>                 Initialize a new scarp.project app
   launch <directory>               Execute a Scarp project entrypoint
   run [directory|file.srp]          Run a project or legacy source file
+  test [directory]                 Execute the project's tests/*.srp files
   inspect ast <file.srp>           Show the parsed syntax tree (development)
   inspect modules [--json] <file.srp|directory>  Inspect statically checked modules
   explain E####                   Explain a real diagnostic code
@@ -47,6 +49,7 @@ Examples:
   scarp create demo
   scarp init modern-demo
   scarp run modern-demo
+  scarp test modern-demo
   scarp launch demo
   scarp verify examples/hello.srp
   scarp inspect tokens examples/hello.srp
@@ -158,6 +161,19 @@ Initialize a new standalone application using the declarative scarp.project
 manifest, src/main.srp, README.md, .gitignore, tests/ and examples/.
 Reject existing paths and do not install packages or run any source.
 Use scarp verify DIRECTORY and scarp run DIRECTORY afterwards.
+";
+
+const TEST_HELP: &str = "Usage: scarp test [--] [project-directory]
+
+Discover and execute direct tests/*.srp source files in the selected project.
+Without a directory argument, test the current project directory.
+Tests run through the interpreter with its default deterministic budgets;
+a test passes if it compiles and executes without an error.
+Tests may run side-effecting Scarp code, so run only trusted project tests.
+Tests cannot read interactive stdin, and each program's ordinary output is
+captured, not emitted as test status. Dependencies are not installed.
+The tests directory must be a real directory, not a symlink.
+This command accepts no budget or diagnostic-format options yet.
 ";
 
 const LAUNCH_HELP: &str =
@@ -333,6 +349,9 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         [command, flag] if command == "launch" && (flag == "--help" || flag == "-h") => {
             return write_output(output.write_all(LAUNCH_HELP.as_bytes()), errors);
         }
+        [command, flag] if command == "test" && (flag == "--help" || flag == "-h") => {
+            return write_output(output.write_all(TEST_HELP.as_bytes()), errors);
+        }
         [command] if command == "guide" => {
             return write_output(output.write_all(HELP.as_bytes()), errors);
         }
@@ -350,6 +369,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                 Some("diagnose") => Some(DIAGNOSE_HELP),
                 Some("create") => Some(CREATE_HELP),
                 Some("init") => Some(INIT_HELP),
+                Some("test") => Some(TEST_HELP),
                 Some("launch") => Some(LAUNCH_HELP),
                 _ => None,
             };
@@ -456,6 +476,19 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             return write_output(output.write_all(EXEC_HELP.as_bytes()), errors);
         }
         _ => {}
+    }
+    if args.first().is_some_and(|command| command == "test") {
+        let destination = match args.as_slice() {
+            [_] => Some(Path::new(".")),
+            [_, path] if !path.to_string_lossy().starts_with('-') => Some(Path::new(path)),
+            [_, separator, path] if separator == "--" => Some(Path::new(path)),
+            _ => None,
+        };
+        let Some(destination) = destination else {
+            let _ = writeln!(errors, "error: expected zero or one project directory\n\n{TEST_HELP}");
+            return 2;
+        };
+        return project_tests::run(destination, output, errors);
     }
     if args
         .first()
