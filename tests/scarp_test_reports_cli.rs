@@ -12,10 +12,8 @@ struct Workspace(PathBuf);
 impl Workspace {
     fn new() -> Self {
         let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "scarp-test-report-cli-{}-{n}",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("scarp-test-report-cli-{}-{n}", std::process::id()));
         fs::create_dir(&path).unwrap();
         Self(path)
     }
@@ -149,8 +147,7 @@ fn filenames_with_unicode_and_quotes_are_escaped_correctly() {
     let info = cli(&["test", "--json", "--list"], &root);
     assert!(info.status.success(), "{info:?}");
     assert!(
-        String::from_utf8_lossy(&info.stdout)
-            .contains("\"path\":\"tests/हिंदी \\\"hi\\\".srp\""),
+        String::from_utf8_lossy(&info.stdout).contains("\"path\":\"tests/हिंदी \\\"hi\\\".srp\""),
         "{info:?}"
     );
 }
