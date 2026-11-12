@@ -662,7 +662,17 @@ pub fn resolve_with_compiler_limits(
     constants: ConstantLimits,
     types: crate::types::TypeLimits,
 ) -> Result<ModuleProgram, ModuleDiagnostic> {
-    linker::resolve(graph, constants, types)
+    linker::resolve(graph, constants, types, None)
+}
+/// Compile a freshly loaded graph with caller-owned reuse of scalar constant
+/// evaluations. Imports, references and all compile limits still apply.
+pub fn resolve_with_constant_cache(
+    graph: ModuleGraph,
+    constants: ConstantLimits,
+    types: crate::types::TypeLimits,
+    cache: &mut cache::ConstantCache,
+) -> Result<ModuleProgram, ModuleDiagnostic> {
+    linker::resolve(graph, constants, types, Some(cache))
 }
 /// Compile and build an opt-in navigation snapshot without executing statements.
 pub fn resolve_indexed(
@@ -683,7 +693,19 @@ pub fn resolve_indexed_with_compiler_limits(
     types: crate::types::TypeLimits,
     index: symbols::IndexLimits,
 ) -> Result<symbols::IndexedProgram, ModuleDiagnostic> {
-    linker::resolve_indexed(graph, constants, types, index)
+    linker::resolve_indexed(graph, constants, types, index, None)
+}
+/// Compile with scalar constant reuse and build a fresh navigation index in
+/// the current graph's source coordinates. Callers can combine this with
+/// [load_with_frontend_caches] for independent token and AST reuse.
+pub fn resolve_indexed_with_constant_cache(
+    graph: ModuleGraph,
+    constants: ConstantLimits,
+    types: crate::types::TypeLimits,
+    index: symbols::IndexLimits,
+    cache: &mut cache::ConstantCache,
+) -> Result<symbols::IndexedProgram, ModuleDiagnostic> {
+    linker::resolve_indexed(graph, constants, types, index, Some(cache))
 }
 pub fn compile_indexed_with_loader(
     entry: &str,

@@ -7,7 +7,7 @@
 //! resolution result can be reused ONLY if every original byte, source label,
 //! resolved per-import target and caller-owned revision matches exactly.
 //!
-//! This is deliberately not a parser cache or partial incremental compiler.
+//! Separate opt-in caches also cover tokens, syntax trees and constant evaluation.
 
 use super::invalidation::{EditImpact, InvalidationError, InvalidationSnapshot};
 use super::{
@@ -18,8 +18,10 @@ use super::{
 use crate::types::TypeLimits;
 use std::{collections::VecDeque, error::Error, fmt, sync::Arc};
 
+mod constants;
 mod syntax;
 mod tokens;
+pub use constants::{ConstantCache, ConstantCacheLimits, ConstantCacheStats};
 pub use syntax::{SyntaxCache, SyntaxCacheLimits, SyntaxCacheStats};
 pub use tokens::{TokenCache, TokenCacheLimits, TokenCacheStats};
 
