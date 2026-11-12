@@ -28,7 +28,9 @@ includes conditions inside branches that happen not to run.
 
 A predicate is evaluated **once, only if execution reaches the statement**.
 Boolean `and` and `or` preserve their existing short-circuit semantics.
-An assertion with a true predicate completes silently and has no output.
+The assertion operation itself does not emit output; any permitted calls
+inside its predicate retain their existing effects, input rules and failure
+semantics. In a pure function, normal purity restrictions still apply.
 A false predicate terminates execution with diagnostic
 **E0062 — AssertionFailure**, optionally including the quoted literal
 message. Diagnostics retain source spans, including imports and nested
