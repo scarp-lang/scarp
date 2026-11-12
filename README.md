@@ -1,18 +1,17 @@
 # Scarp
 
-**0.0.6-alpha.7** is the **latest published experimental GitHub prerelease**
-(11 November 2026), from exact source `b1c1fd232b418267d95520c69ee563ac99ecae30`.
-It adds typed conditional expressions and Unicode scalar string escapes.
+**0.0.6-alpha.8** is the **latest published experimental GitHub prerelease**
+(12 November 2026), from exact source `37253e7805c0ca594560700dd1deb3928458e60d`.
+It adds declarative projects, project testing, and Boolean assertions.
 The latest published prerelease is
-[0.0.6-alpha.7](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.7),
-with seven verified assets for Windows x64, Linux x64 and macOS Apple Silicon.
-See [public notes](docs/releases/v0.0.6-alpha.7-publication.md) and
-[exact-source publication verification](docs/releases/v0.0.6-alpha.7-validation.md).
+[0.0.6-alpha.8](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.8),
+with verified packages for Windows x64, Linux x64, and macOS Apple Silicon.
+See the [release notes](docs/releases/v0.0.6-alpha.8-publication.md),
+[verification record](docs/releases/v0.0.6-alpha.8-validation.md), and
+[runnable calculator project](examples/projects/calculator/README.md).
 
-The **0.0.6-alpha.8 development candidate** adds declarative projects, project
-testing, and Boolean assertions. Build the candidate from source and try the
-[calculator project](examples/projects/calculator/README.md). See the
-[candidate preparation notes](docs/releases/v0.0.6-alpha.8-preparation.md) for scope.
+**0.0.6-alpha.7** added typed conditional expressions and Unicode scalar
+string escapes. [Alpha.7 verification](docs/releases/v0.0.6-alpha.7-validation.md)
 
 **0.0.6-alpha.6** added [bounded input](docs/program-input.md),
 [scalar/text utilities](docs/text-foundations.md) and

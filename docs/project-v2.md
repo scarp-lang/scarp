@@ -1,7 +1,6 @@
-# Declarative Scarp projects (development branch; not released)
+# Declarative Scarp projects
 
-> Status: implemented in the associated development branch, pending full CI
-> review. This document does **not** describe a published compiler release.
+Scarp v0.0.6-alpha.8 includes declarative project manifests.
 
 Scarp's new project manifest is **`scarp.project`**, a compact,
 declarative format designed for Scarp. It is not TOML, JSON, Rust code, or
@@ -106,8 +105,8 @@ schema-v1 JSON error envelope when requested with
 | `scarp run DIRECTORY` | Execute declared project entry using existing interpreter |
 | `scarp run` | Execute the project in the current directory |
 | `scarp verify DIRECTORY` | Compile and type-check project without runtime execution |
-| `scarp test [DIRECTORY]` | Execute nonrecursive `tests/*.srp` test programs (stacked development PR #218) |
-| `scarp project info [--json] [DIRECTORY]` | Display read-only, validated project metadata (stacked development PR) |
+| `scarp test [DIRECTORY]` | Execute nonrecursive `tests/*.srp` test programs  |
+| `scarp project info [--json] [DIRECTORY]` | Display read-only, validated project metadata  |
 | `scarp launch DIRECTORY` | Existing explicit project command, now resolves both manifests |
 | `scarp create DIRECTORY` | Retained legacy v1 project initialization |
 | `scarp run FILE.srp` | Retained single-file interpreter workflow |
@@ -145,7 +144,7 @@ No package registry, dependency resolution, lockfile, remote installation,
 `scarp fmt` formatting, native build or source
 workspace discovery is added here. The empty dependencies block reserves
 syntax without pretending those features work. The separate [project test
-runner](project-testing.md) defines the development-only `scarp test`
+runner](project-testing.md) defines the `scarp test`
 workflow. The separate [project information command](project-info.md)
 provides read-only metadata inspection. Broader standard-library and tooling features require independent,
 tested development slices.

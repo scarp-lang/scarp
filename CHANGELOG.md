@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.6-alpha.8 — development candidate
+## 0.0.6-alpha.8 — published GitHub prerelease, 2026-11-12
 
 - Add bounded declarative `scarp.project` manifests, `scarp init`, project
   `run` and `verify`, and read-only `project info` with optional JSON.

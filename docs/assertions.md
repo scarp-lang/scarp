@@ -1,9 +1,6 @@
-# Native assertions (unreleased development feature)
+# Native assertions
 
-**Development status:** The syntax described here is implemented in the
-stacked assertion branch, not in a published Scarp compiler. It depends on
-the project foundation and test-reporting development PRs. No release or
-pre-release was created as part of this work.
+Boolean assertion statements are available in Scarp v0.0.6-alpha.8.
 
 ## Syntax
 

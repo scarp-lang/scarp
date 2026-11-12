@@ -1,5 +1,10 @@
 # Scarp documentation
 
+**0.0.6-alpha.8 prerelease** was published on **12 November 2026**, adding
+declarative manifests, project tests, and Boolean assertions.
+[Public notes](releases/v0.0.6-alpha.8-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.8-validation.md)
+
 **0.0.6-alpha.7 prerelease** was published on **11 November 2026**, adding
 typed conditional expressions and Unicode scalar string escapes.
 [Public notes](releases/v0.0.6-alpha.7-publication.md) ·
@@ -66,7 +71,7 @@ updated for the **0.0.6-alpha.6 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
 contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.6-alpha.7](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.7),
+[0.0.6-alpha.8](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.8),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)
@@ -78,21 +83,12 @@ website deployment remain separate.
 in published alpha.6 and absent from alpha.5. Review the structural
 Rust API/schema migration before adopting that source.
 
-## Unreleased development documentation
+## Projects and testing
 
-The following guides describe **draft, unmerged compiler work** and are
-**not features of the published v0.0.6-alpha.7 release**:
-
-- [Declarative project manifest](project-v2.md) — draft PR #217.
-- [Project test runner and JSON reporting](project-testing.md) — drafts
-  #218 and #220.
-- [Read-only project metadata](project-info.md) — draft PR #219.
-- [Native source-language assertions](assertions.md) — draft PR #221:
-  `assert(boolean_condition);` or an optional bounded literal message.
-
-These guides specify development branch behavior only. Feature availability
-must be verified against the exact compiler commit; no merging, tagging,
-or publication is implied by their presence here.
+- [Declarative project manifests](project-v2.md)
+- [Project test runner, JSON reports, filtering, and stdin fixtures](project-testing.md)
+- [Read-only project metadata](project-info.md)
+- [Boolean assertions](assertions.md)
 
 ## Guides and what each adds
 

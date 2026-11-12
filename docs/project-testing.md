@@ -1,9 +1,6 @@
-# Project test runner (unreleased development)
+# Project test runner
 
-This page describes the development-only **`scarp test`** command in the
-stacked test-runner branch. The published Scarp compiler does not include
-this new command. It depends on the unmerged declarative-project foundation
-PR #217; neither change is a release or pre-release.
+Scarp v0.0.6-alpha.8 includes `scarp test` for declarative and legacy projects.
 
 ## Usage
 
@@ -58,12 +55,8 @@ import "../src/math.srp" as math;
 assert(math.add(2, 3) == 5, "math.add must produce 5");
 ```
 
-The native `assert` statement belongs to the **unreleased, stacked assertion
-development branch**, not the published compiler. Its
-[syntax and runtime behavior](assertions.md) use the real Scarp parser,
-type checker and interpreter. Earlier project-test-runner branches do not
-yet support this assertion form; there, use a standalone test source and
-check its exit status.
+The `assert` statement checks a Boolean condition during execution.
+See the [assertion syntax and failure behavior](assertions.md).
 
 Example status:
 
@@ -78,7 +71,7 @@ is written to stderr. Failure status is exit code 1. Invalid CLI arguments
 return exit code 2. No tests found reports an explicit zero-test message and
 returns success. Use `--require-tests` in CI when a nonempty suite is required.
 
-## Discovery and structured reports (unreleased stacked PR)
+## Discovery and structured reports
 
 The test-reporting implementation adds two optional flags:
 
@@ -128,12 +121,7 @@ produce an error on stderr and **no JSON stdout**.
 The `--json` flag does not make these setup errors machine-readable yet.
 The normal human-readable `scarp test` format is unchanged.
 
-The assertion statement shown in the example is implemented in this combined
-unreleased development candidate, not in the published compiler. Custom
-execution-budget flags, retries, package installation and releases are not
-introduced by the test-reporting layer.
-
-## CI guard: require at least one test (unreleased stacked PR)
+## CI guard: require at least one test
 
 The optional `--require-tests` flag makes a valid but empty suite fail.
 It prevents a new project from receiving a green CI status before any
@@ -158,7 +146,7 @@ well-formed suite still reports zero tests and exits successfully.
 The option does not change filename ordering, symlink restrictions,
 source execution behavior, discovery limits, or the JSON v1 schema.
 
-## Filename substring selection (separate unreleased stacked development PR)
+## Filename substring selection
 
 An optional filter lets a developer run or list only tests whose **filename**
 (including the `.srp` suffix) contains a literal, case-sensitive UTF-8
@@ -184,14 +172,10 @@ only, in the same lexicographical order. A valid filter matching nothing
 returns the existing zero-test report; with `--require-tests`, its status
 is 1. Without `--filter`, behavior and JSON schema remain unchanged.
 
-This filter is not in published alpha.7 and is kept separate from the
-original CI-qualified alpha.8 integration candidate.
-
-## Optional per-test stdin fixtures (separate unreleased stacked development PR)
+## Optional per-test stdin fixtures
 
 Scarp already has the `read_line()` intrinsic and a bounded
-`execute_with_input` embedding API. In the development-only test runner, a
-matching sibling fixture now supplies input to an individual test:
+`execute_with_input` embedding API. A matching sibling fixture supplies input to an individual test:
 
 ```text
 calculator/
@@ -233,8 +217,6 @@ normal input-unavailable diagnostic. Test processes never consume shell stdin.
   preserve their existing semantics. Fixture contents are never emitted as
   program output into trusted PASS/FAIL or structured JSON streams. Diagnostics
   may still contain source-line excerpts.
-
-This capability is part of the combined alpha.8 development candidate.
 
 ## Limits and security
 
