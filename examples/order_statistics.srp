@@ -1,0 +1,8 @@
+// Median and type-7 quantiles use a bounded, immutable sorted copy.
+bind samples = [4.0, 1.0, 7.0, 2.0];
+print(median(samples));
+print(quantile(samples, 0.25));
+print(quantile(samples, 0.75));
+bind visible = window(samples, 1, 3);
+print(median(visible));
+print(samples);
