@@ -111,6 +111,8 @@ pub enum Builtin {
     BigIntLcm,
     BigIntSqrt,
     BigIntPowMod,
+    BigIntFromRadix,
+    BigIntToRadix,
 }
 
 impl Builtin {
@@ -141,6 +143,8 @@ impl Builtin {
             "bigint_lcm" => Self::BigIntLcm,
             "bigint_sqrt" => Self::BigIntSqrt,
             "bigint_pow_mod" => Self::BigIntPowMod,
+            "bigint_from_radix" => Self::BigIntFromRadix,
+            "bigint_to_radix" => Self::BigIntToRadix,
             "integer_to_text" => Self::IntegerToText,
             "float_to_text" => Self::FloatToText,
             "text_to_integer" => Self::TextToInteger,
@@ -234,6 +238,8 @@ impl Builtin {
             | Self::BigIntToText => &[ValueType::BigInt],
             Self::BigIntPow => &[ValueType::BigInt, Integer],
             Self::BigIntPowMod => &[ValueType::BigInt, Integer, ValueType::BigInt],
+            Self::BigIntFromRadix => &[String, Integer],
+            Self::BigIntToRadix => &[ValueType::BigInt, Integer],
             Self::BigIntGcd | Self::BigIntLcm => &[ValueType::BigInt, ValueType::BigInt],
             Self::BigIntSqrt => &[ValueType::BigInt],
             Self::IntegerToText => &[Integer],
@@ -305,9 +311,10 @@ impl Builtin {
             | Self::BigIntGcd
             | Self::BigIntLcm
             | Self::BigIntSqrt
-            | Self::BigIntPowMod => ValueType::BigInt,
+            | Self::BigIntPowMod
+            | Self::BigIntFromRadix => ValueType::BigInt,
             Self::BigIntBitLength => ValueType::Integer,
-            Self::BigIntToText => ValueType::String,
+            Self::BigIntToText | Self::BigIntToRadix => ValueType::String,
             Self::BigIntToInteger => ValueType::Integer,
             Self::IntegerToText | Self::FloatToText | Self::TextTrim | Self::TextReplace => {
                 ValueType::String
@@ -388,6 +395,8 @@ impl Builtin {
                 | Self::BigIntLcm
                 | Self::BigIntSqrt
                 | Self::BigIntPowMod
+                | Self::BigIntFromRadix
+                | Self::BigIntToRadix
         )
     }
 
@@ -1063,6 +1072,8 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::BigIntLcm
         | Builtin::BigIntSqrt
         | Builtin::BigIntPowMod
+        | Builtin::BigIntFromRadix
+        | Builtin::BigIntToRadix
         | Builtin::IntegerToText
         | Builtin::FloatToText
         | Builtin::TextToInteger
