@@ -44,7 +44,10 @@ impl Lexer<'_> {
         let bytes = self.src.as_bytes();
         loop {
             if self.pos >= bytes.len() {
-                return Ok(Token { kind: Kind::End, offset: self.pos });
+                return Ok(Token {
+                    kind: Kind::End,
+                    offset: self.pos,
+                });
             }
             if bytes[self.pos].is_ascii_whitespace() {
                 self.pos += 1;
@@ -60,9 +63,18 @@ impl Lexer<'_> {
         }
         let offset = self.pos;
         let kind = match bytes[self.pos] {
-            b'{' => { self.pos += 1; Kind::Open }
-            b'}' => { self.pos += 1; Kind::Close }
-            b':' => { self.pos += 1; Kind::Colon }
+            b'{' => {
+                self.pos += 1;
+                Kind::Open
+            }
+            b'}' => {
+                self.pos += 1;
+                Kind::Close
+            }
+            b':' => {
+                self.pos += 1;
+                Kind::Colon
+            }
             b'"' => {
                 self.pos += 1;
                 let mut value = String::new();
@@ -80,10 +92,17 @@ impl Lexer<'_> {
                             self.pos += escaped.len_utf8();
                             match escaped {
                                 '"' | '\\' => value.push(escaped),
-                                _ => return Err(self.error(self.pos - escaped.len_utf8(), "unsupported string escape")),
+                                _ => {
+                                    return Err(self.error(
+                                        self.pos - escaped.len_utf8(),
+                                        "unsupported string escape",
+                                    ))
+                                }
                             }
                         }
-                        '\n' | '\r' => return Err(self.error(offset, "newline inside a quoted string")),
+                        '\n' | '\r' => {
+                            return Err(self.error(offset, "newline inside a quoted string"))
+                        }
                         _ => value.push(ch),
                     }
                 }
@@ -118,7 +137,9 @@ impl Parser<'_> {
 
     fn expect(&mut self, kind: Kind) -> Result<(), String> {
         if self.token.kind != kind {
-            return Err(self.lexer.error(self.token.offset, &format!("expected {kind:?}")));
+            return Err(self
+                .lexer
+                .error(self.token.offset, &format!("expected {kind:?}")));
         }
         self.bump()
     }
@@ -130,7 +151,9 @@ impl Parser<'_> {
                 self.bump()?;
                 Ok(value)
             }
-            _ => Err(self.lexer.error(self.token.offset, "expected a quoted string")),
+            _ => Err(self
+                .lexer
+                .error(self.token.offset, "expected a quoted string")),
         }
     }
 }
@@ -139,7 +162,9 @@ pub fn valid_name(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 96
         && value.trim() == value
-        && !value.chars().any(|ch| ch.is_control() || matches!(ch, ':' | '/' | '\\'))
+        && !value
+            .chars()
+            .any(|ch| ch.is_control() || matches!(ch, ':' | '/' | '\\'))
 }
 
 fn valid_version(value: &str) -> bool {
@@ -171,15 +196,18 @@ fn valid_version(value: &str) -> bool {
                     || !part.starts_with('0'))
         })
     }
-    pre.map_or(true, |v| identifiers(v, true))
-        && build.map_or(true, |v| identifiers(v, false))
+    pre.map_or(true, |v| identifiers(v, true)) && build.map_or(true, |v| identifiers(v, false))
 }
 
 pub fn valid_entry(value: &str) -> bool {
     value.len() <= 512
         && value.ends_with(".srp")
-        && !value.chars().any(|ch| ch.is_control() || matches!(ch, '\\' | ':'))
-        && value.split('/').all(|part| !part.is_empty() && part != "." && part != "..")
+        && !value
+            .chars()
+            .any(|ch| ch.is_control() || matches!(ch, '\\' | ':'))
+        && value
+            .split('/')
+            .all(|part| !part.is_empty() && part != "." && part != "..")
         && !std::path::Path::new(value).is_absolute()
 }
 
@@ -187,21 +215,32 @@ pub fn valid_entry(value: &str) -> bool {
 /// empty block until a reproducible local dependency specification exists.
 pub fn parse(source: &str) -> Result<Manifest, String> {
     let mut parser = Parser {
-        lexer: Lexer { src: source, pos: 0 },
-        token: Token { kind: Kind::End, offset: 0 },
+        lexer: Lexer {
+            src: source,
+            pos: 0,
+        },
+        token: Token {
+            kind: Kind::End,
+            offset: 0,
+        },
     };
     parser.bump()?;
     parser.expect(Kind::Word("project".into()))?;
     let name = parser.quoted()?;
     if !valid_name(&name) {
-        return Err(parser.lexer.error(0, "project name must be 1..96 UTF-8 bytes without separators or controls"));
+        return Err(parser.lexer.error(
+            0,
+            "project name must be 1..96 UTF-8 bytes without separators or controls",
+        ));
     }
     parser.expect(Kind::Open)?;
     let (mut version, mut entry, mut kind) = (None, None, None);
     let mut dependencies = false;
     while parser.token.kind != Kind::Close {
         if parser.token.kind == Kind::End {
-            return Err(parser.lexer.error(parser.token.offset, "missing closing project brace"));
+            return Err(parser
+                .lexer
+                .error(parser.token.offset, "missing closing project brace"));
         }
         let at = parser.token.offset;
         let key = match parser.token.kind.clone() {
@@ -216,7 +255,10 @@ pub fn parse(source: &str) -> Result<Manifest, String> {
             dependencies = true;
             parser.expect(Kind::Open)?;
             if parser.token.kind != Kind::Close {
-                return Err(parser.lexer.error(parser.token.offset, "dependency declarations are not implemented; only an empty block is supported"));
+                return Err(parser.lexer.error(
+                    parser.token.offset,
+                    "dependency declarations are not implemented; only an empty block is supported",
+                ));
             }
             parser.bump()?;
             continue;
@@ -227,27 +269,46 @@ pub fn parse(source: &str) -> Result<Manifest, String> {
             "version" => &mut version,
             "entry" => &mut entry,
             "type" => &mut kind,
-            _ => return Err(parser.lexer.error(at, &format!("unsupported project field '{key}'"))),
+            _ => {
+                return Err(parser
+                    .lexer
+                    .error(at, &format!("unsupported project field '{key}'")))
+            }
         };
         if field.replace(value).is_some() {
-            return Err(parser.lexer.error(at, &format!("duplicate project field '{key}'")));
+            return Err(parser
+                .lexer
+                .error(at, &format!("duplicate project field '{key}'")));
         }
     }
     parser.bump()?;
     parser.expect(Kind::End)?;
-    let version = version.ok_or_else(|| parser.lexer.error(0, "missing required 'version' field"))?;
+    let version =
+        version.ok_or_else(|| parser.lexer.error(0, "missing required 'version' field"))?;
     let entry = entry.ok_or_else(|| parser.lexer.error(0, "missing required 'entry' field"))?;
     let kind = kind.ok_or_else(|| parser.lexer.error(0, "missing required 'type' field"))?;
     if !valid_version(&version) {
-        return Err(parser.lexer.error(0, "version must be a valid semantic version"));
+        return Err(parser
+            .lexer
+            .error(0, "version must be a valid semantic version"));
     }
     if !valid_entry(&entry) {
-        return Err(parser.lexer.error(0, "entry must be a safe relative .srp path without traversal"));
+        return Err(parser.lexer.error(
+            0,
+            "entry must be a safe relative .srp path without traversal",
+        ));
     }
     if kind != "application" {
-        return Err(parser.lexer.error(0, "only project type 'application' is currently supported"));
+        return Err(parser
+            .lexer
+            .error(0, "only project type 'application' is currently supported"));
     }
-    Ok(Manifest { name, version, entry, kind })
+    Ok(Manifest {
+        name,
+        version,
+        entry,
+        kind,
+    })
 }
 
 #[cfg(test)]
@@ -277,7 +338,10 @@ mod tests {
     #[test]
     fn rejects_duplicate_or_unknown_fields() {
         for value in [
-            GOOD.replace("type: \"application\"", "type: \"application\" type: \"application\""),
+            GOOD.replace(
+                "type: \"application\"",
+                "type: \"application\" type: \"application\"",
+            ),
             GOOD.replace("dependencies {}", "dependencies {} dependencies {}"),
             GOOD.replace("dependencies {}", "garbage: \"ignored\""),
         ] {
@@ -287,8 +351,17 @@ mod tests {
 
     #[test]
     fn rejects_wrong_versions_and_missing_fields() {
-        for version in ["0.01.0", "01.0.0", "1.0", "1.0.0-", "1.0.0+",
-            "1.0.0-alpha..1", "1.0.0-01", "1.0.0-α", "1.0.0+foo+bar"] {
+        for version in [
+            "0.01.0",
+            "01.0.0",
+            "1.0",
+            "1.0.0-",
+            "1.0.0+",
+            "1.0.0-alpha..1",
+            "1.0.0-01",
+            "1.0.0-α",
+            "1.0.0+foo+bar",
+        ] {
             let bad = GOOD.replace("0.1.0-beta.2+build.4", version);
             assert!(parse(&bad).is_err(), "{version}");
         }
@@ -297,8 +370,14 @@ mod tests {
 
     #[test]
     fn rejects_unsafe_entries_and_executable_dependency_blocks() {
-        for value in ["../outside.srp", "/root.srp", "src/./main.srp",
-            "C:/tmp/main.srp", "src\\main.srp", "src//main.srp"] {
+        for value in [
+            "../outside.srp",
+            "/root.srp",
+            "src/./main.srp",
+            "C:/tmp/main.srp",
+            "src\\main.srp",
+            "src//main.srp",
+        ] {
             let bad = GOOD.replace("src/main.srp", value);
             assert!(parse(&bad).is_err(), "{value}");
         }
@@ -316,7 +395,14 @@ mod tests {
 
     #[test]
     fn accepts_valid_semver_and_rejects_invalid_pre_release_identifiers() {
-        for v in ["0.0.0", "1.2.3", "1.2.3-alpha", "1.2.3-0", "1.2.3+001", "12.100.999-rc.1+git.abc"] {
+        for v in [
+            "0.0.0",
+            "1.2.3",
+            "1.2.3-alpha",
+            "1.2.3-0",
+            "1.2.3+001",
+            "12.100.999-rc.1+git.abc",
+        ] {
             assert!(valid_version(v), "{v}");
         }
         for v in ["1.2.3-01", "1.2.3-1.02", "1.2.3-", "1.2.3++x"] {
