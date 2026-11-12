@@ -34,7 +34,8 @@ mod linker;
 mod loader;
 pub use inspection::{ImportInfo, SourceLocation};
 pub use loader::{
-    FileSourceLoader, MemorySourceLoader, SourceLoadError, SourceLoadKind, SourceLoader,
+    FileSourceLoader, LoadedSource, MemorySourceLoader, SourceLoadError, SourceLoadKind,
+    SourceLoader,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -318,6 +319,7 @@ struct Import {
 #[derive(Debug, Clone)]
 struct ParsedModule {
     identity: String,
+    revision: Option<u64>,
     program: Program,
     imports: Vec<Import>,
     dependencies: Vec<(Import, SourceId)>,
@@ -340,6 +342,10 @@ impl ModuleGraph {
     pub fn file_count(&self) -> usize {
         self.modules.len()
     }
+    /// The editor revision supplied in the same read as this source's text.
+    pub fn source_revision(&self, source: SourceId) -> Option<u64> {
+        self.modules.get(source)?.revision
+    }
     fn load_one(
         &mut self,
         loader: &dyn SourceLoader,
@@ -357,8 +363,11 @@ impl ModuleGraph {
             .max_total_bytes
             .saturating_sub(self.source_bytes)
             .min(self.limits.max_file_bytes);
-        let source = loader
-            .load(&identity, allowance)
+        let LoadedSource {
+            text: source,
+            revision,
+        } = loader
+            .load_with_revision(&identity, allowance)
             .map_err(|error| load_error(error, span))?;
         if source.len() > allowance {
             return Err(limit(span, "module source bytes"));
@@ -397,6 +406,7 @@ impl ModuleGraph {
         let id = self.modules.len();
         self.modules.push(ParsedModule {
             identity,
+            revision,
             program,
             imports,
             dependencies: Vec::new(),
