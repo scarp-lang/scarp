@@ -20,7 +20,9 @@ The command validates the project's `scarp.project` manifest (or legacy
 direct `.srp` files under `tests/`, sorts their UTF-8 filenames
 lexicographically and compiles/executes each test with the real module
 resolver and interpreter. Test files in nested directories are not run.
-A legacy v1 project may create its own `tests/` directory.
+A legacy v1 project may create its own `tests/` directory. A missing
+`tests/` directory is an empty suite, including after cloning a project whose
+empty directories were omitted from Git.
 
 Each test is **an ordinary, standalone Scarp program**, not an invented
 test-specific language or a Rust unit test. A successful execution is a pass;
@@ -74,8 +76,7 @@ PASS tests/boundary.srp
 When a test fails, its line is reported as `FAIL` and a bounded diagnostic
 is written to stderr. Failure status is exit code 1. Invalid CLI arguments
 return exit code 2. No tests found reports an explicit zero-test message and
-returns success; CI consumers should check this message if a nonempty suite
-is required. A missing `tests/` directory is an error.
+returns success. Use `--require-tests` in CI when a nonempty suite is required.
 
 ## Discovery and structured reports (unreleased stacked PR)
 
@@ -122,8 +123,8 @@ per-test runtime/compile failures return status 1 but still produce a complete
 result object. An empty suite reports discovered=0 and returns status 0;
 CI users who require tests must explicitly check this count.
 
-Unsafe project/test paths, malformed manifests, missing tests directories
-and invalid CLI arguments produce an error on stderr and **no JSON stdout**.
+Unsafe project/test paths, malformed manifests, and invalid CLI arguments
+produce an error on stderr and **no JSON stdout**.
 The `--json` flag does not make these setup errors machine-readable yet.
 The normal human-readable `scarp test` format is unchanged.
 
@@ -144,7 +145,7 @@ scarp test --require-tests --json calculator
 scarp test --require-tests --list calculator
 ```
 
-When `tests/` contains zero immediate `.srp` files, this flag returns
+When `tests/` is absent or contains zero immediate `.srp` files, this flag returns
 exit status **1**, in both execution and read-only listing modes.
 The usual zero-test human-readable message or complete JSON report is
 still written to stdout; diagnostics and setup errors remain on stderr.
@@ -156,7 +157,6 @@ The default `scarp test` remains backward compatible: an empty,
 well-formed suite still reports zero tests and exits successfully.
 The option does not change filename ordering, symlink restrictions,
 source execution behavior, discovery limits, or the JSON v1 schema.
-A missing `tests/` directory is still a separate setup error.
 
 ## Filename substring selection (separate unreleased stacked development PR)
 
@@ -215,7 +215,8 @@ existing no-input behavior: calling `read_line()` raises the compiler's
 normal input-unavailable diagnostic. Test processes never consume shell stdin.
 
 - Fixtures are optional `tests/NAME.stdin` companions to immediate
-  `tests/NAME.srp` files, with the same exact filename stem.
+  `tests/NAME.srp` files. Use the same spelling for the two stems so the
+  fixture also resolves on case-sensitive filesystems.
 - Each fixture must be an ordinary, contained file, not a symlink, directory,
   or file outside the canonical project root. Bad fixtures fail their selected
   test with a bounded diagnostic and preserve the complete JSON report.
@@ -233,14 +234,12 @@ normal input-unavailable diagnostic. Test processes never consume shell stdin.
   program output into trusted PASS/FAIL or structured JSON streams. Diagnostics
   may still contain source-line excerpts.
 
-This capability is **not** in published alpha.7 or the separately qualified
-alpha.8 project integration PR #225. It requires review and integration of its
-stacked dependencies before any release.
+This capability is part of the combined alpha.8 development candidate.
 
 ## Limits and security
 
 - Discovery is nonrecursive and limited to 64 immediate `.srp` files.
-- The `tests/` directory must be a real directory, not a symlink. Each
+- When present, `tests/` must be an ordinary directory inside the project. Each
   discovered `.srp` must be a regular file, not a symlink or directory.
 - Module loads use the same project-root containment checks as the existing
   source loader. Out-of-root imports are rejected.

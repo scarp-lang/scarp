@@ -6,7 +6,7 @@
 
 use std::{
     fs,
-    io::{Cursor, Read, Write},
+    io::{self, Cursor, Read, Write},
     path::{Path, PathBuf},
 };
 
@@ -36,16 +36,24 @@ fn report(error: impl std::fmt::Display, stderr: &mut impl Write) -> u8 {
     1
 }
 
-fn suite(directory: &Path) -> Result<(FileSourceLoader, Vec<(String, PathBuf)>), String> {
-    // The manifest/entrypoint must validate before inspecting or executing tests.
-    let _ = super::project::entry_file(directory)?;
-    let root = fs::canonicalize(directory)
-        .map_err(|error| format!("could not open project directory: {error}"))?;
+fn discover(root: &Path) -> Result<Vec<(String, PathBuf)>, String> {
     let test_dir = root.join("tests");
-    let metadata = fs::symlink_metadata(&test_dir)
-        .map_err(|error| format!("could not inspect project tests directory: {error}"))?;
+    let metadata = match fs::symlink_metadata(&test_dir) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(format!(
+                "could not inspect project tests directory: {error}"
+            ))
+        }
+    };
     if metadata.file_type().is_symlink() || !metadata.is_dir() {
         return Err("project tests path must be an ordinary directory, not a symlink".into());
+    }
+    let test_dir = fs::canonicalize(test_dir)
+        .map_err(|error| format!("could not resolve project tests directory: {error}"))?;
+    if !test_dir.starts_with(root) {
+        return Err("project tests directory resolves outside the project root".into());
     }
     let mut files = Vec::new();
     for entry in
@@ -84,9 +92,7 @@ fn suite(directory: &Path) -> Result<(FileSourceLoader, Vec<(String, PathBuf)>),
         }
     }
     files.sort_by(|a, b| a.0.cmp(&b.0));
-    let loader = FileSourceLoader::new(&root)
-        .map_err(|error| format!("could not open trusted project loader: {error}"))?;
-    Ok((loader, files))
+    Ok(files)
 }
 
 /// Read the optional sibling test input without reading process stdin.
@@ -98,7 +104,7 @@ fn input_fixture(label: &str, test_path: &Path, root: &Path) -> Result<Option<Ve
     let path = test_path.with_extension("stdin");
     let meta = match fs::symlink_metadata(&path) {
         Ok(meta) => meta,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(format!("{label}: cannot inspect .stdin fixture: {error}")),
     };
     if !meta.file_type().is_file() {
@@ -196,8 +202,12 @@ pub fn run(
     require_tests: bool,
     filter: Option<&str>,
 ) -> u8 {
-    let (loader, files) = match suite(directory) {
-        Ok(suite) => suite,
+    let project = match super::project::info(directory) {
+        Ok(project) => project,
+        Err(error) => return report(error, stderr),
+    };
+    let files = match discover(&project.root) {
+        Ok(files) => files,
         Err(error) => return report(error, stderr),
     };
     // Inspect and validate *every* .srp entry before selecting by filename.
@@ -259,9 +269,18 @@ pub fn run(
     let mut passed = 0usize;
     let mut failed = 0usize;
     let mut cases = Vec::new();
+    let loader = match FileSourceLoader::new(&project.root) {
+        Ok(loader) => loader,
+        Err(error) => {
+            return report(
+                format_args!("could not open trusted project loader: {error}"),
+                stderr,
+            )
+        }
+    };
     for (label, test_path) in files {
-        let mut program_stdout = Vec::new();
-        let mut program_stderr = Vec::new();
+        let mut program_stdout = io::sink();
+        let mut program_stderr = io::sink();
         let result = modules::compile_with_loader(&label, &loader, ModuleLimits::default())
             .map_err(|error| error.to_string())
             .and_then(|program| {

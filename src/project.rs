@@ -170,6 +170,7 @@ pub fn init(directory: &Path) -> Result<(), String> {
 /// manifest read; the canonical entrypoint must remain inside the project.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectInfo {
+    pub root: PathBuf,
     pub name: String,
     pub version: Option<String>,
     pub entry: String,
@@ -275,6 +276,7 @@ pub fn info(directory: &Path) -> Result<ProjectInfo, String> {
         return Err("project entry must be an existing .srp file".into());
     }
     Ok(ProjectInfo {
+        root,
         name,
         version,
         entry,

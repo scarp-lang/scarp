@@ -70,6 +70,7 @@ mod tests {
 
     fn example() -> ProjectInfo {
         ProjectInfo {
+            root: PathBuf::from("ignored"),
             name: "unicode हिंदी \"quoted\"".into(),
             version: Some("1.2.3-beta.1".into()),
             kind: "application".into(),

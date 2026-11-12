@@ -111,7 +111,7 @@ fn compilation_and_runtime_failures_both_fail_suite_without_leaking_program_outp
 }
 
 #[test]
-fn requires_valid_manifest_and_test_directory() {
+fn requires_valid_manifest_and_rejects_non_directory_tests_path() {
     let ws = Workspace::new();
     let root = project(&ws, "guards");
     fs::remove_file(root.join("scarp.project")).unwrap();
@@ -126,11 +126,43 @@ fn requires_valid_manifest_and_test_directory() {
     assert_eq!(invalid.status.code(), Some(1), "{invalid:?}");
     assert!(invalid.stdout.is_empty());
 
-    let other = project(&ws, "missing-tests");
+    let other = project(&ws, "invalid-tests-path");
     fs::remove_dir(other.join("tests")).unwrap();
-    let missing = command(&["test"], &other);
-    assert_eq!(missing.status.code(), Some(1), "{missing:?}");
-    assert!(missing.stdout.is_empty());
+    fs::write(other.join("tests"), "not a directory").unwrap();
+    let invalid = command(&["test", "--list", "--json"], &other);
+    assert_eq!(invalid.status.code(), Some(1), "{invalid:?}");
+    assert!(invalid.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&invalid.stderr).contains("ordinary directory"));
+}
+
+#[test]
+fn absent_test_directory_behaves_like_an_empty_suite() {
+    let ws = Workspace::new();
+    let legacy = ws.child("legacy-empty");
+    let created = command(&["create", "legacy-empty"], &ws.0);
+    assert!(created.status.success(), "{created:?}");
+    let modern = project(&ws, "modern-empty");
+    fs::remove_dir(modern.join("tests")).unwrap();
+
+    for root in [legacy, modern] {
+        for (args, status, mode) in [
+            (&["test", "--json"][..], 0, "run"),
+            (&["test", "--json", "--require-tests"][..], 1, "run"),
+            (
+                &["test", "--json", "--list", "--require-tests"][..],
+                1,
+                "list",
+            ),
+        ] {
+            let result = command(args, &root);
+            assert_eq!(result.status.code(), Some(status), "{result:?}");
+            assert!(result.stderr.is_empty(), "{result:?}");
+            assert_eq!(String::from_utf8(result.stdout).unwrap(), format!(
+                "{{\"schema_version\":1,\"mode\":\"{mode}\",\"discovered\":0,\"passed\":0,\"failed\":0,\"tests\":[]}}\n"
+            ));
+        }
+        assert!(!root.join("tests").exists());
+    }
 }
 
 #[test]

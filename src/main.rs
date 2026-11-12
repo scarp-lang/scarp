@@ -27,7 +27,7 @@ Usage:
 Commands:
   inspect symbols|references [--json] <file.srp|project-directory>  Source navigation
   exec <file.srp>                  Execute a Scarp program
-  verify <file.srp|directory>      Perform static source or project validation
+  verify [file.srp|directory]      Perform static source or project validation
   inspect tokens <file.srp>        Inspect lexer tokens and source locations
   create <directory>               Create a legacy Scarp.project app
   init <directory>                 Initialize a new scarp.project app
@@ -71,11 +71,12 @@ verification. Native executable generation and package management are not suppor
 ";
 
 const VERIFY_HELP: &str =
-    "Usage: scarp verify [--diagnostic-format=json|text] [--] <file.srp|project-directory>
+    "Usage: scarp verify [--diagnostic-format=json|text] [--] [file.srp|project-directory]
 
-Statically validate the selected source file or an explicit Scarp project
-directory. Project mode validates scarp.project or legacy Scarp.project and resolves its contained
-entrypoint using the same safety checks as launch.
+Statically validate the selected source file or a Scarp project. With no
+arguments, validate the current directory if it contains a project manifest.
+Project mode validates scarp.project or legacy Scarp.project and resolves its
+contained entrypoint using the same safety checks as launch.
 The real compiler loads imports, resolves names/types and checks constants
 without executing runtime statements or writing artifacts.
 Runtime arithmetic, contracts, dynamic paths and budgets are not evaluated.
@@ -185,6 +186,8 @@ even for --list/--json; the zero-test report remains visible for CI tooling.
 It does not support regex/globs; use 1..128 bytes, no leading dash, separators,
 colon or control characters. An empty selection reports zero tests.
 Files are sorted lexicographically, limited to 64, and checked for symlinks.
+An absent tests/ directory counts as an empty suite.
+An optional sibling NAME.stdin fixture supplies bounded per-test input.
 Tests run only trusted Scarp code with existing deterministic default budgets.
 Interactive stdin and ordinary program stdout are not forwarded.
 A suite with no tests succeeds by default and reports an explicit zero-test result.
@@ -648,20 +651,21 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             }
         };
     }
-    // A source path keeps the historical single-file run behavior. A directory
-    // (or no argument) uses the project-aware launch path with identical budgets.
+    if matches!(args.as_slice(), [command] if command == "run" || command == "verify")
+        && has_project_manifest(Path::new("."))
+    {
+        args.push(OsString::from("."));
+    }
+    // A source path keeps the historical single-file run behavior. A project
+    // directory uses the project-aware launch path with identical budgets.
     if args.first().is_some_and(|command| command == "run")
-        && ((args.len() == 1 && has_project_manifest(Path::new(".")))
-            || (args.len() > 1
-                && args
-                    .last()
-                    .is_some_and(|path| has_project_manifest(Path::new(path)))))
+        && args.len() > 1
+        && args
+            .last()
+            .is_some_and(|path| has_project_manifest(Path::new(path)))
     {
         let mut forwarded = args.clone();
         forwarded[0] = OsString::from("launch");
-        if args.len() == 1 {
-            forwarded.push(OsString::from("."));
-        }
         return dispatch(forwarded, output, errors);
     }
     if args.first().is_some_and(|command| command == "launch") {

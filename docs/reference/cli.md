@@ -1,5 +1,20 @@
 # Command-line reference
 
+## Project commands in the v0.0.6-alpha.8 development candidate
+
+| Command | Behavior |
+| --- | --- |
+| `scarp init DIRECTORY` | Scaffold a new project with a declarative manifest and starter source |
+| `scarp run [DIRECTORY]` | Execute the project entrypoint with the interpreter |
+| `scarp verify [DIRECTORY]` | Type-check the entrypoint and imports without executing runtime statements |
+| `scarp project info [--json] [DIRECTORY]` | Inspect the validated manifest and entrypoint |
+| `scarp test [--list] [--json] [--require-tests] [--filter SUBSTRING] [DIRECTORY]` | Discover or run project tests |
+
+The optional directory defaults to the current project. `run FILE` and
+`verify FILE` continue to accept standalone source files. See the
+[manifest format and migration](../project-v2.md), [test report and fixture
+contracts](../project-testing.md), and [assertion syntax](../assertions.md).
+
 **v0.0.6-alpha.6 published prerelease:** `exec`/`run`/`launch` support redirected
 UTF-8 `read_line()` with `--max-input-line-bytes`, `--max-input-bytes` and
 `--max-input-reads`. `--max-tuple-bytes` limits new tuple payload. Terminal reads

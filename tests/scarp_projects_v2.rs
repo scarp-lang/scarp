@@ -93,6 +93,21 @@ fn current_directory_project_run_keeps_existing_file_run_behavior() {
 }
 
 #[test]
+fn current_directory_project_verify_is_static_and_requires_a_project() {
+    let workspace = Workspace::new();
+    let project = workspace.child("current");
+    init(&project);
+    fs::write(project.join("src/main.srp"), "assert(false);\n").unwrap();
+
+    let verified = inside(&["verify"], &project);
+    assert!(verified.status.success(), "{verified:?}");
+    assert!(verified.stdout.is_empty());
+    assert!(verified.stderr.is_empty());
+    assert_eq!(inside(&["run"], &project).status.code(), Some(1));
+    assert_eq!(inside(&["verify"], &workspace.0).status.code(), Some(2));
+}
+
+#[test]
 fn modern_projects_load_real_imports_and_verify_without_runtime_execution() {
     let workspace = Workspace::new();
     let project = workspace.child("multi-file");

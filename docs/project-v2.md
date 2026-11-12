@@ -16,6 +16,10 @@ scarp verify hello
 scarp run hello
 ```
 
+From inside `hello`, run `scarp verify`, `scarp run`, or `scarp project info`
+with no directory argument. The [calculator example](../examples/projects/calculator/README.md)
+shows a project with source imports, tests, and a per-test input fixture.
+
 The generated directory contains:
 
 ```text

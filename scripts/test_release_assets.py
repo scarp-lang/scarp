@@ -270,6 +270,23 @@ class ReleaseAssets(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "missing " + re.escape(member)):
                     verifier.verify(self.directory, version, COMMIT)
 
+    def test_alpha8_requires_project_example_fixture_and_inherited_assets(self):
+        version = "0.0.6-alpha.8"
+        files = self.core_release_files(version)
+        self.build(version=version, extra_files=files)
+        self.assertEqual(len(verifier.verify(self.directory, version, COMMIT).splitlines()), 3)
+        for member in (
+            "docs/releases/v0.0.6-alpha.8-publication.md",
+            "examples/projects/calculator/scarp.project",
+            "examples/projects/calculator/tests/input.stdin",
+            "examples/conditional_unicode.srp",
+        ):
+            with self.subTest(member=member):
+                damaged = {name: data for name, data in files.items() if name != member}
+                self.build(version=version, omit=member, extra_files=damaged)
+                with self.assertRaisesRegex(ValueError, "missing " + re.escape(member)):
+                    verifier.verify(self.directory, version, COMMIT)
+
     def test_alpha6_4_requires_scientific_and_native_release_assets(self):
         version = "0.0.6-alpha.4"
         self.build(version=version)
