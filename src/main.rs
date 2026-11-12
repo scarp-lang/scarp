@@ -448,7 +448,10 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         }
         _ => {}
     }
-    if args.first().is_some_and(|command| command == "create" || command == "init") {
+    if args
+        .first()
+        .is_some_and(|command| command == "create" || command == "init")
+    {
         let modern = args[0] == "init";
         let command_help = if modern { INIT_HELP } else { CREATE_HELP };
         let destination = match args.as_slice() {
@@ -464,7 +467,11 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             return 2;
         };
         let destination = Path::new(destination);
-        let created = if modern { project::init(destination) } else { project::create(destination) };
+        let created = if modern {
+            project::init(destination)
+        } else {
+            project::create(destination)
+        };
         return match created {
             Ok(()) => write_output(
                 writeln!(output, "Created Scarp project: {}", destination.display()),
