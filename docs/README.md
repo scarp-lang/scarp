@@ -1,5 +1,10 @@
 # Scarp documentation
 
+**0.0.6-alpha.7 prerelease** was published on **11 November 2026**, adding
+typed conditional expressions and Unicode scalar string escapes.
+[Public notes](releases/v0.0.6-alpha.7-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.7-validation.md)
+
 **0.0.6-alpha.6 prerelease** was published on **10 November 2026**, adding
 bounded input, scalar/text utilities and immutable tuples. See [public notes](releases/v0.0.6-alpha.6-publication.md)
 and [exact-source verification](releases/v0.0.6-alpha.6-validation.md).
@@ -61,7 +66,7 @@ updated for the **0.0.6-alpha.6 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
 contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.6-alpha.6](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.6),
+[0.0.6-alpha.7](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.7),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)

@@ -36,7 +36,7 @@ Published v0.0.6-alpha.1 adds static `inspect symbols` and `inspect references`
 commands, which are absent from older alpha.5 packages.
 
 The latest published prerelease is
-[v0.0.6-alpha.6](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.6).
+[v0.0.6-alpha.7](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.7).
 It retains project-directory module inspection. The experimental C11 scalar
 source emitter is a Rust embedding API, **not** a Scarp CLI command;
 `scarp compile` still does not exist.
@@ -335,11 +335,11 @@ graph inspections; runtime budgets do not apply. They accept the existing
 for snapshot-local IDs, precise source positions, limits, schema-v1 fixtures,
 implicit definitions and failure behavior. These commands are not in alpha.5.
 
-## BigInt development flags (post-alpha.5 branch)
+## BigInt development flags
 
 The [BigInt milestone](../bigint.md) adds `--max-bigint-digits` (default 10,000,
 maximum 1,000,000) and `--max-bigint-bytes` (default 8,388,608). `exec`/`run` and
 evaluating `check` accept them before the filename; static `verify` rejects
 runtime flags. E0051 diagnoses malformed decimal text, E0052 digit/payload
 quota exhaustion, and E0053 limb reservation failure. `explain` documents all
-three codes. These features are absent from published alpha.5.
+three codes. [BigInt integration PR #200](https://github.com/scarp-lang/scarp/pull/200)

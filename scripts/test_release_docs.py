@@ -11,7 +11,7 @@ import json
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLISHED_VERSION = "0.0.6-alpha.6"
+PUBLISHED_VERSION = "0.0.6-alpha.7"
 ALPHA6_SOURCE = "cdf6a3924ec2a36c7beca5a9aec4f01a0bce515e"
 HISTORICAL_ALPHA3 = "0.0.6-alpha.3"
 HISTORICAL_ALPHA2 = "0.0.6-alpha.2"
@@ -89,12 +89,17 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
             "docs/reference/cli.md": (f"v{PUBLISHED_VERSION}",),
             "docs/development/feature-matrix.md": (f"Cargo declares `{version}`",),
             "CHANGELOG.md": (
-                f"## {version} — prerelease candidate",
-                f"## {PUBLISHED_VERSION} — published GitHub prerelease, 2026-11-10",
+                f"## {PUBLISHED_VERSION} — published GitHub prerelease, 2026-11-11",
+                "## 0.0.6-alpha.6 — published GitHub prerelease, 2026-11-10",
             ),
             f"docs/releases/v{version}-publication.md": (
                 f"# Scarp v{version} — prerelease",
                 "## Compatibility and limits",
+            ),
+            f"docs/releases/v{PUBLISHED_VERSION}-validation.md": (
+                "Published GitHub experimental prerelease", "draft=false", "prerelease=true",
+                "b1c1fd232b418267d95520c69ee563ac99ecae30", "4712acbd01914b86ea2fdfcb904b24edf44e5f44", "441415412", "42987993233",
+                "fc584bd9eec7d2ce10a31892d418a1319543c669b5c36ef390761f885d11d319",
             ),
             "docs/releases/v0.0.6-alpha.5.md": ("Scarp v0.0.6-alpha.5", "source candidate", "Publication gates"),
             "docs/releases/v0.0.6-alpha.5-publication.md": (
@@ -224,7 +229,8 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
     def test_latest_published_anchor_and_immutable_candidate_snapshot(self):
         version = PUBLISHED_VERSION
         self.assertEqual(PACKAGE_VERSION, package_version())
-        self.assertNotEqual(version, PACKAGE_VERSION)
+        self.assertEqual(version, PACKAGE_VERSION)
+        self.assertFalse((ROOT / ".github/release-request.json").exists())
         for filename in ("README.md", "docs/README.md", "docs/compatibility.md"):
             with self.subTest(file=filename):
                 text = (ROOT / filename).read_text(encoding="utf-8")
@@ -259,7 +265,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         request_path = ROOT / ".github/release-request.json"
         if request_path.exists():
             request = json.loads(request_path.read_text(encoding="utf-8"))
-            self.assertNotEqual(request.get("version"), PUBLISHED_VERSION)
+            self.assertNotEqual(request.get("version"), "0.0.6-alpha.6")
             self.assertNotIn(ALPHA6_SOURCE, (request.get("source_commit"), request.get("resume_commit")))
         self.assert_no_reused_alpha4_authorization()
         for filename in (
