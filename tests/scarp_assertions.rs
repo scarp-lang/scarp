@@ -289,3 +289,64 @@ fn parser_and_source_rebasing_retain_real_assertion_spans() {
     assert_eq!(location.column, 1);
     assert_eq!(&source[span.start..span.start + 6], "assert");
 }
+
+#[test]
+fn json_diagnostics_preserve_assertion_code_and_utf8_source_location() {
+    let ws = Workspace::new();
+    let source = ws.source(
+        "unicode-diagnostic.srp",
+        "// नमस्ते 🌍\nassert(false, \"असफल assertion\");\n",
+    );
+    let result = Command::new(env!("CARGO_BIN_EXE_scarp"))
+        .args(["exec", "--diagnostic-format=json"])
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert_eq!(result.status.code(), Some(1), "{result:?}");
+    assert!(result.stdout.is_empty(), "{result:?}");
+    let text = String::from_utf8_lossy(&result.stderr);
+    assert!(text.contains("\"schema_version\":1"), "{text}");
+    assert!(text.contains("\"code\":\"E0062\""), "{text}");
+    assert!(text.contains("\"span_encoding\":\"utf-8-bytes\""), "{text}");
+    assert!(text.contains("\"line\":2,\"column\":1"), "{text}");
+    assert!(text.contains("unicode-diagnostic.srp"), "{text}");
+}
+
+#[test]
+fn assertion_does_not_hide_underlying_predicate_runtime_errors() {
+    let ws = Workspace::new();
+    let source = ws.source(
+        "arithmetic-error.srp",
+        "assert(1 / 0 == 0, \"not an assertion failure\");\n",
+    );
+    let result = file_cli("exec", &source);
+    assert_eq!(result.status.code(), Some(1), "{result:?}");
+    let text = String::from_utf8_lossy(&result.stderr);
+    assert!(text.contains("E0008"), "{text}");
+    assert!(!text.contains("E0062"), "{text}");
+}
+
+#[test]
+fn assertions_are_not_output_statements_and_allow_tail_recursion() {
+    let ws = Workspace::new();
+    let source = ws.source(
+        "recursion.srp",
+        r#"pure funcra countdown(n: integer) -> integer {
+    assert(n >= 0);
+    if n == 0 {
+        return 0;
+    }
+    return countdown(n - 1);
+}
+assert(countdown(1000) == 0);
+"#,
+    );
+    let result = Command::new(env!("CARGO_BIN_EXE_scarp"))
+        .args(["exec", "--max-prints", "0"])
+        .arg(&source)
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{result:?}");
+    assert!(result.stdout.is_empty());
+    assert!(result.stderr.is_empty());
+}
