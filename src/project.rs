@@ -101,9 +101,9 @@ pub fn create(directory: &Path) -> Result<(), String> {
 }
 
 
-/// Initialize a new project using the declarative \`scarp.project\` format.
+/// Initialize a new project using the declarative `scarp.project` format.
 ///
-/// \`create\` remains the legacy v1 workflow and is intentionally unchanged.
+/// `create` remains the legacy v1 workflow and is intentionally unchanged.
 /// Refuse existing directories; clean up only paths created by this call.
 pub fn init(directory: &Path) -> Result<(), String> {
     let name = directory
@@ -130,7 +130,7 @@ pub fn init(directory: &Path) -> Result<(), String> {
             "project \"{escaped_name}\" {{\n    version: \"0.1.0\"\n    entry: \"src/main.srp\"\n    type: \"application\"\n    dependencies {{}}\n}}\n"
         );
         let readme = format!(
-            "# {name}\n\nA Scarp application.\n\nRun from the project directory:\n\n\`\`\`sh\nscarp verify .\nscarp run .\n\`\`\`\n\nThe project is defined by \`scarp.project\`. No dependencies are installed.\n"
+            "# {name}\n\nA Scarp application.\n\nRun from the project directory:\n\n```sh\nscarp verify .\nscarp run .\n```\n\nThe project is defined by `scarp.project`. No dependencies are installed.\n"
         );
         let files: [(&str, &[u8]); 4] = [
             (MANIFEST_V2, manifest.as_bytes()),
