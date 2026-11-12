@@ -103,6 +103,7 @@ schema-v1 JSON error envelope when requested with
 | `scarp run` | Execute the project in the current directory |
 | `scarp verify DIRECTORY` | Compile and type-check project without runtime execution |
 | `scarp test [DIRECTORY]` | Execute nonrecursive `tests/*.srp` test programs (stacked development PR #218) |
+| `scarp project info [--json] [DIRECTORY]` | Display read-only, validated project metadata (stacked development PR) |
 | `scarp launch DIRECTORY` | Existing explicit project command, now resolves both manifests |
 | `scarp create DIRECTORY` | Retained legacy v1 project initialization |
 | `scarp run FILE.srp` | Retained single-file interpreter workflow |
@@ -141,7 +142,8 @@ No package registry, dependency resolution, lockfile, remote installation,
 workspace discovery is added here. The empty dependencies block reserves
 syntax without pretending those features work. The separate [project test
 runner](project-testing.md) defines the development-only `scarp test`
-workflow. Broader standard-library and tooling features require independent,
+workflow. The separate [project information command](project-info.md)
+provides read-only metadata inspection. Broader standard-library and tooling features require independent,
 tested development slices.
 
 CI must pass on Windows, Linux, macOS and Rust 1.74 before this format can
