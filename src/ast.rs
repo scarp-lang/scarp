@@ -6,6 +6,9 @@ use crate::value::FiniteFloat;
 mod rebase;
 pub(crate) use rebase::relocate;
 
+/// Maximum decoded UTF-8 bytes in a native assertion's static message.
+pub const MAX_ASSERT_MESSAGE_BYTES: usize = 256;
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Program {
     pub statements: Vec<Statement>,
