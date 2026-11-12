@@ -6,6 +6,7 @@ use std::{
 };
 
 pub const MANIFEST: &str = "Scarp.project";
+pub const MANIFEST_V2: &str = "scarp.project";
 const MAX_MANIFEST_BYTES: u64 = 4096;
 const STARTER: &[u8] = b"print(\"Hello from Scarp!\");\n";
 
@@ -99,6 +100,70 @@ pub fn create(directory: &Path) -> Result<(), String> {
     result
 }
 
+
+/// Initialize a new project using the declarative \`scarp.project\` format.
+///
+/// \`create\` remains the legacy v1 workflow and is intentionally unchanged.
+/// Refuse existing directories; clean up only paths created by this call.
+pub fn init(directory: &Path) -> Result<(), String> {
+    let name = directory
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or("project directory must have a UTF-8 name")?;
+    if !crate::project_manifest::valid_name(name) {
+        return Err("project name must be 1..96 UTF-8 bytes without separators or controls".into());
+    }
+    fs::create_dir(directory).map_err(|error| {
+        format!("could not create project directory '{}': {error}", directory.display())
+    })?;
+    let mut created_files = Vec::new();
+    let mut created_directories = Vec::new();
+    let result = (|| -> Result<(), String> {
+        for sub in ["src", "tests", "examples"] {
+            let path = directory.join(sub);
+            fs::create_dir(&path)
+                .map_err(|error| format!("could not create '{}': {error}", path.display()))?;
+            created_directories.push(path);
+        }
+        let escaped_name = name.replace('"', "\\\"");
+        let manifest = format!(
+            "project \"{escaped_name}\" {{\n    version: \"0.1.0\"\n    entry: \"src/main.srp\"\n    type: \"application\"\n    dependencies {{}}\n}}\n"
+        );
+        let readme = format!(
+            "# {name}\n\nA Scarp application.\n\nRun from the project directory:\n\n\`\`\`sh\nscarp verify .\nscarp run .\n\`\`\`\n\nThe project is defined by \`scarp.project\`. No dependencies are installed.\n"
+        );
+        let files: [(&str, &[u8]); 4] = [
+            (MANIFEST_V2, manifest.as_bytes()),
+            ("src/main.srp", STARTER),
+            ("README.md", readme.as_bytes()),
+            (".gitignore", b"/target/\n"),
+        ];
+        for (name, contents) in files {
+            let path = directory.join(name);
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+                .map_err(|error| format!("could not create '{}': {error}", path.display()))?;
+            created_files.push(path.clone());
+            file.write_all(contents)
+                .map_err(|error| format!("could not write '{}': {error}", path.display()))?;
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        for file in created_files.iter().rev() {
+            let _ = fs::remove_file(file);
+        }
+        for dir in created_directories.iter().rev() {
+            let _ = fs::remove_dir(dir);
+        }
+        // Nonrecursive: never remove another process's foreign content.
+        let _ = fs::remove_dir(directory);
+    }
+    result
+}
+
 /// Resolve a user-selected project root to one existing, contained .srp file.
 /// No ancestor search, symlink escape, source execution, or registry access.
 pub fn entry_file(directory: &Path) -> Result<PathBuf, String> {
@@ -107,7 +172,15 @@ pub fn entry_file(directory: &Path) -> Result<PathBuf, String> {
     if !root.is_dir() {
         return Err("project path must be a directory".into());
     }
-    let manifest_path = root.join(MANIFEST);
+    // Prefer the new filename; on case-insensitive filesystems a legacy
+    // Scarp.project may resolve at both spellings, so the format is selected
+    // from the file's actual content instead of filename case alone.
+    let new_path = root.join(MANIFEST_V2);
+    let manifest_path = if fs::symlink_metadata(&new_path).is_ok() {
+        new_path
+    } else {
+        root.join(MANIFEST)
+    };
     let link_meta = fs::symlink_metadata(&manifest_path)
         .map_err(|error| format!("could not open {MANIFEST}: {error}"))?;
     if link_meta.file_type().is_symlink() || !link_meta.file_type().is_file() {
@@ -131,28 +204,35 @@ pub fn entry_file(directory: &Path) -> Result<PathBuf, String> {
         return Err("project manifest exceeds 4096 bytes".into());
     }
     let content = std::str::from_utf8(&bytes).map_err(|_| "project manifest must be UTF-8")?;
-    let mut lines = content.lines();
-    if lines.next() != Some("scarp-project: 1") {
-        return Err("expected 'scarp-project: 1' as the first manifest line".into());
-    }
-    let name = lines
-        .next()
-        .and_then(|line| line.strip_prefix("name: "))
-        .ok_or("expected 'name: NAME' as the second manifest line")?;
-    if !valid_name(name) {
-        return Err("invalid project name in manifest".into());
-    }
-    let entry = lines
-        .next()
-        .and_then(|line| line.strip_prefix("entry: "))
-        .ok_or("expected 'entry: SOURCE.srp' as the third manifest line")?;
-    if lines.next().is_some() {
-        return Err("unknown or duplicate project manifest fields".into());
-    }
-    if !valid_entry(entry) {
-        return Err("entry must be a contained, relative .srp path without traversal".into());
-    }
-    let target = fs::canonicalize(root.join(entry))
+    let entry = if content.starts_with("scarp-project:") {
+        // Legacy v1 remains accepted verbatim. Preserve its strict line order
+        // and existing diagnostics for previously generated projects.
+        let mut lines = content.lines();
+        if lines.next() != Some("scarp-project: 1") {
+            return Err("expected 'scarp-project: 1' as the first manifest line".into());
+        }
+        let name = lines
+            .next()
+            .and_then(|line| line.strip_prefix("name: "))
+            .ok_or("expected 'name: NAME' as the second manifest line")?;
+        if !valid_name(name) {
+            return Err("invalid project name in manifest".into());
+        }
+        let entry = lines
+            .next()
+            .and_then(|line| line.strip_prefix("entry: "))
+            .ok_or("expected 'entry: SOURCE.srp' as the third manifest line")?;
+        if lines.next().is_some() {
+            return Err("unknown or duplicate project manifest fields".into());
+        }
+        if !valid_entry(entry) {
+            return Err("entry must be a contained, relative .srp path without traversal".into());
+        }
+        entry.to_owned()
+    } else {
+        crate::project_manifest::parse(content)?.entry
+    };
+    let target = fs::canonicalize(root.join(&entry))
         .map_err(|error| format!("could not open project entry '{entry}': {error}"))?;
     if !target.starts_with(&root) {
         return Err("project entry resolves outside the project directory".into());
