@@ -226,10 +226,11 @@ pub fn parse(source: &str) -> Result<Manifest, String> {
     };
     parser.bump()?;
     parser.expect(Kind::Word("project".into()))?;
+    let name_offset = parser.token.offset;
     let name = parser.quoted()?;
     if !valid_name(&name) {
         return Err(parser.lexer.error(
-            0,
+            name_offset,
             "project name must be 1..96 UTF-8 bytes without separators or controls",
         ));
     }
@@ -264,6 +265,7 @@ pub fn parse(source: &str) -> Result<Manifest, String> {
             continue;
         }
         parser.expect(Kind::Colon)?;
+        let value_offset = parser.token.offset;
         let value = parser.quoted()?;
         let field = match key.as_str() {
             "version" => &mut version,
@@ -275,7 +277,7 @@ pub fn parse(source: &str) -> Result<Manifest, String> {
                     .error(at, &format!("unsupported project field '{key}'")))
             }
         };
-        if field.replace(value).is_some() {
+        if field.replace((value, value_offset)).is_some() {
             return Err(parser
                 .lexer
                 .error(at, &format!("duplicate project field '{key}'")));
@@ -283,25 +285,27 @@ pub fn parse(source: &str) -> Result<Manifest, String> {
     }
     parser.bump()?;
     parser.expect(Kind::End)?;
-    let version =
+    let (version, version_offset) =
         version.ok_or_else(|| parser.lexer.error(0, "missing required 'version' field"))?;
-    let entry = entry.ok_or_else(|| parser.lexer.error(0, "missing required 'entry' field"))?;
-    let kind = kind.ok_or_else(|| parser.lexer.error(0, "missing required 'type' field"))?;
+    let (entry, entry_offset) =
+        entry.ok_or_else(|| parser.lexer.error(0, "missing required 'entry' field"))?;
+    let (kind, kind_offset) =
+        kind.ok_or_else(|| parser.lexer.error(0, "missing required 'type' field"))?;
     if !valid_version(&version) {
         return Err(parser
             .lexer
-            .error(0, "version must be a valid semantic version"));
+            .error(version_offset, "version must be a valid semantic version"));
     }
     if !valid_entry(&entry) {
         return Err(parser.lexer.error(
-            0,
+            entry_offset,
             "entry must be a safe relative .srp path without traversal",
         ));
     }
     if kind != "application" {
         return Err(parser
             .lexer
-            .error(0, "only project type 'application' is currently supported"));
+            .error(kind_offset, "only project type 'application' is currently supported"));
     }
     Ok(Manifest {
         name,
@@ -391,6 +395,31 @@ mod tests {
         assert!(parse("project \"app\" {").is_err());
         assert!(parse("").is_err());
         assert!(parse(&GOOD.replace("project \"unicode नमस्ते\"", "project \"a\\nb\"")).is_err());
+    }
+
+    #[test]
+    fn semantic_errors_report_the_actual_value_location() {
+        for (source, location) in [
+            (
+                GOOD.replace("0.1.0-beta.2+build.4", "0.01.0"),
+                "scarp.project:2:18:",
+            ),
+            (
+                GOOD.replace("src/main.srp", "../outside.srp"),
+                "scarp.project:3:16:",
+            ),
+            (
+                GOOD.replace("type: \"application\"", "type: \"library\""),
+                "scarp.project:4:15:",
+            ),
+            (
+                GOOD.replace("unicode नमस्ते", " invalid"),
+                "scarp.project:1:9:",
+            ),
+        ] {
+            let error = parse(&source).unwrap_err();
+            assert!(error.starts_with(location), "{error}");
+        }
     }
 
     #[test]
