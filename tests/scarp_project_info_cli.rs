@@ -105,7 +105,7 @@ fn legacy_v1_manifest_has_unspecified_version_and_same_entry() {
 }
 
 #[test]
-fn JSON_metadata_escapes_quotes_and_keeps_unicode_readable() {
+fn json_metadata_escapes_quotes_and_keeps_unicode_readable() {
     let ws = Workspace::new();
     let root = init(&ws, "quoted");
     fs::write(
