@@ -249,6 +249,11 @@ impl Budget {
     }
 }
 
+pub(crate) fn text_construction(span: Span, message: impl Into<String>) -> Diagnostic {
+    Diagnostic::new(DiagnosticKind::TextConstruction, span, message)
+        .with_help("use nonnegative repetition counts and smaller strings; raise --max-text-bytes / ExecutionOptions.max_text_bytes for the cumulative payload quota")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,9 +277,4 @@ mod tests {
         assert_eq!(too_small.remaining, 3);
         assert_eq!(too_small.array_remaining, 7);
     }
-}
-
-pub(crate) fn text_construction(span: Span, message: impl Into<String>) -> Diagnostic {
-    Diagnostic::new(DiagnosticKind::TextConstruction, span, message)
-        .with_help("use nonnegative repetition counts and smaller strings; raise --max-text-bytes / ExecutionOptions.max_text_bytes for the cumulative payload quota")
 }
