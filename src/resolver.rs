@@ -525,6 +525,18 @@ impl<'a> Resolver<'a> {
                     message,
                     span,
                 } => {
+                    // Public AST clients can bypass text parsing, so enforce
+                    // this diagnostic-size bound again at the semantic gate.
+                    if message
+                        .as_ref()
+                        .is_some_and(|text| text.len() > crate::ast::MAX_ASSERT_MESSAGE_BYTES)
+                    {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::CallArguments,
+                            span,
+                            "assertion message exceeds 256 UTF-8 bytes",
+                        ));
+                    }
                     let condition = self.expression(condition)?;
                     let condition_span = condition.syntax.nodes()[condition.syntax.root()].span;
                     require_type(&condition.kind, ValueType::Boolean, condition_span)?;
