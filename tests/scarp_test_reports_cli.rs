@@ -128,6 +128,20 @@ fn empty_suites_report_unambiguously_in_both_json_modes() {
 }
 
 #[test]
+fn unicode_test_filenames_are_reported_on_all_platforms() {
+    let ws = Workspace::new();
+    let root = project(&ws, "unicode");
+    fs::write(root.join("tests/हिंदी.srp"), "print(3);").unwrap();
+    let info = cli(&["test", "--json", "--list"], &root);
+    assert!(info.status.success(), "{info:?}");
+    assert!(
+        String::from_utf8_lossy(&info.stdout).contains("\"path\":\"tests/हिंदी.srp\""),
+        "{info:?}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn filenames_with_unicode_and_quotes_are_escaped_correctly() {
     let ws = Workspace::new();
     let root = project(&ws, "quoted");
