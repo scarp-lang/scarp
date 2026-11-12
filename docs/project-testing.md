@@ -158,6 +158,35 @@ The option does not change filename ordering, symlink restrictions,
 source execution behavior, discovery limits, or the JSON v1 schema.
 A missing `tests/` directory is still a separate setup error.
 
+## Filename substring selection (separate unreleased stacked development PR)
+
+An optional filter lets a developer run or list only tests whose **filename**
+(including the `.srp` suffix) contains a literal, case-sensitive UTF-8
+substring. This is not a glob, regex or path selector:
+
+```sh
+scarp test --filter math calculator
+scarp test --filter हिंदी --list calculator
+scarp test --json --require-tests --filter math calculator
+```
+
+The filter is 1–128 UTF-8 bytes and cannot begin with `-` or contain
+slashes, backslashes, colons or control characters. It is a single CLI
+argument following `--filter`; a missing, empty, malformed or duplicate
+filter is a usage error (exit status 2). The filter can also occur after
+the directory argument, before any `--` separator.
+
+All direct `tests/*.srp` entries are checked for symlinks, safe filenames
+and the 64-test maximum **before** filtering. Nonmatching sources are not
+compiled, executed or included in the report. Both human-readable
+`--list` and schema-version-1 JSON list/run results count selected tests
+only, in the same lexicographical order. A valid filter matching nothing
+returns the existing zero-test report; with `--require-tests`, its status
+is 1. Without `--filter`, behavior and JSON schema remain unchanged.
+
+This filter is not in published alpha.7 and is kept separate from the
+original CI-qualified alpha.8 integration candidate.
+
 ## Limits and security
 
 - Discovery is nonrecursive and limited to 64 immediate `.srp` files.

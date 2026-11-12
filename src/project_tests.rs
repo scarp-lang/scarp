@@ -17,6 +17,19 @@ use scarp::{
 
 const MAX_TESTS: usize = 64;
 const FAILURE_DETAIL_CHARS: usize = 1600;
+const MAX_FILTER_BYTES: usize = 128;
+
+/// A filter is a literal substring of a single UTF-8 test filename, not a
+/// filesystem path, command option, regular expression, or glob.
+pub fn valid_filter(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= MAX_FILTER_BYTES
+        && !value.starts_with('-')
+        && !value
+            .chars()
+            .any(|ch| ch.is_control() || matches!(ch, '/' | '\\' | ':'))
+}
+
 
 fn report(error: impl std::fmt::Display, stderr: &mut impl Write) -> u8 {
     let _ = writeln!(stderr, "error: {error}");
@@ -132,10 +145,24 @@ pub fn run(
     json: bool,
     list_only: bool,
     require_tests: bool,
+    filter: Option<&str>,
 ) -> u8 {
     let (loader, files) = match suite(directory) {
         Ok(suite) => suite,
         Err(error) => return report(error, stderr),
+    };
+    // Inspect and validate *every* .srp entry before selecting by filename.
+    // Filtering cannot bypass the 64-file limit or symlink safety checks.
+    let files: Vec<_> = match filter {
+        Some(fragment) => files
+            .into_iter()
+            .filter(|(label, _)| {
+                label
+                    .strip_prefix("tests/")
+                    .is_some_and(|filename| filename.contains(fragment))
+            })
+            .collect(),
+        None => files,
     };
     let discovered = files.len();
     // Optional CI gate: a valid but empty suite must not silently pass.
@@ -248,6 +275,17 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn filename_filter_rejects_paths_options_controls_and_oversized_text() {
+        for invalid in ["", "-skip", "a/b", "a\\\\b", "c:d", "bad\\nname"] {
+            assert!(!valid_filter(invalid), "{invalid:?}");
+        }
+        assert!(!valid_filter(&"a".repeat(129)));
+        for valid in ["test", "हिंदी", "a b", "a.srp", &"a".repeat(128)] {
+            assert!(valid_filter(valid), "{valid:?}");
+        }
+    }
 
     #[test]
     fn json_report_handles_empty_and_mixed_cases_without_inventing_diagnostics() {
