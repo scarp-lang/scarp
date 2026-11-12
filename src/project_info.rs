@@ -48,9 +48,17 @@ pub fn write(info: &ProjectInfo, stdout: &mut impl Write, json: bool) -> io::Res
         )
     } else {
         writeln!(stdout, "Name: {}", info.name)?;
-        writeln!(stdout, "Version: {}", info.version.as_deref().unwrap_or("unspecified"))?;
+        writeln!(
+            stdout,
+            "Version: {}",
+            info.version.as_deref().unwrap_or("unspecified")
+        )?;
         writeln!(stdout, "Type: {}", info.kind)?;
-        writeln!(stdout, "Manifest: {} ({})", info.manifest_filename, info.format)?;
+        writeln!(
+            stdout,
+            "Manifest: {} ({})",
+            info.manifest_filename, info.format
+        )?;
         writeln!(stdout, "Entry: {}", info.entry)
     }
 }
@@ -92,9 +100,13 @@ mod tests {
         info.manifest_filename = "Scarp.project";
         let mut json = Vec::new();
         write(&info, &mut json, true).unwrap();
-        assert!(String::from_utf8(json).unwrap().contains("\"version\":null"));
+        assert!(String::from_utf8(json)
+            .unwrap()
+            .contains("\"version\":null"));
         let mut text = Vec::new();
         write(&info, &mut text, false).unwrap();
-        assert!(String::from_utf8(text).unwrap().contains("Version: unspecified\n"));
+        assert!(String::from_utf8(text)
+            .unwrap()
+            .contains("Version: unspecified\n"));
     }
 }
