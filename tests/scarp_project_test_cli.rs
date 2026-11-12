@@ -70,7 +70,8 @@ fn tests_run_in_deterministic_filename_order_and_can_import_project_sources() {
     fs::write(
         root.join("tests/alpha.srp"),
         "import \"../src/math.srp\" as math;\nprint(math.answer);\n",
-    ).unwrap();
+    )
+    .unwrap();
     // Non-.srp files and nested directories are not recursively executed.
     fs::write(root.join("tests/notes.txt"), "print(1 / 0);\n").unwrap();
     fs::create_dir(root.join("tests/nested")).unwrap();
