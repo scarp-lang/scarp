@@ -114,10 +114,8 @@ fn write_report(
             "{{\"path\":{},\"status\":\"{status}\"",
             quote_json(&case.path)
         )?;
-        if !list_only {
-            if let Some(error) = &case.error {
-                write!(stdout, ",\"error\":{}", quote_json(error))?;
-            }
+        if let (false, Some(error)) = (list_only, &case.error) {
+            write!(stdout, ",\"error\":{}", quote_json(error))?;
         }
         write!(stdout, "}}")?;
     }
