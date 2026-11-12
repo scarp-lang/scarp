@@ -13,6 +13,7 @@ use crate::{
 };
 
 mod advanced;
+mod modular;
 mod number_theory;
 
 const BASE: u64 = 1_000_000_000;
