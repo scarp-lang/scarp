@@ -8,7 +8,7 @@ use crate::{
         AssignmentOperator, BinaryOperator, CallArgument, ConditionalBranch,
         ConditionalExpressionBranch, Contract, Expression, ExpressionKind, ExpressionNode,
         FunctionDeclaration, LogicalOperator, OutputTarget, Parameter, PrintArgument, Program,
-        Statement,
+        Statement, MAX_ASSERT_MESSAGE_BYTES,
     },
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     lexer::{Token, TokenKind},
@@ -838,11 +838,11 @@ impl Parser<'_> {
                 }) => text.clone(),
                 _ => return Err(self.expected("a quoted assertion message")),
             };
-            if text.len() > 256 {
+            if text.len() > MAX_ASSERT_MESSAGE_BYTES {
                 return Err(ParseError::new(
                     DiagnosticKind::CallArguments,
                     self.current().expect("quoted message is present").span,
-                    "assertion message exceeds 256 UTF-8 bytes",
+                    format!("assertion message exceeds {MAX_ASSERT_MESSAGE_BYTES} UTF-8 bytes"),
                 ));
             }
             self.advance();
