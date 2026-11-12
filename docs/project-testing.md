@@ -79,7 +79,7 @@ is required. A missing `tests/` directory is an error.
 
 ## Discovery and structured reports (unreleased stacked PR)
 
-The additional test-reporting branch adds two optional flags:
+The test-reporting implementation adds two optional flags:
 
 ```sh
 scarp test --list calculator        # Read-only test discovery
@@ -124,8 +124,36 @@ and invalid CLI arguments produce an error on stderr and **no JSON stdout**.
 The `--json` flag does not make these setup errors machine-readable yet.
 The normal human-readable `scarp test` format is unchanged.
 
-This development work does not implement an assertion language construct,
-custom execution-budget flags, retries, package installation, or a release.
+The assertion statement shown in the example is implemented in this combined
+unreleased development candidate, not in the published compiler. Custom
+execution-budget flags, retries, package installation and releases are not
+introduced by the test-reporting layer.
+
+## CI guard: require at least one test (unreleased stacked PR)
+
+The optional `--require-tests` flag makes a valid but empty suite fail.
+It prevents a new project from receiving a green CI status before any
+test programs have been written.
+
+```sh
+scarp test --require-tests calculator
+scarp test --require-tests --json calculator
+scarp test --require-tests --list calculator
+```
+
+When `tests/` contains zero immediate `.srp` files, this flag returns
+exit status **1**, in both execution and read-only listing modes.
+The usual zero-test human-readable message or complete JSON report is
+still written to stdout; diagnostics and setup errors remain on stderr.
+A nonempty suite retains normal pass/fail exit statuses. This option
+is safe to combine with `--json` or `--list`, and duplicate flags are
+invalid usage.
+
+The default `scarp test` remains backward compatible: an empty,
+well-formed suite still reports zero tests and exits successfully.
+The option does not change filename ordering, symlink restrictions,
+source execution behavior, discovery limits, or the JSON v1 schema.
+A missing `tests/` directory is still a separate setup error.
 
 ## Limits and security
 
