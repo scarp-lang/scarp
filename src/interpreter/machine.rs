@@ -20,12 +20,12 @@ enum Stage {
     Ensures(usize),
     Done,
 }
-enum Completion {
+enum Completion<'a> {
     Store(usize),
     RepeatCount(usize, usize, Span),
     Update(usize, BinaryOperator, Value, Span),
     Guard(usize, Span),
-    Assert(Span, Option<String>),
+    Assert(Span, Option<&'a str>),
     Discard,
     Return,
     Contract(bool, Span),
@@ -53,7 +53,7 @@ struct Frame<'a> {
     pc: usize,
     stage: Stage,
     expression: Option<&'a ResolvedExpression>,
-    completion: Completion,
+    completion: Completion<'a>,
     workspace: Workspace,
     output: Option<PendingOutput<'a>>,
     result: Value,
@@ -72,7 +72,7 @@ impl<'a> Frame<'a> {
             std::mem::take(&mut self.workspace),
         )
     }
-    fn start(&mut self, expression: &'a ResolvedExpression, completion: Completion) {
+    fn start(&mut self, expression: &'a ResolvedExpression, completion: Completion<'a>) {
         self.workspace.start(expression);
         self.expression = Some(expression);
         self.completion = completion;
@@ -543,7 +543,7 @@ pub(super) fn prepare<'a>(
                         ResolvedStatement::Assert { condition, message } => {
                             frame.start(
                                 condition,
-                                Completion::Assert(operation.span, message.clone()),
+                                Completion::Assert(operation.span, message.as_deref()),
                             );
                         }
                         ResolvedStatement::Return { value: Some(value) } => {
