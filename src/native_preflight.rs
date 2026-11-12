@@ -106,6 +106,13 @@ fn verify_expression_shape(
             return Err(unsupported(node.span));
         }
         let kind = match &node.kind {
+            ExpressionKind::Conditional { .. } => {
+                return Err(Diagnostic::new(
+                    DiagnosticKind::NativeUnsupported,
+                    node.span,
+                    "conditional expressions are not supported by the experimental native backends",
+                ))
+            }
             ExpressionKind::Integer(_) => ValueType::Integer,
             ExpressionKind::Boolean(_) => ValueType::Boolean,
             ExpressionKind::Name(_) => {

@@ -42,12 +42,18 @@ fn escapes_retain_source_spans_in_lf_and_crlf_files() {
 
 #[test]
 fn invalid_escapes_and_physical_linebreaks_keep_their_codes_and_spans() {
-    for suffix in ["x", "b", "0", "u", "🌍"] {
+    for (suffix, hint) in [
+        ("x", r"\t"),
+        ("b", r"\t"),
+        ("0", r"\t"),
+        ("u", r"\u{HEX}"),
+        ("🌍", r"\t"),
+    ] {
         let source = format!("\"π\\{suffix}\"");
         let error = lex(&source).unwrap_err();
         assert_eq!(error.kind, DiagnosticKind::InvalidEscape);
         assert_eq!(error.span, Span::new(3, 4 + suffix.len()));
-        assert!(error.help.unwrap().contains(r"\t"));
+        assert!(error.help.unwrap().contains(hint));
     }
     for source in ["\"a\rb\"", "\"a\nb\"", "\"a\r\nb\"", "\"a\\\r\n", "\"a\\"] {
         assert_eq!(

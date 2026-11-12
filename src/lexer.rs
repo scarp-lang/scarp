@@ -428,6 +428,10 @@ impl Lexer<'_> {
                         Some('n') => '\n',
                         Some('t') => '\t',
                         Some('r') => '\r',
+                        Some('u') => {
+                            value.push(self.unicode_escape(escape_start)?);
+                            continue;
+                        }
                         Some('\n' | '\r') | None => break,
                         Some(ch) => {
                             return Err(Diagnostic::new(
@@ -435,7 +439,7 @@ impl Lexer<'_> {
                                 Span::new(escape_start, self.cursor + ch.len_utf8()),
                                 format!("unsupported escape {:?}", format!("\\{ch}")),
                             )
-                            .with_help(r#"supported escapes are \\, \", \n, \t and \r"#));
+                            .with_help(r#"supported escapes are \\, \", \n, \t, \r and \u{HEX}"#));
                         }
                     };
                     self.bump();
@@ -453,5 +457,64 @@ impl Lexer<'_> {
             "unterminated string literal",
         )
         .with_help(r#"close the string with a double quote; use \n for a line break"#))
+    }
+
+    fn unicode_escape(&mut self, start: usize) -> Result<char, Diagnostic> {
+        let invalid = |end, message| {
+            Diagnostic::new(
+                DiagnosticKind::InvalidEscape,
+                Span::new(start, end),
+                message,
+            )
+            .with_help(r#"write \u{HEX} with one to six ASCII hex digits for a Unicode scalar"#)
+        };
+        self.bump(); // u
+        if self.peek() != Some('{') {
+            return Err(invalid(self.cursor, "expected '{' after \\u"));
+        }
+        self.bump();
+
+        let mut scalar = 0;
+        let mut digits = 0;
+        loop {
+            match self.peek() {
+                Some('}') => {
+                    self.bump();
+                    break;
+                }
+                Some('"' | '\n' | '\r') | None => {
+                    return Err(invalid(
+                        self.cursor,
+                        "expected '}' to end the Unicode escape",
+                    ));
+                }
+                Some(ch) => {
+                    self.bump();
+                    let digit = ch.to_digit(16).ok_or_else(|| {
+                        invalid(self.cursor, "expected an ASCII hexadecimal digit")
+                    })?;
+                    if digits == 6 {
+                        return Err(invalid(
+                            self.cursor,
+                            "Unicode escape exceeds six hex digits",
+                        ));
+                    }
+                    scalar = (scalar << 4) | digit;
+                    digits += 1;
+                }
+            }
+        }
+        if digits == 0 {
+            return Err(invalid(
+                self.cursor,
+                "Unicode escape requires at least one hex digit",
+            ));
+        }
+        char::from_u32(scalar).ok_or_else(|| {
+            invalid(
+                self.cursor,
+                "Unicode escape is outside the scalar value range",
+            )
+        })
     }
 }

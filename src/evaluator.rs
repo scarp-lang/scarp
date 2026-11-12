@@ -47,6 +47,7 @@ enum Task {
     Boolean(Span),
     Binary(BinaryOperator, Span),
     Logical(LogicalOperator, usize, Span),
+    Conditional(usize, usize, Span),
 }
 
 pub(crate) enum Evaluation {
@@ -112,7 +113,8 @@ impl Workspace {
                 | Task::Not(span)
                 | Task::Boolean(span)
                 | Task::Binary(_, span)
-                | Task::Logical(_, _, span) => *span,
+                | Task::Logical(_, _, span)
+                | Task::Conditional(_, _, span) => *span,
             };
             budget.charge(1, span)?;
             match task {
@@ -174,6 +176,12 @@ impl Workspace {
                         }
                         ExpressionKind::Group { expression } => {
                             tasks.push(Task::Visit(*expression))
+                        }
+                        ExpressionKind::Conditional { branches, .. } => {
+                            let condition = branches[0].condition;
+                            let span = expression.syntax.nodes()[condition].span;
+                            tasks.push(Task::Conditional(index, 0, span));
+                            tasks.push(Task::Visit(condition));
                         }
                         ExpressionKind::BitNot {
                             operand,
@@ -390,6 +398,24 @@ impl Workspace {
                     } else {
                         tasks.push(Task::Boolean(span));
                         tasks.push(Task::Visit(right));
+                    }
+                }
+                Task::Conditional(node, branch, span) => {
+                    let ExpressionKind::Conditional {
+                        branches,
+                        otherwise,
+                    } = &expression.syntax.nodes()[node].kind
+                    else {
+                        unreachable!("conditional expression task")
+                    };
+                    if values.pop().unwrap().require_boolean(span)? {
+                        tasks.push(Task::Visit(branches[branch].result));
+                    } else if let Some(next) = branches.get(branch + 1) {
+                        let span = expression.syntax.nodes()[next.condition].span;
+                        tasks.push(Task::Conditional(node, branch + 1, span));
+                        tasks.push(Task::Visit(next.condition));
+                    } else {
+                        tasks.push(Task::Visit(*otherwise));
                     }
                 }
             }

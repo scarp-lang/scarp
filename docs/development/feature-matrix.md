@@ -1,10 +1,11 @@
 # Feature completeness and development roadmap
 
-**Reviewed 2026-11-10.** The latest **published** GitHub prerelease is
-[v0.0.6-alpha.6](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.6)
-(10 November 2026), from exact source `cdf6a3924ec2a36c7beca5a9aec4f01a0bce515e`.
-Cargo declares `0.0.6-alpha.6`, matching the published prerelease. It adds bounded
-program input, six scalar/text utilities and immutable structural tuples; see
+**Reviewed 2026-11-11.** Cargo declares `0.0.6-alpha.7`, matching the published
+prerelease with typed conditional expressions and Unicode scalar string escapes.
+[Release verification](../releases/v0.0.6-alpha.7-validation.md)
+
+The published alpha.6 adds bounded program input, six scalar/text utilities and
+immutable structural tuples. See
 [publication verification](../releases/v0.0.6-alpha.6-validation.md) and
 [Rust API migration](../tuples.md). Its [candidate notes](../releases/v0.0.6-alpha.6.md)
 remain a historical preparation snapshot.
@@ -69,7 +70,7 @@ requires separate architecture and multiple implementation phases.
 | Records/structures | Missing | Declaration, fields, construction, access | Nominal/structural type decision | P1 | XL | Recursive/nested fields, visibility | Type-system proposal |
 | Enums/tagged variants | Missing | Constructors, pattern typing | Composite types and exhaustiveness | P1 | L | Exhaustive/redundant patterns, recursion | Variant/match design |
 | Generics/type aliases | Missing | Type parameters, constraints, monomorphization policy | Composite types and stable IR | P2 | XL | Substitution, recursion bounds, diagnostics | Type-system design |
-| Arithmetic/comparison/logic | Implemented; strict primitive kinds | Conditional expression form | Typed expression nodes | P1 | M | Precedence, short circuit, dead-branch typing | Expressions |
+| Arithmetic/comparison/logic | Strict primitive kinds and typed conditional expressions | Conditional expressions in constants or native emission | Typed expression nodes | P1 | M | Precedence, short circuit, dead-branch typing | Expressions |
 | Indexing/slicing | Numeric vectors/windows and tile cells/lanes | General strings/collections and multidimensional syntax | Composite types; text scalar policy | P1 | L | Bounds, visible windows, backing lifetime | Collection guides |
 | If/while/repeat | Implemented and bounded | General collection iteration/ranges | Iterator/range type design | P1 | L | Empty/range bounds, controls, budgets | Iteration grammar |
 | Break/continue/early return | Implemented with retirement | Labeled control only if justified | CFG and scope cleanup | P2 | M | Nested exits, contracts, retirement | Control flow |
