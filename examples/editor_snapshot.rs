@@ -10,28 +10,17 @@ use scarp::modules::{
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let source = "import \"lib.srp\" as m;\nprint(m.twice(n: 5));\n";
+    let library = "pub pure funcra twice(n: integer)->integer{return n*2;}";
     let mut loader = MemorySourceLoader::new();
-    loader.insert("main.srp", source)?;
-    loader.insert(
-        "lib.srp",
-        "pub pure funcra twice(n: integer)->integer{return n*2;}",
-    )?;
+    loader.set_document("main.srp", source, 3)?;
+    loader.set_document("lib.srp", library, 8)?;
 
     let mut cache = EditorCompilationCache::new(EditorCacheLimits::default());
-    let compile = |cache: &mut EditorCompilationCache, library_version| {
-        let graph = modules::load("main.srp", &loader, ModuleLimits::default())?;
-        cache.resolve(
-            graph,
-            EditorCompileLimits::default(),
-            |identity| match identity {
-                "main.srp" => Some(3),
-                "lib.srp" => Some(library_version),
-                _ => None,
-            },
-            None,
-        )
+    let compile = |cache: &mut EditorCompilationCache, loader: &MemorySourceLoader| {
+        let graph = modules::load("main.srp", loader, ModuleLimits::default())?;
+        cache.resolve_with_loaded_revisions(graph, EditorCompileLimits::default(), None)
     };
-    let compiled = compile(&mut cache, 8)?;
+    let compiled = compile(&mut cache, &loader)?;
     let editor = &compiled.snapshot;
     // Queries use the revisions in the returned program's SourceId order.
     let versions = [3, 8];
@@ -51,7 +40,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(editor.find_references(&versions, definition.id)?.count(), 1);
 
     // Advancing the import's revision invalidates queries against the old view.
-    let refreshed = compile(&mut cache, 9)?;
+    loader.set_document("lib.srp", library, 9)?;
+    let refreshed = compile(&mut cache, &loader)?;
     assert_eq!(refreshed.status, CacheStatus::Hit);
     assert!(refreshed
         .snapshot

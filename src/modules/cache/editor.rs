@@ -8,7 +8,8 @@ use crate::{
             editor::{EditorBuildError, EditorLimits, EditorSnapshot},
             IndexLimits,
         },
-        ConstantLimits, ModuleDiagnostic, ModuleGraph, ModuleLimits, ModuleProgram, SourceId,
+        ConstantLimits, ModuleDiagnostic, ModuleGraph, ModuleLimits, ModuleProgram, ParsedModule,
+        SourceId,
     },
     types::TypeLimits,
 };
@@ -62,7 +63,16 @@ pub struct EditorCacheStats {
 #[derive(Debug)]
 pub enum EditorCompileError {
     Module(ModuleDiagnostic),
-    MissingRevision { source: SourceId, identity: String },
+    MissingRevision {
+        source: SourceId,
+        identity: String,
+    },
+    RevisionMismatch {
+        source: SourceId,
+        identity: String,
+        loaded: u64,
+        supplied: u64,
+    },
     RevisionAllocation,
     Editor(EditorBuildError),
 }
@@ -77,6 +87,15 @@ impl fmt::Display for EditorCompileError {
                     "missing document revision for source {source} ({identity:?})"
                 )
             }
+            Self::RevisionMismatch {
+                source,
+                identity,
+                loaded,
+                supplied,
+            } => write!(
+                f,
+                "source {source} ({identity:?}) was read at revision {loaded}, but the host supplied {supplied}"
+            ),
             Self::RevisionAllocation => f.write_str("could not reserve document revisions"),
             Self::Editor(error) => error.fmt(f),
         }
@@ -88,7 +107,9 @@ impl Error for EditorCompileError {
         match self {
             Self::Module(error) => Some(error),
             Self::Editor(error) => Some(error),
-            Self::MissingRevision { .. } | Self::RevisionAllocation => None,
+            Self::MissingRevision { .. }
+            | Self::RevisionMismatch { .. }
+            | Self::RevisionAllocation => None,
         }
     }
 }
@@ -151,6 +172,32 @@ struct Entry {
     module_limits: ModuleLimits,
     compile_limits: EditorCompileLimits,
     retained: Retained,
+}
+
+fn collect_revisions(
+    graph: &ModuleGraph,
+    mut revision_of: impl FnMut(&ParsedModule) -> Option<u64>,
+) -> Result<Vec<u64>, EditorCompileError> {
+    let mut revisions = Vec::new();
+    revisions
+        .try_reserve_exact(graph.file_count())
+        .map_err(|_| EditorCompileError::RevisionAllocation)?;
+    for (source, module) in graph.modules.iter().enumerate() {
+        let supplied = revision_of(module).ok_or_else(|| EditorCompileError::MissingRevision {
+            source,
+            identity: module.identity.clone(),
+        })?;
+        if let Some(loaded) = module.revision.filter(|&loaded| loaded != supplied) {
+            return Err(EditorCompileError::RevisionMismatch {
+                source,
+                identity: module.identity.clone(),
+                loaded,
+                supplied,
+            });
+        }
+        revisions.push(supplied);
+    }
+    Ok(revisions)
 }
 
 /// Caller-owned FIFO of successful editor compilations.
@@ -228,7 +275,8 @@ impl EditorCompilationCache {
     /// Resolve a fresh graph and bind its editor snapshot to the current revisions.
     ///
     /// The callback supplies a revision for each canonical loader identity from
-    /// the same workspace snapshot used to load the graph. Editor queries still
+    /// the same workspace snapshot used to load the graph. Sources read with
+    /// a captured revision must match the supplied revision. Editor queries
     /// take the current revisions in the returned program's SourceId order.
     /// An optional constant cache can reuse individual folds after source edits.
     pub fn resolve(
@@ -238,20 +286,31 @@ impl EditorCompilationCache {
         mut revision_of: impl FnMut(&str) -> Option<u64>,
         constants: Option<&mut ConstantCache>,
     ) -> Result<CachedEditorProgram, EditorCompileError> {
-        let mut revisions = Vec::new();
-        revisions
-            .try_reserve_exact(graph.file_count())
-            .map_err(|_| EditorCompileError::RevisionAllocation)?;
-        for (source, module) in graph.modules.iter().enumerate() {
-            let revision = revision_of(&module.identity).ok_or_else(|| {
-                EditorCompileError::MissingRevision {
-                    source,
-                    identity: module.identity.clone(),
-                }
-            })?;
-            revisions.push(revision);
-        }
+        let revisions = collect_revisions(&graph, |module| revision_of(&module.identity))?;
+        self.resolve_revisions(graph, limits, revisions, constants)
+    }
 
+    /// Resolve with the revisions captured alongside the graph's source text.
+    ///
+    /// Every loaded source must provide a revision. A queued graph carries
+    /// its original revisions even if the workspace changes before resolution.
+    pub fn resolve_with_loaded_revisions(
+        &mut self,
+        graph: ModuleGraph,
+        limits: EditorCompileLimits,
+        constants: Option<&mut ConstantCache>,
+    ) -> Result<CachedEditorProgram, EditorCompileError> {
+        let revisions = collect_revisions(&graph, |module| module.revision)?;
+        self.resolve_revisions(graph, limits, revisions, constants)
+    }
+
+    fn resolve_revisions(
+        &mut self,
+        graph: ModuleGraph,
+        limits: EditorCompileLimits,
+        revisions: Vec<u64>,
+        constants: Option<&mut ConstantCache>,
+    ) -> Result<CachedEditorProgram, EditorCompileError> {
         let module_limits = graph.limits;
         for entry in &mut self.entries {
             if entry.module_limits == module_limits
