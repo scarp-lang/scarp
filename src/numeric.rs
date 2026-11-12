@@ -47,7 +47,10 @@ pub enum Builtin {
     TextLength,
     TextBytes,
     TextCodepoint,
+    TextFromCodepoint,
     TextFind,
+    TextRFind,
+    TextCount,
     TextContains,
     TextStartsWith,
     TextEndsWith,
@@ -150,7 +153,10 @@ impl Builtin {
             "text_len" => Self::TextLength,
             "text_bytes" => Self::TextBytes,
             "text_codepoint" => Self::TextCodepoint,
+            "text_from_codepoint" => Self::TextFromCodepoint,
             "text_find" => Self::TextFind,
+            "text_rfind" => Self::TextRFind,
+            "text_count" => Self::TextCount,
             "text_contains" => Self::TextContains,
             "text_starts_with" => Self::TextStartsWith,
             "text_ends_with" => Self::TextEndsWith,
@@ -217,12 +223,16 @@ impl Builtin {
             Self::ToFloat => &[Integer],
             Self::ToInteger => &[Float],
             Self::TextLength | Self::TextBytes => &[String],
+            Self::TextFromCodepoint => &[Integer],
             Self::TextCodepoint | Self::TextRepeat => &[String, Integer],
             Self::TextSlice => &[String, Integer, Integer],
             Self::TextConcat => &[String, String],
-            Self::TextFind | Self::TextContains | Self::TextStartsWith | Self::TextEndsWith => {
-                &[String, String]
-            }
+            Self::TextFind
+            | Self::TextRFind
+            | Self::TextCount
+            | Self::TextContains
+            | Self::TextStartsWith
+            | Self::TextEndsWith => &[String, String],
             Self::Length
             | Self::Sum
             | Self::Mean
@@ -265,9 +275,11 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
-            Self::IntegerToText | Self::FloatToText | Self::TextTrim | Self::TextReplace => {
-                ValueType::String
-            }
+            Self::IntegerToText
+            | Self::FloatToText
+            | Self::TextTrim
+            | Self::TextReplace
+            | Self::TextFromCodepoint => ValueType::String,
             Self::TextToInteger => ValueType::Integer,
             Self::TextToFloat => ValueType::Float,
             Self::Variance
@@ -287,7 +299,9 @@ impl Builtin {
             | Self::TextLength
             | Self::TextBytes
             | Self::TextCodepoint
-            | Self::TextFind => ValueType::Integer,
+            | Self::TextFind
+            | Self::TextRFind
+            | Self::TextCount => ValueType::Integer,
             Self::ToFloat => ValueType::Float,
             Self::TextConcat | Self::TextSlice | Self::TextRepeat => ValueType::String,
             Self::TextContains | Self::TextStartsWith | Self::TextEndsWith => ValueType::Boolean,
@@ -339,6 +353,8 @@ impl Builtin {
                 | Self::TextBytes
                 | Self::TextCodepoint
                 | Self::TextFind
+                | Self::TextRFind
+                | Self::TextCount
                 | Self::TextContains
                 | Self::TextStartsWith
                 | Self::TextEndsWith
@@ -624,6 +640,7 @@ pub(crate) fn evaluate_with_spans(
             | Builtin::TextRepeat
             | Builtin::TextTrim
             | Builtin::TextReplace
+            | Builtin::TextFromCodepoint
     ) {
         return text::evaluate(function, args, budget, span, argument_span);
     }
@@ -1002,7 +1019,10 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::TextLength
         | Builtin::TextBytes
         | Builtin::TextCodepoint
+        | Builtin::TextFromCodepoint
         | Builtin::TextFind
+        | Builtin::TextRFind
+        | Builtin::TextCount
         | Builtin::TextContains
         | Builtin::TextStartsWith
         | Builtin::TextEndsWith

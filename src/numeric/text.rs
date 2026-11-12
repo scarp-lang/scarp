@@ -25,6 +25,27 @@ pub(super) fn evaluate(
     span: Span,
     argument_span: impl Fn(usize) -> Span,
 ) -> Result<Value, Diagnostic> {
+    if function == Builtin::TextFromCodepoint {
+        let codepoint = args[0].require_integer(argument_span(0))?;
+        // Unicode scalar values exclude surrogates and values beyond U+10FFFF.
+        // Reject before allocating or publishing a partial result.
+        let scalar = u32::try_from(codepoint)
+            .ok()
+            .and_then(char::from_u32)
+            .ok_or_else(|| {
+                Diagnostic::new(
+                    DiagnosticKind::NumericDomain,
+                    argument_span(0),
+                    "text_from_codepoint requires a valid Unicode scalar value",
+                )
+                .with_help("use an integer in 0..=0x10FFFF, excluding 0xD800..=0xDFFF (surrogates)")
+            })?;
+        budget.charge(1, span)?;
+        let mut result = reserve(scalar.len_utf8(), budget, span)?;
+        result.push(scalar);
+        return Ok(Value::from(result));
+    }
+
     let text = args[0].as_str().expect("checked string argument");
     let result = match function {
         Builtin::TextTrim => {
