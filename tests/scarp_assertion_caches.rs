@@ -14,9 +14,7 @@ fn source(prefix: &str) -> MemorySourceLoader {
     loader
         .insert(
             "main.srp",
-            format!(
-                "{prefix}import \"lib.srp\" as lib;\nprint(lib.guarded(-1));\n"
-            ),
+            format!("{prefix}import \"lib.srp\" as lib;\nprint(lib.guarded(-1));\n"),
         )
         .unwrap();
     loader
@@ -34,11 +32,7 @@ fn source(prefix: &str) -> MemorySourceLoader {
 fn runtime_json(program: &modules::ModuleProgram) -> String {
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let error = program
-        .execute(
-            &mut stdout,
-            &mut stderr,
-            ExecutionOptions::default(),
-        )
+        .execute(&mut stdout, &mut stderr, ExecutionOptions::default())
         .unwrap_err();
     assert!(stdout.is_empty());
     assert!(stderr.is_empty());
@@ -60,31 +54,23 @@ fn source_syntax_cache_keeps_assertion_failure_spans_after_unicode_prefix_shift(
     let after = source("// नमस्ते 🌍\r\n// more source text\r\n");
     let mut syntax = SyntaxCache::new(SyntaxCacheLimits::default());
     let first = modules::resolve(
-        modules::load_with_syntax_cache(
-            "main.srp",
-            &before,
-            ModuleLimits::default(),
-            &mut syntax,
-        )
-        .unwrap(),
+        modules::load_with_syntax_cache("main.srp", &before, ModuleLimits::default(), &mut syntax)
+            .unwrap(),
     )
     .unwrap();
     let warm = modules::resolve(
-        modules::load_with_syntax_cache(
-            "main.srp",
-            &after,
-            ModuleLimits::default(),
-            &mut syntax,
-        )
-        .unwrap(),
+        modules::load_with_syntax_cache("main.srp", &after, ModuleLimits::default(), &mut syntax)
+            .unwrap(),
     )
     .unwrap();
-    let cold =
-        modules::compile_with_loader("main.srp", &after, ModuleLimits::default()).unwrap();
+    let cold = modules::compile_with_loader("main.srp", &after, ModuleLimits::default()).unwrap();
 
     assert!(syntax.stats().hits > 0, "{:?}", syntax.stats());
     assert_eq!(runtime_json(&warm), runtime_json(&cold));
-    assert_ne!(first.sources().files()[1].range(), warm.sources().files()[1].range());
+    assert_ne!(
+        first.sources().files()[1].range(),
+        warm.sources().files()[1].range()
+    );
 }
 
 #[test]
@@ -93,27 +79,16 @@ fn source_token_cache_keeps_assertion_failure_spans_after_unicode_prefix_shift()
     let after = source("// नमस्ते 🌍\r\n// more source text\r\n");
     let mut tokens = TokenCache::new(TokenCacheLimits::default());
     let _ = modules::resolve(
-        modules::load_with_token_cache(
-            "main.srp",
-            &before,
-            ModuleLimits::default(),
-            &mut tokens,
-        )
-        .unwrap(),
+        modules::load_with_token_cache("main.srp", &before, ModuleLimits::default(), &mut tokens)
+            .unwrap(),
     )
     .unwrap();
     let warm = modules::resolve(
-        modules::load_with_token_cache(
-            "main.srp",
-            &after,
-            ModuleLimits::default(),
-            &mut tokens,
-        )
-        .unwrap(),
+        modules::load_with_token_cache("main.srp", &after, ModuleLimits::default(), &mut tokens)
+            .unwrap(),
     )
     .unwrap();
-    let cold =
-        modules::compile_with_loader("main.srp", &after, ModuleLimits::default()).unwrap();
+    let cold = modules::compile_with_loader("main.srp", &after, ModuleLimits::default()).unwrap();
 
     assert!(tokens.stats().hits > 0, "{:?}", tokens.stats());
     assert_eq!(runtime_json(&warm), runtime_json(&cold));
