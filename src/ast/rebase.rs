@@ -126,6 +126,11 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                 Statement::Call {
                     expression,
                     span: whole,
+                }
+                | Statement::Assert {
+                    condition: expression,
+                    span: whole,
+                    ..
                 } => {
                     span(whole, base, to_local);
                     expr(expression, base, to_local, nodes);

@@ -20,9 +20,13 @@ fn json(program: &modules::ModuleProgram) -> Vec<u8> {
 #[test]
 fn every_diagnostic_code_has_a_unique_stable_lookup_and_explanation() {
     let mut codes = std::collections::HashSet::new();
-    assert_eq!(Kind::ALL.len(), 58);
-    // E0051-E0053 are reserved for the independent BigInt development slice.
-    for (&kind, number) in Kind::ALL.iter().zip((1..=50).chain(54..=61)) {
+    assert_eq!(Kind::ALL.len(), 59);
+    // E0051-E0053 are reserved for BigInt; E0062-E0064 are reserved for fixed arrays.
+    // Assertions use E0065 so both independent feature branches can coexist.
+    for (&kind, number) in Kind::ALL
+        .iter()
+        .zip((1..=50).chain(54..=61).chain(std::iter::once(65)))
+    {
         assert_eq!(kind.code(), format!("E{number:04}"));
         assert!(codes.insert(kind.code()));
         assert_eq!(Kind::from_code(kind.code()), Some(kind));
@@ -31,6 +35,7 @@ fn every_diagnostic_code_has_a_unique_stable_lookup_and_explanation() {
     for invalid in ["E0000", "E0051", "E9999", "e0007", "E00007", "7", ""] {
         assert_eq!(Kind::from_code(invalid), None);
     }
+    assert_eq!(Kind::AssertionFailure.code(), "E0065");
     const OVERFLOW: &str = Kind::ArithmeticOverflow.code();
     assert_eq!(OVERFLOW, "E0007");
 }

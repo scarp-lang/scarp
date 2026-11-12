@@ -159,6 +159,8 @@ diagnostic_catalogue! {
     TupleIndex => ("E0059", "Tuple projection requires a nonnegative integer literal within the fixed tuple arity. Use t[0], not a runtime/computed/negative index. Numerical collection indexing retains its existing rules."),
     TupleLimit => ("E0060", "Tuple shape exceeds the supported bounds. Use one through 32 members, tuple depth at most 32 and structural type size at most 4096 nodes. Empty tuples and unit members are unsupported."),
     TupleAllocation => ("E0061", "Tuple payload allocation exceeded its cumulative quota or bounded reservation failed. Reuse immutable tuples or reduce construction; adjust --max-tuple-bytes / ExecutionOptions.max_tuple_bytes explicitly. This is a logical payload quota, not process RAM."),
+    // Reserve E0062-E0064 for immutable arrays (PR #189); assertion failures have a distinct code.
+    AssertionFailure => ("E0065", "A selected assert(condition) statement evaluated to false. Check the boolean predicate and test inputs; an optional bounded literal message is included in the diagnostic. Assertions run only when reached and never emit ordinary program output."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

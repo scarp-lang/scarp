@@ -532,7 +532,11 @@ impl Rewriter<'_> {
                     });
                     self.expression(value)?;
                 }
-                Statement::Call { expression, .. } => self.expression(expression)?,
+                Statement::Call { expression, .. }
+                | Statement::Assert {
+                    condition: expression,
+                    ..
+                } => self.expression(expression)?,
                 Statement::Return { value, .. } => {
                     if let Some(value) = value {
                         self.expression(value)?;

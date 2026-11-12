@@ -70,6 +70,10 @@ pub(crate) enum ResolvedStatement {
     Call {
         expression: ResolvedExpression,
     },
+    Assert {
+        condition: ResolvedExpression,
+        message: Option<String>,
+    },
     RepeatInit {
         count: ResolvedExpression,
         count_slot: usize,
@@ -515,6 +519,28 @@ impl<'a> Resolver<'a> {
                     }
                     let expression = self.expression(expression)?;
                     self.emit(ResolvedStatement::Call { expression }, span);
+                }
+                Statement::Assert {
+                    condition,
+                    message,
+                    span,
+                } => {
+                    // Public AST clients can bypass text parsing, so enforce
+                    // this diagnostic-size bound again at the semantic gate.
+                    if message
+                        .as_ref()
+                        .is_some_and(|text| text.len() > crate::ast::MAX_ASSERT_MESSAGE_BYTES)
+                    {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::CallArguments,
+                            span,
+                            "assertion message exceeds 256 UTF-8 bytes",
+                        ));
+                    }
+                    let condition = self.expression(condition)?;
+                    let condition_span = condition.syntax.nodes()[condition.syntax.root()].span;
+                    require_type(&condition.kind, ValueType::Boolean, condition_span)?;
+                    self.emit(ResolvedStatement::Assert { condition, message }, span);
                 }
                 Statement::Repeat {
                     count,
@@ -1434,6 +1460,7 @@ pub(crate) fn check_name(name: &str, span: Span) -> Result<(), Diagnostic> {
             | "return"
             | "needs"
             | "ensures"
+            | "assert"
     ) {
         Err(Diagnostic::new(
             DiagnosticKind::ReservedName,

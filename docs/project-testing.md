@@ -53,15 +53,15 @@ pub pure funcra add(a: integer, b: integer) -> integer {
 
 ```scarp
 import "../src/math.srp" as math;
-if math.add(2, 3) != 5 {
-    print(1 / 0);
-}
+assert(math.add(2, 3) == 5, "math.add must produce 5");
 ```
 
-The intentional error in the failure branch is a temporary assertion
-pattern, **not** a new `assert` built-in. This syntax and imported-function
-execution use existing Scarp capabilities. A future assertion API deserves
-its own documented semantics and dedicated tests.
+The native `assert` statement belongs to the **unreleased, stacked assertion
+development branch**, not the published compiler. Its
+[syntax and runtime behavior](assertions.md) use the real Scarp parser,
+type checker and interpreter. Earlier project-test-runner branches do not
+yet support this assertion form; there, use a standalone test source and
+check its exit status.
 
 Example status:
 
