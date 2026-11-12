@@ -1,4 +1,5 @@
 mod project;
+mod project_info;
 mod project_manifest;
 mod project_tests;
 
@@ -30,6 +31,7 @@ Commands:
   inspect tokens <file.srp>        Inspect lexer tokens and source locations
   create <directory>               Create a legacy Scarp.project app
   init <directory>                 Initialize a new scarp.project app
+  project info [--json] [directory]  Display validated project metadata
   launch <directory>               Execute a Scarp project entrypoint
   run [directory|file.srp]          Run a project or legacy source file
   test [directory]                 Execute the project's tests/*.srp files
@@ -48,6 +50,7 @@ Examples:
   scarp exec examples/hello.srp
   scarp create demo
   scarp init modern-demo
+  scarp project info --json modern-demo
   scarp run modern-demo
   scarp test modern-demo
   scarp launch demo
@@ -174,6 +177,19 @@ Tests cannot read interactive stdin, and each program's ordinary output is
 captured, not emitted as test status. Dependencies are not installed.
 The tests directory must be a real directory, not a symlink.
 This command accepts no budget or diagnostic-format options yet.
+";
+
+const PROJECT_HELP: &str = "Usage:
+  scarp project info [--json] [--] [project-directory]
+
+Display validated local project metadata without executing Scarp source.
+The default directory is the current working directory. The parser checks
+manifest syntax and the entrypoint's canonical containment, existence and
+file type, but does not compile the source graph.
+--json prints schema-version-1 JSON with name, version, type, entry,
+manifest and format. Legacy Scarp.project reports a null version.
+No dependencies, lockfiles or network operations are involved.
+Errors go to stderr and do not emit partial successful JSON output.
 ";
 
 const LAUNCH_HELP: &str =
@@ -352,6 +368,14 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         [command, flag] if command == "test" && (flag == "--help" || flag == "-h") => {
             return write_output(output.write_all(TEST_HELP.as_bytes()), errors);
         }
+        [command, flag] if command == "project" && (flag == "--help" || flag == "-h") => {
+            return write_output(output.write_all(PROJECT_HELP.as_bytes()), errors);
+        }
+        [command, topic, flag]
+            if command == "project" && topic == "info" && (flag == "--help" || flag == "-h") =>
+        {
+            return write_output(output.write_all(PROJECT_HELP.as_bytes()), errors);
+        }
         [command] if command == "guide" => {
             return write_output(output.write_all(HELP.as_bytes()), errors);
         }
@@ -370,6 +394,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                 Some("create") => Some(CREATE_HELP),
                 Some("init") => Some(INIT_HELP),
                 Some("test") => Some(TEST_HELP),
+                Some("project") => Some(PROJECT_HELP),
                 Some("launch") => Some(LAUNCH_HELP),
                 _ => None,
             };
@@ -476,6 +501,43 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             return write_output(output.write_all(EXEC_HELP.as_bytes()), errors);
         }
         _ => {}
+    }
+    if args.first().is_some_and(|command| command == "project") {
+        if args.get(1).map_or(true, |topic| topic != "info") {
+            let _ = writeln!(errors, "error: expected 'project info'\n\n{PROJECT_HELP}");
+            return 2;
+        }
+        let mut json = false;
+        let mut directory = None;
+        let mut separator = false;
+        let mut invalid = false;
+        for arg in args.iter().skip(2) {
+            if !separator && arg == "--" {
+                separator = true;
+            } else if !separator && arg == "--json" {
+                if json {
+                    invalid = true;
+                }
+                json = true;
+            } else if (!separator && arg.to_string_lossy().starts_with('-')) || directory.is_some()
+            {
+                invalid = true;
+            } else {
+                directory = Some(Path::new(arg));
+            }
+        }
+        if invalid {
+            let _ = writeln!(errors, "error: expected at most one project directory and a single --json flag\n\n{PROJECT_HELP}");
+            return 2;
+        }
+        let directory = directory.unwrap_or(Path::new("."));
+        return match project::info(directory) {
+            Ok(info) => write_output(project_info::write(&info, output, json), errors),
+            Err(message) => {
+                let _ = writeln!(errors, "error: {message}");
+                1
+            }
+        };
     }
     if args.first().is_some_and(|command| command == "test") {
         let destination = match args.as_slice() {

@@ -166,9 +166,24 @@ pub fn init(directory: &Path) -> Result<(), String> {
     result
 }
 
-/// Resolve a user-selected project root to one existing, contained .srp file.
-/// No ancestor search, symlink escape, source execution, or registry access.
-pub fn entry_file(directory: &Path) -> Result<PathBuf, String> {
+/// A validated project snapshot. Relative labels come from a single bounded
+/// manifest read; the canonical entrypoint must remain inside the project.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectInfo {
+    pub name: String,
+    pub version: Option<String>,
+    pub entry: String,
+    pub kind: String,
+    pub format: &'static str,
+    pub manifest_filename: &'static str,
+    pub entry_path: PathBuf,
+}
+
+/// Read the same strictly bounded project manifest used by run/verify, with no
+/// source execution, imports, network access or dependency installation.
+///
+/// Returns validated metadata only after checking the canonical entrypoint.
+pub fn info(directory: &Path) -> Result<ProjectInfo, String> {
     let root = fs::canonicalize(directory)
         .map_err(|error| format!("could not open project '{}': {error}", directory.display()))?;
     if !root.is_dir() {
@@ -206,9 +221,11 @@ pub fn entry_file(directory: &Path) -> Result<PathBuf, String> {
         return Err("project manifest exceeds 4096 bytes".into());
     }
     let content = std::str::from_utf8(&bytes).map_err(|_| "project manifest must be UTF-8")?;
-    let entry = if content.starts_with("scarp-project:") {
-        // Legacy v1 remains accepted verbatim. Preserve its strict line order
-        // and existing diagnostics for previously generated projects.
+    let (name, version, entry, kind, format, manifest_filename) = if content
+        .starts_with("scarp-project:")
+    {
+        // Legacy v1 remains accepted verbatim. Preserve its strict line
+        // order and diagnostics for previously generated projects.
         let mut lines = content.lines();
         if lines.next() != Some("scarp-project: 1") {
             return Err("expected 'scarp-project: 1' as the first manifest line".into());
@@ -230,9 +247,24 @@ pub fn entry_file(directory: &Path) -> Result<PathBuf, String> {
         if !valid_entry(entry) {
             return Err("entry must be a contained, relative .srp path without traversal".into());
         }
-        entry.to_owned()
+        (
+            name.to_owned(),
+            None,
+            entry.to_owned(),
+            "application".to_owned(),
+            "legacy-v1",
+            MANIFEST,
+        )
     } else {
-        crate::project_manifest::parse(content)?
+        let manifest = crate::project_manifest::parse(content)?;
+        (
+            manifest.name,
+            Some(manifest.version),
+            manifest.entry,
+            manifest.kind,
+            "v2",
+            MANIFEST_V2,
+        )
     };
     let target = fs::canonicalize(root.join(&entry))
         .map_err(|error| format!("could not open project entry '{entry}': {error}"))?;
@@ -242,5 +274,19 @@ pub fn entry_file(directory: &Path) -> Result<PathBuf, String> {
     if !target.is_file() {
         return Err("project entry must be an existing .srp file".into());
     }
-    Ok(target)
+    Ok(ProjectInfo {
+        name,
+        version,
+        entry,
+        kind,
+        format,
+        manifest_filename,
+        entry_path: target,
+    })
+}
+
+/// Resolve a user-selected project root to one existing, contained .srp file.
+/// No ancestor search, symlink escape, source execution, or registry access.
+pub fn entry_file(directory: &Path) -> Result<PathBuf, String> {
+    info(directory).map(|project| project.entry_path)
 }
