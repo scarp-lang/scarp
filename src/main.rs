@@ -519,10 +519,12 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                     invalid = true;
                 }
                 json = true;
-            } else if !separator && arg.to_string_lossy().starts_with('-') {
+            } else if (!separator && arg.to_string_lossy().starts_with('-'))
+                || directory.is_some()
+            {
                 invalid = true;
-            } else if directory.replace(Path::new(arg)).is_some() {
-                invalid = true;
+            } else {
+                directory = Some(Path::new(arg));
             }
         }
         if invalid {
