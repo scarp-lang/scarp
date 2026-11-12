@@ -89,7 +89,6 @@ fn suite(directory: &Path) -> Result<(FileSourceLoader, Vec<(String, PathBuf)>),
     Ok((loader, files))
 }
 
-
 /// Read the optional sibling test input without reading process stdin.
 ///
 /// A missing fixture preserves the previous no-input execution contract.
@@ -110,7 +109,9 @@ fn input_fixture(label: &str, test_path: &Path, root: &Path) -> Result<Option<Ve
     let canonical = fs::canonicalize(&path)
         .map_err(|error| format!("{label}: cannot resolve .stdin fixture: {error}"))?;
     if !canonical.starts_with(root) {
-        return Err(format!("{label}: .stdin fixture escapes the trusted project root"));
+        return Err(format!(
+            "{label}: .stdin fixture escapes the trusted project root"
+        ));
     }
     let file = fs::File::open(&canonical)
         .map_err(|error| format!("{label}: cannot open .stdin fixture: {error}"))?;
