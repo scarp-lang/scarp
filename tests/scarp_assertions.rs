@@ -350,3 +350,44 @@ assert(countdown(1000) == 0);
     assert!(result.stdout.is_empty());
     assert!(result.stderr.is_empty());
 }
+
+#[test]
+fn public_ast_resolver_enforces_the_same_message_limit_as_the_parser() {
+    let mut program = scarp::parse("assert(true);").unwrap();
+    match &mut program.statements[0] {
+        scarp::ast::Statement::Assert { message, .. } => {
+            *message = Some("x".repeat(scarp::ast::MAX_ASSERT_MESSAGE_BYTES + 1));
+        }
+        _ => panic!("expected an assertion"),
+    }
+    let error = scarp::resolver::resolve(program).unwrap_err();
+    assert_eq!(error.kind, scarp::diagnostics::DiagnosticKind::CallArguments);
+    assert!(error.message.contains("256"), "{error}");
+
+    let mut allowed = scarp::parse("assert(true);").unwrap();
+    match &mut allowed.statements[0] {
+        scarp::ast::Statement::Assert { message, .. } => {
+            *message = Some("é".repeat(scarp::ast::MAX_ASSERT_MESSAGE_BYTES / 2));
+        }
+        _ => panic!("expected an assertion"),
+    }
+    let checked = scarp::resolver::resolve(allowed);
+    assert!(checked.is_ok(), "{checked:?}");
+}
+
+#[test]
+fn parser_counts_assertion_message_bytes_not_unicode_scalar_characters() {
+    let workspace = Workspace::new();
+    let accepted = workspace.source(
+        "unicode-boundary.srp",
+        &format!("assert(true, \"{}\");", "é".repeat(128)),
+    );
+    assert!(file_cli("verify", &accepted).status.success());
+    let rejected = workspace.source(
+        "unicode-too-long.srp",
+        &format!("assert(true, \"{}\");", "é".repeat(129)),
+    );
+    let result = file_cli("verify", &rejected);
+    assert_eq!(result.status.code(), Some(1), "{result:?}");
+    assert!(String::from_utf8_lossy(&result.stderr).contains("256"));
+}
