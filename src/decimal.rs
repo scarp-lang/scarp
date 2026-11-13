@@ -146,8 +146,11 @@ impl Decimal {
         Self::new(rounded, target_scale)
     }
 
-    /// Long division with explicit target scale and rounding mode.
-    /// No decimal operation silently converts to binary floating point.
+    /// Bounded digit-by-digit division with explicit rounding and target scale.
+    ///
+    /// Avoid aligning full operands: a 28-digit integer divided by a decimal
+    /// can have an exactly representable quotient even when cross-scaling
+    /// its numerator would exceed the coefficient bound or i128 storage.
     pub fn div_rounded(
         self,
         other: Self,
@@ -160,34 +163,87 @@ impl Decimal {
         if target_scale > MAX_DECIMAL_SCALE {
             return Err(DecimalError::ScaleExceeded);
         }
-        let (a, b) = self.align(other)?;
-        let negative = (a < 0) != (b < 0);
-        let numerator = a.abs();
-        let denominator = b.abs();
-        let mut digits = numerator / denominator;
+        let negative = (self.coefficient < 0) != (other.coefficient < 0);
+        let numerator = self.coefficient.unsigned_abs();
+        let denominator = other.coefficient.unsigned_abs();
+        let mut quotient = numerator / denominator;
         let mut remainder = numerator % denominator;
-        let mut output_scale = 0u8;
-        while remainder != 0 && output_scale < target_scale {
-            remainder = remainder
-                .checked_mul(10)
-                .ok_or(DecimalError::PrecisionExceeded)?;
-            let digit = remainder / denominator;
-            remainder %= denominator;
-            digits = digits
-                .checked_mul(10)
-                .and_then(|v| v.checked_add(digit))
-                .ok_or(DecimalError::PrecisionExceeded)?;
-            if digits > MAX_COEFFICIENT {
-                return Err(DecimalError::PrecisionExceeded);
+        let shift = i16::from(other.scale) - i16::from(self.scale);
+
+        if shift >= 0 {
+            // Move the quotient's decimal point right by the scale difference.
+            // The remainder is always below 10^28, so *10 fits in u128.
+            for _ in 0..shift {
+                remainder *= 10;
+                let digit = remainder / denominator;
+                remainder %= denominator;
+                quotient = push_decimal_digit(quotient, digit)?;
             }
-            output_scale += 1;
+            let mut scale = 0;
+            while remainder != 0 && scale < target_scale {
+                remainder *= 10;
+                let digit = remainder / denominator;
+                remainder %= denominator;
+                quotient = push_decimal_digit(quotient, digit)?;
+                scale += 1;
+            }
+            if should_increment(quotient, remainder, denominator, mode) {
+                quotient = quotient.checked_add(1).ok_or(DecimalError::PrecisionExceeded)?;
+            }
+            return Self::new(signed_coefficient(quotient, negative)?, scale);
         }
-        if should_increment(digits as u128, remainder as u128, denominator as u128, mode) {
-            digits = digits
-                .checked_add(1)
-                .ok_or(DecimalError::PrecisionExceeded)?;
+
+        // Move the quotient point left without allocating a 46-digit
+        // denominator. The quotient's trailing k digits become fractional,
+        // followed by the original remainder's decimal expansion.
+        let k = (-shift) as u8;
+        let divisor = power_of_ten(k) as u128;
+        let fractional_prefix = quotient % divisor;
+        quotient /= divisor;
+        let mut scale = 0;
+        while scale < target_scale {
+            let more_prefix = scale < k
+                && fractional_prefix % (power_of_ten(k - scale) as u128) != 0;
+            if !more_prefix && remainder == 0 {
+                break;
+            }
+            let digit = if scale < k {
+                (fractional_prefix / (power_of_ten(k - scale - 1) as u128)) % 10
+            } else {
+                remainder *= 10;
+                let digit = remainder / denominator;
+                remainder %= denominator;
+                digit
+            };
+            quotient = push_decimal_digit(quotient, digit)?;
+            scale += 1;
         }
-        Self::new(if negative { -digits } else { digits }, output_scale)
+        let more_prefix = scale < k
+            && fractional_prefix % (power_of_ten(k - scale) as u128) != 0;
+        if more_prefix || remainder != 0 {
+            let (next_digit, sticky) = if scale < k {
+                let remaining_divisor = power_of_ten(k - scale - 1) as u128;
+                (
+                    (fractional_prefix / remaining_divisor) % 10,
+                    fractional_prefix % remaining_divisor != 0 || remainder != 0,
+                )
+            } else {
+                let expanded = remainder * 10;
+                (expanded / denominator, expanded % denominator != 0)
+            };
+            let increment = match mode {
+                RoundingMode::HalfEven => {
+                    next_digit > 5 || (next_digit == 5 && (sticky || quotient % 2 != 0))
+                }
+                RoundingMode::HalfUp => next_digit >= 5,
+                RoundingMode::TowardZero => false,
+                RoundingMode::AwayFromZero => true,
+            };
+            if increment {
+                quotient = quotient.checked_add(1).ok_or(DecimalError::PrecisionExceeded)?;
+            }
+        }
+        Self::new(signed_coefficient(quotient, negative)?, scale)
     }
 
     /// Never truncate a fraction during integer conversion.
@@ -218,6 +274,26 @@ fn shift(coefficient: i128, exponent: u8) -> Result<i128, DecimalError> {
     }
     Ok(shifted)
 }
+/// Append one decimal digit without exceeding the target coefficient capacity.
+fn push_decimal_digit(quotient: u128, digit: u128) -> Result<u128, DecimalError> {
+    let value = quotient
+        .checked_mul(10)
+        .and_then(|n| n.checked_add(digit))
+        .ok_or(DecimalError::PrecisionExceeded)?;
+    if value > MAX_COEFFICIENT as u128 {
+        return Err(DecimalError::PrecisionExceeded);
+    }
+    Ok(value)
+}
+
+fn signed_coefficient(value: u128, negative: bool) -> Result<i128, DecimalError> {
+    if value > MAX_COEFFICIENT as u128 {
+        return Err(DecimalError::PrecisionExceeded);
+    }
+    let signed = value as i128;
+    Ok(if negative { -signed } else { signed })
+}
+
 fn should_increment(quotient: u128, remainder: u128, divisor: u128, mode: RoundingMode) -> bool {
     if remainder == 0 {
         return false;
