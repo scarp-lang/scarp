@@ -1,9 +1,7 @@
 # Scarp में बहुत बड़े पूर्णांक: BigInt
 
-यह **अभी अप्रकाशित development feature** है। Published `v0.0.6-alpha.5`
-में यह सुविधा उपलब्ध नहीं है। इस feature
-branch के source से compiler बनाना जरूरी है; सिर्फ version देखकर support
-न मानें। [पूरी reference और limits](../bigint.md) देखें।
+BigInt पहली बार [Scarp v0.0.6-alpha.9](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.9)
+में उपलब्ध है। [पूरी reference और limits](../bigint.md) देखें।
 
 साधारण `integer` में signed 64-bit संख्या रहती है:
 `-9223372036854775808` से `9223372036854775807` तक। `bigint` अलग type है,

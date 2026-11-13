@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.6-alpha.9 — development candidate
+## 0.0.6-alpha.9 — published GitHub prerelease, 2026-11-13
 
 - Add opt-in `scarp test --json=v2` with compile, fixture, and runtime
   phases, diagnostic codes, and project-relative source locations.

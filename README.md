@@ -1,21 +1,19 @@
 # Scarp
 
-**0.0.6-alpha.8** is the **latest published experimental GitHub prerelease**
-(12 November 2026), from exact source `37253e7805c0ca594560700dd1deb3928458e60d`.
-It adds declarative projects, project testing, and Boolean assertions.
+**0.0.6-alpha.9** adds [bounded BigInt](docs/bigint.md) and opt-in
+[structured project test reports](docs/project-testing.md#structured-failure-reports).
 The latest published prerelease is
-[0.0.6-alpha.8](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.8),
+[0.0.6-alpha.9](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.9),
 with verified packages for Windows x64, Linux x64, and macOS Apple Silicon.
-See the [release notes](docs/releases/v0.0.6-alpha.8-publication.md),
-[verification record](docs/releases/v0.0.6-alpha.8-validation.md), and
-[runnable calculator project](examples/projects/calculator/README.md).
+[Release notes](docs/releases/v0.0.6-alpha.9-publication.md) ·
+[Verification record](docs/releases/v0.0.6-alpha.9-validation.md)
+
+**0.0.6-alpha.8** added declarative projects, project testing, and Boolean
+assertions. [Alpha.8 verification](docs/releases/v0.0.6-alpha.8-validation.md) ·
+[Runnable calculator project](examples/projects/calculator/README.md)
 
 **0.0.6-alpha.7** added typed conditional expressions and Unicode scalar
 string escapes. [Alpha.7 verification](docs/releases/v0.0.6-alpha.7-validation.md)
-
-The **0.0.6-alpha.9 development candidate** adds [bounded BigInt](docs/bigint.md)
-and opt-in [structured project test reports](docs/project-testing.md#structured-failure-reports-development).
-[Candidate PR #232](https://github.com/scarp-lang/scarp/pull/232)
 
 **0.0.6-alpha.6** added [bounded input](docs/program-input.md),
 [scalar/text utilities](docs/text-foundations.md) and

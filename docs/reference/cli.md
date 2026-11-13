@@ -15,7 +15,10 @@ The optional directory defaults to the current project. `run FILE` and
 [manifest format and migration](../project-v2.md), [test report and fixture
 contracts](../project-testing.md), and [assertion syntax](../assertions.md).
 
-**Development candidate only (not in published alpha.8):** `scarp exec
+Scarp v0.0.6-alpha.9 adds `scarp test --json=v2`
+for [structured diagnostics](../project-testing.md#structured-failure-reports).
+
+**Development candidate only (not in published alpha.9):** `scarp exec
 --input-file DATA.txt app.srp` selects a UTF-8 file as the program's explicit
 input source. `run FILE`, `run PROJECT` and `launch PROJECT` accept the
 same option. An input file takes priority over ambient stdin; normal input
@@ -23,9 +26,6 @@ quotas, UTF-8 errors and transactional output remain unchanged. The path is
 relative to the process working directory, not automatically to the Scarp
 source directory. Static commands reject the flag. Input is streamed through
 a buffered file reader rather than loaded into memory all at once.
-
-The alpha.9 development candidate adds `scarp test --json=v2`
-for [structured diagnostics](../project-testing.md#structured-failure-reports-development).
 
 **v0.0.6-alpha.6 published prerelease:** `exec`/`run`/`launch` support redirected
 UTF-8 `read_line()` with `--max-input-line-bytes`, `--max-input-bytes` and
@@ -63,7 +63,7 @@ Published v0.0.6-alpha.1 adds static `inspect symbols` and `inspect references`
 commands, which are absent from older alpha.5 packages.
 
 The latest published prerelease is
-[v0.0.6-alpha.8](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.8).
+[v0.0.6-alpha.9](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.9).
 It retains project-directory module inspection. The experimental C11 scalar
 source emitter is a Rust embedding API, **not** a Scarp CLI command;
 `scarp compile` still does not exist.
@@ -362,9 +362,9 @@ graph inspections; runtime budgets do not apply. They accept the existing
 for snapshot-local IDs, precise source positions, limits, schema-v1 fixtures,
 implicit definitions and failure behavior. These commands are not in alpha.5.
 
-## BigInt development flags
+## BigInt flags
 
-The [BigInt milestone](../bigint.md) adds `--max-bigint-digits` (default 10,000,
+Scarp v0.0.6-alpha.9 adds [BigInt](../bigint.md) flags `--max-bigint-digits` (default 10,000,
 maximum 1,000,000) and `--max-bigint-bytes` (default 8,388,608). `exec`/`run` and
 evaluating `check` accept them before the filename; static `verify` rejects
 runtime flags. E0051 diagnoses malformed decimal text, E0052 digit/payload
