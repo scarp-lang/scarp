@@ -44,6 +44,11 @@ pub trait SourceLoader {
     fn display_name(&self, identity: &str) -> String {
         identity.to_string()
     }
+    /// Optional qualified-name prefix for diagnostics. The canonical identity
+    /// still determines source resolution and the linker's expansion charge.
+    fn diagnostic_qualifier(&self, _identity: &str) -> Option<String> {
+        None
+    }
 }
 
 fn path_error(message: impl Into<String>) -> SourceLoadError {
@@ -172,21 +177,13 @@ impl FileSourceLoader {
     }
     pub(super) fn identify(&self, path: &Path) -> Result<String, SourceLoadError> {
         let path = self.checked(path)?;
-        let name = self.diagnostic_path(&path);
-        if !name.is_empty() && (self.relative_diagnostics || path.to_str().is_some()) {
-            return Ok(name.into_owned());
+        if let Some(name) = path.to_str() {
+            return Ok(name.to_string());
         }
         // Preserve native non-Unicode entry paths without lossy identity keys.
         // Debug formatting escapes their native bytes/code units; actual paths
         // remain owned by this loader instance, never a mutable global cache.
-        let identity = if self.relative_diagnostics {
-            let relative = path
-                .strip_prefix(&self.root)
-                .map_err(|_| path_error("canonical module path escapes the trusted source root"))?;
-            format!("\0native:{relative:?}")
-        } else {
-            format!("@native:{path:?}")
-        };
+        let identity = format!("@native:{path:?}");
         self.native_paths
             .borrow_mut()
             .insert(identity.clone(), path);
@@ -197,26 +194,16 @@ impl FileSourceLoader {
             .borrow()
             .get(identity)
             .cloned()
-            .unwrap_or_else(|| {
-                if self.relative_diagnostics {
-                    self.root.join(identity)
-                } else {
-                    PathBuf::from(identity)
-                }
-            })
+            .unwrap_or_else(|| PathBuf::from(identity))
     }
     fn diagnostic_path<'a>(&self, path: &'a Path) -> Cow<'a, str> {
         if !self.relative_diagnostics {
             return path.to_string_lossy();
         }
-        let Some(relative) = path.strip_prefix(&self.root).ok().and_then(Path::to_str) else {
-            return Cow::Borrowed("");
-        };
-        if cfg!(windows) {
-            Cow::Owned(relative.replace('\\', "/"))
-        } else {
-            Cow::Borrowed(relative)
-        }
+        path.strip_prefix(&self.root)
+            .ok()
+            .and_then(portable_name)
+            .unwrap_or_default()
     }
 
     fn read_error(
@@ -307,4 +294,26 @@ impl SourceLoader for FileSourceLoader {
     fn display_name(&self, identity: &str) -> String {
         self.diagnostic_path(&self.path(identity)).into_owned()
     }
+
+    fn diagnostic_qualifier(&self, identity: &str) -> Option<String> {
+        if !self.relative_diagnostics {
+            return None;
+        }
+        let path = self.path(identity);
+        let relative = path.strip_prefix(&self.root).ok()?;
+        Some(portable_name(relative).map_or_else(
+            // The NUL distinguishes escaped native names from ordinary paths.
+            || format!("\0native:{relative:?}"),
+            Cow::into_owned,
+        ))
+    }
+}
+
+fn portable_name(path: &Path) -> Option<Cow<'_, str>> {
+    let name = path.to_str()?;
+    Some(if cfg!(windows) {
+        Cow::Owned(name.replace('\\', "/"))
+    } else {
+        Cow::Borrowed(name)
+    })
 }
