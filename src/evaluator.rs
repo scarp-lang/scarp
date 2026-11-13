@@ -95,7 +95,7 @@ impl Workspace {
             }
             Evaluation::Ask { span, .. } | Evaluation::AskOr { span, .. } => {
                 Err(crate::input::prompt_unavailable(span))
-            },
+            }
             Evaluation::Call { span, .. } => Err(Diagnostic::new(
                 DiagnosticKind::FunctionUnsupported,
                 span,

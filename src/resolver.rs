@@ -150,7 +150,8 @@ pub(crate) enum ResolvedCall {
 }
 
 pub(crate) fn is_builtin_name(name: &str) -> bool {
-    matches!(name, "read_line" | "read_line_or" | "ask" | "ask_or") || Builtin::from_name(name).is_some()
+    matches!(name, "read_line" | "read_line_or" | "ask" | "ask_or")
+        || Builtin::from_name(name).is_some()
 }
 
 /// Static function signature and call-graph information. Spans are source bytes.

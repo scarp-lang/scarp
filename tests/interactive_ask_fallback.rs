@@ -12,29 +12,32 @@ use scarp::{
 
 fn output(source: &str, bytes: &[u8]) -> (Vec<u8>, Vec<u8>) {
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    scarp::run_with_interactive_input(
-        source,
-        &mut Cursor::new(bytes),
-        &mut out,
-        &mut err,
-    )
-    .unwrap();
+    scarp::run_with_interactive_input(source, &mut Cursor::new(bytes), &mut out, &mut err).unwrap();
     (out, err)
 }
 
 #[test]
 fn eof_fallback_preserves_visible_prompt_and_empty_line_distinction() {
     let program = r#"print(ask_or("Name: ", "Guest"));"#;
-    assert_eq!(output(program, b""), (b"Name: Guest\n".to_vec(), Vec::new()));
+    assert_eq!(
+        output(program, b""),
+        (b"Name: Guest\n".to_vec(), Vec::new())
+    );
     assert_eq!(output(program, b"\n"), (b"Name: \n".to_vec(), Vec::new()));
     assert_eq!(output(program, b"\r\n"), (b"Name: \n".to_vec(), Vec::new()));
-    assert_eq!(output(program, b"Ada"), (b"Name: Ada\n".to_vec(), Vec::new()));
+    assert_eq!(
+        output(program, b"Ada"),
+        (b"Name: Ada\n".to_vec(), Vec::new())
+    );
     assert_eq!(
         output(r#"print(ask_or("नाम: ", "अतिथि"));"#, b""),
         ("नाम: अतिथि\n".as_bytes().to_vec(), Vec::new())
     );
     assert_eq!(
-        output(r#"print(ask_or("नाम: ", "अतिथि"));"#, "नमस्ते 🌍\r\n".as_bytes()),
+        output(
+            r#"print(ask_or("नाम: ", "अतिथि"));"#,
+            "नमस्ते 🌍\r\n".as_bytes()
+        ),
         ("नाम: नमस्ते 🌍\n".as_bytes().to_vec(), Vec::new())
     );
 }
@@ -43,20 +46,26 @@ fn eof_fallback_preserves_visible_prompt_and_empty_line_distinction() {
 fn fallback_never_hides_encoding_reader_or_quota_errors() {
     let source = r#"print("buffered"); eprint("buffered"); print(ask_or("Name: ", "Guest"));"#;
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    let failure = scarp::run_with_interactive_input(
-        source,
-        &mut Cursor::new(b"\xff\n"),
-        &mut out,
-        &mut err,
-    ).unwrap_err();
+    let failure =
+        scarp::run_with_interactive_input(source, &mut Cursor::new(b"\xff\n"), &mut out, &mut err)
+            .unwrap_err();
     assert!(matches!(failure, RunError::Diagnostic(ref d) if d.kind == Kind::InputEncoding));
     assert_eq!(out, b"Name: ");
     assert!(err.is_empty());
 
     for limits in [
-        InputLimits { max_reads: 0, ..Default::default() },
-        InputLimits { max_total_bytes: 0, ..Default::default() },
-        InputLimits { max_line_bytes: 0, ..Default::default() },
+        InputLimits {
+            max_reads: 0,
+            ..Default::default()
+        },
+        InputLimits {
+            max_total_bytes: 0,
+            ..Default::default()
+        },
+        InputLimits {
+            max_line_bytes: 0,
+            ..Default::default()
+        },
     ] {
         out.clear();
         let failure = scarp::run_with_interactive_input_and_options(
@@ -66,7 +75,8 @@ fn fallback_never_hides_encoding_reader_or_quota_errors() {
             &mut err,
             ExecutionOptions::default(),
             limits,
-        ).unwrap_err();
+        )
+        .unwrap_err();
         assert!(matches!(failure, RunError::Diagnostic(ref d) if d.kind == Kind::InputLimit));
         assert!(out.is_empty() && err.is_empty());
     }
@@ -75,10 +85,16 @@ fn fallback_never_hides_encoding_reader_or_quota_errors() {
 struct FailedPrompt;
 impl Write for FailedPrompt {
     fn write(&mut self, _: &[u8]) -> io::Result<usize> {
-        Err(io::Error::new(io::ErrorKind::BrokenPipe, "secret-host-details"))
+        Err(io::Error::new(
+            io::ErrorKind::BrokenPipe,
+            "secret-host-details",
+        ))
     }
     fn flush(&mut self) -> io::Result<()> {
-        Err(io::Error::new(io::ErrorKind::BrokenPipe, "secret-host-details"))
+        Err(io::Error::new(
+            io::ErrorKind::BrokenPipe,
+            "secret-host-details",
+        ))
     }
 }
 
@@ -95,13 +111,17 @@ fn failed_prompt_writer_remains_error_and_does_not_read_input() {
         &mut stderr,
         ExecutionOptions::default(),
         InputLimits::default(),
-    ).unwrap_err();
+    )
+    .unwrap_err();
     let RunError::Diagnostic(diagnostic) = error else {
         panic!("expected source diagnostic");
     };
     assert_eq!(diagnostic.kind, Kind::PromptIo);
     assert!(!diagnostic.message.contains("secret-host-details"));
-    assert_eq!(&source[diagnostic.span.start..diagnostic.span.end], r#"ask_or("Prompt: ", "Guest")"#);
+    assert_eq!(
+        &source[diagnostic.span.start..diagnostic.span.end],
+        r#"ask_or("Prompt: ", "Guest")"#
+    );
     assert_eq!(input.position(), 0);
     assert!(stderr.is_empty());
 }
@@ -115,7 +135,10 @@ fn default_host_modes_reject_ask_or_without_consuming_input_or_writing_output() 
     assert!(matches!(error, RunError::Diagnostic(ref d) if d.kind == Kind::InputUnavailable));
     assert_eq!(input.position(), 0);
     assert!(out.is_empty() && err.is_empty());
-    assert_eq!(scarp::check(source).unwrap_err().kind, Kind::InputUnavailable);
+    assert_eq!(
+        scarp::check(source).unwrap_err().kind,
+        Kind::InputUnavailable
+    );
 }
 
 #[test]
@@ -126,7 +149,10 @@ fn typing_purity_shadowing_and_eager_argument_order() {
         r#"print(ask_or("Name: ", "Guest", "extra"));"#,
         r#"print(ask_or(prompt: "Name: ", fallback: "Guest"));"#,
     ] {
-        assert_eq!(scarp::compile(source).unwrap_err().kind, Kind::CallArguments);
+        assert_eq!(
+            scarp::compile(source).unwrap_err().kind,
+            Kind::CallArguments
+        );
     }
     for source in [
         r#"print(ask_or(8, "Guest"));"#,
@@ -148,7 +174,10 @@ fn typing_purity_shadowing_and_eager_argument_order() {
         (b"shadow\n".to_vec(), Vec::new())
     );
     assert_eq!(
-        output(r#"print(ask_or(read_line(), read_line()));"#, b"Prompt> \nFallback\nAda\n"),
+        output(
+            r#"print(ask_or(read_line(), read_line()));"#,
+            b"Prompt> \nFallback\nAda\n"
+        ),
         (b"Prompt> Ada\n".to_vec(), Vec::new())
     );
 }
