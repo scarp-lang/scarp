@@ -287,3 +287,26 @@ fn division_canonicalizes_fraction_before_assembling_large_coefficient() {
         Ok(expected)
     );
 }
+
+#[test]
+fn multiplication_cancels_base_ten_factors_before_intermediate_overflow() {
+    // Raw coefficients multiply to > u128::MAX, yet exact canonical output
+    // fits in 28 digits. A naive checked i128/u128 multiply rejects this.
+    let a = Decimal::new(2_i128.pow(70), 18).unwrap();
+    let b = Decimal::new(5_i128.pow(27), 18).unwrap();
+    let expected = Decimal::new(2_i128.pow(43), 9).unwrap();
+    assert_eq!(a.checked_mul(b), Ok(expected));
+    assert_eq!(b.checked_mul(a), Ok(expected));
+    let negative = Decimal::new(-2_i128.pow(70), 18).unwrap();
+    assert_eq!(negative.checked_mul(b), Ok(Decimal::new(-2_i128.pow(43), 9).unwrap()));
+
+    // A genuinely nonrepresentable product still produces an error.
+    assert_eq!(
+        d("9999999999999999999999999999").checked_mul(d("10")),
+        Err(DecimalError::PrecisionExceeded)
+    );
+    assert_eq!(
+        d("0.000000000000000001").checked_mul(d("0.1")),
+        Err(DecimalError::ScaleExceeded)
+    );
+}
