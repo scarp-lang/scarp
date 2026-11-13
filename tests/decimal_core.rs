@@ -313,3 +313,33 @@ fn multiplication_cancels_base_ten_factors_before_intermediate_overflow() {
         Err(DecimalError::ScaleExceeded)
     );
 }
+
+#[test]
+fn exact_division_rejects_repeating_results_and_never_rounds_silently() {
+    assert_eq!(d("1").checked_div_exact(d("8")), Ok(d("0.125")));
+    assert_eq!(d("0.1").checked_div_exact(d("0.2")), Ok(d("0.5")));
+    assert_eq!(d("-12.50").checked_div_exact(d("5")), Ok(d("-2.5")));
+    assert_eq!(d("0").checked_div_exact(d("5")), Ok(d("0")));
+    assert_eq!(d("1").checked_div_exact(d("3")), Err(DecimalError::Inexact));
+    assert_eq!(
+        d("1").checked_div_exact(d("10000000000000000000")),
+        Err(DecimalError::Inexact)
+    );
+    assert_eq!(
+        d("1").checked_div_exact(d("0")),
+        Err(DecimalError::DivisionByZero)
+    );
+}
+
+#[test]
+fn explicit_fixed_formatting_keeps_money_decimal_places() {
+    assert_eq!(d("1.2").format_fixed(2, RoundingMode::HalfEven).unwrap(), "1.20");
+    assert_eq!(d("199.996").format_fixed(2, RoundingMode::HalfEven).unwrap(), "200.00");
+    assert_eq!(d("-1.235").format_fixed(2, RoundingMode::HalfEven).unwrap(), "-1.24");
+    assert_eq!(d("-0.005").format_fixed(2, RoundingMode::HalfEven).unwrap(), "0.00");
+    assert_eq!(d("0").format_fixed(0, RoundingMode::HalfEven).unwrap(), "0");
+    assert_eq!(
+        d("1").format_fixed(19, RoundingMode::HalfEven),
+        Err(DecimalError::ScaleExceeded)
+    );
+}
