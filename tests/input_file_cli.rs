@@ -129,3 +129,29 @@ fn static_commands_duplicates_and_missing_paths_reject_input_file() {
     assert!(result.status.success(), "{result:?}");
     assert_eq!(result.stdout, b"text\n");
 }
+
+#[test]
+fn project_execution_accepts_the_same_explicit_input_file() {
+    let fixture = Fixture::new();
+    let project = fixture.0.join("project");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("scarp.project"),
+        "project \"input-demo\" { version: \"0.1.0\" entry: \"src/main.srp\" type: \"application\" dependencies {} }",
+    )
+    .unwrap();
+    fs::write(project.join("src/main.srp"), "print(read_line());").unwrap();
+    let input = fixture.file("project-data.txt", b"project input\n");
+    for verb in ["run", "launch"] {
+        let result = Command::new(env!("CARGO_BIN_EXE_scarp"))
+            .arg(verb)
+            .arg("--input-file")
+            .arg(&input)
+            .arg(&project)
+            .output()
+            .unwrap();
+        assert!(result.status.success(), "{result:?}");
+        assert_eq!(result.stdout, b"project input\n");
+        assert!(result.stderr.is_empty());
+    }
+}
