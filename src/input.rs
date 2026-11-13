@@ -233,3 +233,47 @@ impl<'a> InputState<'a> {
         Ok(Value::from(text))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn prompt_is_not_exposed_without_work_for_first_read() {
+        let mut reader = Cursor::new(b"Ada\n");
+        let mut stdout = Vec::new();
+        let mut budget = Budget::new(6);
+        let span = Span::default();
+        {
+            let mut input = InputState::interactive(
+                &mut reader,
+                &mut stdout,
+                InputLimits::default(),
+            );
+            let error = input.ask("Name: ", &mut budget, span).unwrap_err();
+            assert_eq!(error.kind, Kind::ExecutionLimit);
+        }
+        assert!(stdout.is_empty());
+        assert_eq!(reader.position(), 0);
+    }
+
+    #[test]
+    fn first_read_probe_is_not_charged_twice() {
+        let mut reader = Cursor::new(b"");
+        let mut stdout = Vec::new();
+        let mut budget = Budget::new(2);
+        let span = Span::default();
+        {
+            let mut input = InputState::interactive(
+                &mut reader,
+                &mut stdout,
+                InputLimits::default(),
+            );
+            let error = input.ask(">", &mut budget, span).unwrap_err();
+            assert_eq!(error.kind, Kind::InputEof);
+        }
+        assert_eq!(stdout, b">");
+        assert_eq!(reader.position(), 0);
+    }
+}
