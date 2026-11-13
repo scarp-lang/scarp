@@ -805,6 +805,8 @@ impl<'a> Resolver<'a> {
                     match operator {
                         AssignmentOperator::Compound(operator)
                             if operator.is_integer_only()
+                                && !(operator == BinaryOperator::Remainder
+                                    && expected_type == ValueType::BigInt)
                                 && expected_type != ValueType::Integer =>
                         {
                             return Err(type_mismatch(
@@ -1318,7 +1320,11 @@ fn resolve_expression(
                     BinaryOperator::Equal | BinaryOperator::NotEqual => {
                         require_value(&types[*left], *operator_span)?;
                     }
-                    operator if operator.is_integer_only() => {
+                    operator
+                        if operator.is_integer_only()
+                            && !(*operator == BinaryOperator::Remainder
+                                && types[*left] == ValueType::BigInt) =>
+                    {
                         require_type(&types[*left], ValueType::Integer, *operator_span)?;
                     }
                     _ => {

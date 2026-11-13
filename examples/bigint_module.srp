@@ -1,0 +1,2 @@
+import "modules/bigint_math.srp" as exact;
+print(exact.twice(bigint("123456789012345678901234567890")));
