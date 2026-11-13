@@ -192,7 +192,7 @@ impl Decimal {
                     .checked_add(1)
                     .ok_or(DecimalError::PrecisionExceeded)?;
             }
-            return Self::new(signed_coefficient(quotient, negative)?, scale);
+            return normalized_rounded_decimal(quotient, scale, negative);
         }
 
         // Move the quotient point left without allocating a 46-digit
@@ -246,7 +246,7 @@ impl Decimal {
                     .ok_or(DecimalError::PrecisionExceeded)?;
             }
         }
-        Self::new(signed_coefficient(quotient, negative)?, scale)
+        normalized_rounded_decimal(quotient, scale, negative)
     }
 
     /// Never truncate a fraction during integer conversion.
@@ -277,24 +277,32 @@ fn shift(coefficient: i128, exponent: u8) -> Result<i128, DecimalError> {
         .checked_mul(power_of_ten(exponent))
         .ok_or(DecimalError::PrecisionExceeded)
 }
-/// Append one decimal digit without exceeding the target coefficient capacity.
+/// Append one digit without overflowing the bounded intermediate. The
+/// 28-digit coefficient limit applies after rounding and canonicalization.
 fn push_decimal_digit(quotient: u128, digit: u128) -> Result<u128, DecimalError> {
-    let value = quotient
+    quotient
         .checked_mul(10)
         .and_then(|n| n.checked_add(digit))
-        .ok_or(DecimalError::PrecisionExceeded)?;
-    if value > MAX_COEFFICIENT as u128 {
-        return Err(DecimalError::PrecisionExceeded);
-    }
-    Ok(value)
+        .ok_or(DecimalError::PrecisionExceeded)
 }
 
-fn signed_coefficient(value: u128, negative: bool) -> Result<i128, DecimalError> {
-    if value > MAX_COEFFICIENT as u128 {
+/// A rounded coefficient can temporarily exceed 28 digits, yet become
+/// representable after trailing fractional zeros are removed. Normalize the
+/// unsigned magnitude before converting it to the signed storage type.
+fn normalized_rounded_decimal(
+    mut magnitude: u128,
+    mut scale: u8,
+    negative: bool,
+) -> Result<Decimal, DecimalError> {
+    while scale > 0 && magnitude % 10 == 0 {
+        magnitude /= 10;
+        scale -= 1;
+    }
+    if magnitude > MAX_COEFFICIENT as u128 {
         return Err(DecimalError::PrecisionExceeded);
     }
-    let signed = value as i128;
-    Ok(if negative { -signed } else { signed })
+    let signed = magnitude as i128;
+    Decimal::new(if negative { -signed } else { signed }, scale)
 }
 
 fn should_increment(quotient: u128, remainder: u128, divisor: u128, mode: RoundingMode) -> bool {
