@@ -298,7 +298,10 @@ fn multiplication_cancels_base_ten_factors_before_intermediate_overflow() {
     assert_eq!(a.checked_mul(b), Ok(expected));
     assert_eq!(b.checked_mul(a), Ok(expected));
     let negative = Decimal::new(-2_i128.pow(70), 18).unwrap();
-    assert_eq!(negative.checked_mul(b), Ok(Decimal::new(-2_i128.pow(43), 9).unwrap()));
+    assert_eq!(
+        negative.checked_mul(b),
+        Ok(Decimal::new(-2_i128.pow(43), 9).unwrap())
+    );
 
     // A genuinely nonrepresentable product still produces an error.
     assert_eq!(
