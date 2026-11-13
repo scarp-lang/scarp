@@ -194,11 +194,7 @@ fn decimal_division_normalizes_rounded_intermediate_before_precision_check() {
 
     // Do not relax final precision: nonzero excess digits are still rejected.
     assert_eq!(
-        d("9999999999999999999999999999").div_rounded(
-            d("0.1"),
-            18,
-            RoundingMode::HalfUp
-        ),
+        d("9999999999999999999999999999").div_rounded(d("0.1"), 18, RoundingMode::HalfUp),
         Err(DecimalError::PrecisionExceeded)
     );
 }
