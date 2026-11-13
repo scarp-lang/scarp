@@ -5,13 +5,14 @@
 //! not a separate assertion framework and does not execute files during discovery.
 
 use std::{
-    fs,
+    fmt, fs,
     io::{self, Cursor, Read, Write},
     path::{Path, PathBuf},
 };
 
 use scarp::{
-    modules::{self, FileSourceLoader, ModuleLimits},
+    diagnostics::write_json_message,
+    modules::{self, FileSourceLoader, ModuleDiagnostic, ModuleLimits, ModuleRunError},
     ExecutionOptions, InputLimits,
 };
 
@@ -19,6 +20,12 @@ const MAX_TESTS: usize = 64;
 const FAILURE_DETAIL_CHARS: usize = 1600;
 const MAX_FILTER_BYTES: usize = 128;
 const MAX_STDIN_FIXTURE_BYTES: usize = 1024 * 1024;
+
+#[derive(Clone, Copy)]
+pub enum JsonVersion {
+    V1,
+    V2,
+}
 
 /// A filter is a literal substring of a single UTF-8 test filename, not a
 /// filesystem path, command option, regular expression, or glob.
@@ -144,11 +151,73 @@ fn input_fixture(label: &str, test_path: &Path, root: &Path) -> Result<Option<Ve
     Ok(Some(bytes))
 }
 
-/// One captured test outcome for a stable JSON report. The error text is
-/// bounded and is not mixed with the program's captured stdout or stderr.
+enum Failure {
+    Compile(ModuleDiagnostic),
+    Fixture(String),
+    Runtime(ModuleRunError),
+}
+
+impl fmt::Display for Failure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Compile(error) => error.fmt(f),
+            Self::Fixture(error) => error.fmt(f),
+            Self::Runtime(error) => error.fmt(f),
+        }
+    }
+}
+
+impl Failure {
+    fn text(&self) -> String {
+        self.to_string()
+            .chars()
+            .take(FAILURE_DETAIL_CHARS)
+            .collect()
+    }
+
+    fn structured(&self) -> io::Result<ReportFailure> {
+        let mut diagnostic = Vec::new();
+        let phase = match self {
+            Self::Compile(error) => {
+                error.write_project_json(&mut diagnostic)?;
+                "compile"
+            }
+            Self::Fixture(_) => {
+                write_json_message(&self.text(), None, &mut diagnostic)?;
+                "fixture"
+            }
+            Self::Runtime(error) => {
+                match error {
+                    ModuleRunError::Diagnostic(error) => {
+                        error.write_project_json(&mut diagnostic)?;
+                    }
+                    ModuleRunError::Output(_) => {
+                        write_json_message(&self.text(), None, &mut diagnostic)?;
+                    }
+                }
+                "runtime"
+            }
+        };
+        // The compiler writer terminates a standalone diagnostic with LF.
+        // Strip that terminator when embedding it in the single-line report.
+        if diagnostic.last() == Some(&b'\n') {
+            diagnostic.pop();
+        }
+        Ok(ReportFailure::Structured { phase, diagnostic })
+    }
+}
+
+enum ReportFailure {
+    Text(String),
+    Structured {
+        phase: &'static str,
+        diagnostic: Vec<u8>,
+    },
+}
+
 struct Case {
     path: String,
-    error: Option<String>,
+    error: Option<ReportFailure>,
 }
 
 fn write_report(
@@ -157,14 +226,19 @@ fn write_report(
     passed: usize,
     failed: usize,
     list_only: bool,
+    version: JsonVersion,
     cases: &[Case],
 ) -> std::io::Result<()> {
     use super::project_info::quote_json;
 
     let mode = if list_only { "list" } else { "run" };
+    let schema = match version {
+        JsonVersion::V1 => 1,
+        JsonVersion::V2 => 2,
+    };
     write!(
         stdout,
-        "{{\"schema_version\":1,\"mode\":\"{mode}\",\"discovered\":{discovered},\"passed\":{passed},\"failed\":{failed},\"tests\":["
+        "{{\"schema_version\":{schema},\"mode\":\"{mode}\",\"discovered\":{discovered},\"passed\":{passed},\"failed\":{failed},\"tests\":["
     )?;
     for (index, case) in cases.iter().enumerate() {
         if index != 0 {
@@ -183,7 +257,13 @@ fn write_report(
             quote_json(&case.path)
         )?;
         if let (false, Some(error)) = (list_only, &case.error) {
-            write!(stdout, ",\"error\":{}", quote_json(error))?;
+            match error {
+                ReportFailure::Text(error) => write!(stdout, ",\"error\":{}", quote_json(error))?,
+                ReportFailure::Structured { phase, diagnostic } => {
+                    write!(stdout, ",\"phase\":\"{phase}\",\"diagnostic\":")?;
+                    stdout.write_all(diagnostic)?;
+                }
+            }
         }
         write!(stdout, "}}")?;
     }
@@ -192,12 +272,12 @@ fn write_report(
 
 /// Discover direct project tests without compiling or executing anything,
 /// or execute them through the real compiler with the original default
-/// budgets. JSON reports emit one schema-version-1 result object.
+/// budgets. JSON reports emit one object in the selected schema.
 pub fn run(
     directory: &Path,
     stdout: &mut impl Write,
     stderr: &mut impl Write,
-    json: bool,
+    json: Option<JsonVersion>,
     list_only: bool,
     require_tests: bool,
     filter: Option<&str>,
@@ -229,12 +309,12 @@ pub fn run(
     let empty_status = u8::from(require_tests && discovered == 0);
 
     if list_only {
-        if json {
+        if let Some(version) = json {
             let cases: Vec<_> = files
                 .into_iter()
                 .map(|(path, _)| Case { path, error: None })
                 .collect();
-            return match write_report(stdout, discovered, 0, 0, true, &cases) {
+            return match write_report(stdout, discovered, 0, 0, true, version, &cases) {
                 Ok(()) => empty_status,
                 Err(error) => report(error, stderr),
             };
@@ -256,7 +336,7 @@ pub fn run(
         };
     }
 
-    if discovered == 0 && !json {
+    if discovered == 0 && json.is_none() {
         return match writeln!(
             stdout,
             "No .srp test files found in tests/ (0 passed, 0 failed)"
@@ -270,6 +350,7 @@ pub fn run(
     let mut failed = 0usize;
     let mut cases = Vec::new();
     let loader = match FileSourceLoader::new(&project.root) {
+        Ok(loader) if matches!(json, Some(JsonVersion::V2)) => loader.with_relative_diagnostics(),
         Ok(loader) => loader,
         Err(error) => {
             return report(
@@ -282,9 +363,10 @@ pub fn run(
         let mut program_stdout = io::sink();
         let mut program_stderr = io::sink();
         let result = modules::compile_with_loader(&label, &loader, ModuleLimits::default())
-            .map_err(|error| error.to_string())
+            .map_err(Failure::Compile)
             .and_then(|program| {
-                let fixture = input_fixture(&label, &test_path, loader.root())?;
+                let fixture =
+                    input_fixture(&label, &test_path, loader.root()).map_err(Failure::Fixture)?;
                 match fixture {
                     Some(bytes) => {
                         let mut reader = Cursor::new(bytes);
@@ -296,7 +378,7 @@ pub fn run(
                                 ExecutionOptions::default(),
                                 InputLimits::default(),
                             )
-                            .map_err(|error| error.to_string())
+                            .map_err(Failure::Runtime)
                     }
                     None => program
                         .execute(
@@ -304,13 +386,13 @@ pub fn run(
                             &mut program_stderr,
                             ExecutionOptions::default(),
                         )
-                        .map_err(|error| error.to_string()),
+                        .map_err(Failure::Runtime),
                 }
             });
         match result {
             Ok(()) => {
                 passed += 1;
-                if json {
+                if json.is_some() {
                     cases.push(Case {
                         path: label,
                         error: None,
@@ -321,11 +403,17 @@ pub fn run(
             }
             Err(error) => {
                 failed += 1;
-                let detail: String = error.chars().take(FAILURE_DETAIL_CHARS).collect();
-                if json {
+                if let Some(version) = json {
+                    let error = match version {
+                        JsonVersion::V1 => ReportFailure::Text(error.text()),
+                        JsonVersion::V2 => match error.structured() {
+                            Ok(failure) => failure,
+                            Err(error) => return report(error, stderr),
+                        },
+                    };
                     cases.push(Case {
                         path: label,
-                        error: Some(detail),
+                        error: Some(error),
                     });
                 } else {
                     if let Err(write_error) = writeln!(stdout, "FAIL {label}") {
@@ -333,15 +421,16 @@ pub fn run(
                     }
                     // Ordinary program output is not an authenticated status
                     // line; include bounded compiler/runtime diagnostics only.
-                    if let Err(write_error) = writeln!(stderr, "{label}: {detail}") {
+                    if let Err(write_error) = writeln!(stderr, "{label}: {}", error.text()) {
                         return report(write_error, stderr);
                     }
                 }
             }
         }
     }
-    if json {
-        if let Err(error) = write_report(stdout, discovered, passed, failed, false, &cases) {
+    if let Some(version) = json {
+        if let Err(error) = write_report(stdout, discovered, passed, failed, false, version, &cases)
+        {
             return report(error, stderr);
         }
     } else if let Err(error) = writeln!(stdout, "{passed} passed, {failed} failed") {
@@ -373,7 +462,7 @@ mod tests {
     #[test]
     fn json_report_handles_empty_and_mixed_cases_without_inventing_diagnostics() {
         let mut empty = Vec::new();
-        write_report(&mut empty, 0, 0, 0, false, &[]).unwrap();
+        write_report(&mut empty, 0, 0, 0, false, JsonVersion::V1, &[]).unwrap();
         assert_eq!(
             std::str::from_utf8(&empty).unwrap(),
             "{\"schema_version\":1,\"mode\":\"run\",\"discovered\":0,\"passed\":0,\"failed\":0,\"tests\":[]}\n"
@@ -385,16 +474,16 @@ mod tests {
             },
             Case {
                 path: "tests/b.srp".into(),
-                error: Some("bad\nmessage".into()),
+                error: Some(ReportFailure::Text("bad\nmessage".into())),
             },
         ];
         let mut out = Vec::new();
-        write_report(&mut out, 2, 1, 1, false, &cases).unwrap();
+        write_report(&mut out, 2, 1, 1, false, JsonVersion::V1, &cases).unwrap();
         let output = String::from_utf8(out).unwrap();
         assert!(output.contains("\"path\":\"tests/a\\\".srp\""));
         assert!(output.contains("\"status\":\"failed\",\"error\":\"bad\\nmessage\""));
         let mut listed = Vec::new();
-        write_report(&mut listed, 2, 0, 0, true, &cases).unwrap();
+        write_report(&mut listed, 2, 0, 0, true, JsonVersion::V1, &cases).unwrap();
         let listed = String::from_utf8(listed).unwrap();
         assert!(listed.contains("\"mode\":\"list\""));
         assert!(listed.contains("\"status\":\"discovered\""));

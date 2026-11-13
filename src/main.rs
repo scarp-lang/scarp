@@ -34,7 +34,7 @@ Commands:
   project info [--json] [directory]  Display validated project metadata
   launch <directory>               Execute a Scarp project entrypoint
   run [directory|file.srp]          Run a project or legacy source file
-  test [--json] [--list] [--require-tests] [--filter SUBSTRING] [directory]  Project tests
+  test [--json|--json=v2] [--list] [--require-tests] [--filter SUBSTRING] [directory]  Project tests
   inspect ast <file.srp>           Show the parsed syntax tree (development)
   inspect modules [--json] <file.srp|directory>  Inspect statically checked modules
   explain E####                   Explain a real diagnostic code
@@ -172,12 +172,14 @@ Use scarp verify DIRECTORY and scarp run DIRECTORY afterwards.
 ";
 
 const TEST_HELP: &str =
-    "Usage: scarp test [--json] [--list] [--require-tests] [--filter SUBSTRING] [--] [project-directory]
+    "Usage: scarp test [--json|--json=v2] [--list] [--require-tests] [--filter SUBSTRING] [--] [project-directory]
 
 Run the immediate tests/*.srp files, or list them without source execution.
 Without a directory argument, use the current project directory.
 --json emits one schema-version-1 test report on stdout; failed test diagnostics
 are bounded and embedded in the JSON rather than printed separately.
+--json=v2 opts into structured per-test diagnostics with codes, source spans,
+and failure phases. Choose at most one JSON flag.
 --list reports discovered tests without compiling or running them; combine
 --json --list to obtain a machine-readable discovery report.
 --require-tests returns exit status 1 when no selected test files are discovered,
@@ -556,7 +558,9 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         };
     }
     if args.first().is_some_and(|command| command == "test") {
-        let mut json = false;
+        use project_tests::JsonVersion;
+
+        let mut json = None;
         let mut list_only = false;
         let mut require_tests = false;
         let mut filter: Option<String> = None;
@@ -567,11 +571,15 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         while let Some(arg) = arguments.next() {
             if !separator && arg == "--" {
                 separator = true;
-            } else if !separator && arg == "--json" {
-                if json {
+            } else if !separator && (arg == "--json" || arg == "--json=v2") {
+                if json.is_some() {
                     invalid = true;
                 }
-                json = true;
+                json = Some(if arg == "--json" {
+                    JsonVersion::V1
+                } else {
+                    JsonVersion::V2
+                });
             } else if !separator && arg == "--list" {
                 if list_only {
                     invalid = true;
