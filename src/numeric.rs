@@ -104,6 +104,9 @@ pub enum Builtin {
     BigIntFromInteger,
     BigIntToInteger,
     BigIntAbs,
+    BigIntPow,
+    BigIntBitLength,
+    BigIntToText,
 }
 
 impl Builtin {
@@ -127,6 +130,9 @@ impl Builtin {
             "bigint_from_integer" => Self::BigIntFromInteger,
             "bigint_to_integer" => Self::BigIntToInteger,
             "bigint_abs" => Self::BigIntAbs,
+            "bigint_pow" => Self::BigIntPow,
+            "bigint_bit_length" => Self::BigIntBitLength,
+            "bigint_to_text" => Self::BigIntToText,
             "integer_to_text" => Self::IntegerToText,
             "float_to_text" => Self::FloatToText,
             "text_to_integer" => Self::TextToInteger,
@@ -214,7 +220,11 @@ impl Builtin {
         match self {
             Self::BigInt => &[String],
             Self::BigIntFromInteger => &[Integer],
-            Self::BigIntToInteger | Self::BigIntAbs => &[ValueType::BigInt],
+            Self::BigIntToInteger
+            | Self::BigIntAbs
+            | Self::BigIntBitLength
+            | Self::BigIntToText => &[ValueType::BigInt],
+            Self::BigIntPow => &[ValueType::BigInt, Integer],
             Self::IntegerToText => &[Integer],
             Self::FloatToText => &[Float],
             Self::TextToInteger | Self::TextToFloat | Self::TextTrim => &[String],
@@ -277,7 +287,11 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
-            Self::BigInt | Self::BigIntFromInteger | Self::BigIntAbs => ValueType::BigInt,
+            Self::BigInt | Self::BigIntFromInteger | Self::BigIntAbs | Self::BigIntPow => {
+                ValueType::BigInt
+            }
+            Self::BigIntBitLength => ValueType::Integer,
+            Self::BigIntToText => ValueType::String,
             Self::BigIntToInteger => ValueType::Integer,
             Self::IntegerToText | Self::FloatToText | Self::TextTrim | Self::TextReplace => {
                 ValueType::String
@@ -347,7 +361,13 @@ impl Builtin {
     fn is_bigint(self) -> bool {
         matches!(
             self,
-            Self::BigInt | Self::BigIntFromInteger | Self::BigIntToInteger | Self::BigIntAbs
+            Self::BigInt
+                | Self::BigIntFromInteger
+                | Self::BigIntToInteger
+                | Self::BigIntAbs
+                | Self::BigIntPow
+                | Self::BigIntBitLength
+                | Self::BigIntToText
         )
     }
 
@@ -1016,6 +1036,9 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::BigIntFromInteger
         | Builtin::BigIntToInteger
         | Builtin::BigIntAbs
+        | Builtin::BigIntPow
+        | Builtin::BigIntBitLength
+        | Builtin::BigIntToText
         | Builtin::IntegerToText
         | Builtin::FloatToText
         | Builtin::TextToInteger
