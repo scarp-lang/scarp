@@ -130,3 +130,13 @@ fn pure_imported_function_cannot_acquire_interactive_input() {
     assert_eq!(error.diagnostic.kind, Kind::ImpureFunction);
     assert!(error.render().contains("lib.srp:1:"));
 }
+
+#[test]
+fn missing_reader_diagnostic_explains_explicit_interactive_opt_in() {
+    let error = scarp::check("print(read_line());").unwrap_err();
+    assert_eq!(error.kind, Kind::InputUnavailable);
+    let help = error.help.as_deref().unwrap_or_default();
+    assert!(help.contains("run_with_input"), "{help}");
+    assert!(help.contains("--interactive"), "{help}");
+    assert!(help.contains("check never reads stdin"), "{help}");
+}
