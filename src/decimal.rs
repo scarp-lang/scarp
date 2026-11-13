@@ -193,7 +193,9 @@ impl Decimal {
             if should_increment(last, remainder, denominator, mode) {
                 fraction += 1;
                 if scale == 0 {
-                    integer = integer.checked_add(1).ok_or(DecimalError::PrecisionExceeded)?;
+                    integer = integer
+                        .checked_add(1)
+                        .ok_or(DecimalError::PrecisionExceeded)?;
                     fraction = 0;
                 }
             }
@@ -209,8 +211,7 @@ impl Decimal {
         let mut fraction = 0_u128;
         let mut scale = 0_u8;
         while scale < target_scale {
-            let more_prefix =
-                scale < k && prefix % (power_of_ten(k - scale) as u128) != 0;
+            let more_prefix = scale < k && prefix % (power_of_ten(k - scale) as u128) != 0;
             if !more_prefix && remainder == 0 {
                 break;
             }
@@ -249,7 +250,9 @@ impl Decimal {
             };
             if increment {
                 if scale == 0 {
-                    integer = integer.checked_add(1).ok_or(DecimalError::PrecisionExceeded)?;
+                    integer = integer
+                        .checked_add(1)
+                        .ok_or(DecimalError::PrecisionExceeded)?;
                 } else {
                     fraction += 1;
                 }
@@ -305,7 +308,9 @@ fn finish_rounded_decimal(
     negative: bool,
 ) -> Result<Decimal, DecimalError> {
     if scale != 0 && fraction == power_of_ten(scale) as u128 {
-        integer = integer.checked_add(1).ok_or(DecimalError::PrecisionExceeded)?;
+        integer = integer
+            .checked_add(1)
+            .ok_or(DecimalError::PrecisionExceeded)?;
         fraction = 0;
     }
     while scale > 0 && fraction % 10 == 0 {
