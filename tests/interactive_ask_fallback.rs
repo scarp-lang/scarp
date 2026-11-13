@@ -86,13 +86,19 @@ struct FailedReader;
 
 impl Read for FailedReader {
     fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
-        Err(io::Error::new(io::ErrorKind::Other, "secret-reader-details"))
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "secret-reader-details",
+        ))
     }
 }
 
 impl BufRead for FailedReader {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
-        Err(io::Error::new(io::ErrorKind::Other, "secret-reader-details"))
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "secret-reader-details",
+        ))
     }
 
     fn consume(&mut self, _: usize) {}
