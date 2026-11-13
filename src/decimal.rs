@@ -376,8 +376,11 @@ impl FromStr for Decimal {
         if fraction.len() > usize::from(MAX_DECIMAL_SCALE) {
             return Err(DecimalError::ScaleExceeded);
         }
+        // Drop redundant fractional zeros before collecting the coefficient,
+        // so a legal 28-digit integer followed by ".0" remains representable.
+        let significant_fraction = fraction.trim_end_matches('0');
         let mut coefficient = 0_i128;
-        for part in [whole, fraction] {
+        for part in [whole, significant_fraction] {
             for byte in part.bytes() {
                 if !byte.is_ascii_digit() {
                     return Err(DecimalError::InvalidSyntax);
@@ -393,7 +396,7 @@ impl FromStr for Decimal {
         }
         Self::new(
             if negative { -coefficient } else { coefficient },
-            fraction.len() as u8,
+            significant_fraction.len() as u8,
         )
     }
 }
@@ -432,6 +435,10 @@ mod tests {
     fn parsing_canonicalizes_zero_and_trailing_zeros() {
         assert_eq!(d("-0.000"), d("0"));
         assert_eq!(d("+00012.3400").to_string(), "12.34");
+        assert_eq!(
+            d("9999999999999999999999999999.0").to_string(),
+            "9999999999999999999999999999"
+        );
         assert_eq!(
             d("0.000000000000000001").to_string(),
             "0.000000000000000001"
