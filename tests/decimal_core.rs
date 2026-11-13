@@ -45,3 +45,51 @@ fn exact_accounting_example_and_explicit_rounding() {
 fn source_level_type_does_not_exist_until_separate_integration() {
     assert!(scarp::compile("bind amount: decimal = 10;").is_err());
 }
+
+#[test]
+fn canonical_decimal_sorting_is_mathematically_ordered() {
+    let mut values = vec![
+        d("0.3"), d("-1.1"), d("1.000000000000000001"),
+        d("0"), d("0.03"), d("-1.01"), d("1"), d("0.30"),
+    ];
+    values.sort();
+    assert_eq!(
+        values.iter().map(ToString::to_string).collect::<Vec<_>>(),
+        ["-1.1", "-1.01", "0", "0.03", "0.3", "0.3", "1", "1.000000000000000001"]
+    );
+}
+
+#[test]
+fn exact_arithmetic_matches_independent_small_scaled_integer_oracle() {
+    // Distinct coefficients and scales prevent relying on the implementation's
+    // own arithmetic to construct expected results.
+    for a in -73i128..=73 {
+        for b in -73i128..=73 {
+            let x = Decimal::new(a, 2).unwrap();
+            let y = Decimal::new(b, 2).unwrap();
+            assert_eq!(
+                x.checked_add(y).unwrap(),
+                Decimal::new(a + b, 2).unwrap()
+            );
+            assert_eq!(
+                x.checked_sub(y).unwrap(),
+                Decimal::new(a - b, 2).unwrap()
+            );
+            assert_eq!(
+                x.checked_mul(y).unwrap(),
+                Decimal::new(a * b, 4).unwrap()
+            );
+            assert_eq!(x.cmp(&y), a.cmp(&b));
+        }
+    }
+}
+
+#[test]
+fn parsing_is_length_bounded_and_precision_checked() {
+    use scarp::decimal::MAX_DECIMAL_TEXT_BYTES;
+    let long_text = "0".repeat(MAX_DECIMAL_TEXT_BYTES + 1);
+    assert_eq!(long_text.parse::<Decimal>(), Err(DecimalError::PrecisionExceeded));
+    assert_eq!(d("+00012.3400").to_string(), "12.34");
+    assert_eq!(Decimal::new(10000000000000000000000000000, 1).unwrap().to_string(),
+        "1000000000000000000000000000");
+}
