@@ -13,7 +13,9 @@ Many decimal fractions cannot be represented exactly by binary64; for instance, 
 - A Decimal value represents coefficient / 10^scale, with private signed i128 coefficient and u8 scale.
 - Maximum 28 coefficient digits and 18 fractional digits. These are conservative limits, not decimal128 or IEEE-754 decimal128 compliance.
 - Canonicalization removes negative zero and trailing fractional zeros. Therefore text 1.20 equals 1.2, and canonical Display prints 1.2.
-- Strict text parsing allows optional sign, digits and an optional dot with digits on both sides. No scientific exponents, separators, whitespace, infinity or NaN.
+- Strict text parsing allows optional sign, digits and an optional dot with digits on both sides. No scientific exponents, separators, whitespace, infinity or NaN. Text is capped at 96 UTF-8 bytes before scanning.
+- Canonicalized precision checks remove redundant fractional zeros before testing the coefficient range. `Decimal::new` still rejects an incoming scale above 18.
+- Exact numeric comparisons use a total mathematical order, including across different scales and negative values, without binary floating-point rounding or overflowing a full coefficient alignment.
 - Checked exact addition, subtraction and multiplication report an error instead of silently rounding or falling back to binary64.
 - Alignment may conservatively reject a valid cancellation when an intermediate exceeds the initial 28-digit limit. This is a documented v1 limitation.
 - Decimal division requires a target fractional scale and explicit rounding mode; modes are HalfEven, HalfUp (ties away), TowardZero and AwayFromZero.
