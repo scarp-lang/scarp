@@ -144,11 +144,12 @@ pub(crate) enum ResolvedCall {
     },
     Builtin(Builtin),
     ReadLine,
+    ReadLineOr,
     Ask,
 }
 
 pub(crate) fn is_builtin_name(name: &str) -> bool {
-    matches!(name, "read_line" | "ask") || Builtin::from_name(name).is_some()
+    matches!(name, "read_line" | "read_line_or" | "ask") || Builtin::from_name(name).is_some()
 }
 
 /// Static function signature and call-graph information. Spans are source bytes.
@@ -1077,13 +1078,27 @@ fn resolve_expression(
             } => {
                 // Preserve existing user function names; kernels occupy call
                 // position only when no user declaration has this name.
-                if name == "read_line" && !names.contains_key(name) {
-                    if !arguments.is_empty() {
+                if matches!(name.as_str(), "read_line" | "read_line_or")
+                    && !names.contains_key(name)
+                {
+                    let with_fallback = name == "read_line_or";
+                    let expected = if with_fallback { 1 } else { 0 };
+                    if arguments.len() != expected
+                        || arguments.iter().any(|argument| argument.label.is_some())
+                    {
                         return Err(Diagnostic::new(
                             DiagnosticKind::CallArguments,
                             *function_span,
-                            "read_line requires zero arguments",
+                            format!("{name} requires {expected} positional arguments"),
                         ));
+                    }
+                    if with_fallback {
+                        let fallback = &arguments[0];
+                        require_type(
+                            &types[fallback.expression],
+                            ValueType::String,
+                            syntax.nodes()[fallback.expression].span,
+                        )?;
                     }
                     if pure {
                         return Err(Diagnostic::new(
@@ -1093,7 +1108,11 @@ fn resolve_expression(
                         ));
                     }
                     slots.push(None);
-                    calls.push(Some(ResolvedCall::ReadLine));
+                    calls.push(Some(if with_fallback {
+                        ResolvedCall::ReadLineOr
+                    } else {
+                        ResolvedCall::ReadLine
+                    }));
                     types.push(ValueType::String.into());
                     continue;
                 }
