@@ -93,3 +93,76 @@ fn parsing_is_length_bounded_and_precision_checked() {
     assert_eq!(Decimal::new(10000000000000000000000000000, 1).unwrap().to_string(),
         "1000000000000000000000000000");
 }
+
+#[test]
+fn rounded_division_handles_large_mixed_scales_without_alignment() {
+    let numerator = d("9999999999999999999999999999");
+    let denominator = d("99999999999999999999999999.99");
+    assert_eq!(
+        numerator.div_rounded(denominator, 18, RoundingMode::HalfEven).unwrap().to_string(),
+        "100"
+    );
+    assert_eq!(
+        d("0.000000000000000001")
+            .div_rounded(d("2"), 18, RoundingMode::HalfEven)
+            .unwrap().to_string(),
+        "0"
+    );
+    assert_eq!(
+        d("0.000000000000000001")
+            .div_rounded(d("2"), 18, RoundingMode::HalfUp)
+            .unwrap().to_string(),
+        "0.000000000000000001"
+    );
+    assert_eq!(
+        d("-0.5").div_rounded(d("1"), 0, RoundingMode::HalfEven)
+            .unwrap().to_string(),
+        "0"
+    );
+    assert_eq!(
+        d("-0.5").div_rounded(d("1"), 0, RoundingMode::HalfUp)
+            .unwrap().to_string(),
+        "-1"
+    );
+}
+
+#[test]
+fn decimal_division_matches_rational_integer_oracle() {
+    for a in -9i128..=9 {
+        for b in -9i128..=9 {
+            if b == 0 { continue; }
+            for sa in 0..=2u8 {
+                for sb in 0..=2u8 {
+                    for scale in 0..=4u8 {
+                        for mode in [
+                            RoundingMode::HalfEven,
+                            RoundingMode::HalfUp,
+                            RoundingMode::TowardZero,
+                            RoundingMode::AwayFromZero,
+                        ] {
+                            let lhs = Decimal::new(a, sa).unwrap();
+                            let rhs = Decimal::new(b, sb).unwrap();
+                            let num = a * 10_i128.pow(u32::from(sb + scale));
+                            let den = b * 10_i128.pow(u32::from(sa));
+                            let q = num.abs() / den.abs();
+                            let r = num.abs() % den.abs();
+                            let increment = match mode {
+                                RoundingMode::TowardZero => false,
+                                RoundingMode::AwayFromZero => r != 0,
+                                RoundingMode::HalfUp => r * 2 >= den.abs(),
+                                RoundingMode::HalfEven =>
+                                    r * 2 > den.abs() || (r * 2 == den.abs() && q % 2 != 0),
+                            };
+                            let magnitude = q + i128::from(increment);
+                            let signed = if (num < 0) != (den < 0) { -magnitude } else { magnitude };
+                            let expected = Decimal::new(signed, scale).unwrap();
+                            let actual = lhs.div_rounded(rhs, scale, mode).unwrap();
+                            assert_eq!(actual, expected,
+                                "divide {a}/10^{sa} by {b}/10^{sb}, target {scale}, mode {mode:?}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
