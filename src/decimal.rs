@@ -285,6 +285,39 @@ impl Decimal {
         finish_rounded_decimal(integer, fraction, scale, negative)
     }
 
+    /// Divide only when the exact mathematical quotient is representable
+    /// within 18 fractional digits and the 28-digit coefficient bound.
+    /// A repeating decimal such as 1/3 returns Inexact, never a silently
+    /// rounded approximation. Division by zero retains its distinct error.
+    pub fn checked_div_exact(self, other: Self) -> Result<Self, DecimalError> {
+        let candidate = self.div_rounded(other, MAX_DECIMAL_SCALE, RoundingMode::TowardZero)?;
+        if candidate.checked_mul(other).ok() == Some(self) {
+            Ok(candidate)
+        } else {
+            Err(DecimalError::Inexact)
+        }
+    }
+
+    /// Format with exactly `places` fractional digits, explicitly choosing a
+    /// rounding mode. Trailing zeroes are presentation-only and do not alter
+    /// the canonical Decimal value.
+    pub fn format_fixed(self, places: u8, mode: RoundingMode) -> Result<String, DecimalError> {
+        if places > MAX_DECIMAL_SCALE {
+            return Err(DecimalError::ScaleExceeded);
+        }
+        let rounded = self.round_to(places, mode)?;
+        let mut text = rounded.to_string();
+        if places > 0 {
+            if rounded.scale == 0 {
+                text.push('.');
+            }
+            for _ in rounded.scale..places {
+                text.push('0');
+            }
+        }
+        Ok(text)
+    }
+
     /// Never truncate a fraction during integer conversion.
     pub fn to_integer_exact(self) -> Result<i64, DecimalError> {
         if self.scale != 0 {
