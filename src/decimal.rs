@@ -102,21 +102,45 @@ impl Decimal {
         })
     }
 
-    /// Exact multiplication only. Loss of fractional precision is an error.
+    /// Exact multiplication without overflowing a large intermediate when
+    /// the canonical product is small enough to fit. Remove factors 2 and 5
+    /// in pairs (one base-10 factor) before multiplying the coefficients.
     pub fn checked_mul(self, other: Self) -> Result<Self, DecimalError> {
-        let mut coefficient = self
-            .coefficient
-            .checked_mul(other.coefficient)
-            .ok_or(DecimalError::PrecisionExceeded)?;
+        let mut a = self.coefficient.unsigned_abs();
+        let mut b = other.coefficient.unsigned_abs();
+        if a == 0 || b == 0 {
+            return Ok(Self {
+                coefficient: 0,
+                scale: 0,
+            });
+        }
+        let negative = (self.coefficient < 0) != (other.coefficient < 0);
         let mut scale = self.scale + other.scale;
-        while scale > MAX_DECIMAL_SCALE {
-            if coefficient % 10 != 0 {
-                return Err(DecimalError::ScaleExceeded);
+        while scale > 0 {
+            if (a % 2 != 0 && b % 2 != 0) || (a % 5 != 0 && b % 5 != 0) {
+                break;
             }
-            coefficient /= 10;
+            if a % 2 == 0 {
+                a /= 2;
+            } else {
+                b /= 2;
+            }
+            if a % 5 == 0 {
+                a /= 5;
+            } else {
+                b /= 5;
+            }
             scale -= 1;
         }
-        Self::new(coefficient, scale)
+        if scale > MAX_DECIMAL_SCALE {
+            return Err(DecimalError::ScaleExceeded);
+        }
+        let magnitude = a.checked_mul(b).ok_or(DecimalError::PrecisionExceeded)?;
+        if magnitude > MAX_COEFFICIENT as u128 {
+            return Err(DecimalError::PrecisionExceeded);
+        }
+        let signed = magnitude as i128;
+        Self::new(if negative { -signed } else { signed }, scale)
     }
 
     /// Round to at most the requested fractional scale.
