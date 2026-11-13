@@ -140,8 +140,8 @@ exhaustion all retain the selected source span and prevent output replay.
 
 Pure-context failures retain E0025. Both experimental native emitters reject
 input with E0049 before accessing a reader. The separate
-[BigInt diagnostics](reference/diagnostics.md#bigint-diagnostics-alpha9-development-candidate)
-use E0051–E0053 in the alpha.9 candidate.
+[BigInt diagnostics](reference/diagnostics.md#bigint-diagnostics)
+use E0051–E0053 in alpha.9.
 
 ## Output and interactive boundary
 

@@ -1,12 +1,12 @@
 # Work and print budgets
 
-The separate post-alpha.5 [BigInt development milestone](bigint.md) adds
+[BigInt](bigint.md) in v0.0.6-alpha.9 adds
 `--max-bigint-digits` (10,000; ceiling 1,000,000) and `--max-bigint-bytes`
 (8,388,608 cumulative limb bytes including division scratch). Arithmetic,
 comparison and printing also consume the existing shared work budget. Output
-snapshot accounting includes BigInt payload/digits. These are logical quotas,
-not physical process-memory limits, and are not in published alpha.5. `exec`/`run` and evaluating `check` accept these flags; static `verify`
-does not. Full formulas and errors are specified in the linked guide.
+snapshot accounting includes BigInt payload and digits. The quotas measure
+logical reservations and work. Set them with `exec`, `run`, or evaluating
+`check`. The BigInt guide specifies the full formulas and errors.
 
 In the alpha.4 candidate, vectors and tiles share the cumulative numerical
 payload ledger. Shape binding, windows and unroll share existing storage without

@@ -1,6 +1,7 @@
 # Project test runner
 
-Scarp v0.0.6-alpha.8 includes `scarp test` for declarative and legacy projects.
+Scarp v0.0.6-alpha.8 introduced `scarp test` for declarative and legacy
+projects. Scarp v0.0.6-alpha.9 adds opt-in structured diagnostics.
 
 ## Usage
 
@@ -121,10 +122,10 @@ produce an error on stderr and **no JSON stdout**.
 The `--json` flag does not make these setup errors machine-readable yet.
 The normal human-readable `scarp test` format is unchanged.
 
-### Structured failure reports (development)
+### Structured failure reports
 
-Use `scarp test --json=v2` when a CI job or editor needs diagnostic codes
-and source ranges. It accepts the same project path, `--filter`, `--list`,
+Use `scarp test --json=v2` in v0.0.6-alpha.9 for diagnostic codes and source
+ranges in CI or editors. It accepts the same project path, `--filter`, `--list`,
 and `--require-tests` arguments as `--json`. Use one JSON flag per command.
 
 The outer report has `schema_version: 2` and the same modes, counts, path
@@ -275,6 +276,3 @@ The `scarp run FILE.srp`, `scarp exec FILE.srp`,
 remain unchanged by this test runner. Existing `Scarp.project` files
 are supported without conversion. No automated project discovery in
 ancestor directories is performed.
-
-The new command must pass Rust, Windows, Linux and macOS CI before review
-and cannot be described as published until a separately authorized release.
