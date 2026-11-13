@@ -17,7 +17,7 @@ Many decimal fractions cannot be represented exactly by binary64; for instance, 
 - Canonicalized precision checks remove redundant fractional zeros before testing the coefficient range. `Decimal::new` still rejects an incoming scale above 18.
 - Exact numeric comparisons use a total mathematical order, including across different scales and negative values, without binary floating-point rounding or overflowing a full coefficient alignment.
 - Checked exact addition, subtraction and multiplication report an error instead of silently rounding or falling back to binary64.
-- Alignment may conservatively reject a valid cancellation when an intermediate exceeds the initial 28-digit limit. This is a documented v1 limitation.
+- Cross-scale addition/subtraction checks aligned intermediates using i128 and applies the 28-digit coefficient limit **after** exact addition and canonicalization. A representable cancellation such as `10^27 - 0.1` is accepted; an intermediate exceeding i128 or a final nonrepresentable result is rejected.
 - Decimal division uses bounded digit-by-digit arithmetic without expanding both operands to the maximum scale; it requires a target fractional scale and explicit rounding mode. Modes are HalfEven, HalfUp (ties away), TowardZero and AwayFromZero. A large 28-digit value divided by a two-decimal-place value can now yield an exactly representable integer without an oversized intermediate coefficient.
 - Conversion to i64 requires an exact whole number and in-range value.
 - Errors distinguish invalid syntax, scale excess, precision excess, division by zero and inexact conversion.
