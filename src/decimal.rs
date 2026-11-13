@@ -3,12 +3,14 @@
 //! This is a host-side building block, NOT a Scarp source-language type yet.
 //! Decimal = coefficient / 10^scale. No binary float fallback.
 
-use std::{fmt, str::FromStr};
+use std::{cmp::Ordering, fmt, str::FromStr};
 
 /// Initial conservative precision, independent of binary64 floats.
 pub const MAX_DECIMAL_DIGITS: u32 = 28;
 /// Maximum fractional digits.
 pub const MAX_DECIMAL_SCALE: u8 = 18;
+/// Reject excessively long text before parsing; avoid unbounded work for hostile input.
+pub const MAX_DECIMAL_TEXT_BYTES: usize = 96;
 const MAX_COEFFICIENT: i128 = 10_i128.pow(MAX_DECIMAL_DIGITS) - 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,6 +57,12 @@ impl Decimal {
         if scale > MAX_DECIMAL_SCALE {
             return Err(DecimalError::ScaleExceeded);
         }
+        // Strip redundant fractional zeros before applying the precision limit.
+        // A textual value such as 1.0000 must not need five significant digits.
+        while scale > 0 && coefficient % 10 == 0 {
+            coefficient /= 10;
+            scale -= 1;
+        }
         if coefficient.unsigned_abs() > MAX_COEFFICIENT as u128 {
             return Err(DecimalError::PrecisionExceeded);
         }
@@ -63,10 +71,6 @@ impl Decimal {
                 coefficient: 0,
                 scale: 0,
             });
-        }
-        while scale > 0 && coefficient % 10 == 0 {
-            coefficient /= 10;
-            scale -= 1;
         }
         Ok(Self { coefficient, scale })
     }
@@ -229,9 +233,46 @@ fn should_increment(quotient: u128, remainder: u128, divisor: u128, mode: Roundi
     }
 }
 
+// Canonical decimals are totally ordered as mathematical numbers. Compare
+// integer parts first, then cross-scale fractional remainders; no 28-digit
+// coefficient expansion or binary float conversion is necessary.
+impl Ord for Decimal {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let left_sign = self.coefficient.signum();
+        let right_sign = other.coefficient.signum();
+        if left_sign != right_sign {
+            return left_sign.cmp(&right_sign);
+        }
+        if left_sign == 0 {
+            return Ordering::Equal;
+        }
+        let a = self.coefficient.abs();
+        let b = other.coefficient.abs();
+        let a_divisor = power_of_ten(self.scale);
+        let b_divisor = power_of_ten(other.scale);
+        let integer_order = (a / a_divisor).cmp(&(b / b_divisor));
+        let magnitude_order = if integer_order != Ordering::Equal {
+            integer_order
+        } else {
+            // Fractional remainders each have at most 18 digits. Both cross-
+            // products fit in i128 (strictly below 10^36).
+            ((a % a_divisor) * b_divisor).cmp(&((b % b_divisor) * a_divisor))
+        };
+        if left_sign < 0 { magnitude_order.reverse() } else { magnitude_order }
+    }
+}
+impl PartialOrd for Decimal {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl FromStr for Decimal {
     type Err = DecimalError;
     fn from_str(text: &str) -> Result<Self, Self::Err> {
+        if text.len() > MAX_DECIMAL_TEXT_BYTES {
+            return Err(DecimalError::PrecisionExceeded);
+        }
         let (negative, body) = if let Some(rest) = text.strip_prefix('-') {
             (true, rest)
         } else if let Some(rest) = text.strip_prefix('+') {
@@ -459,6 +500,25 @@ mod tests {
             d("1").div_rounded(d("0"), 2, RoundingMode::HalfEven),
             Err(DecimalError::DivisionByZero)
         );
+    }
+
+    #[test]
+    fn decimal_total_order_has_no_float_rounding_or_alignment_overflow() {
+        assert_eq!(d("-0.0").cmp(&d("0")), Ordering::Equal);
+        assert!(d("-1.20") < d("-1.12"));
+        assert!(d("0.000000000000000001") > d("0"));
+        assert!(d("-0.000000000000000001") < d("0"));
+        assert!(d("9999999999999999999999999999") > d("9999999999999999999999999998"));
+        assert!(d("9999999999999999999999999999") > d("0.000000000000000001"));
+        assert!(d("0.2") > d("0.19"));
+        assert!(d("-10") < d("-9.999999999999999999"));
+    }
+
+    #[test]
+    fn canonicalization_before_precision_checks() {
+        assert_eq!(Decimal::new(10000000000000000000000000000, 1).unwrap().to_string(), "1000000000000000000000000000");
+        assert_eq!(d("000000000000000000000000000000001.20").to_string(), "1.2");
+        assert_eq!("0".repeat(MAX_DECIMAL_TEXT_BYTES + 1).parse::<Decimal>(), Err(DecimalError::PrecisionExceeded));
     }
 
     #[test]
