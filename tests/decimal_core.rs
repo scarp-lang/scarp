@@ -164,7 +164,10 @@ fn bounded_cross_scale_cancellation_is_not_rejected_prematurely() {
 
     // Positive shifts beyond the coefficient limit are only accepted when
     // the complete result is representable. No implicit rounding occurs.
-    assert_eq!(large.checked_add(tenth), Err(DecimalError::PrecisionExceeded));
+    assert_eq!(
+        large.checked_add(tenth),
+        Err(DecimalError::PrecisionExceeded)
+    );
     assert_eq!(
         large.checked_sub(d("-0.1")),
         Err(DecimalError::PrecisionExceeded)
