@@ -176,6 +176,31 @@ fn bounded_cross_scale_cancellation_is_not_rejected_prematurely() {
 }
 
 #[test]
+fn decimal_division_normalizes_rounded_intermediate_before_precision_check() {
+    // At requested scale 18 the rounded quotient has 29 coefficient digits,
+    // ending with zero. Its canonical value uses scale 17 and 28 digits.
+    // Rejecting the intermediate before normalization loses a valid result.
+    let numerator = d("10000000000000000000000000");
+    let denominator = d("-308435397185422.9874517414445");
+    let value = numerator
+        .div_rounded(denominator, 18, RoundingMode::HalfUp)
+        .unwrap();
+    assert_eq!(value.to_string(), "-32421700269.33799520356095414");
+    assert_eq!(value.scale(), 17);
+    assert_eq!(value.coefficient(), -3242170026933799520356095414);
+
+    // Do not relax final precision: nonzero excess digits are still rejected.
+    assert_eq!(
+        d("9999999999999999999999999999").div_rounded(
+            d("0.1"),
+            18,
+            RoundingMode::HalfUp
+        ),
+        Err(DecimalError::PrecisionExceeded)
+    );
+}
+
+#[test]
 fn decimal_division_matches_rational_integer_oracle() {
     for a in -9i128..=9 {
         for b in -9i128..=9 {
