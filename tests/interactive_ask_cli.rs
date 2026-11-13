@@ -1,6 +1,6 @@
 use std::{
     fs,
-    io::Write,
+    io::{self, Write},
     path::PathBuf,
     process::{Command, Stdio},
     sync::atomic::{AtomicUsize, Ordering},
@@ -51,7 +51,10 @@ fn cli(
         .spawn()
         .unwrap();
     let mut stdin = child.stdin.take().unwrap();
-    stdin.write_all(bytes).unwrap();
+    if let Err(error) = stdin.write_all(bytes) {
+        // Noninteractive ask may be rejected before the parent writes input.
+        assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
+    }
     drop(stdin);
     child.wait_with_output().unwrap()
 }
