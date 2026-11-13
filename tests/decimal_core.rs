@@ -1,7 +1,9 @@
 //! Host-side exact decimal API. Source-language decimal is NOT available yet.
 use scarp::decimal::{Decimal, DecimalError, RoundingMode};
 
-fn d(text: &str) -> Decimal { text.parse().unwrap() }
+fn d(text: &str) -> Decimal {
+    text.parse().unwrap()
+}
 
 #[test]
 fn exact_decimal_addition_does_not_change_existing_float_results() {
@@ -19,9 +21,24 @@ fn exact_accounting_example_and_explicit_rounding() {
     assert_eq!(tax.to_string(), "35.9982");
     let total = subtotal.checked_add(tax).unwrap();
     assert_eq!(total.to_string(), "235.9882");
-    assert_eq!(total.round_to(2, RoundingMode::HalfEven).unwrap().to_string(), "235.99");
-    assert_eq!(d("1").div_rounded(d("3"), 2, RoundingMode::HalfEven).unwrap().to_string(), "0.33");
-    assert_eq!(d("1").div_rounded(d("0"), 2, RoundingMode::HalfEven), Err(DecimalError::DivisionByZero));
+    assert_eq!(
+        total
+            .round_to(2, RoundingMode::HalfEven)
+            .unwrap()
+            .to_string(),
+        "235.99"
+    );
+    assert_eq!(
+        d("1")
+            .div_rounded(d("3"), 2, RoundingMode::HalfEven)
+            .unwrap()
+            .to_string(),
+        "0.33"
+    );
+    assert_eq!(
+        d("1").div_rounded(d("0"), 2, RoundingMode::HalfEven),
+        Err(DecimalError::DivisionByZero)
+    );
 }
 
 #[test]
