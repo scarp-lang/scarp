@@ -146,11 +146,9 @@ impl Decimal {
         Self::new(rounded, target_scale)
     }
 
-    /// Bounded digit-by-digit division with explicit rounding and target scale.
-    ///
-    /// Avoid aligning full operands: a 28-digit integer divided by a decimal
-    /// can have an exactly representable quotient even when cross-scaling
-    /// its numerator would exceed the coefficient bound or i128 storage.
+    /// Calculate a rounded quotient without accumulating oversized fractional
+    /// coefficients. The integer and fractional digits are stored separately
+    /// until trailing zeros can be normalized at the final precision.
     pub fn div_rounded(
         self,
         other: Self,
@@ -166,87 +164,98 @@ impl Decimal {
         let negative = (self.coefficient < 0) != (other.coefficient < 0);
         let numerator = self.coefficient.unsigned_abs();
         let denominator = other.coefficient.unsigned_abs();
-        let mut quotient = numerator / denominator;
+        let mut integer = numerator / denominator;
         let mut remainder = numerator % denominator;
         let shift = i16::from(other.scale) - i16::from(self.scale);
 
         if shift >= 0 {
-            // Move the quotient's decimal point right by the scale difference.
-            // The remainder is always below 10^28, so *10 fits in u128.
+            // Convert the coefficient quotient to its integer part. Remainder
+            // always stays below the 28-digit divisor, so * 10 fits u128.
             for _ in 0..shift {
                 remainder *= 10;
                 let digit = remainder / denominator;
                 remainder %= denominator;
-                quotient = push_decimal_digit(quotient, digit)?;
+                integer = push_decimal_digit(integer, digit)?;
+                if integer > MAX_COEFFICIENT as u128 {
+                    return Err(DecimalError::PrecisionExceeded);
+                }
             }
-            let mut scale = 0;
+            let mut fraction = 0_u128;
+            let mut scale = 0_u8;
             while remainder != 0 && scale < target_scale {
                 remainder *= 10;
                 let digit = remainder / denominator;
                 remainder %= denominator;
-                quotient = push_decimal_digit(quotient, digit)?;
+                fraction = push_decimal_digit(fraction, digit)?;
                 scale += 1;
             }
-            if should_increment(quotient, remainder, denominator, mode) {
-                quotient = quotient
-                    .checked_add(1)
-                    .ok_or(DecimalError::PrecisionExceeded)?;
+            let last = if scale == 0 { integer } else { fraction };
+            if should_increment(last, remainder, denominator, mode) {
+                fraction += 1;
+                if scale == 0 {
+                    integer = integer.checked_add(1).ok_or(DecimalError::PrecisionExceeded)?;
+                    fraction = 0;
+                }
             }
-            return normalized_rounded_decimal(quotient, scale, negative);
+            return finish_rounded_decimal(integer, fraction, scale, negative);
         }
 
-        // Move the quotient point left without allocating a 46-digit
-        // denominator. The quotient's trailing k digits become fractional,
-        // followed by the original remainder's decimal expansion.
+        // A negative shift means quotient integer digits become a fractional
+        // prefix. Keep that prefix separate from the later remainder digits.
         let k = (-shift) as u8;
-        let divisor = power_of_ten(k) as u128;
-        let fractional_prefix = quotient % divisor;
-        quotient /= divisor;
-        let mut scale = 0;
+        let prefix_divisor = power_of_ten(k) as u128;
+        let prefix = integer % prefix_divisor;
+        integer /= prefix_divisor;
+        let mut fraction = 0_u128;
+        let mut scale = 0_u8;
         while scale < target_scale {
             let more_prefix =
-                scale < k && fractional_prefix % (power_of_ten(k - scale) as u128) != 0;
+                scale < k && prefix % (power_of_ten(k - scale) as u128) != 0;
             if !more_prefix && remainder == 0 {
                 break;
             }
             let digit = if scale < k {
-                (fractional_prefix / (power_of_ten(k - scale - 1) as u128)) % 10
+                (prefix / (power_of_ten(k - scale - 1) as u128)) % 10
             } else {
                 remainder *= 10;
                 let digit = remainder / denominator;
                 remainder %= denominator;
                 digit
             };
-            quotient = push_decimal_digit(quotient, digit)?;
+            fraction = push_decimal_digit(fraction, digit)?;
             scale += 1;
         }
-        let more_prefix = scale < k && fractional_prefix % (power_of_ten(k - scale) as u128) != 0;
+
+        let more_prefix = scale < k && prefix % (power_of_ten(k - scale) as u128) != 0;
         if more_prefix || remainder != 0 {
             let (next_digit, sticky) = if scale < k {
-                let remaining_divisor = power_of_ten(k - scale - 1) as u128;
+                let prefix_base = power_of_ten(k - scale - 1) as u128;
                 (
-                    (fractional_prefix / remaining_divisor) % 10,
-                    fractional_prefix % remaining_divisor != 0 || remainder != 0,
+                    (prefix / prefix_base) % 10,
+                    prefix % prefix_base != 0 || remainder != 0,
                 )
             } else {
                 let expanded = remainder * 10;
                 (expanded / denominator, expanded % denominator != 0)
             };
+            let last = if scale == 0 { integer } else { fraction };
             let increment = match mode {
                 RoundingMode::HalfEven => {
-                    next_digit > 5 || (next_digit == 5 && (sticky || quotient % 2 != 0))
+                    next_digit > 5 || (next_digit == 5 && (sticky || last % 2 != 0))
                 }
                 RoundingMode::HalfUp => next_digit >= 5,
                 RoundingMode::TowardZero => false,
                 RoundingMode::AwayFromZero => true,
             };
             if increment {
-                quotient = quotient
-                    .checked_add(1)
-                    .ok_or(DecimalError::PrecisionExceeded)?;
+                if scale == 0 {
+                    integer = integer.checked_add(1).ok_or(DecimalError::PrecisionExceeded)?;
+                } else {
+                    fraction += 1;
+                }
             }
         }
-        normalized_rounded_decimal(quotient, scale, negative)
+        finish_rounded_decimal(integer, fraction, scale, negative)
     }
 
     /// Never truncate a fraction during integer conversion.
@@ -286,18 +295,27 @@ fn push_decimal_digit(quotient: u128, digit: u128) -> Result<u128, DecimalError>
         .ok_or(DecimalError::PrecisionExceeded)
 }
 
-/// A rounded coefficient can temporarily exceed 28 digits, yet become
-/// representable after trailing fractional zeros are removed. Normalize the
-/// unsigned magnitude before converting it to the signed storage type.
-fn normalized_rounded_decimal(
-    mut magnitude: u128,
+/// Fractional digits never exceed 18; remove their trailing zeros BEFORE
+/// assembling the bounded coefficient. Otherwise a valid rounded 27-digit
+/// integer could falsely overflow while appending 18 zero digits.
+fn finish_rounded_decimal(
+    mut integer: u128,
+    mut fraction: u128,
     mut scale: u8,
     negative: bool,
 ) -> Result<Decimal, DecimalError> {
-    while scale > 0 && magnitude % 10 == 0 {
-        magnitude /= 10;
+    if scale != 0 && fraction == power_of_ten(scale) as u128 {
+        integer = integer.checked_add(1).ok_or(DecimalError::PrecisionExceeded)?;
+        fraction = 0;
+    }
+    while scale > 0 && fraction % 10 == 0 {
+        fraction /= 10;
         scale -= 1;
     }
+    let magnitude = integer
+        .checked_mul(power_of_ten(scale) as u128)
+        .and_then(|value| value.checked_add(fraction))
+        .ok_or(DecimalError::PrecisionExceeded)?;
     if magnitude > MAX_COEFFICIENT as u128 {
         return Err(DecimalError::PrecisionExceeded);
     }
