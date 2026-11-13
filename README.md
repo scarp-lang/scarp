@@ -13,6 +13,8 @@ See the [release notes](docs/releases/v0.0.6-alpha.8-publication.md),
 **0.0.6-alpha.7** added typed conditional expressions and Unicode scalar
 string escapes. [Alpha.7 verification](docs/releases/v0.0.6-alpha.7-validation.md)
 
+**BigInt development:** [bounded BigInt](docs/bigint.md) adds exact signed arithmetic, explicit conversions and deterministic work, digit and allocation quotas. [Integration PR #200](https://github.com/scarp-lang/scarp/pull/200)
+
 **0.0.6-alpha.6** added [bounded input](docs/program-input.md),
 [scalar/text utilities](docs/text-foundations.md) and
 [immutable tuples with a Rust API migration](docs/tuples.md).

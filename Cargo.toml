@@ -28,5 +28,9 @@ harness = false
 name = "compiler"
 harness = false
 
+[[bench]]
+name = "bigint"
+harness = false
+
 [lints.rust]
 unsafe_code = "forbid"

@@ -1,0 +1,15 @@
+pure funcra factorial(n: integer) -> bigint needs n >= 0; {
+    var result = bigint("1");
+    repeat n as index { result *= bigint_from_integer(index + 1); }
+    return result;
+}
+
+var a = bigint("0");
+var b = bigint("1");
+repeat 100 as index {
+    bind next = a + b;
+    a = b;
+    b = next;
+}
+print(a);
+print(factorial(50));

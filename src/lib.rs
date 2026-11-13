@@ -11,6 +11,7 @@
 //! ```
 
 pub mod ast;
+pub mod bigint;
 /// Opt-in, experimental scalar C11 emitter (not a CLI build command).
 pub mod c_backend;
 pub mod diagnostics;

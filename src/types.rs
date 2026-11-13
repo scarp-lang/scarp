@@ -22,6 +22,7 @@ pub enum PrimitiveType {
     Tile,
     Boolean,
     String,
+    BigInt,
 }
 
 impl PrimitiveType {
@@ -34,6 +35,7 @@ impl PrimitiveType {
         Self::Tile,
         Self::Boolean,
         Self::String,
+        Self::BigInt,
     ];
     pub const fn id(self) -> TypeId {
         TypeId(self as u64)
@@ -48,11 +50,12 @@ impl PrimitiveType {
             "tile" => Self::Tile,
             "boolean" => Self::Boolean,
             "string" => Self::String,
+            "bigint" => Self::BigInt,
             _ => return None,
         })
     }
     pub(crate) fn is_numeric(self) -> bool {
-        matches!(self, Self::Integer | Self::Float)
+        matches!(self, Self::Integer | Self::Float | Self::BigInt)
     }
 }
 impl fmt::Display for PrimitiveType {
@@ -66,6 +69,7 @@ impl fmt::Display for PrimitiveType {
             Self::Tile => "tile",
             Self::Boolean => "boolean",
             Self::String => "string",
+            Self::BigInt => "bigint",
         })
     }
 }
@@ -240,7 +244,7 @@ impl fmt::Display for TypeRegistryError {
 }
 impl std::error::Error for TypeRegistryError {}
 
-static PRIMITIVES: [TypeKind; 8] = [
+static PRIMITIVES: [TypeKind; 9] = [
     TypeKind::Primitive(PrimitiveType::Unit),
     TypeKind::Primitive(PrimitiveType::Integer),
     TypeKind::Primitive(PrimitiveType::Float),
@@ -249,6 +253,7 @@ static PRIMITIVES: [TypeKind; 8] = [
     TypeKind::Primitive(PrimitiveType::Tile),
     TypeKind::Primitive(PrimitiveType::Boolean),
     TypeKind::Primitive(PrimitiveType::String),
+    TypeKind::Primitive(PrimitiveType::BigInt),
 ];
 static NEXT_ARENA: AtomicU32 = AtomicU32::new(1);
 

@@ -64,10 +64,12 @@ jobs:
           SCARP_CC=gcc cargo test --locked --offline --test c_backend
           SCARP_CC=clang SCARP_C_SANITIZE=1 cargo test --locked --offline --test c_backend
       - name: Smoke-test benchmark workloads
+        shell: bash
         run: |
           cargo bench --locked --offline --bench runtime -- --quick
           cargo bench --locked --offline --bench numerics -- --quick
           cargo bench --locked --offline --bench compiler -- --quick
+          cargo bench --locked --offline --bench bigint -- --quick
       - name: Verify release and branch-maintenance tools
         if: runner.os == 'Linux'
         run: |
@@ -77,6 +79,7 @@ jobs:
           python3 scripts/test_rms.py target/debug/scarp
           python3 scripts/test_program_input.py target/debug/scarp
           python3 scripts/test_sampled_calculus.py target/debug/scarp
+          python3 scripts/test_bigint.py target/debug/scarp
           python3 -m unittest discover -s scripts -p 'test_*release*.py'
           python3 -m unittest discover -s scripts -p 'test_prune_branches.py'
       - name: Validate PowerShell check script
@@ -110,3 +113,4 @@ jobs:
           cargo bench --locked --offline --bench runtime -- --quick
           cargo bench --locked --offline --bench numerics -- --quick
           cargo bench --locked --offline --bench compiler -- --quick
+          cargo bench --locked --offline --bench bigint -- --quick
