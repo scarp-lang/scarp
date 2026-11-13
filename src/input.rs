@@ -246,11 +246,8 @@ mod tests {
         let mut budget = Budget::new(6);
         let span = Span::default();
         {
-            let mut input = InputState::interactive(
-                &mut reader,
-                &mut stdout,
-                InputLimits::default(),
-            );
+            let mut input =
+                InputState::interactive(&mut reader, &mut stdout, InputLimits::default());
             let error = input.ask("Name: ", &mut budget, span).unwrap_err();
             assert_eq!(error.kind, Kind::ExecutionLimit);
         }
@@ -265,11 +262,8 @@ mod tests {
         let mut budget = Budget::new(2);
         let span = Span::default();
         {
-            let mut input = InputState::interactive(
-                &mut reader,
-                &mut stdout,
-                InputLimits::default(),
-            );
+            let mut input =
+                InputState::interactive(&mut reader, &mut stdout, InputLimits::default());
             let error = input.ask(">", &mut budget, span).unwrap_err();
             assert_eq!(error.kind, Kind::InputEof);
         }
