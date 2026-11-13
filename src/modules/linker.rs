@@ -9,8 +9,12 @@ use std::collections::HashMap;
 struct Symbol {
     info: SymbolInfo,
     definition: Span,
-    target: Option<String>,
+    target: Option<FunctionTarget>,
     constant: Option<ExpressionKind>,
+}
+struct FunctionTarget {
+    name: String,
+    charged_bytes: usize,
 }
 struct Table {
     symbols: HashMap<String, Symbol>,
@@ -80,7 +84,11 @@ fn collect(
                     let target = if unqualified {
                         function.name.clone()
                     } else {
-                        format!("{}::{}", module.identity, function.name)
+                        let qualifier = module
+                            .diagnostic_qualifier
+                            .as_deref()
+                            .unwrap_or(&module.identity);
+                        format!("{qualifier}::{}", function.name)
                     };
                     Symbol {
                         definition: function.span,
@@ -98,7 +106,10 @@ fn collect(
                                 pure: function.pure,
                             },
                         },
-                        target: Some(target),
+                        target: Some(FunctionTarget {
+                            name: target,
+                            charged_bytes: size,
+                        }),
                         constant: None,
                     }
                 }
@@ -384,7 +395,7 @@ impl Rewriter<'_> {
                 } => {
                     if let Some(symbol) = self.symbol(name, *function_span)? {
                         if let Some(target) = &symbol.target {
-                            let size = target.len();
+                            let size = target.charged_bytes;
                             consume(self.remaining, size, *function_span)?;
                             // Reborrow after charging so no symbol data is cloned
                             // before its bounded expansion allowance is checked.
@@ -394,6 +405,7 @@ impl Rewriter<'_> {
                                 .target
                                 .as_ref()
                                 .unwrap()
+                                .name
                                 .clone();
                         } else if name.contains('.') || !crate::resolver::is_builtin_name(name) {
                             return Err(Diagnostic::new(
@@ -418,14 +430,17 @@ impl Rewriter<'_> {
                     if let Some(symbol) = self.symbol(name, node.span)? {
                         let size = match &symbol.constant {
                             Some(ExpressionKind::String(text)) => text.len(),
-                            _ => symbol.target.as_ref().map_or(0, String::len),
+                            _ => symbol
+                                .target
+                                .as_ref()
+                                .map_or(0, |target| target.charged_bytes),
                         };
                         consume(self.remaining, size, node.span)?;
                         let symbol = self.symbol(name, node.span)?.unwrap();
                         node.kind = if let Some(value) = &symbol.constant {
                             value.clone()
                         } else {
-                            ExpressionKind::Name(symbol.target.as_ref().unwrap().clone())
+                            ExpressionKind::Name(symbol.target.as_ref().unwrap().name.clone())
                         };
                     }
                 }
@@ -466,6 +481,7 @@ impl Rewriter<'_> {
                         .target
                         .as_ref()
                         .unwrap()
+                        .name
                         .clone();
                 }
                 Statement::Declaration {
