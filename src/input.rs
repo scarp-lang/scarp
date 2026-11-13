@@ -36,7 +36,7 @@ pub(crate) fn unavailable(span: Span) -> Diagnostic {
         span,
         "read_line requires an explicit input reader; this execution mode has none",
     )
-    .with_help("use run_with_input / execute_with_input, or redirect stdin to scarp exec; check never reads stdin and terminal prompts are not yet supported")
+    .with_help("use run_with_input / execute_with_input, redirect stdin to scarp exec, or explicitly enable --interactive for terminal input; check never reads stdin")
 }
 
 pub(crate) fn prompt_unavailable(span: Span) -> Diagnostic {
