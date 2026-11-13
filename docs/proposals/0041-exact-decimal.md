@@ -17,8 +17,11 @@ Many decimal fractions cannot be represented exactly by binary64; for instance, 
 - Canonicalized precision checks remove redundant fractional zeros before testing the coefficient range. `Decimal::new` still rejects an incoming scale above 18.
 - Exact numeric comparisons use a total mathematical order, including across different scales and negative values, without binary floating-point rounding or overflowing a full coefficient alignment.
 - Checked exact addition, subtraction and multiplication report an error instead of silently rounding or falling back to binary64.
+- Multiplication first cancels paired factors of 2 and 5 across the coefficients to avoid overflow of intermediates when the canonical exact product is representable; the final 28-digit precision ceiling remains enforced.
 - Cross-scale addition/subtraction checks aligned intermediates using i128 and applies the 28-digit coefficient limit **after** exact addition and canonicalization. A representable cancellation such as `10^27 - 0.1` is accepted; an intermediate exceeding i128 or a final nonrepresentable result is rejected.
 - Decimal division uses bounded digit-by-digit arithmetic without expanding both operands to the maximum scale; it requires a target fractional scale and explicit rounding mode. Modes are HalfEven, HalfUp (ties away), TowardZero and AwayFromZero. Rounding and trailing-zero normalization precede the final 28-digit coefficient limit: representable results are not rejected merely because an intermediate includes an extra fractional zero. Division intermediates remain checked u128 values.
+- Exact-only division (`checked_div_exact`) rejects repeating or out-of-scale quotients with `Inexact`; it never silently rounds. Rounded division continues to require an explicit scale and rounding mode.
+- `format_fixed(places, rounding_mode)` produces a fixed number of fractional places (for presentation such as currency), while stored decimals remain canonical and strip trailing zeros.
 - Conversion to i64 requires an exact whole number and in-range value.
 - Errors distinguish invalid syntax, scale excess, precision excess, division by zero and inexact conversion.
 - No external dependency, unsafe code or unbounded coefficient storage.
