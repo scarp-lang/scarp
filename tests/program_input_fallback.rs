@@ -117,7 +117,7 @@ fn typed_metadata_exposes_the_impure_string_to_string_signature() {
     assert!(matches!(
         program.type_registry().get(signature),
         Some(TypeKind::Function { parameters, result, effect })
-            if parameters.as_ref() == &[scarp::value::ValueType::String.id()]
+            if parameters.as_ref() == [scarp::value::ValueType::String.id()]
                 && *result == scarp::value::ValueType::String.id()
                 && *effect == FunctionEffect::Impure
     ));
