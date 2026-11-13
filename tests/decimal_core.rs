@@ -149,6 +149,33 @@ fn rounded_division_handles_large_mixed_scales_without_alignment() {
 }
 
 #[test]
+fn bounded_cross_scale_cancellation_is_not_rejected_prematurely() {
+    // Aligned 10^27 becomes a 29-digit coefficient at scale 1, but the
+    // correctly normalized exact result still fits the 28-digit limit.
+    let large = d("1000000000000000000000000000");
+    let tenth = d("0.1");
+    let expected = d("999999999999999999999999999.9");
+    assert_eq!(large.checked_sub(tenth), Ok(expected));
+    assert_eq!(large.checked_add(d("-0.1")), Ok(expected));
+    assert_eq!(
+        d("-1000000000000000000000000000").checked_add(tenth),
+        Ok(d("-999999999999999999999999999.9"))
+    );
+
+    // Positive shifts beyond the coefficient limit are only accepted when
+    // the complete result is representable. No implicit rounding occurs.
+    assert_eq!(large.checked_add(tenth), Err(DecimalError::PrecisionExceeded));
+    assert_eq!(
+        large.checked_sub(d("-0.1")),
+        Err(DecimalError::PrecisionExceeded)
+    );
+    assert_eq!(
+        large.checked_sub(d("0.01")),
+        Err(DecimalError::PrecisionExceeded)
+    );
+}
+
+#[test]
 fn decimal_division_matches_rational_integer_oracle() {
     for a in -9i128..=9 {
         for b in -9i128..=9 {
