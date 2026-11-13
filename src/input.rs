@@ -109,6 +109,10 @@ impl<'a> InputState<'a> {
             return Err(limit(span, "input byte quota exhausted before line read"));
         }
         budget.charge(prompt.len() as u64, span)?;
+        // A selected read must be able to pay for its first buffer probe.
+        // Preflight it before the prompt becomes irrevocably visible, without
+        // changing the established work charge when the read actually starts.
+        budget.preflight_steps(1, span)?;
         let writer = self
             .prompt_writer
             .as_deref_mut()
