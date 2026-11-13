@@ -188,7 +188,9 @@ impl Decimal {
                 scale += 1;
             }
             if should_increment(quotient, remainder, denominator, mode) {
-                quotient = quotient.checked_add(1).ok_or(DecimalError::PrecisionExceeded)?;
+                quotient = quotient
+                    .checked_add(1)
+                    .ok_or(DecimalError::PrecisionExceeded)?;
             }
             return Self::new(signed_coefficient(quotient, negative)?, scale);
         }
@@ -202,8 +204,8 @@ impl Decimal {
         quotient /= divisor;
         let mut scale = 0;
         while scale < target_scale {
-            let more_prefix = scale < k
-                && fractional_prefix % (power_of_ten(k - scale) as u128) != 0;
+            let more_prefix =
+                scale < k && fractional_prefix % (power_of_ten(k - scale) as u128) != 0;
             if !more_prefix && remainder == 0 {
                 break;
             }
@@ -218,8 +220,7 @@ impl Decimal {
             quotient = push_decimal_digit(quotient, digit)?;
             scale += 1;
         }
-        let more_prefix = scale < k
-            && fractional_prefix % (power_of_ten(k - scale) as u128) != 0;
+        let more_prefix = scale < k && fractional_prefix % (power_of_ten(k - scale) as u128) != 0;
         if more_prefix || remainder != 0 {
             let (next_digit, sticky) = if scale < k {
                 let remaining_divisor = power_of_ten(k - scale - 1) as u128;
@@ -240,7 +241,9 @@ impl Decimal {
                 RoundingMode::AwayFromZero => true,
             };
             if increment {
-                quotient = quotient.checked_add(1).ok_or(DecimalError::PrecisionExceeded)?;
+                quotient = quotient
+                    .checked_add(1)
+                    .ok_or(DecimalError::PrecisionExceeded)?;
             }
         }
         Self::new(signed_coefficient(quotient, negative)?, scale)
@@ -334,7 +337,11 @@ impl Ord for Decimal {
             // products fit in i128 (strictly below 10^36).
             ((a % a_divisor) * b_divisor).cmp(&((b % b_divisor) * a_divisor))
         };
-        if left_sign < 0 { magnitude_order.reverse() } else { magnitude_order }
+        if left_sign < 0 {
+            magnitude_order.reverse()
+        } else {
+            magnitude_order
+        }
     }
 }
 impl PartialOrd for Decimal {
@@ -592,9 +599,17 @@ mod tests {
 
     #[test]
     fn canonicalization_before_precision_checks() {
-        assert_eq!(Decimal::new(10000000000000000000000000000, 1).unwrap().to_string(), "1000000000000000000000000000");
+        assert_eq!(
+            Decimal::new(10000000000000000000000000000, 1)
+                .unwrap()
+                .to_string(),
+            "1000000000000000000000000000"
+        );
         assert_eq!(d("000000000000000000000000000000001.20").to_string(), "1.2");
-        assert_eq!("0".repeat(MAX_DECIMAL_TEXT_BYTES + 1).parse::<Decimal>(), Err(DecimalError::PrecisionExceeded));
+        assert_eq!(
+            "0".repeat(MAX_DECIMAL_TEXT_BYTES + 1).parse::<Decimal>(),
+            Err(DecimalError::PrecisionExceeded)
+        );
     }
 
     #[test]
