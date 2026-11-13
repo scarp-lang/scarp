@@ -18,10 +18,11 @@ Many decimal fractions cannot be represented exactly by binary64; for instance, 
 - Exact numeric comparisons use a total mathematical order, including across different scales and negative values, without binary floating-point rounding or overflowing a full coefficient alignment.
 - Checked exact addition, subtraction and multiplication report an error instead of silently rounding or falling back to binary64.
 - Alignment may conservatively reject a valid cancellation when an intermediate exceeds the initial 28-digit limit. This is a documented v1 limitation.
-- Decimal division requires a target fractional scale and explicit rounding mode; modes are HalfEven, HalfUp (ties away), TowardZero and AwayFromZero.
+- Decimal division uses bounded digit-by-digit arithmetic without expanding both operands to the maximum scale; it requires a target fractional scale and explicit rounding mode. Modes are HalfEven, HalfUp (ties away), TowardZero and AwayFromZero. A large 28-digit value divided by a two-decimal-place value can now yield an exactly representable integer without an oversized intermediate coefficient.
 - Conversion to i64 requires an exact whole number and in-range value.
 - Errors distinguish invalid syntax, scale excess, precision excess, division by zero and inexact conversion.
 - No external dependency, unsafe code or unbounded coefficient storage.
+- Cross-scale division is checked with independent scaled-integer rational oracle tests covering signs, rounding modes, and target scales; the initial core remains intentionally limited to 28 coefficient digits and 18 fractional digits.
 
 ### Host Rust API example
 
