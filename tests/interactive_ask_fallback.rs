@@ -168,6 +168,13 @@ fn default_host_modes_reject_ask_or_without_consuming_input_or_writing_output() 
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let error = scarp::run_with_input(source, &mut input, &mut out, &mut err).unwrap_err();
     assert!(matches!(error, RunError::Diagnostic(ref d) if d.kind == Kind::InputUnavailable));
+    if let RunError::Diagnostic(ref diagnostic) = error {
+        assert!(
+            diagnostic.message.contains("interactive input prompts"),
+            "{}",
+            diagnostic.message
+        );
+    }
     assert_eq!(input.position(), 0);
     assert!(out.is_empty() && err.is_empty());
     assert_eq!(
