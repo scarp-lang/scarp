@@ -11,6 +11,7 @@ pub(super) struct ProgramTypes {
     functions: Vec<TypeId>,
     builtins: BTreeMap<Builtin, TypeId>,
     input: Option<TypeId>,
+    input_fallback: Option<TypeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,6 +70,7 @@ impl TypedExpression<'_> {
                         self.types.builtins.get(&builtin).copied()
                     }
                     Some(ResolvedCall::ReadLine) => self.types.input,
+                    Some(ResolvedCall::ReadLineOr) => self.types.input_fallback,
                     None => None,
                 };
                 TypedNode {
@@ -230,6 +232,7 @@ pub(super) fn build(
     }
     let mut builtins = BTreeMap::new();
     let mut input = None;
+    let mut input_fallback = None;
     for (_, expression) in expressions(program) {
         for (index, call) in expression.calls.iter().enumerate() {
             if matches!(call, Some(ResolvedCall::ReadLine)) && input.is_none() {
@@ -237,6 +240,17 @@ pub(super) fn build(
                     registry
                         .intern(TypeKind::Function {
                             parameters: Vec::new().into(),
+                            result: ValueType::String.id(),
+                            effect: FunctionEffect::Impure,
+                        })
+                        .map_err(|error| failure(error, expression.syntax.nodes()[index].span))?,
+                );
+            }
+            if matches!(call, Some(ResolvedCall::ReadLineOr)) && input_fallback.is_none() {
+                input_fallback = Some(
+                    registry
+                        .intern(TypeKind::Function {
+                            parameters: vec![ValueType::String.id()].into(),
                             result: ValueType::String.id(),
                             effect: FunctionEffect::Impure,
                         })
@@ -268,5 +282,6 @@ pub(super) fn build(
         functions,
         builtins,
         input,
+        input_fallback,
     })
 }
