@@ -318,6 +318,7 @@ struct Import {
 #[derive(Debug, Clone)]
 struct ParsedModule {
     identity: String,
+    diagnostic_qualifier: Option<String>,
     program: Program,
     imports: Vec<Import>,
     dependencies: Vec<(Import, SourceId)>,
@@ -396,6 +397,7 @@ impl ModuleGraph {
         self.imports += imports.len();
         let id = self.modules.len();
         self.modules.push(ParsedModule {
+            diagnostic_qualifier: loader.diagnostic_qualifier(&identity),
             identity,
             program,
             imports,

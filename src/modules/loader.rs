@@ -1,5 +1,6 @@
 //! Source identity and bounded reads; no lexer/parser filesystem access.
 use std::{
+    borrow::Cow,
     cell::RefCell,
     collections::BTreeMap,
     fs,
@@ -42,6 +43,11 @@ pub trait SourceLoader {
     fn load(&self, identity: &str, max_bytes: usize) -> Result<String, SourceLoadError>;
     fn display_name(&self, identity: &str) -> String {
         identity.to_string()
+    }
+    /// Optional qualified-name prefix for diagnostics. The canonical identity
+    /// still determines source resolution and the linker's expansion charge.
+    fn diagnostic_qualifier(&self, _identity: &str) -> Option<String> {
+        None
     }
 }
 
@@ -143,6 +149,7 @@ impl SourceLoader for MemorySourceLoader {
 pub struct FileSourceLoader {
     root: PathBuf,
     native_paths: RefCell<BTreeMap<String, PathBuf>>,
+    relative_diagnostics: bool,
 }
 impl FileSourceLoader {
     pub fn new(root: impl AsRef<Path>) -> io::Result<Self> {
@@ -156,7 +163,14 @@ impl FileSourceLoader {
         Ok(Self {
             root,
             native_paths: RefCell::new(BTreeMap::new()),
+            relative_diagnostics: false,
         })
+    }
+    /// Use root-relative names for sources and qualified functions. Canonical
+    /// resolution and containment checks still use native paths.
+    pub fn with_relative_diagnostics(mut self) -> Self {
+        self.relative_diagnostics = true;
+        self
     }
     pub fn root(&self) -> &Path {
         &self.root
@@ -182,23 +196,41 @@ impl FileSourceLoader {
             .cloned()
             .unwrap_or_else(|| PathBuf::from(identity))
     }
+    fn diagnostic_path<'a>(&self, path: &'a Path) -> Cow<'a, str> {
+        if !self.relative_diagnostics {
+            return path.to_string_lossy();
+        }
+        path.strip_prefix(&self.root)
+            .ok()
+            .and_then(portable_name)
+            .unwrap_or_default()
+    }
+
+    fn read_error(
+        &self,
+        path: &Path,
+        kind: SourceLoadKind,
+        error: impl std::fmt::Display,
+    ) -> SourceLoadError {
+        let name = self.diagnostic_path(path);
+        let message = if name.is_empty() {
+            format!("could not read source file: {error}")
+        } else {
+            format!("could not read '{name}': {error}")
+        };
+        SourceLoadError::new(kind, message)
+    }
+
     fn checked(&self, path: &Path) -> Result<PathBuf, SourceLoadError> {
-        let path = fs::canonicalize(path).map_err(|error| {
-            SourceLoadError::new(
-                SourceLoadKind::Io,
-                format!("could not read '{}': {error}", path.display()),
-            )
-        })?;
+        let path = fs::canonicalize(path)
+            .map_err(|error| self.read_error(path, SourceLoadKind::Io, error))?;
         if !path.starts_with(&self.root) {
             return Err(path_error(
                 "canonical module path escapes the trusted source root",
             ));
         }
         if !path.is_file() {
-            return Err(SourceLoadError::new(
-                SourceLoadKind::Io,
-                format!("could not read '{}': not a regular file", path.display()),
-            ));
+            return Err(self.read_error(&path, SourceLoadKind::Io, "not a regular file"));
         }
         Ok(path)
     }
@@ -226,12 +258,8 @@ impl SourceLoader for FileSourceLoader {
         // Recheck canonical containment immediately before opening. This is a
         // trusted-tree loader, not a sandbox against concurrent hostile changes.
         let path = self.checked(&self.path(identity))?;
-        let file = fs::File::open(&path).map_err(|error| {
-            SourceLoadError::new(
-                SourceLoadKind::Io,
-                format!("could not read '{}': {error}", path.display()),
-            )
-        })?;
+        let file = fs::File::open(&path)
+            .map_err(|error| self.read_error(&path, SourceLoadKind::Io, error))?;
         let amount = file
             .metadata()
             .map_err(|error| SourceLoadError::new(SourceLoadKind::Io, error.to_string()))?
@@ -248,12 +276,7 @@ impl SourceLoader for FileSourceLoader {
         })?;
         file.take((max_bytes as u64).saturating_add(1))
             .read_to_end(&mut bytes)
-            .map_err(|error| {
-                SourceLoadError::new(
-                    SourceLoadKind::Io,
-                    format!("could not read '{}': {error}", path.display()),
-                )
-            })?;
+            .map_err(|error| self.read_error(&path, SourceLoadKind::Io, error))?;
         if bytes.len() > max_bytes {
             return Err(SourceLoadError::new(
                 SourceLoadKind::Limit,
@@ -261,16 +284,36 @@ impl SourceLoader for FileSourceLoader {
             ));
         }
         String::from_utf8(bytes).map_err(|_| {
-            SourceLoadError::new(
+            self.read_error(
+                &path,
                 SourceLoadKind::InvalidUtf8,
-                format!(
-                    "could not read '{}': source is not valid UTF-8",
-                    path.display()
-                ),
+                "source is not valid UTF-8",
             )
         })
     }
     fn display_name(&self, identity: &str) -> String {
-        self.path(identity).to_string_lossy().into_owned()
+        self.diagnostic_path(&self.path(identity)).into_owned()
     }
+
+    fn diagnostic_qualifier(&self, identity: &str) -> Option<String> {
+        if !self.relative_diagnostics {
+            return None;
+        }
+        let path = self.path(identity);
+        let relative = path.strip_prefix(&self.root).ok()?;
+        Some(portable_name(relative).map_or_else(
+            // The NUL distinguishes escaped native names from ordinary paths.
+            || format!("\0native:{relative:?}"),
+            Cow::into_owned,
+        ))
+    }
+}
+
+fn portable_name(path: &Path) -> Option<Cow<'_, str>> {
+    let name = path.to_str()?;
+    Some(if cfg!(windows) {
+        Cow::Owned(name.replace('\\', "/"))
+    } else {
+        Cow::Borrowed(name)
+    })
 }

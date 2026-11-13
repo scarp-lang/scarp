@@ -356,6 +356,7 @@ impl Workspace {
                     let value = values.pop().unwrap();
                     values.push(match value {
                         Value::Float(value) => finite(-value.get(), span)?,
+                        Value::BigInt(value) => Value::BigInt(value.negated()),
                         _ => Value::Integer(
                             value
                                 .require_integer(span)?
@@ -387,7 +388,9 @@ impl Workspace {
                     if let (Some(a), Some(b)) = (left.as_tuple(), right.as_tuple()) {
                         budget.charge(a.work().max(b.work()), span)?;
                     }
-                    values.push(apply_binary(operator, &left, &right, span)?);
+                    values.push(apply_binary_with_budget(
+                        operator, &left, &right, budget, span,
+                    )?);
                 }
                 Task::Logical(operator, right, span) => {
                     let left = values.pop().unwrap().require_boolean(span)?;
@@ -426,6 +429,19 @@ impl Workspace {
                 .expect("a resolved expression produces one value"),
         ))
     }
+}
+
+pub(crate) fn apply_binary_with_budget(
+    operator: BinaryOperator,
+    left: &Value,
+    right: &Value,
+    budget: &mut Budget,
+    span: Span,
+) -> Result<Value, Diagnostic> {
+    if let (Some(left), Some(right)) = (left.as_bigint(), right.as_bigint()) {
+        return crate::bigint::binary(operator, left, right, budget, span);
+    }
+    apply_binary(operator, left, right, span)
 }
 
 pub(crate) fn apply_binary(

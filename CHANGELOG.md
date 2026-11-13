@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.6-alpha.9 — development candidate
+
+- Add opt-in `scarp test --json=v2` with compile, fixture, and runtime
+  phases, diagnostic codes, and project-relative source locations.
+- Add bounded exact `bigint` arithmetic, comparisons, explicit conversions,
+  and support for BigInt values in typed functions, modules, and tuples.
+- Keep project test schema 1 and the signed 64-bit `integer` type compatible.
+  Rust hosts can use `..Default::default()` for the new execution limits and
+  must extend exhaustive matches on the affected public enums.
+
 ## 0.0.6-alpha.8 — published GitHub prerelease, 2026-11-12
 
 - Add bounded declarative `scarp.project` manifests, `scarp init`, project

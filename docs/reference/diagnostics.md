@@ -201,3 +201,12 @@ can differ between operating systems.
 If the caret or code appears wrong, preserve the original file's UTF-8 contents
 and line endings when reporting it. See [testing](../testing.md) for turning a
 reproduction into a focused regression test.
+
+## BigInt diagnostics (alpha.9 development candidate)
+
+The alpha.9 candidate's [BigInt implementation](../bigint.md) adds E0051 for malformed decimal
+constructor text, E0052 for digit/cumulative limb-payload quota exhaustion, and
+E0053 for fallible limb-buffer reservation failure. Existing E0008 diagnoses a
+zero divisor, E0044 rejects out-of-range `bigint_to_integer`, and E0017 enforces
+shared arithmetic/comparison/formatting work. Constructor/conversion diagnostics
+point at arguments. Arithmetic failures point at operators.

@@ -34,7 +34,7 @@ Commands:
   project info [--json] [directory]  Display validated project metadata
   launch <directory>               Execute a Scarp project entrypoint
   run [directory|file.srp]          Run a project or legacy source file
-  test [--json] [--list] [--require-tests] [--filter SUBSTRING] [directory]  Project tests
+  test [--json|--json=v2] [--list] [--require-tests] [--filter SUBSTRING] [directory]  Project tests
   inspect ast <file.srp>           Show the parsed syntax tree (development)
   inspect modules [--json] <file.srp|directory>  Inspect statically checked modules
   explain E####                   Explain a real diagnostic code
@@ -146,7 +146,8 @@ Execute a checked Scarp source file with the existing interpreter.
 --diagnostic-format=json is available for real compiler errors.
 Execution-limit options: --max-steps, --max-prints, --max-call-depth, --max-calls,
 --max-live-slots, --max-capture-bytes, --max-vector-bytes, --max-text-bytes,
---max-tuple-bytes, --max-input-line-bytes, --max-input-bytes, --max-input-reads.
+--max-tuple-bytes, --max-bigint-digits, --max-bigint-bytes,
+--max-input-line-bytes, --max-input-bytes, --max-input-reads.
 Options precede the
 source path. -- before a filename permits filenames beginning with a dash.
 Program-argument forwarding and project entrypoint execution are not supported.
@@ -172,12 +173,14 @@ Use scarp verify DIRECTORY and scarp run DIRECTORY afterwards.
 ";
 
 const TEST_HELP: &str =
-    "Usage: scarp test [--json] [--list] [--require-tests] [--filter SUBSTRING] [--] [project-directory]
+    "Usage: scarp test [--json|--json=v2] [--list] [--require-tests] [--filter SUBSTRING] [--] [project-directory]
 
 Run the immediate tests/*.srp files, or list them without source execution.
 Without a directory argument, use the current project directory.
 --json emits one schema-version-1 test report on stdout; failed test diagnostics
 are bounded and embedded in the JSON rather than printed separately.
+--json=v2 opts into structured per-test diagnostics with codes, source spans,
+and failure phases. Choose at most one JSON flag.
 --list reports discovered tests without compiling or running them; combine
 --json --list to obtain a machine-readable discovery report.
 --require-tests returns exit status 1 when no selected test files are discovered,
@@ -274,6 +277,7 @@ Function defaults: --max-call-depth 256, --max-calls 100000,
 Vector and tile buffers share this cumulative quota; retirement does not refund it.
 --max-text-bytes 8388608 limits cumulative new UTF-8 payload (1048576 bytes per string).
 --max-tuple-bytes 8388608 limits cumulative immutable tuple member/type payload.
+--max-bigint-digits 10000 (ceiling 1000000), --max-bigint-bytes 8388608 (limbs and scratch).
 String sharing and direct literal output do not allocate text payload; retirement gives no refund.
 Snapshot bytes are a logical storage cap, not an exact process-memory limit.
 Counts are unsigned decimal digits, zero is valid, and each option may occur once.
@@ -300,6 +304,7 @@ Function defaults: --max-call-depth 256, --max-calls 100000,
 Vector and tile buffers share this cumulative quota; retirement does not refund it.
 --max-text-bytes 8388608 limits cumulative new UTF-8 payload (1048576 bytes per string).
 --max-tuple-bytes 8388608 limits cumulative immutable tuple member/type payload.
+--max-bigint-digits 10000 (ceiling 1000000), --max-bigint-bytes 8388608 (limbs and scratch).
 String sharing and direct literal output do not allocate text payload; retirement gives no refund.
 All resource options take unsigned decimal counts, allow zero, and may occur once.
 Input-limit options are accepted, but check never reads stdin: a selected read_line
@@ -556,7 +561,9 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         };
     }
     if args.first().is_some_and(|command| command == "test") {
-        let mut json = false;
+        use project_tests::JsonVersion;
+
+        let mut json = None;
         let mut list_only = false;
         let mut require_tests = false;
         let mut filter: Option<String> = None;
@@ -567,11 +574,15 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         while let Some(arg) = arguments.next() {
             if !separator && arg == "--" {
                 separator = true;
-            } else if !separator && arg == "--json" {
-                if json {
+            } else if !separator && (arg == "--json" || arg == "--json=v2") {
+                if json.is_some() {
                     invalid = true;
                 }
-                json = true;
+                json = Some(if arg == "--json" {
+                    JsonVersion::V1
+                } else {
+                    JsonVersion::V2
+                });
             } else if !separator && arg == "--list" {
                 if list_only {
                     invalid = true;
@@ -973,6 +984,8 @@ fn execution_limit_flag(flag: &str) -> bool {
             | "--max-vector-bytes"
             | "--max-text-bytes"
             | "--max-tuple-bytes"
+            | "--max-bigint-digits"
+            | "--max-bigint-bytes"
             | "--max-input-line-bytes"
             | "--max-input-bytes"
             | "--max-input-reads"
@@ -1089,6 +1102,13 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
                     "--max-vector-bytes" => options.max_vector_bytes = value,
                     "--max-text-bytes" => options.max_text_bytes = value,
                     "--max-tuple-bytes" => options.max_tuple_bytes = value,
+                    "--max-bigint-digits" => {
+                        if value > scarp::bigint::MAX_BIGINT_DIGITS {
+                            return Err("bigint digit limit cannot exceed 1000000");
+                        }
+                        options.max_bigint_digits = value;
+                    }
+                    "--max-bigint-bytes" => options.max_bigint_bytes = value,
                     "--max-input-line-bytes" => input_limits.max_line_bytes = value,
                     "--max-input-bytes" => input_limits.max_total_bytes = value,
                     "--max-input-reads" => input_limits.max_reads = value,

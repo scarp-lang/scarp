@@ -324,6 +324,7 @@ pub enum Value {
     Boolean(bool),
     String(Arc<str>),
     Tuple(TupleValue),
+    BigInt(crate::bigint::BigInt),
 }
 
 impl Value {
@@ -331,6 +332,7 @@ impl Value {
     pub fn kind(&self) -> SourceType {
         match self {
             Self::Tuple(value) => value.kind().clone(),
+            Self::BigInt(_) => ValueType::BigInt.into(),
             Self::Unit => ValueType::Unit.into(),
             Self::Integer(_) => ValueType::Integer.into(),
             Self::Float(_) => ValueType::Float.into(),
@@ -353,6 +355,13 @@ impl Value {
     pub fn as_integer(&self) -> Option<i64> {
         match self {
             Self::Integer(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    pub fn as_bigint(&self) -> Option<&crate::bigint::BigInt> {
+        match self {
+            Self::BigInt(value) => Some(value),
             _ => None,
         }
     }
@@ -444,6 +453,7 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Tuple(value) => value.fmt(f),
+            Self::BigInt(value) => value.fmt(f),
             Self::Unit => f.write_str("unit"),
             Self::Integer(value) => value.fmt(f),
             Self::Float(value) => value.fmt(f),
