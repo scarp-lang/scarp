@@ -1,4 +1,8 @@
-use std::io::{self, Cursor, Write};
+use std::{
+    cell::Cell,
+    io::{self, BufRead, Cursor, Read, Write},
+    rc::Rc,
+};
 
 use scarp::{
     diagnostics::DiagnosticKind as Kind,
@@ -196,4 +200,72 @@ fn successful_prompts_preserve_normal_stdout_stderr_order_after_evaluation() {
     );
     assert_eq!(result.0, b"> one\ntwoAda\n");
     assert_eq!(result.1, b"warning\n");
+}
+
+struct ObservedReader {
+    input: Cursor<Vec<u8>>,
+    flushed: Rc<Cell<bool>>,
+    read_started: Rc<Cell<bool>>,
+}
+
+impl Read for ObservedReader {
+    fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+        self.input.read(bytes)
+    }
+}
+
+impl BufRead for ObservedReader {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        assert!(self.flushed.get(), "read started before prompt flush");
+        self.read_started.set(true);
+        self.input.fill_buf()
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.input.consume(amount);
+    }
+}
+
+struct FlushObserver {
+    contents: Vec<u8>,
+    flushed: Rc<Cell<bool>>,
+}
+
+impl Write for FlushObserver {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.contents.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.flushed.set(true);
+        Ok(())
+    }
+}
+
+#[test]
+fn buffered_reader_observes_flushed_prompt_before_first_read() {
+    let flushed = Rc::new(Cell::new(false));
+    let read_started = Rc::new(Cell::new(false));
+    let mut reader = ObservedReader {
+        input: Cursor::new(b"Ada\n".to_vec()),
+        flushed: Rc::clone(&flushed),
+        read_started: Rc::clone(&read_started),
+    };
+    let mut stdout = FlushObserver {
+        contents: Vec::new(),
+        flushed: Rc::clone(&flushed),
+    };
+    let mut stderr = Vec::new();
+    scarp::run_with_interactive_input(
+        r#"print(ask("Name: "));"#,
+        &mut reader,
+        &mut stdout,
+        &mut stderr,
+    )
+    .unwrap();
+    assert!(read_started.get());
+    assert!(flushed.get());
+    assert_eq!(stdout.contents, b"Name: Ada\n");
+    assert!(stderr.is_empty());
 }
