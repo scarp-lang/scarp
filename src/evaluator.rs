@@ -54,7 +54,10 @@ enum Task {
 pub(crate) enum Evaluation {
     Complete(Value),
     ReadLine(Span),
-    ReadLineOr { fallback: Value, span: Span },
+    ReadLineOr {
+        fallback: Value,
+        span: Span,
+    },
     Call {
         node: usize,
         arguments: Vec<Value>,

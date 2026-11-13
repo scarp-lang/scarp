@@ -1,31 +1,20 @@
 use std::io::Cursor;
 
 use scarp::{
-    diagnostics::{DiagnosticKind as Kind, Diagnostic},
+    diagnostics::{Diagnostic, DiagnosticKind as Kind},
     types::{FunctionEffect, TypeKind},
-    InputLimits, ExecutionOptions, RunError,
+    ExecutionOptions, InputLimits, RunError,
 };
 
 fn output(source: &str, input: &[u8]) -> (Vec<u8>, Vec<u8>) {
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-    scarp::run_with_input(
-        source,
-        &mut Cursor::new(input),
-        &mut stdout,
-        &mut stderr,
-    )
-    .unwrap();
+    scarp::run_with_input(source, &mut Cursor::new(input), &mut stdout, &mut stderr).unwrap();
     (stdout, stderr)
 }
 
 fn error(source: &str, input: &[u8]) -> Kind {
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-    let result = scarp::run_with_input(
-        source,
-        &mut Cursor::new(input),
-        &mut stdout,
-        &mut stderr,
-    );
+    let result = scarp::run_with_input(source, &mut Cursor::new(input), &mut stdout, &mut stderr);
     assert!(stdout.is_empty() && stderr.is_empty());
     match result.unwrap_err() {
         RunError::Diagnostic(diagnostic) => diagnostic.kind,
@@ -41,7 +30,10 @@ fn eof_fallback_is_distinct_from_empty_or_unterminated_lines() {
     assert_eq!(output(source, b"\r\n"), (b"\n".to_vec(), Vec::new()));
     assert_eq!(output(source, b"final"), (b"final\n".to_vec(), Vec::new()));
     assert_eq!(
-        output(r#"print(read_line_or("missing"), read_line_or("missing"));"#, b"Ada\n"),
+        output(
+            r#"print(read_line_or("missing"), read_line_or("missing"));"#,
+            b"Ada\n"
+        ),
         (b"Ada missing\n".to_vec(), Vec::new())
     );
 }
@@ -59,9 +51,19 @@ fn eof_is_the_only_error_the_fallback_handles() {
         &mut stdout,
         &mut stderr,
         ExecutionOptions::default(),
-        InputLimits { max_reads: 0, ..Default::default() },
-    ).unwrap_err();
-    assert!(matches!(failure, RunError::Diagnostic(Diagnostic { kind: Kind::InputLimit, .. })));
+        InputLimits {
+            max_reads: 0,
+            ..Default::default()
+        },
+    )
+    .unwrap_err();
+    assert!(matches!(
+        failure,
+        RunError::Diagnostic(Diagnostic {
+            kind: Kind::InputLimit,
+            ..
+        })
+    ));
     assert!(stdout.is_empty() && stderr.is_empty());
 }
 
@@ -72,7 +74,10 @@ fn fallback_is_typed_eager_impure_and_shadowable() {
         r#"print(read_line_or("x", "y"));"#,
         r#"print(read_line_or(default: "x"));"#,
     ] {
-        assert_eq!(scarp::compile(source).unwrap_err().kind, Kind::CallArguments);
+        assert_eq!(
+            scarp::compile(source).unwrap_err().kind,
+            Kind::CallArguments
+        );
     }
     assert_eq!(
         scarp::compile("print(read_line_or(4));").unwrap_err().kind,
@@ -80,11 +85,15 @@ fn fallback_is_typed_eager_impure_and_shadowable() {
     );
     assert_eq!(
         scarp::compile(r#"pure funcra f() -> string { return read_line_or("x"); }"#)
-            .unwrap_err().kind,
+            .unwrap_err()
+            .kind,
         Kind::ImpureFunction
     );
     assert_eq!(
-        output(r#"pure funcra read_line_or(default: string) -> string { return default; } print(read_line_or("shadow"));"#, b""),
+        output(
+            r#"pure funcra read_line_or(default: string) -> string { return default; } print(read_line_or("shadow"));"#,
+            b""
+        ),
         (b"shadow\n".to_vec(), Vec::new())
     );
     // Eager fallback evaluation consumes a line before the actual read.
