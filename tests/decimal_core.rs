@@ -258,7 +258,11 @@ fn division_keeps_representable_large_integer_when_fraction_rounds_to_zero() {
     let numerator = d("999999999000000000111111102");
     let denominator = d("9.000000000000000001");
     let expected = d("111111110999999999999999999");
-    for mode in [RoundingMode::HalfEven, RoundingMode::HalfUp, RoundingMode::TowardZero] {
+    for mode in [
+        RoundingMode::HalfEven,
+        RoundingMode::HalfUp,
+        RoundingMode::TowardZero,
+    ] {
         assert_eq!(numerator.div_rounded(denominator, 18, mode), Ok(expected));
     }
     assert_eq!(
@@ -266,8 +270,7 @@ fn division_keeps_representable_large_integer_when_fraction_rounds_to_zero() {
         Err(DecimalError::PrecisionExceeded)
     );
     assert_eq!(
-        d("-999999999000000000111111102")
-            .div_rounded(denominator, 18, RoundingMode::HalfEven),
+        d("-999999999000000000111111102").div_rounded(denominator, 18, RoundingMode::HalfEven),
         Ok(d("-111111110999999999999999999"))
     );
 }
