@@ -248,3 +248,39 @@ fn decimal_division_matches_rational_integer_oracle() {
         }
     }
 }
+
+#[test]
+fn division_keeps_representable_large_integer_when_fraction_rounds_to_zero() {
+    // 999999999000000000111111102 / 9.000000000000000001
+    // is 111111110999999999999999999 + 1 / 9000000000000000001.
+    // The fraction rounds to zero at 18 places. Building integer*10^18
+    // first would overflow u128, even though the final integer fits.
+    let numerator = d("999999999000000000111111102");
+    let denominator = d("9.000000000000000001");
+    let expected = d("111111110999999999999999999");
+    for mode in [RoundingMode::HalfEven, RoundingMode::HalfUp, RoundingMode::TowardZero] {
+        assert_eq!(numerator.div_rounded(denominator, 18, mode), Ok(expected));
+    }
+    assert_eq!(
+        numerator.div_rounded(denominator, 18, RoundingMode::AwayFromZero),
+        Err(DecimalError::PrecisionExceeded)
+    );
+    assert_eq!(
+        d("-999999999000000000111111102")
+            .div_rounded(denominator, 18, RoundingMode::HalfEven),
+        Ok(d("-111111110999999999999999999"))
+    );
+}
+
+#[test]
+fn division_canonicalizes_fraction_before_assembling_large_coefficient() {
+    // Nonzero tenths and no more fractional digits: 10^26 + 0.1 fits
+    // within 28 coefficient digits despite an 18-place target.
+    let numerator = d("1000000000000000000000000001");
+    let denominator = d("10");
+    let expected = d("100000000000000000000000000.1");
+    assert_eq!(
+        numerator.div_rounded(denominator, 18, RoundingMode::HalfEven),
+        Ok(expected)
+    );
+}
