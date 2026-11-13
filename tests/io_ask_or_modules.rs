@@ -80,9 +80,8 @@ fn imported_ask_or_encoding_failure_keeps_prompt_and_source_trace() {
 
 #[test]
 fn imported_ask_or_never_turns_noninteractive_unavailability_into_fallback() {
-    let program = module_program(
-        "pub funcra answer() -> string { return ask_or(\"Name: \", \"Guest\"); }",
-    );
+    let program =
+        module_program("pub funcra answer() -> string { return ask_or(\"Name: \", \"Guest\"); }");
     let mut reader = Cursor::new(b"unused\n");
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let error = program
