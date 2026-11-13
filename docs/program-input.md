@@ -72,6 +72,28 @@ quotas bound compiler-controlled work, not time spent inside a host I/O call.
 Reader implementations and buffering may read ahead; raw quotas count bytes
 consumed through `BufRead::consume`, not underlying operating-system reads.
 
+## End-of-input fallback (development main)
+
+`read_line_or(fallback: string) -> string` is an additional impure expression
+for line-oriented programs that need a sensible final value when input is
+exhausted. It consumes one selected line exactly like `read_line()` and returns
+the fallback **only** for E0055 (immediate EOF). A genuinely empty LF/CRLF line
+returns `""`, not the fallback. Other errors (unavailable input, invalid UTF-8,
+reader failure, input quota, work or text quota) remain errors. It evaluates its
+string fallback argument before performing the read, even when input exists.
+This form is not included in published alpha.6–alpha.8.
+
+```scarp
+bind first = read_line_or("Anonymous");
+bind second = read_line_or("Guest");
+print(first, second);
+```
+
+Both input expressions are rejected in pure functions, defaults and contracts.
+They obey the same reader capability, exact UTF-8 handling, input limits and
+no-output-on-runtime-error rule. Either intrinsic spelling may be shadowed by
+an explicitly defined function; that user function does not acquire input.
+
 ## Quotas, allocation and work
 
 Input limits are a separate public `InputLimits` value; existing public runtime
@@ -136,8 +158,8 @@ Unlike `write("Name: "); read_line()`, the prompt is visible immediately.
 An empty prompt is valid, and prompt text has no implicit newline.
 
 CLI execution requires an explicit `--interactive` option to enable prompts
-and terminal stdin. The opt-in works with redirected stdin as well for automated
-tests; without it, `ask` returns E0054 without writing a prompt or consuming
+and terminal stdin. The opt-in works with redirected stdin and also with
+`--input-file PATH` for reproducible interactive program testing; without it, `ask` returns E0054 without writing a prompt or consuming
 input. The Rust embedding APIs `run_with_interactive_input`,
 `run_with_interactive_input_and_options`, interpreter
 `execute_with_interactive_input_and_options` and module
