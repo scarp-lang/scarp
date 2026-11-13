@@ -14,6 +14,8 @@ pub mod ast;
 pub mod bigint;
 /// Opt-in, experimental scalar C11 emitter (not a CLI build command).
 pub mod c_backend;
+/// Experimental exact decimal Rust API (not yet a Scarp source-language type).
+pub mod decimal;
 pub mod diagnostics;
 pub mod evaluator;
 pub mod input;
