@@ -78,7 +78,10 @@ fn file_errors_and_runtime_limits_produce_no_program_output() {
         let result = command.arg(&source).output().unwrap();
         assert_eq!(result.status.code(), Some(status));
         assert!(result.stdout.is_empty());
-        assert!(String::from_utf8_lossy(&result.stderr).contains(expected), "{result:?}");
+        assert!(
+            String::from_utf8_lossy(&result.stderr).contains(expected),
+            "{result:?}"
+        );
     }
 
     let result = Command::new(env!("CARGO_BIN_EXE_scarp"))
@@ -101,7 +104,13 @@ fn static_commands_duplicates_and_missing_paths_reject_input_file() {
         vec!["verify", "--input-file", "input.txt"],
         vec!["check", "--input-file", "input.txt"],
         vec!["exec", "--input-file"],
-        vec!["exec", "--input-file", "input.txt", "--input-file", "again.txt"],
+        vec![
+            "exec",
+            "--input-file",
+            "input.txt",
+            "--input-file",
+            "again.txt",
+        ],
     ] {
         let result = Command::new(env!("CARGO_BIN_EXE_scarp"))
             .args(args)
