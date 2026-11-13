@@ -54,7 +54,10 @@ enum Task {
 pub(crate) enum Evaluation {
     Complete(Value),
     ReadLine(Span),
-    Ask { prompt: Value, span: Span },
+    Ask {
+        prompt: Value,
+        span: Span,
+    },
     Call {
         node: usize,
         arguments: Vec<Value>,

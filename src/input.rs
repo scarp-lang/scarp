@@ -45,7 +45,9 @@ pub(crate) fn prompt_unavailable(span: Span) -> Diagnostic {
         span,
         "ask requires interactive input and a prompt writer",
     )
-    .with_help("enable --interactive on scarp exec/run, or use an explicit interactive Rust host API")
+    .with_help(
+        "enable --interactive on scarp exec/run, or use an explicit interactive Rust host API",
+    )
 }
 
 fn limit(span: Span, message: &str) -> Diagnostic {
@@ -107,7 +109,10 @@ impl<'a> InputState<'a> {
             return Err(limit(span, "input byte quota exhausted before line read"));
         }
         budget.charge(prompt.len() as u64, span)?;
-        let writer = self.prompt_writer.as_deref_mut().expect("checked prompt writer");
+        let writer = self
+            .prompt_writer
+            .as_deref_mut()
+            .expect("checked prompt writer");
         writer
             .write_all(prompt.as_bytes())
             .and_then(|_| writer.flush())
@@ -117,7 +122,9 @@ impl<'a> InputState<'a> {
                     span,
                     "interactive prompt could not be written and flushed",
                 )
-                .with_help("check the host prompt writer; visible prompt bytes cannot be rolled back")
+                .with_help(
+                    "check the host prompt writer; visible prompt bytes cannot be rolled back",
+                )
             })?;
         self.read_line(budget, span)
     }

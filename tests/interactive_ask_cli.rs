@@ -32,13 +32,19 @@ impl Drop for Fixture {
     }
 }
 
-fn cli(verb: &str, path: &std::path::Path, bytes: &[u8], interactive: bool) -> std::process::Output {
+fn cli(
+    verb: &str,
+    path: &std::path::Path,
+    bytes: &[u8],
+    interactive: bool,
+) -> std::process::Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_scarp"));
     command.arg(verb);
     if interactive {
         command.arg("--interactive");
     }
-    let mut child = command.arg(path)
+    let mut child = command
+        .arg(path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -53,7 +59,10 @@ fn cli(verb: &str, path: &std::path::Path, bytes: &[u8], interactive: bool) -> s
 #[test]
 fn interactive_flag_is_required_and_forwards_through_exec_and_run() {
     let dir = Fixture::new();
-    let path = dir.file("greeting with space.srp", r#"bind name = ask("Name: "); print("Hello", name);"#);
+    let path = dir.file(
+        "greeting with space.srp",
+        r#"bind name = ask("Name: "); print("Hello", name);"#,
+    );
     for verb in ["exec", "run"] {
         let result = cli(verb, &path, b"Ada\n", true);
         assert!(result.status.success(), "{result:?}");
@@ -105,6 +114,9 @@ fn static_modes_and_duplicate_flags_are_rejected() {
         assert_eq!(result.status.code(), Some(2), "{result:?}");
     }
     let result = Command::new(env!("CARGO_BIN_EXE_scarp"))
-        .arg("verify").arg(&path).output().unwrap();
+        .arg("verify")
+        .arg(&path)
+        .output()
+        .unwrap();
     assert!(result.status.success(), "{result:?}");
 }
