@@ -48,7 +48,7 @@ fn source_level_type_does_not_exist_until_separate_integration() {
 
 #[test]
 fn canonical_decimal_sorting_is_mathematically_ordered() {
-    let mut values = vec![
+    let mut values = [
         d("0.3"),
         d("-1.1"),
         d("1.000000000000000001"),
