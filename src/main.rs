@@ -934,13 +934,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                         input_limits,
                     )
                 } else {
-                    program.execute_with_input(
-                        &mut reader,
-                        output,
-                        errors,
-                        options,
-                        input_limits,
-                    )
+                    program.execute_with_input(&mut reader, output, errors, options, input_limits)
                 }
             } else if interactive {
                 program.execute_with_interactive_input(

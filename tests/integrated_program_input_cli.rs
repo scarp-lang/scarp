@@ -72,20 +72,12 @@ fn explicit_file_input_without_prompt_capability_remains_noninteractive() {
     let fixture = Fixture::new();
     let source = fixture.write("app.srp", br#"print(read_line_or("fallback"));"#);
     let input = fixture.write("empty.txt", b"");
-    let result = cli(
-        "exec",
-        &["--input-file", input.to_str().unwrap()],
-        &source,
-    );
+    let result = cli("exec", &["--input-file", input.to_str().unwrap()], &source);
     assert!(result.status.success(), "{result:?}");
     assert_eq!(result.stdout, b"fallback\n");
 
     let source = fixture.write("ask.srp", br#"print(ask("Name: "));"#);
-    let result = cli(
-        "exec",
-        &["--input-file", input.to_str().unwrap()],
-        &source,
-    );
+    let result = cli("exec", &["--input-file", input.to_str().unwrap()], &source);
     assert_eq!(result.status.code(), Some(1));
     assert!(result.stdout.is_empty());
     assert!(String::from_utf8_lossy(&result.stderr).contains("E0054"));
@@ -94,10 +86,7 @@ fn explicit_file_input_without_prompt_capability_remains_noninteractive() {
 #[test]
 fn prompt_before_invalid_utf8_stays_visible_and_buffered_output_is_discarded() {
     let fixture = Fixture::new();
-    let source = fixture.write(
-        "app.srp",
-        br#"print("buffered"); print(ask("Name: "));"#,
-    );
+    let source = fixture.write("app.srp", br#"print("buffered"); print(ask("Name: "));"#);
     let input = fixture.write("invalid.txt", b"\xff\n");
     let result = cli(
         "exec",
