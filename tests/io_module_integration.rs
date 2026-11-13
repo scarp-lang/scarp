@@ -84,7 +84,7 @@ fn imported_eof_fallback_does_not_hide_invalid_utf8() {
     stdout.clear();
     let error = program
         .execute_with_input(
-            &mut Cursor::new(b"\\xff\\n"),
+            &mut Cursor::new(b"\xff\n"),
             &mut stdout,
             &mut stderr,
             ExecutionOptions::default(),
