@@ -49,13 +49,28 @@ fn source_level_type_does_not_exist_until_separate_integration() {
 #[test]
 fn canonical_decimal_sorting_is_mathematically_ordered() {
     let mut values = vec![
-        d("0.3"), d("-1.1"), d("1.000000000000000001"),
-        d("0"), d("0.03"), d("-1.01"), d("1"), d("0.30"),
+        d("0.3"),
+        d("-1.1"),
+        d("1.000000000000000001"),
+        d("0"),
+        d("0.03"),
+        d("-1.01"),
+        d("1"),
+        d("0.30"),
     ];
     values.sort();
     assert_eq!(
         values.iter().map(ToString::to_string).collect::<Vec<_>>(),
-        ["-1.1", "-1.01", "0", "0.03", "0.3", "0.3", "1", "1.000000000000000001"]
+        [
+            "-1.1",
+            "-1.01",
+            "0",
+            "0.03",
+            "0.3",
+            "0.3",
+            "1",
+            "1.000000000000000001"
+        ]
     );
 }
 
@@ -67,18 +82,9 @@ fn exact_arithmetic_matches_independent_small_scaled_integer_oracle() {
         for b in -73i128..=73 {
             let x = Decimal::new(a, 2).unwrap();
             let y = Decimal::new(b, 2).unwrap();
-            assert_eq!(
-                x.checked_add(y).unwrap(),
-                Decimal::new(a + b, 2).unwrap()
-            );
-            assert_eq!(
-                x.checked_sub(y).unwrap(),
-                Decimal::new(a - b, 2).unwrap()
-            );
-            assert_eq!(
-                x.checked_mul(y).unwrap(),
-                Decimal::new(a * b, 4).unwrap()
-            );
+            assert_eq!(x.checked_add(y).unwrap(), Decimal::new(a + b, 2).unwrap());
+            assert_eq!(x.checked_sub(y).unwrap(), Decimal::new(a - b, 2).unwrap());
+            assert_eq!(x.checked_mul(y).unwrap(), Decimal::new(a * b, 4).unwrap());
             assert_eq!(x.cmp(&y), a.cmp(&b));
         }
     }
@@ -88,10 +94,17 @@ fn exact_arithmetic_matches_independent_small_scaled_integer_oracle() {
 fn parsing_is_length_bounded_and_precision_checked() {
     use scarp::decimal::MAX_DECIMAL_TEXT_BYTES;
     let long_text = "0".repeat(MAX_DECIMAL_TEXT_BYTES + 1);
-    assert_eq!(long_text.parse::<Decimal>(), Err(DecimalError::PrecisionExceeded));
+    assert_eq!(
+        long_text.parse::<Decimal>(),
+        Err(DecimalError::PrecisionExceeded)
+    );
     assert_eq!(d("+00012.3400").to_string(), "12.34");
-    assert_eq!(Decimal::new(10000000000000000000000000000, 1).unwrap().to_string(),
-        "1000000000000000000000000000");
+    assert_eq!(
+        Decimal::new(10000000000000000000000000000, 1)
+            .unwrap()
+            .to_string(),
+        "1000000000000000000000000000"
+    );
 }
 
 #[test]
@@ -99,29 +112,38 @@ fn rounded_division_handles_large_mixed_scales_without_alignment() {
     let numerator = d("9999999999999999999999999999");
     let denominator = d("99999999999999999999999999.99");
     assert_eq!(
-        numerator.div_rounded(denominator, 18, RoundingMode::HalfEven).unwrap().to_string(),
+        numerator
+            .div_rounded(denominator, 18, RoundingMode::HalfEven)
+            .unwrap()
+            .to_string(),
         "100"
     );
     assert_eq!(
         d("0.000000000000000001")
             .div_rounded(d("2"), 18, RoundingMode::HalfEven)
-            .unwrap().to_string(),
+            .unwrap()
+            .to_string(),
         "0"
     );
     assert_eq!(
         d("0.000000000000000001")
             .div_rounded(d("2"), 18, RoundingMode::HalfUp)
-            .unwrap().to_string(),
+            .unwrap()
+            .to_string(),
         "0.000000000000000001"
     );
     assert_eq!(
-        d("-0.5").div_rounded(d("1"), 0, RoundingMode::HalfEven)
-            .unwrap().to_string(),
+        d("-0.5")
+            .div_rounded(d("1"), 0, RoundingMode::HalfEven)
+            .unwrap()
+            .to_string(),
         "0"
     );
     assert_eq!(
-        d("-0.5").div_rounded(d("1"), 0, RoundingMode::HalfUp)
-            .unwrap().to_string(),
+        d("-0.5")
+            .div_rounded(d("1"), 0, RoundingMode::HalfUp)
+            .unwrap()
+            .to_string(),
         "-1"
     );
 }
@@ -130,7 +152,9 @@ fn rounded_division_handles_large_mixed_scales_without_alignment() {
 fn decimal_division_matches_rational_integer_oracle() {
     for a in -9i128..=9 {
         for b in -9i128..=9 {
-            if b == 0 { continue; }
+            if b == 0 {
+                continue;
+            }
             for sa in 0..=2u8 {
                 for sb in 0..=2u8 {
                     for scale in 0..=4u8 {
@@ -150,15 +174,22 @@ fn decimal_division_matches_rational_integer_oracle() {
                                 RoundingMode::TowardZero => false,
                                 RoundingMode::AwayFromZero => r != 0,
                                 RoundingMode::HalfUp => r * 2 >= den.abs(),
-                                RoundingMode::HalfEven =>
-                                    r * 2 > den.abs() || (r * 2 == den.abs() && q % 2 != 0),
+                                RoundingMode::HalfEven => {
+                                    r * 2 > den.abs() || (r * 2 == den.abs() && q % 2 != 0)
+                                }
                             };
                             let magnitude = q + i128::from(increment);
-                            let signed = if (num < 0) != (den < 0) { -magnitude } else { magnitude };
+                            let signed = if (num < 0) != (den < 0) {
+                                -magnitude
+                            } else {
+                                magnitude
+                            };
                             let expected = Decimal::new(signed, scale).unwrap();
                             let actual = lhs.div_rounded(rhs, scale, mode).unwrap();
-                            assert_eq!(actual, expected,
-                                "divide {a}/10^{sa} by {b}/10^{sb}, target {scale}, mode {mode:?}");
+                            assert_eq!(
+                                actual, expected,
+                                "divide {a}/10^{sa} by {b}/10^{sb}, target {scale}, mode {mode:?}"
+                            );
                         }
                     }
                 }
