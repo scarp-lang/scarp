@@ -10,9 +10,9 @@ This document describes implemented variable behavior on development main. The p
 
 ## Immutable bindings
 
-Unreleased declaration annotations optionally state a primitive kind:
+Declaration annotations optionally state a primitive kind:
 `bind count: integer = 42;` or `var total: float = 0.0;`. Supported binding types
-are integer, float, bigint (post-alpha.5 branch), boolean, string, vector,
+are integer, float, bigint (since alpha.9), boolean, string, vector,
 integers and tile. Initializers remain mandatory
 and must infer exactly that kind; annotations never convert values. The same rule
 applies to module constants, function locals and nested scopes. A mismatch is E0015

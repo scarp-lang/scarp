@@ -1,5 +1,12 @@
 # Version and API compatibility
 
+`0.0.6-alpha.9` is **a published GitHub prerelease**. It adds bounded BigInt
+and opt-in `scarp test --json=v2` reports. Rust hosts with exhaustive
+`ExecutionOptions` literals need the two BigInt limit fields or struct update
+syntax. Exhaustive `Value`, `PrimitiveType`, `numeric::Builtin`, and
+`DiagnosticKind` matches need the added variants.
+[Public notes](releases/v0.0.6-alpha.9-publication.md)
+
 `0.0.6-alpha.8` is **a published GitHub prerelease** (12 November 2026).
 It introduces declarative projects and the project test runner. Rename existing
 identifiers named `assert`. Rust hosts with exhaustive matches on `Statement`
@@ -67,7 +74,7 @@ The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.6-alpha.8](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.8).
+[0.0.6-alpha.9](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.9).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a

@@ -1,9 +1,7 @@
-# Exact, bounded BigInt integers (development milestone)
+# Exact, bounded BigInt integers
 
-**Development feature.** Build the BigInt integration revision to run the
-examples here. The published alpha.8 compiler does not include BigInt.
-See the [design](proposals/bounded-bigint.md) and
-[Hindi guide](tutorials/bigint-hi.md).
+BigInt first shipped in [Scarp v0.0.6-alpha.9](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.9).
+See the [design](proposals/bounded-bigint.md) and [Hindi guide](tutorials/bigint-hi.md).
 
 `integer` remains signed 64-bit, and `float` remains finite binary64. The separate
 `bigint` type stores exact signed whole numbers. Its capacity is controlled by
