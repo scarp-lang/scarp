@@ -202,8 +202,12 @@ EOF, invalid UTF-8, a later runtime error or a subsequent failed output replay.
 Ordinary `print`/`write`/`eprint`/`ewrite` events remain buffered until
 successful evaluation. For example, an ordinary `print` before `ask` will
 be replayed *after* the immediate prompt. Use `ask` for prompt text.
-Input quotas are preflighted before the prompt, where possible. E0066 reports a
-prompt write/flush failure with no arbitrary host error text. Host blocking,
+Input quotas are preflighted before the prompt, where possible. The runtime
+also checks that at least one work step remains for the first reader-buffer probe
+before making the prompt visible. This check does not consume a step; the actual
+read still charges it normally. Later reader/scanning work may fail after a
+prompt has already appeared. E0066 reports a prompt write/flush failure with
+no arbitrary host error text. Host blocking,
 cancellation and deadlines remain the caller's responsibility. No password
 echo control, formatting or new input data type is introduced.
 

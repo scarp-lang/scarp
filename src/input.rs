@@ -109,6 +109,10 @@ impl<'a> InputState<'a> {
             return Err(limit(span, "input byte quota exhausted before line read"));
         }
         budget.charge(prompt.len() as u64, span)?;
+        // A selected read must be able to pay for its first buffer probe.
+        // Preflight it before the prompt becomes irrevocably visible, without
+        // changing the established work charge when the read actually starts.
+        budget.preflight_steps(1, span)?;
         let writer = self
             .prompt_writer
             .as_deref_mut()
@@ -227,5 +231,43 @@ impl<'a> InputState<'a> {
             .with_help("encode program input as UTF-8; invalid bytes are never replaced silently")
         })?;
         Ok(Value::from(text))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn prompt_is_not_exposed_without_work_for_first_read() {
+        let mut reader = Cursor::new(b"Ada\n");
+        let mut stdout = Vec::new();
+        let mut budget = Budget::new(6);
+        let span = Span::default();
+        {
+            let mut input =
+                InputState::interactive(&mut reader, &mut stdout, InputLimits::default());
+            let error = input.ask("Name: ", &mut budget, span).unwrap_err();
+            assert_eq!(error.kind, Kind::ExecutionLimit);
+        }
+        assert!(stdout.is_empty());
+        assert_eq!(reader.position(), 0);
+    }
+
+    #[test]
+    fn first_read_probe_is_not_charged_twice() {
+        let mut reader = Cursor::new(b"");
+        let mut stdout = Vec::new();
+        let mut budget = Budget::new(2);
+        let span = Span::default();
+        {
+            let mut input =
+                InputState::interactive(&mut reader, &mut stdout, InputLimits::default());
+            let error = input.ask(">", &mut budget, span).unwrap_err();
+            assert_eq!(error.kind, Kind::InputEof);
+        }
+        assert_eq!(stdout, b">");
+        assert_eq!(reader.position(), 0);
     }
 }

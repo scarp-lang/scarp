@@ -192,7 +192,9 @@ impl Budget {
         Ok(())
     }
 
-    pub fn charge(&mut self, amount: u64, span: Span) -> Result<(), Diagnostic> {
+    /// Verify remaining work without spending it. Interactive prompts use
+    /// this before exposing bytes when a selected read cannot even begin.
+    pub(crate) fn preflight_steps(&self, amount: u64, span: Span) -> Result<(), Diagnostic> {
         if self.remaining < amount {
             return Err(Diagnostic::new(
                 DiagnosticKind::ExecutionLimit,
@@ -201,6 +203,11 @@ impl Budget {
             )
             .with_help("check loop progress or raise --max-steps / ExecutionLimits.max_steps"));
         }
+        Ok(())
+    }
+
+    pub fn charge(&mut self, amount: u64, span: Span) -> Result<(), Diagnostic> {
+        self.preflight_steps(amount, span)?;
         self.remaining -= amount;
         Ok(())
     }
