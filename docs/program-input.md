@@ -94,6 +94,30 @@ They obey the same reader capability, exact UTF-8 handling, input limits and
 no-output-on-runtime-error rule. Either intrinsic spelling may be shadowed by
 an explicitly defined function; that user function does not acquire input.
 
+## Prompt fallback (stacked development proposal)
+
+`ask_or(prompt: string, fallback: string) -> string` combines immediate
+prompt output with the precise EOF semantics of `read_line_or`. It requires
+the same explicit interactive capability as `ask`, and first writes and
+flushes the UTF-8 prompt. It returns `fallback` **only** if the selected
+read reaches immediate EOF (E0055). An empty line is valid empty text,
+and a final unterminated line is valid input. Invalid UTF-8, unavailable
+interactive output, quota violations and writer/reader failures remain errors.
+
+```scarp
+bind name = ask_or("Name: ", "Guest");
+print("Welcome", name);
+```
+
+Both string arguments evaluate before the prompt is shown or input is read,
+from left to right, even when input is available. Like other intrinsic
+calls, `ask_or` is impure, can be shadowed by a declared Scarp function,
+and has a typed `(string, string) -> string` signature. When EOF occurs
+the already flushed prompt remains visible and ordinary buffered output
+still replays, because the fallback permits evaluation to succeed.
+This proposed feature is not in published alpha.9 or the three original
+I/O branches and requires separate validation before integration.
+
 ## Quotas, allocation and work
 
 Input limits are a separate public `InputLimits` value; existing public runtime

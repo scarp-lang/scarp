@@ -146,10 +146,11 @@ pub(crate) enum ResolvedCall {
     ReadLine,
     ReadLineOr,
     Ask,
+    AskOr,
 }
 
 pub(crate) fn is_builtin_name(name: &str) -> bool {
-    matches!(name, "read_line" | "read_line_or" | "ask") || Builtin::from_name(name).is_some()
+    matches!(name, "read_line" | "read_line_or" | "ask" | "ask_or") || Builtin::from_name(name).is_some()
 }
 
 /// Static function signature and call-graph information. Spans are source bytes.
@@ -1116,19 +1117,25 @@ fn resolve_expression(
                     types.push(ValueType::String.into());
                     continue;
                 }
-                if name == "ask" && !names.contains_key(name) {
-                    if arguments.len() != 1 || arguments[0].label.is_some() {
+                if matches!(name.as_str(), "ask" | "ask_or") && !names.contains_key(name) {
+                    let with_fallback = name == "ask_or";
+                    let expected = if with_fallback { 2 } else { 1 };
+                    if arguments.len() != expected
+                        || arguments.iter().any(|argument| argument.label.is_some())
+                    {
                         return Err(Diagnostic::new(
                             DiagnosticKind::CallArguments,
                             *function_span,
-                            "ask requires exactly one positional string prompt",
+                            format!("{name} requires {expected} positional string arguments"),
                         ));
                     }
-                    require_type(
-                        &types[arguments[0].expression],
-                        ValueType::String,
-                        syntax.nodes()[arguments[0].expression].span,
-                    )?;
+                    for argument in arguments {
+                        require_type(
+                            &types[argument.expression],
+                            ValueType::String,
+                            syntax.nodes()[argument.expression].span,
+                        )?;
+                    }
                     if pure {
                         return Err(Diagnostic::new(
                             DiagnosticKind::ImpureFunction,
@@ -1137,7 +1144,11 @@ fn resolve_expression(
                         ));
                     }
                     slots.push(None);
-                    calls.push(Some(ResolvedCall::Ask));
+                    calls.push(Some(if with_fallback {
+                        ResolvedCall::AskOr
+                    } else {
+                        ResolvedCall::Ask
+                    }));
                     types.push(ValueType::String.into());
                     continue;
                 }

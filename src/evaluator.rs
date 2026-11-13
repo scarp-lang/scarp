@@ -43,6 +43,7 @@ enum Task {
     ReadLine(Span),
     ReadLineOr(Span),
     Ask(Span),
+    AskOr(Span),
     Visit(usize),
     Negate(Span),
     Not(Span),
@@ -61,6 +62,11 @@ pub(crate) enum Evaluation {
     },
     Ask {
         prompt: Value,
+        span: Span,
+    },
+    AskOr {
+        prompt: Value,
+        fallback: Value,
         span: Span,
     },
     Call {
@@ -87,7 +93,9 @@ impl Workspace {
             Evaluation::ReadLine(span) | Evaluation::ReadLineOr { span, .. } => {
                 Err(crate::input::unavailable(span))
             }
-            Evaluation::Ask { span, .. } => Err(crate::input::prompt_unavailable(span)),
+            Evaluation::Ask { span, .. } | Evaluation::AskOr { span, .. } => {
+                Err(crate::input::prompt_unavailable(span))
+            },
             Evaluation::Call { span, .. } => Err(Diagnostic::new(
                 DiagnosticKind::FunctionUnsupported,
                 span,
@@ -120,6 +128,7 @@ impl Workspace {
                 | Task::ReadLine(span)
                 | Task::ReadLineOr(span)
                 | Task::Ask(span)
+                | Task::AskOr(span)
                 | Task::Vector(_, _, span)
                 | Task::BitNot(span)
                 | Task::Index(span)
@@ -141,6 +150,7 @@ impl Workspace {
                                 Some(ResolvedCall::ReadLine) => Task::ReadLine(node.span),
                                 Some(ResolvedCall::ReadLineOr) => Task::ReadLineOr(node.span),
                                 Some(ResolvedCall::Ask) => Task::Ask(node.span),
+                                Some(ResolvedCall::AskOr) => Task::AskOr(node.span),
                                 Some(ResolvedCall::Builtin(builtin)) => {
                                     Task::Builtin(*builtin, index, node.span)
                                 }
@@ -366,6 +376,15 @@ impl Workspace {
                 Task::Ask(span) => {
                     return Ok(Evaluation::Ask {
                         prompt: values.pop().expect("checked ask argument"),
+                        span,
+                    });
+                }
+                Task::AskOr(span) => {
+                    let fallback = values.pop().expect("checked ask_or fallback");
+                    let prompt = values.pop().expect("checked ask_or prompt");
+                    return Ok(Evaluation::AskOr {
+                        prompt,
+                        fallback,
                         span,
                     });
                 }
