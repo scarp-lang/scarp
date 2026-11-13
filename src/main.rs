@@ -7,7 +7,7 @@ use std::{
     env,
     ffi::{OsStr, OsString},
     fs,
-    io::{self, BufWriter, IsTerminal, Write},
+    io::{self, BufReader, BufWriter, IsTerminal, Write},
     path::Path,
     process::ExitCode,
 };
@@ -148,10 +148,13 @@ Execution-limit options: --max-steps, --max-prints, --max-call-depth, --max-call
 --max-live-slots, --max-capture-bytes, --max-vector-bytes, --max-text-bytes,
 --max-tuple-bytes, --max-bigint-digits, --max-bigint-bytes,
 --max-input-line-bytes, --max-input-bytes, --max-input-reads.
+--input-file PATH uses an explicit file instead of stdin for program input.
 Options precede the
 source path. -- before a filename permits filenames beginning with a dash.
 Program-argument forwarding and project entrypoint execution are not supported.
-read_line reads redirected UTF-8 stdin; terminal input is rejected at the selected call.
+read_line reads redirected UTF-8 stdin or --input-file PATH; otherwise terminal input
+is rejected at the selected call. Input-file paths are relative to the current
+working directory, and file contents are read incrementally under input quotas.
 Input defaults: 65536 raw bytes per line, 1048576 total bytes, 4096 reads.
 CR/LF count toward input/text quotas. Input cannot be rolled back; output stays buffered.
 No interactive prompt is displayed or flushed before a read.
@@ -283,7 +286,8 @@ Snapshot bytes are a logical storage cap, not an exact process-memory limit.
 Counts are unsigned decimal digits, zero is valid, and each option may occur once.
 Example: scarp run --max-steps 2000000 --max-prints 10 examples/repeat.srp
 Use scarp check with the same options to evaluate without printing.
-read_line requires redirected UTF-8 stdin; terminal prompts are not supported.
+read_line requires redirected UTF-8 stdin or --input-file PATH; terminal prompts
+without an input file are not supported. --input-file works on project launch too.
 --max-input-line-bytes 65536, --max-input-bytes 1048576, --max-input-reads 4096.
 Raw input counts CR/LF and uses the text/work budgets. Output stays buffered.
 --diagnostic-format=json writes schema-1 errors to stderr, with local UTF-8 byte spans
@@ -807,6 +811,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         filename,
         options,
         input_limits,
+        input_file,
         json,
         json_diagnostics,
     } = match invocation(&args) {
@@ -896,7 +901,32 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             }
         } else {
             let stdin = io::stdin();
-            let result = if stdin.is_terminal() {
+            let result = if let Some(input_path) = input_file {
+                // Explicit file selection never touches ambient stdin. Open
+                // only after source graph compilation and static checks pass.
+                let file = match fs::File::open(input_path) {
+                    Ok(file) => file,
+                    Err(error) => {
+                        let message = format!(
+                            "could not open input file '{}': {error}",
+                            Path::new(input_path).display()
+                        );
+                        if json_diagnostics {
+                            let _ = scarp::diagnostics::write_json_message(&message, None, errors);
+                        } else {
+                            let _ = writeln!(errors, "error: {message}");
+                        }
+                        return 1;
+                    }
+                };
+                program.execute_with_input(
+                    &mut BufReader::new(file),
+                    output,
+                    errors,
+                    options,
+                    input_limits,
+                )
+            } else if stdin.is_terminal() {
                 // A selected read fails immediately; buffered output cannot
                 // serve as a visible interactive prompt in this mode.
                 program.execute(output, errors, options)
@@ -1022,6 +1052,7 @@ struct Invocation<'a> {
     filename: &'a OsStr,
     options: ExecutionOptions,
     input_limits: InputLimits,
+    input_file: Option<&'a OsStr>,
     json: bool,
     json_diagnostics: bool,
 }
@@ -1030,6 +1061,7 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
     let command = args.first().ok_or("expected a command and a file path")?;
     let mut options = ExecutionOptions::default();
     let mut input_limits = InputLimits::default();
+    let mut input_file = None;
     let mut index = 1;
     let mut seen = Vec::new();
     let mut separator = false;
@@ -1067,6 +1099,21 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
             }
             json = true;
             index += 1;
+            continue;
+        }
+        if argument == "--input-file" {
+            if command != "run" {
+                return Err("--input-file is available only for executable programs");
+            }
+            if input_file.is_some() {
+                return Err("--input-file cannot be repeated");
+            }
+            let path = args.get(index + 1).ok_or("--input-file requires a path")?;
+            if path.to_string_lossy().starts_with("--") {
+                return Err("--input-file requires a path");
+            }
+            input_file = Some(path.as_os_str());
+            index += 2;
             continue;
         }
         let flag = match argument.to_str() {
@@ -1130,6 +1177,7 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
         filename: filename.as_os_str(),
         options,
         input_limits,
+        input_file,
         json,
         json_diagnostics,
     })

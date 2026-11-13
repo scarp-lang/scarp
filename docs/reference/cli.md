@@ -15,6 +15,15 @@ The optional directory defaults to the current project. `run FILE` and
 [manifest format and migration](../project-v2.md), [test report and fixture
 contracts](../project-testing.md), and [assertion syntax](../assertions.md).
 
+**Development candidate only (not in published alpha.8):** `scarp exec
+--input-file DATA.txt app.srp` selects a UTF-8 file as the program's explicit
+input source. `run FILE`, `run PROJECT` and `launch PROJECT` accept the
+same option. An input file takes priority over ambient stdin; normal input
+quotas, UTF-8 errors and transactional output remain unchanged. The path is
+relative to the process working directory, not automatically to the Scarp
+source directory. Static commands reject the flag. Input is streamed through
+a buffered file reader rather than loaded into memory all at once.
+
 The alpha.9 development candidate adds `scarp test --json=v2`
 for [structured diagnostics](../project-testing.md#structured-failure-reports-development).
 
