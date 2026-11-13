@@ -259,6 +259,8 @@ impl Decimal {
 
     fn align(self, other: Self) -> Result<(i128, i128), DecimalError> {
         let scale = self.scale.max(other.scale);
+        // Check the normalized result, not either aligned operand. For example,
+        // 10^27 - 0.1 has a 29-digit intermediate but a valid 28-digit result.
         let a = shift(self.coefficient, scale - self.scale)?;
         let b = shift(other.coefficient, scale - other.scale)?;
         Ok((a, b))
@@ -269,13 +271,11 @@ fn power_of_ten(exponent: u8) -> i128 {
     10_i128.pow(u32::from(exponent))
 }
 fn shift(coefficient: i128, exponent: u8) -> Result<i128, DecimalError> {
-    let shifted = coefficient
+    // Intermediate alignment may exceed 28 digits; checked_add/checked_sub
+    // enforce precision after the exact sum is normalized by Decimal::new.
+    coefficient
         .checked_mul(power_of_ten(exponent))
-        .ok_or(DecimalError::PrecisionExceeded)?;
-    if shifted.unsigned_abs() > MAX_COEFFICIENT as u128 {
-        return Err(DecimalError::PrecisionExceeded);
-    }
-    Ok(shifted)
+        .ok_or(DecimalError::PrecisionExceeded)
 }
 /// Append one decimal digit without exceeding the target coefficient capacity.
 fn push_decimal_digit(quotient: u128, digit: u128) -> Result<u128, DecimalError> {
