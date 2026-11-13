@@ -1,6 +1,6 @@
 //! EOF-only fallback for explicitly visible, flushed interactive prompts.
 use std::{
-    io::{self, Cursor, Write},
+    io::{self, BufRead, Cursor, Read, Write},
     process::{Command, Stdio},
 };
 
@@ -80,6 +80,41 @@ fn fallback_never_hides_encoding_reader_or_quota_errors() {
         assert!(matches!(failure, RunError::Diagnostic(ref d) if d.kind == Kind::InputLimit));
         assert!(out.is_empty() && err.is_empty());
     }
+}
+
+struct FailedReader;
+
+impl Read for FailedReader {
+    fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+        Err(io::Error::new(io::ErrorKind::Other, "secret-reader-details"))
+    }
+}
+
+impl BufRead for FailedReader {
+    fn fill_buf(&mut self) -> io::Result<&[u8]> {
+        Err(io::Error::new(io::ErrorKind::Other, "secret-reader-details"))
+    }
+
+    fn consume(&mut self, _: usize) {}
+}
+
+#[test]
+fn reader_failure_is_not_eof_and_cannot_trigger_the_fallback() {
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let error = scarp::run_with_interactive_input(
+        r#"print("buffered"); print(ask_or("Prompt: ", "Guest"));"#,
+        &mut FailedReader,
+        &mut stdout,
+        &mut stderr,
+    )
+    .unwrap_err();
+    let RunError::Diagnostic(diagnostic) = error else {
+        panic!("expected input error");
+    };
+    assert_eq!(diagnostic.kind, Kind::InputIo);
+    assert!(!diagnostic.message.contains("secret-reader-details"));
+    assert_eq!(stdout, b"Prompt: ");
+    assert!(stderr.is_empty());
 }
 
 struct FailedPrompt;
