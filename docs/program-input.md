@@ -129,13 +129,38 @@ input or runtime failure writes no program output; already consumed input
 cannot be restored. Output replay can partially write before an output I/O
 failure, as before. Stream switches retain their existing flush behavior.
 
-`ask` is **not implemented**. Neither `write("Name: ")` nor `print` displays a
-prompt before an input read. A future separate interactive mode or prompt API
-must explicitly write and flush the prompt before waiting, and document that
-visible prompt bytes cannot be rolled back after later failure. It needs its
-own destination, flush/broken-pipe, EOF, nonterminal and cancellation tests.
-This development slice deliberately rejects terminal input instead of hiding
-that contract behind buffered output. No password input is introduced.
+**Development feature, not in published v0.0.6-alpha.9:** `ask(prompt: string)
+-> string` is an impure expression that writes and flushes a UTF-8 prompt
+to the explicitly supplied stdout writer before reading one bounded UTF-8 line.
+Unlike `write("Name: "); read_line()`, the prompt is visible immediately.
+An empty prompt is valid, and prompt text has no implicit newline.
+
+CLI execution requires an explicit `--interactive` option to enable prompts
+and terminal stdin. The opt-in works with redirected stdin as well for automated
+tests; without it, `ask` returns E0054 without writing a prompt or consuming
+input. The Rust embedding APIs `run_with_interactive_input`,
+`run_with_interactive_input_and_options`, interpreter
+`execute_with_interactive_input_and_options` and module
+`execute_with_interactive_input` require caller-supplied readers/writers.
+There is no ambient library stdin acquisition. All existing default execution
+APIs stay noninteractive, including `check` and `verify`.
+
+```scarp
+bind name: string = ask("Your name: ");
+print("Welcome", name);
+```
+
+Prompt text is emitted and flushed **during** evaluation, before a potentially
+blocking host read. Therefore visible prompt bytes cannot be rolled back after
+EOF, invalid UTF-8, a later runtime error or a subsequent failed output replay.
+Ordinary `print`/`write`/`eprint`/`ewrite` events remain buffered until
+successful evaluation. For example, an ordinary `print` before `ask` will
+be replayed *after* the immediate prompt. Use `ask` for prompt text.
+Input quotas are preflighted before the prompt, where possible. E0066 reports a
+prompt write/flush failure with no arbitrary host error text. Host blocking,
+cancellation and deadlines remain the caller's responsibility. No password
+echo control, formatting or new input data type is introduced.
+
 
 ## Verification
 

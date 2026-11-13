@@ -41,6 +41,7 @@ enum Task {
     Builtin(Builtin, usize, Span),
     UserCall(usize, usize, Span),
     ReadLine(Span),
+    Ask(Span),
     Visit(usize),
     Negate(Span),
     Not(Span),
@@ -53,6 +54,7 @@ enum Task {
 pub(crate) enum Evaluation {
     Complete(Value),
     ReadLine(Span),
+    Ask { prompt: Value, span: Span },
     Call {
         node: usize,
         arguments: Vec<Value>,
@@ -75,6 +77,7 @@ impl Workspace {
         match self.resume(expression, environment, budget)? {
             Evaluation::Complete(value) => Ok(value),
             Evaluation::ReadLine(span) => Err(crate::input::unavailable(span)),
+            Evaluation::Ask { span, .. } => Err(crate::input::prompt_unavailable(span)),
             Evaluation::Call { span, .. } => Err(Diagnostic::new(
                 DiagnosticKind::FunctionUnsupported,
                 span,
@@ -105,6 +108,7 @@ impl Workspace {
                 Task::UserCall(_, _, span)
                 | Task::Tuple(_, span)
                 | Task::ReadLine(span)
+                | Task::Ask(span)
                 | Task::Vector(_, _, span)
                 | Task::BitNot(span)
                 | Task::Index(span)
@@ -124,6 +128,7 @@ impl Workspace {
                         ExpressionKind::UserCall { arguments, .. } => {
                             tasks.push(match &expression.calls[index] {
                                 Some(ResolvedCall::ReadLine) => Task::ReadLine(node.span),
+                                Some(ResolvedCall::Ask) => Task::Ask(node.span),
                                 Some(ResolvedCall::Builtin(builtin)) => {
                                     Task::Builtin(*builtin, index, node.span)
                                 }
@@ -340,6 +345,12 @@ impl Workspace {
                     values.push(value);
                 }
                 Task::ReadLine(span) => return Ok(Evaluation::ReadLine(span)),
+                Task::Ask(span) => {
+                    return Ok(Evaluation::Ask {
+                        prompt: values.pop().expect("checked ask argument"),
+                        span,
+                    });
+                }
                 Task::UserCall(node, count, span) => {
                     let arguments = values.split_off(values.len() - count);
                     return Ok(Evaluation::Call {

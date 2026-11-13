@@ -164,6 +164,7 @@ diagnostic_catalogue! {
     TupleAllocation => ("E0061", "Tuple payload allocation exceeded its cumulative quota or bounded reservation failed. Reuse immutable tuples or reduce construction; adjust --max-tuple-bytes / ExecutionOptions.max_tuple_bytes explicitly. This is a logical payload quota, not process RAM."),
     // Reserve E0062-E0064 for immutable arrays (PR #189); assertion failures have a distinct code.
     AssertionFailure => ("E0065", "A selected assert(condition) statement evaluated to false. Check the boolean predicate and test inputs; an optional bounded literal message is included in the diagnostic. Assertions run only when reached and never emit ordinary program output."),
+    PromptIo => ("E0066", "An explicitly enabled interactive prompt could not be written and flushed. Check the host stdout/prompt writer. A partially visible prompt cannot be rolled back, but buffered print events are not replayed on failure."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

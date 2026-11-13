@@ -1,6 +1,6 @@
 //! Explicit, bounded program input. No library API accesses process stdin.
 
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Write};
 
 use crate::{
     diagnostics::{Diagnostic, DiagnosticKind as Kind, Span},
@@ -39,6 +39,15 @@ pub(crate) fn unavailable(span: Span) -> Diagnostic {
     .with_help("use run_with_input / execute_with_input, or redirect stdin to scarp exec; check never reads stdin and terminal prompts are not yet supported")
 }
 
+pub(crate) fn prompt_unavailable(span: Span) -> Diagnostic {
+    Diagnostic::new(
+        Kind::InputUnavailable,
+        span,
+        "ask requires interactive input and a prompt writer",
+    )
+    .with_help("enable --interactive on scarp exec/run, or use an explicit interactive Rust host API")
+}
+
 fn limit(span: Span, message: &str) -> Diagnostic {
     Diagnostic::new(Kind::InputLimit, span, message).with_help(
         "reduce input or raise the relevant InputLimits / --max-input-* quota; line limits include CR/LF and the string ceiling still applies",
@@ -47,6 +56,7 @@ fn limit(span: Span, message: &str) -> Diagnostic {
 
 pub(crate) struct InputState<'a> {
     reader: Option<&'a mut dyn BufRead>,
+    prompt_writer: Option<&'a mut dyn Write>,
     limits: InputLimits,
     consumed: usize,
     reads: usize,
@@ -56,10 +66,60 @@ impl<'a> InputState<'a> {
     pub(crate) fn new(reader: Option<&'a mut dyn BufRead>, limits: InputLimits) -> Self {
         Self {
             reader,
+            prompt_writer: None,
             limits,
             consumed: 0,
             reads: 0,
         }
+    }
+
+    /// The caller explicitly supplies both capabilities; no ambient stdin or
+    /// stdout is acquired through the library.
+    pub(crate) fn interactive(
+        reader: &'a mut dyn BufRead,
+        prompt_writer: &'a mut dyn Write,
+        limits: InputLimits,
+    ) -> Self {
+        Self {
+            reader: Some(reader),
+            prompt_writer: Some(prompt_writer),
+            limits,
+            consumed: 0,
+            reads: 0,
+        }
+    }
+
+    /// Visible prompts are intentionally not transactional. Preflight local
+    /// quotas before showing the prompt, and charge work for prompt length.
+    pub(crate) fn ask(
+        &mut self,
+        prompt: &str,
+        budget: &mut Budget,
+        span: Span,
+    ) -> Result<Value, Diagnostic> {
+        if self.reader.is_none() || self.prompt_writer.is_none() {
+            return Err(prompt_unavailable(span));
+        }
+        if self.reads >= self.limits.max_reads {
+            return Err(limit(span, "input line-read quota exceeded"));
+        }
+        if self.consumed >= self.limits.max_total_bytes || self.limits.max_line_bytes == 0 {
+            return Err(limit(span, "input byte quota exhausted before line read"));
+        }
+        budget.charge(prompt.len() as u64, span)?;
+        let writer = self.prompt_writer.as_deref_mut().expect("checked prompt writer");
+        writer
+            .write_all(prompt.as_bytes())
+            .and_then(|_| writer.flush())
+            .map_err(|_| {
+                Diagnostic::new(
+                    Kind::PromptIo,
+                    span,
+                    "interactive prompt could not be written and flushed",
+                )
+                .with_help("check the host prompt writer; visible prompt bytes cannot be rolled back")
+            })?;
+        self.read_line(budget, span)
     }
 
     pub(crate) fn read_line(

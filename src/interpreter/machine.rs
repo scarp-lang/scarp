@@ -158,6 +158,14 @@ pub(super) fn prepare<'a>(
                         let value = input.read_line(&mut budget, span)?;
                         frame.workspace.accept(value);
                     }
+                    Evaluation::Ask { prompt, span } => {
+                        let value = input.ask(
+                            prompt.as_str().expect("statically checked ask prompt"),
+                            &mut budget,
+                            span,
+                        )?;
+                        frame.workspace.accept(value);
+                    }
                     Evaluation::Call {
                         node,
                         arguments,
