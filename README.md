@@ -13,7 +13,9 @@ See the [release notes](docs/releases/v0.0.6-alpha.8-publication.md),
 **0.0.6-alpha.7** added typed conditional expressions and Unicode scalar
 string escapes. [Alpha.7 verification](docs/releases/v0.0.6-alpha.7-validation.md)
 
-**BigInt development:** [bounded BigInt](docs/bigint.md) adds exact signed arithmetic, explicit conversions and deterministic work, digit and allocation quotas. [Integration PR #200](https://github.com/scarp-lang/scarp/pull/200)
+The **0.0.6-alpha.9 development candidate** adds [bounded BigInt](docs/bigint.md)
+and opt-in [structured project test reports](docs/project-testing.md#structured-failure-reports-development).
+[Candidate PR #232](https://github.com/scarp-lang/scarp/pull/232)
 
 **0.0.6-alpha.6** added [bounded input](docs/program-input.md),
 [scalar/text utilities](docs/text-foundations.md) and

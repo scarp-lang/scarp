@@ -204,10 +204,9 @@ reproduction into a focused regression test.
 
 ## BigInt diagnostics (alpha.9 development candidate)
 
-The unreleased [BigInt milestone](../bigint.md) adds E0051 for malformed decimal
+The alpha.9 candidate's [BigInt implementation](../bigint.md) adds E0051 for malformed decimal
 constructor text, E0052 for digit/cumulative limb-payload quota exhaustion, and
 E0053 for fallible limb-buffer reservation failure. Existing E0008 diagnoses a
 zero divisor, E0044 rejects out-of-range `bigint_to_integer`, and E0017 enforces
 shared arithmetic/comparison/formatting work. Constructor/conversion diagnostics
-point at arguments; arithmetic failures point at operators. These codes/features
-are not in published alpha.5.
+point at arguments. Arithmetic failures point at operators.

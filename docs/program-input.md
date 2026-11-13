@@ -116,10 +116,10 @@ exhaustion all retain the selected source span and prevent output replay.
 | E0058 | Raw line/total/read quota or bounded reservation failure |
 | E0017 / E0048 | Existing shared work/text quota |
 
-E0051-E0053 remain unallocated on main and are used by separate draft BigInt
-PR #172. Input codes avoid that integration collision. Pure-context failures
-retain E0025. Both experimental native emitters reject input with E0049 without
-accessing a reader.
+Pure-context failures retain E0025. Both experimental native emitters reject
+input with E0049 before accessing a reader. The separate
+[BigInt diagnostics](reference/diagnostics.md#bigint-diagnostics-alpha9-development-candidate)
+use E0051–E0053 in the alpha.9 candidate.
 
 ## Output and interactive boundary
 
