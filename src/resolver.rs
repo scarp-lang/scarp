@@ -542,10 +542,7 @@ impl<'a> Resolver<'a> {
                     *name_span,
                     format!("binding {name:?} is already declared in this scope"),
                 )
-                .with_related(
-                    previous.declaration,
-                    "the previous declaration is here",
-                ));
+                .with_related(previous.declaration, "the previous declaration is here"));
             }
         }
 
