@@ -4,7 +4,7 @@ use crate::{
     ast::{BinaryOperator, OutputTarget},
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     evaluator::{self, Evaluation, Workspace},
-    input::InputState,
+    input::{InputState, IoBuiltin},
     limits::{Budget, ExecutionOptions},
     resolver::{
         ResolvedArgument, ResolvedCall, ResolvedExpression, ResolvedOperation, ResolvedProgram,
@@ -141,7 +141,7 @@ pub(super) fn prepare<'a>(
         .with_tuple_bytes(options.max_tuple_bytes)
         .with_array_bytes(options.max_array_bytes)
         .with_bigint_limits(options.max_bigint_digits, options.max_bigint_bytes);
-    let mut events = Vec::new();
+    let mut events: Vec<OutputEvent> = Vec::new();
     let mut calls = 0_u64;
     let mut prints = 0;
     let mut live_slots = program.binding_count();
@@ -155,16 +155,63 @@ pub(super) fn prepare<'a>(
                     .workspace
                     .resume(expression, &frame.environment, &mut budget)?
                 {
-                    Evaluation::Input {
+                    Evaluation::Io {
+                        builtin,
                         prompt,
                         fallback,
                         span,
                     } => {
+                        if let Some(target) = builtin.output_target() {
+                            prints = charge_print(prints, options, span)?;
+                            charge_capture_bytes(0, &mut captured, options, span)?;
+                            if let Some(writer) = input.output_writer(target) {
+                                // Publish only this stream. Earlier output on the
+                                // other stream stays buffered until its own flush
+                                // or successful completion.
+                                let failure = |_| {
+                                    Diagnostic::new(
+                                        DiagnosticKind::StreamFlush,
+                                        span,
+                                        "could not flush the selected program output stream",
+                                    )
+                                    .with_help("check the selected host writer and its destination")
+                                };
+                                budget.charge(events.len() as u64, span)?;
+                                let mut kept = 0;
+                                for index in 0..events.len() {
+                                    if events[index].target == target {
+                                        events[index].write_to(writer).map_err(failure)?;
+                                    } else {
+                                        events.swap(kept, index);
+                                        kept += 1;
+                                    }
+                                }
+                                writer.flush().map_err(failure)?;
+                                events.truncate(kept);
+                            } else if capture {
+                                events.push(OutputEvent::flush(target));
+                            }
+                            frame.workspace.accept(Value::Unit);
+                            continue;
+                        }
                         let read = if let Some(prompt) = prompt {
                             input.ask(prompt.as_str().expect("typed prompt"), &mut budget, span)
                         } else {
                             input.read_line(&mut budget, span)
                         };
+                        if builtin == IoBuiltin::TryReadLine {
+                            let (present, line) = match read {
+                                Ok(line) => (true, line),
+                                Err(error) if error.kind == DiagnosticKind::InputEof => {
+                                    (false, Value::from(""))
+                                }
+                                Err(error) => return Err(error),
+                            };
+                            frame
+                                .workspace
+                                .accept_input_tuple(present, line, &mut budget, span)?;
+                            continue;
+                        }
                         let value = match (read, fallback) {
                             (Err(error), Some(fallback))
                                 if error.kind == DiagnosticKind::InputEof =>
@@ -173,7 +220,9 @@ pub(super) fn prepare<'a>(
                             }
                             (result, _) => result?,
                         };
-                        frame.workspace.accept(value);
+                        frame
+                            .workspace
+                            .accept(builtin.convert(value, &mut budget, span)?);
                     }
                     Evaluation::Call {
                         node,
@@ -583,17 +632,7 @@ pub(super) fn prepare<'a>(
                             target,
                             newline,
                         } => {
-                            if prints >= options.limits.max_prints {
-                                return Err(Diagnostic::new(
-                                    DiagnosticKind::OutputLimit,
-                                    operation.span,
-                                    format!("print count limit of {} exceeded", options.limits.max_prints),
-                                )
-                                .with_help(
-                                    "reduce output calls or raise --max-prints / ExecutionLimits.max_prints",
-                                ));
-                            }
-                            prints += 1;
+                            prints = charge_print(prints, options, operation.span)?;
                             frame.output = Some(PendingOutput {
                                 arguments,
                                 target: *target,
@@ -681,6 +720,30 @@ fn charge_capture(
         PrintValue::Value(Value::Tile(tile)) => tile.len().saturating_mul(8).saturating_add(16),
         _ => 8,
     };
+    charge_capture_bytes(payload, used, options, span)
+}
+
+fn charge_print(count: usize, options: ExecutionOptions, span: Span) -> Result<usize, Diagnostic> {
+    if count < options.limits.max_prints {
+        return Ok(count + 1);
+    }
+    Err(Diagnostic::new(
+        DiagnosticKind::OutputLimit,
+        span,
+        format!(
+            "print count limit of {} exceeded",
+            options.limits.max_prints
+        ),
+    )
+    .with_help("reduce output calls or raise --max-prints / ExecutionLimits.max_prints"))
+}
+
+fn charge_capture_bytes(
+    payload: usize,
+    used: &mut usize,
+    options: ExecutionOptions,
+    span: Span,
+) -> Result<(), Diagnostic> {
     let available = options.max_capture_bytes.saturating_sub(*used);
     let Some(amount) = payload
         .checked_add(64)

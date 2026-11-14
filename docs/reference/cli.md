@@ -32,7 +32,12 @@ allows `ask(prompt)` and `ask_or(prompt, fallback)` to flush a prompt before
 reading a line from stdin or an input file. `--interactive --input-file DATA.txt` makes
 interactive programs reproducible without reading ambient stdin; prompts are
 visible even if later input or runtime execution fails. Without `--interactive`,
-both prompt built-ins report E0054. `ask_or` uses the fallback only at EOF.
+prompt built-ins report E0054. `ask_or` uses the fallback only at EOF.
+Alpha.10 development also includes `input(prompt)` and the typed variants
+`input_integer`, `input_float` and `input_bigint`. `try_read_line()` handles
+EOF from any explicitly selected reader. `flush_stdout()` and
+`flush_stderr()` publish the selected stream during interactive execution
+and replay after successful evaluation in other modes.
 
 Development builds accept `--max-array-bytes` on `exec`, `run`, `launch`, and
 `check`. The default cumulative fixed-array payload limit is 8,388,608 bytes.

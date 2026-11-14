@@ -15,6 +15,7 @@ use crate::{
 enum PrintValue<'a> {
     String(&'a str),
     Value(Value),
+    Flush,
 }
 
 struct OutputEvent<'a> {
@@ -24,20 +25,37 @@ struct OutputEvent<'a> {
 }
 
 impl OutputEvent<'_> {
+    fn flush(target: OutputTarget) -> Self {
+        Self {
+            target,
+            value: PrintValue::Flush,
+            newline: false,
+        }
+    }
+
+    fn is_flush(&self) -> bool {
+        matches!(self.value, PrintValue::Flush)
+    }
+
     fn has_text(&self) -> bool {
         match &self.value {
+            PrintValue::Flush => false,
             PrintValue::String(value) => !value.is_empty(),
             PrintValue::Value(value) => value.as_str().map_or(true, |text| !text.is_empty()),
         }
     }
 
-    fn has_bytes(&self) -> bool {
-        self.newline || self.has_text()
+    fn has_effect(&self) -> bool {
+        self.is_flush() || self.newline || self.has_text()
     }
 
     fn write_to(&self, output: &mut dyn Write) -> io::Result<()> {
+        if self.is_flush() {
+            return output.flush();
+        }
         if self.has_text() {
             match &self.value {
+                PrintValue::Flush => unreachable!("handled separately"),
                 PrintValue::String(value) => output.write_all(value.as_bytes())?,
                 PrintValue::Value(value) => write!(output, "{value}")?,
             }
@@ -87,7 +105,7 @@ pub fn execute_with_options(
     let events = prepare(program, true, options).map_err(RunError::Diagnostic)?;
     if events
         .iter()
-        .any(|event| event.target == OutputTarget::Stderr && event.has_bytes())
+        .any(|event| event.target == OutputTarget::Stderr && event.has_effect())
     {
         return Err(RunError::Output(io::Error::new(
             io::ErrorKind::Unsupported,
@@ -169,7 +187,8 @@ pub fn execute_with_input_and_options(
 
 /// Explicit interactive capability. Prompts are written and flushed to stdout
 /// during evaluation, while ordinary print/eprint events remain transactional.
-/// Earlier visible prompts cannot be rolled back if later execution fails.
+/// An explicit flush publishes queued output for its stream immediately.
+/// Prompts and explicitly flushed bytes remain visible if evaluation fails later.
 pub fn execute_with_interactive_input_and_options(
     program: &ResolvedProgram,
     input: &mut impl io::BufRead,
@@ -179,7 +198,8 @@ pub fn execute_with_interactive_input_and_options(
     input_limits: InputLimits,
 ) -> Result<(), RunError> {
     let events = {
-        let mut state = InputState::interactive(input, stdout, input_limits);
+        let mut state =
+            InputState::interactive(input, stdout, input_limits).with_error_writer(stderr);
         machine::prepare(program, true, options, &mut state).map_err(RunError::Diagnostic)?
     };
     replay(events, stdout, stderr)
@@ -191,7 +211,7 @@ fn replay(
     stderr: &mut impl Write,
 ) -> Result<(), RunError> {
     let mut previous = None;
-    for event in events.iter().filter(|event| event.has_bytes()) {
+    for event in events.iter().filter(|event| event.has_effect()) {
         if let Some(previous) = previous.filter(|previous| *previous != event.target) {
             match previous {
                 OutputTarget::Stdout => stdout.flush(),
@@ -204,7 +224,7 @@ fn replay(
             OutputTarget::Stderr => stderr,
         };
         event.write_to(writer).map_err(RunError::Output)?;
-        previous = Some(event.target);
+        previous = (!event.is_flush()).then_some(event.target);
     }
     Ok(())
 }
