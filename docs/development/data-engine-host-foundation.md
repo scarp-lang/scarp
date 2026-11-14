@@ -246,3 +246,54 @@ iterators, and sized bounds are separate reviewable extensions.
 **Release gate:** This branch must stay development-only until reviewed and
 merged through normal repository protections. No prerelease or stable release
 authorization is implied.
+
+## Extended host semantic layers on this branch
+
+These parts are subsequent development work within this draft PR, not part of
+a released Scarp source-language feature:
+
+- \`paths.rs\`: exact typed nested selection, immutable leaf replacement, and
+  transactional ordered patch execution for records, variants, typed lists,
+  maps, optionals and outcomes.
+- \`generics.rs\`: first-order type templates and exact substitution with
+  constraints and a bounded cache keyed by complete schema contents.
+- \`schema_graph.rs\`: forward-linked atomic nominal declarations, dependency
+  graph analysis, cycle detection and deterministic invalidation queries.
+- \`query.rs\`: pure typed predicate preflight, projection, integer sum, key
+  grouping, and explicit scan/work/output quotas.
+- \`index.rs\`: persistent typed secondary indexes, deterministic text-prefix
+  and integer-range lookup, original-row materialization and bounded joins.
+- \`diff.rs\`: deterministic structural patches with maximum graph-visit,
+  operation, and recursion-depth budgets; roundtrip reconciliation checks.
+- \`wire.rs\`: experimental type-checked canonical value codec v1, with
+  strict decoding and no stable ABI guarantee.
+- \`wire_schema.rs\`: opt-in v2 exact schema descriptor envelope that checks
+  declared member names, order, variant cases, roots, nominal identities
+  and the entire registered schema before decoding the v1 value payload.
+
+### Wire schema boundaries
+
+The v1 raw data codec requires both parties to already agree upon the exact
+schema and does **not** embed that schema in the payload. It is inappropriate
+to assume that equal-layout nominal types can be distinguished from v1 bytes
+alone. For safer interchange, prefer the exact-schema v2 envelope.
+
+The v2 envelope is intentionally strict: the complete ordered schema content
+must match, after canonicalizing declaration registration order by nominal
+identity. Additional unrelated registered definitions cause the decoder to
+reject the envelope. This is a developmental format with no migration plan
+or long-term persistence promise yet.
+
+The v2 descriptor is neither cryptographically signed nor a substitute for
+authenticating data. Type IDs remain build-local logical coordinates; callers
+must independently determine that they trust the schema source. Encoded
+metadata and value bytes are bounded separately and by the total envelope
+quota. Malformed sizes and trailing payloads are rejected.
+
+### Scope boundary
+
+This is still **host API only**. No new \`.srp\` parser, type declarations,
+destructuring, generic function calls, pattern clauses or \`match\` syntax
+has been enabled. Do not interpret passing Rust host tests as compiler-native
+feature completeness. The compiler's existing public language behavior and
+released CLI remain unchanged.

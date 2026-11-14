@@ -17,6 +17,7 @@ pub mod schema;
 pub mod schema_graph;
 pub mod value;
 pub mod wire;
+pub mod wire_schema;
 
 pub use diff::{DataDiff, DiffLimits};
 pub use generics::{
