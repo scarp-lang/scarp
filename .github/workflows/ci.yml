@@ -86,6 +86,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/check.ps1 -Offline
+      - name: Verify interactive Windows console input
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: python scripts/test_windows_console_input.py target/debug/scarp.exe
 
   minimum:
     name: Minimum Rust / 1.74.0
