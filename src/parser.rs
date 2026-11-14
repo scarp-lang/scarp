@@ -1191,6 +1191,8 @@ impl Parser<'_> {
         })
     }
 
+    // Keep the nested expression stack bounded even with 64 nested groups.
+    #[inline(never)]
     fn logical_or(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
@@ -1565,6 +1567,8 @@ impl Parser<'_> {
         ))
     }
 
+    // Keep the nested expression stack bounded even with 64 nested groups.
+    #[inline(never)]
     fn primary(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
@@ -1650,6 +1654,8 @@ impl Parser<'_> {
         Ok((result, end))
     }
 
+    // Keep the nested expression stack bounded even with 64 nested groups.
+    #[inline(never)]
     fn group_expression(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
