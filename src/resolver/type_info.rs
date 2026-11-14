@@ -93,7 +93,9 @@ fn operation_expressions(
             ResolvedStatement::Call { expression } => (Some(expression), &[]),
             ResolvedStatement::RepeatInit { count, .. } => (Some(count), &[]),
             ResolvedStatement::JumpIfFalse { condition, .. } => (Some(condition), &[]),
-            ResolvedStatement::Store { value, .. } | ResolvedStatement::Update { value, .. } => {
+            ResolvedStatement::Store { value, .. }
+            | ResolvedStatement::Destructure { value, .. }
+            | ResolvedStatement::Update { value, .. } => {
                 (Some(value), &[])
             }
             ResolvedStatement::Output { arguments, .. } => (None, arguments),

@@ -22,6 +22,7 @@ enum Stage {
 }
 enum Completion<'a> {
     Store(usize),
+    Destructure(&'a [Option<usize>], Span),
     RepeatCount(usize, usize, Span),
     Update(usize, BinaryOperator, Value, Span),
     Guard(usize, Span),
@@ -279,6 +280,34 @@ pub(super) fn prepare<'a>(
                         frame.expression = None;
                         match std::mem::replace(&mut frame.completion, Completion::Discard) {
                             Completion::Store(slot) => frame.environment[slot] = value,
+                            Completion::Destructure(slots, span) => {
+                                let elements = match &value {
+                                    Value::Tuple(tuple) => tuple.elements(),
+                                    Value::Array(array) => array.elements(),
+                                    _ => {
+                                        return Err(Diagnostic::new(
+                                            DiagnosticKind::TypeMismatch,
+                                            span,
+                                            "destructuring source must be a typed tuple or array",
+                                        ))
+                                    }
+                                };
+                                if elements.len() != slots.len() {
+                                    return Err(Diagnostic::new(
+                                        DiagnosticKind::TypeMismatch,
+                                        span,
+                                        "destructuring source length changed after resolution",
+                                    ));
+                                }
+                                // Account for all positions, including wildcards,
+                                // before writing any binding slot.
+                                budget.charge(slots.len() as u64, span)?;
+                                for (slot, element) in slots.iter().zip(elements) {
+                                    if let Some(slot) = slot {
+                                        frame.environment[*slot] = element.clone();
+                                    }
+                                }
+                            }
                             Completion::RepeatCount(count_slot, index_slot, span) => {
                                 let count = value.require_integer(span)?;
                                 if count < 0 {
@@ -546,6 +575,9 @@ pub(super) fn prepare<'a>(
                         }
                         ResolvedStatement::Store { slot, value } => {
                             frame.start(value, Completion::Store(*slot))
+                        }
+                        ResolvedStatement::Destructure { slots, value } => {
+                            frame.start(value, Completion::Destructure(slots, operation.span))
                         }
                         ResolvedStatement::Update {
                             slot,

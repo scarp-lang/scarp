@@ -229,6 +229,18 @@ fn collect(
                         return Err(duplicate(name, *name_span, symbol.info.span));
                     }
                 }
+                if let Statement::Destructure { bindings, .. } = statement {
+                    for (name, name_span) in bindings {
+                        if name == "_" {
+                            continue;
+                        }
+                        if let Some(symbol) =
+                            table.symbols.get(name).filter(|s| s.constant.is_some())
+                        {
+                            return Err(duplicate(name, *name_span, symbol.info.span));
+                        }
+                    }
+                }
             }
         }
         tables[id] = Some(table);
@@ -527,6 +539,37 @@ impl Rewriter<'_> {
                         .last_mut()
                         .unwrap()
                         .insert(name.clone(), *name_span);
+                }
+                Statement::Destructure {
+                    bindings,
+                    mutable,
+                    initializer,
+                    ..
+                } => {
+                    // Resolve source references before publishing destructured
+                    // bindings. Match the compiler's one-time initializer order.
+                    self.expression(initializer)?;
+                    let (source, owner) = (self.id, self.function);
+                    for (name, name_span) in bindings {
+                        if name == "_" {
+                            continue;
+                        }
+                        self.binding_name(name, *name_span)?;
+                        self.navigation(|b| {
+                            b.binding(
+                                source,
+                                owner,
+                                name,
+                                *name_span,
+                                symbols::SymbolKind::Binding,
+                                *mutable,
+                            )
+                        });
+                        self.scopes
+                            .last_mut()
+                            .unwrap()
+                            .insert(name.clone(), *name_span);
+                    }
                 }
                 Statement::Assign {
                     name,

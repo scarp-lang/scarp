@@ -23,6 +23,9 @@ pub const MAX_EXPRESSION_DEPTH: usize = 64;
 /// Maximum nested statement blocks, independent of expression parentheses.
 pub const MAX_BLOCK_DEPTH: usize = 64;
 
+/// Maximum source-bound names in one flat array destructuring pattern.
+pub const MAX_DESTRUCTURE_BINDINGS: usize = 128;
+
 /// Parse a token stream. An omitted EOF token is treated as the end of input.
 pub fn parse(tokens: &[Token]) -> Result<Program, Diagnostic> {
     Parser {
@@ -541,6 +544,83 @@ impl Parser<'_> {
         Ok(())
     }
 
+    /// Parse flat structural bindings: bind (a, b) = tuple; or
+    /// var [x, _, z] = fixed_array; Nested patterns remain future work.
+    fn destructure(&mut self, start: usize, mutable: bool) -> Result<Statement, ParseError> {
+        let array = self.at(&TokenKind::LeftBracket);
+        let close = if array {
+            TokenKind::RightBracket
+        } else {
+            TokenKind::RightParen
+        };
+        let opener = self.current().unwrap().span;
+        self.advance();
+        let mut bindings = Vec::new();
+        if self.at(&close) {
+            return Err(ParseError::new(
+                DiagnosticKind::UnexpectedToken,
+                opener,
+                "a destructuring pattern requires at least one name",
+            )
+            .with_help("use bind (first, second) = tuple; or bind [item] = array;"));
+        }
+        let mut trailing_comma = false;
+        loop {
+            let (name, span) = self.identifier().map_err(|error| {
+                error.with_help("destructuring accepts names or '_' placeholders, not expressions")
+            })?;
+            let max = if array {
+                MAX_DESTRUCTURE_BINDINGS
+            } else {
+                MAX_TUPLE_ARITY
+            };
+            if bindings.len() >= max {
+                return Err(ParseError::new(
+                    if array {
+                        DiagnosticKind::ArrayLimit
+                    } else {
+                        DiagnosticKind::TupleLimit
+                    },
+                    span,
+                    format!("destructuring pattern exceeds {max} elements"),
+                ));
+            }
+            bindings.push((name, span));
+            if !self.at(&TokenKind::Comma) {
+                trailing_comma = false;
+                break;
+            }
+            self.advance();
+            trailing_comma = true;
+            if self.at(&close) {
+                break;
+            }
+        }
+        let close_label = if array { "']'" } else { "')'" };
+        self.punctuation(close, close_label)?;
+        if !array && bindings.len() == 1 && !trailing_comma {
+            return Err(ParseError::new(
+                DiagnosticKind::UnexpectedToken,
+                opener,
+                "a one-element tuple pattern requires a trailing comma",
+            )
+            .with_help("write bind (value,) = tuple;"));
+        }
+        self.punctuation(TokenKind::Equal, "'=' after the destructuring pattern")?;
+        let initializer = self.expression()?;
+        let end = self
+            .punctuation(TokenKind::Semicolon, "';' after destructuring")
+            .map_err(|error| error.with_help("finish the destructuring declaration with ';'"))?
+            .end;
+        Ok(Statement::Destructure {
+            bindings,
+            mutable,
+            array,
+            initializer,
+            span: Span::new(start, end),
+        })
+    }
+
     // Keep declaration temporaries out of recursive statement-list frames.
     fn declaration(&mut self) -> Result<Statement, ParseError> {
         let token = self.current().expect("declaration keyword is present");
@@ -551,6 +631,9 @@ impl Parser<'_> {
         let mutable = name == "var";
         let keyword = if mutable { "var" } else { "bind" };
         self.advance();
+        if self.at(&TokenKind::LeftParen) || self.at(&TokenKind::LeftBracket) {
+            return self.destructure(start, mutable);
+        }
         if self.keyword("mut")
             && matches!(
                 self.tokens.get(self.cursor + 1).map(|token| &token.kind),

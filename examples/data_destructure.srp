@@ -1,0 +1,22 @@
+// Flat source destructuring: one initializer, multiple typed bindings.
+// Original .srp tuple and fixed-array types; no nominal record syntax yet.
+pure funcra make_pair(value: integer) -> tuple<integer, string> {
+    return (value * 2, "ready");
+}
+
+bind (result, state) = make_pair(21);
+print(result, state);
+
+var [first, second, third] = [array: 3, 5, 7];
+first += second;
+print(first, third);
+
+// The underscore ignores the corresponding element, without storing it.
+bind (_, answer) = (true, 42);
+print(answer);
+
+{
+    bind (result, note) = (5, "inner");
+    print(result, note);
+}
+print(result);
