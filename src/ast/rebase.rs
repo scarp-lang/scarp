@@ -50,6 +50,7 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                 }
                 ExpressionKind::Conditional { .. }
                 | ExpressionKind::Tuple { .. }
+                | ExpressionKind::Array { .. }
                 | ExpressionKind::Integers { .. }
                 | ExpressionKind::Vector { .. }
                 | ExpressionKind::Integer(_)
@@ -251,6 +252,8 @@ pub pure funcra calculate(n: integer, factor: integer=n)->integer
     return value;
 }
 bind values=[1,2,3];
+bind array:array<array<integer, 0>, 1>=[array: [array: <integer>]];
+print(array[0]);
 print(values[1] + calculate(3, factor: 4));
 "#;
         let original = parser::parse(&lexer::lex(source).unwrap()).unwrap();

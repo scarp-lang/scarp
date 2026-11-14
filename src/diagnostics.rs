@@ -162,7 +162,10 @@ diagnostic_catalogue! {
     TupleIndex => ("E0059", "Tuple projection requires a nonnegative integer literal within the fixed tuple arity. Use t[0], not a runtime/computed/negative index. Numerical collection indexing retains its existing rules."),
     TupleLimit => ("E0060", "Tuple shape exceeds the supported bounds. Use one through 32 members, tuple depth at most 32 and structural type size at most 4096 nodes. Empty tuples and unit members are unsupported."),
     TupleAllocation => ("E0061", "Tuple payload allocation exceeded its cumulative quota or bounded reservation failed. Reuse immutable tuples or reduce construction; adjust --max-tuple-bytes / ExecutionOptions.max_tuple_bytes explicitly. This is a logical payload quota, not process RAM."),
-    // Reserve E0062-E0064 for immutable arrays (PR #189); assertion failures have a distinct code.
+    ArrayLimit => ("E0062", "Fixed array shape exceeds the supported bounds. Use 0 through 4096 elements, at most 32 composite levels and 4096 type nodes, and at most 65536 expanded value nodes. Use a non-unit element type."),
+    ArrayIndex => ("E0063", "Fixed array index is outside its length. Use an integer index from zero through length minus one. An empty array has no valid index."),
+    ArrayAllocation => ("E0064", "Fixed array payload allocation exceeded its cumulative quota or bounded reservation failed. Reuse immutable arrays or adjust --max-array-bytes / ExecutionOptions.max_array_bytes. The quota measures logical payload."),
+
     AssertionFailure => ("E0065", "A selected assert(condition) statement evaluated to false. Check the boolean predicate and test inputs; an optional bounded literal message is included in the diagnostic. Assertions run only when reached and never emit ordinary program output."),
     PromptIo => ("E0066", "An explicitly enabled interactive prompt could not be written and flushed. Check the host stdout/prompt writer. A partially visible prompt cannot be rolled back, but buffered print events are not replayed on failure."),
 }

@@ -986,11 +986,45 @@ fn resolve_expression(
                     require_value(&types[element], syntax.nodes()[element].span)?;
                     members.push(types[element].clone());
                 }
+                let limit = if members.iter().any(SourceType::contains_array) {
+                    DiagnosticKind::ArrayLimit
+                } else {
+                    DiagnosticKind::TupleLimit
+                };
                 let kind = SourceType::tuple(members).ok_or_else(|| {
+                    Diagnostic::new(limit, node.span, "tuple exceeds structural shape limits")
+                })?;
+                (kind, None)
+            }
+            ExpressionKind::Array {
+                elements,
+                empty_element_type,
+            } => {
+                let element_type = if let Some((&first, rest)) = elements.split_first() {
+                    let first_span = syntax.nodes()[first].span;
+                    let kind = &types[first];
+                    require_value(kind, first_span)?;
+                    for &element in rest {
+                        require_type(&types[element], kind, syntax.nodes()[element].span).map_err(
+                            |error| {
+                                error.with_related(
+                                    first_span,
+                                    "the first array element has this type",
+                                )
+                            },
+                        )?;
+                    }
+                    kind
+                } else {
+                    empty_element_type
+                        .as_ref()
+                        .expect("parser supplied element type")
+                };
+                let kind = SourceType::array(element_type, elements.len()).ok_or_else(|| {
                     Diagnostic::new(
-                        DiagnosticKind::TupleLimit,
+                        DiagnosticKind::ArrayLimit,
                         node.span,
-                        "tuple shape exceeds arity, depth or structural-node limits",
+                        "array exceeds structural or expanded shape limits",
                     )
                 })?;
                 (kind, None)
@@ -1021,6 +1055,18 @@ fn resolve_expression(
                 operator_span,
                 source_literal,
             } => {
+                if let Some(array) = types[*vector].as_array() {
+                    require_type(
+                        &types[*index],
+                        ValueType::Integer,
+                        syntax.nodes()[*index].span,
+                    )?;
+                    let element = array.element().clone();
+                    slots.push(None);
+                    calls.push(None);
+                    types.push(element);
+                    continue;
+                }
                 if let Some(elements) = types[*vector].tuple_elements() {
                     let mut literal = *index;
                     while let ExpressionKind::Group { expression } = syntax.nodes()[literal].kind {

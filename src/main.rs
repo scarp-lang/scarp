@@ -146,7 +146,7 @@ Execute a checked Scarp source file with the existing interpreter.
 --diagnostic-format=json is available for real compiler errors.
 Execution-limit options: --max-steps, --max-prints, --max-call-depth, --max-calls,
 --max-live-slots, --max-capture-bytes, --max-vector-bytes, --max-text-bytes,
---max-tuple-bytes, --max-bigint-digits, --max-bigint-bytes,
+--max-tuple-bytes, --max-array-bytes, --max-bigint-digits, --max-bigint-bytes,
 --max-input-line-bytes, --max-input-bytes, --max-input-reads.
 --input-file PATH uses an explicit file instead of stdin for program input.
 --interactive enables ask(prompt) and ask_or(prompt, fallback) to flush prompts,
@@ -283,6 +283,7 @@ Vector and tile buffers share this cumulative quota; retirement does not refund 
 --max-text-bytes 8388608 limits cumulative new UTF-8 payload (1048576 bytes per string).
 --max-tuple-bytes 8388608 limits cumulative immutable tuple member/type payload.
 --max-bigint-digits 10000 (ceiling 1000000), --max-bigint-bytes 8388608 (limbs and scratch).
+--max-array-bytes 8388608 limits cumulative immutable fixed-array member/type payload.
 String sharing and direct literal output do not allocate text payload; retirement gives no refund.
 Snapshot bytes are a logical storage cap, not an exact process-memory limit.
 Counts are unsigned decimal digits, zero is valid, and each option may occur once.
@@ -312,6 +313,7 @@ Vector and tile buffers share this cumulative quota; retirement does not refund 
 --max-text-bytes 8388608 limits cumulative new UTF-8 payload (1048576 bytes per string).
 --max-tuple-bytes 8388608 limits cumulative immutable tuple member/type payload.
 --max-bigint-digits 10000 (ceiling 1000000), --max-bigint-bytes 8388608 (limbs and scratch).
+--max-array-bytes 8388608 limits cumulative immutable fixed-array member/type payload.
 String sharing and direct literal output do not allocate text payload; retirement gives no refund.
 All resource options take unsigned decimal counts, allow zero, and may occur once.
 Input-limit options are accepted, but check never reads stdin: a selected read_line
@@ -1032,6 +1034,7 @@ fn execution_limit_flag(flag: &str) -> bool {
             | "--max-tuple-bytes"
             | "--max-bigint-digits"
             | "--max-bigint-bytes"
+            | "--max-array-bytes"
             | "--max-input-line-bytes"
             | "--max-input-bytes"
             | "--max-input-reads"
@@ -1185,6 +1188,7 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
                         options.max_bigint_digits = value;
                     }
                     "--max-bigint-bytes" => options.max_bigint_bytes = value,
+                    "--max-array-bytes" => options.max_array_bytes = value,
                     "--max-input-line-bytes" => input_limits.max_line_bytes = value,
                     "--max-input-bytes" => input_limits.max_total_bytes = value,
                     "--max-input-reads" => input_limits.max_reads = value,

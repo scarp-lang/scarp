@@ -1,6 +1,8 @@
 //! Parse declarations, assignments, blocks, and print statements without execution.
 
-use crate::types::{SourceType, MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH};
+use crate::types::{
+    SourceType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY,
+};
 use std::collections::VecDeque;
 
 use crate::{
@@ -70,7 +72,7 @@ impl Parser<'_> {
         let token = self
             .current()
             .cloned()
-            .ok_or_else(|| self.expected("'>' after tuple type"))?;
+            .ok_or_else(|| self.expected("'>' after a type"))?;
         let remainder = match token.kind {
             TokenKind::Greater => Vec::new(),
             TokenKind::ShiftRight => vec![TokenKind::Greater],
@@ -80,7 +82,7 @@ impl Parser<'_> {
             TokenKind::UnsignedEqual => {
                 vec![TokenKind::Greater, TokenKind::Greater, TokenKind::Equal]
             }
-            _ => return Err(self.expected("'>' after tuple type")),
+            _ => return Err(self.expected("'>' after a type")),
         };
         self.advance();
         for (offset, kind) in remainder.into_iter().enumerate().rev() {
@@ -677,19 +679,50 @@ impl Parser<'_> {
     }
 
     fn value_type(&mut self, result: bool) -> Result<SourceType, ParseError> {
-        self.source_type(result, 0)
+        let mut remaining = MAX_SOURCE_TYPE_NODES;
+        self.source_type(result, 0, &mut remaining, false)
     }
-    fn source_type(&mut self, result: bool, depth: usize) -> Result<SourceType, ParseError> {
+
+    fn source_type(
+        &mut self,
+        result: bool,
+        depth: usize,
+        remaining: &mut usize,
+        inside_array: bool,
+    ) -> Result<SourceType, ParseError> {
         let (name, span) = self.identifier()?;
         self.type_end = span.end;
+        let inside_array = inside_array || name == "array";
+        let limit = if inside_array {
+            DiagnosticKind::ArrayLimit
+        } else {
+            DiagnosticKind::TupleLimit
+        };
+        *remaining = remaining
+            .checked_sub(1)
+            .ok_or_else(|| ParseError::new(limit, span, "type exceeds 4096 structural nodes"))?;
+        if matches!(name.as_str(), "tuple" | "array") && depth >= MAX_COMPOSITE_DEPTH {
+            return Err(ParseError::new(
+                limit,
+                span,
+                "composite type nesting exceeds 32 levels",
+            ));
+        }
+        if name == "array" {
+            self.punctuation(TokenKind::Less, "'<' after array")?;
+            let element = self.source_type(false, depth + 1, remaining, true)?;
+            self.punctuation(TokenKind::Comma, "',' before the array length")?;
+            let length = self.array_length()?;
+            let end = self.type_close()?.end;
+            return SourceType::array(element, length).ok_or_else(|| {
+                ParseError::new(
+                    DiagnosticKind::ArrayLimit,
+                    Span::new(span.start, end),
+                    "array type exceeds shape limits",
+                )
+            });
+        }
         if name == "tuple" {
-            if depth >= MAX_TUPLE_DEPTH {
-                return Err(ParseError::new(
-                    DiagnosticKind::TupleLimit,
-                    span,
-                    "tuple type nesting exceeds 32 levels",
-                ));
-            }
             self.punctuation(TokenKind::Less, "'<' after tuple")?;
             let mut elements = Vec::new();
             loop {
@@ -700,29 +733,24 @@ impl Parser<'_> {
                         "tuple type arity exceeds 32",
                     ));
                 }
-                elements.push(self.source_type(false, depth + 1)?);
+                elements.push(self.source_type(false, depth + 1, remaining, inside_array)?);
                 if !self.at(&TokenKind::Comma) {
                     break;
                 }
                 self.advance();
-                if matches!(
-                    self.current().map(|t| &t.kind),
-                    Some(
-                        TokenKind::Greater
-                            | TokenKind::ShiftRight
-                            | TokenKind::UnsignedRight
-                            | TokenKind::GreaterEqual
-                            | TokenKind::RightEqual
-                            | TokenKind::UnsignedEqual
-                    )
-                ) {
+                if self.current().is_some_and(|t| is_type_close(&t.kind)) {
                     break;
                 }
             }
             let end = self.type_close()?.end;
+            let limit = if elements.iter().any(SourceType::contains_array) {
+                DiagnosticKind::ArrayLimit
+            } else {
+                limit
+            };
             return SourceType::tuple(elements).ok_or_else(|| {
                 ParseError::new(
-                    DiagnosticKind::TupleLimit,
+                    limit,
                     Span::new(span.start, end),
                     "tuple type exceeds shape limits",
                 )
@@ -751,6 +779,84 @@ impl Parser<'_> {
                 "use integer, float, bigint, vector, integers, tile, boolean, string, or unit for a result",
             )),
         }
+    }
+
+    fn array_length(&mut self) -> Result<usize, ParseError> {
+        let Some(Token {
+            kind: TokenKind::Integer(digits),
+            span,
+        }) = self.current()
+        else {
+            return Err(self.array_length_error(self.current().map(|token| token.span)));
+        };
+        let mut span = *span;
+        let mut length = digits.parse::<usize>().ok();
+        self.advance();
+        // The ordinary decimal lexer deliberately leaves separators unsupported.
+        // Join only an immediately adjacent suffix in this type position.
+        if let Some(Token {
+            kind: TokenKind::Identifier(suffix),
+            span: suffix_span,
+        }) = self.current()
+        {
+            if span.end == suffix_span.start && suffix.starts_with('_') {
+                span.end = suffix_span.end;
+                length = length.and_then(|initial| {
+                    suffix[1..].split('_').try_fold(initial, |n, group| {
+                        if group.is_empty() {
+                            return None;
+                        }
+                        group.bytes().try_fold(n, |n, digit| {
+                            if !digit.is_ascii_digit() {
+                                return None;
+                            }
+                            n.checked_mul(10)?.checked_add(usize::from(digit - b'0'))
+                        })
+                    })
+                });
+                self.advance();
+            }
+        }
+        if !self
+            .current()
+            .is_some_and(|token| is_type_close(&token.kind))
+        {
+            return Err(self.array_length_error(Some(span)));
+        }
+        length
+            .filter(|&n| n <= MAX_ARRAY_LENGTH)
+            .ok_or_else(|| self.array_length_error(Some(span)))
+    }
+
+    fn array_length_error(&self, span: Option<Span>) -> ParseError {
+        let mut span = span.unwrap_or_else(|| {
+            let end = self.tokens.last().map_or(0, |token| token.span.end);
+            Span::new(end, end)
+        });
+        if self.pending.is_empty() {
+            for token in &self.tokens[self.cursor..] {
+                if is_type_close(&token.kind)
+                    || matches!(
+                        token.kind,
+                        TokenKind::Comma
+                            | TokenKind::RightBracket
+                            | TokenKind::RightParen
+                            | TokenKind::Semicolon
+                            | TokenKind::Equal
+                            | TokenKind::Eof
+                    )
+                {
+                    break;
+                }
+                span.end = token.span.end;
+            }
+        }
+        ParseError::new(
+            DiagnosticKind::ArrayLimit,
+            span,
+            "array length must be a decimal integer literal from 0 through 4096",
+        )
+        .with_help("write a nonnegative base-10 length, such as array<integer, 2>")
     }
 
     fn function(&mut self) -> Result<FunctionDeclaration, ParseError> {
@@ -1246,11 +1352,16 @@ impl Parser<'_> {
         self.expression_depth(depth, opening)?;
         // This prefix extends previously invalid syntax; [integer] still reads
         // a normal binding named integer and does not change float vectors.
-        let integers = self.keyword("integer")
-            && self
-                .tokens
-                .get(self.cursor + 1)
-                .is_some_and(|token| token.kind == TokenKind::Colon);
+        let tagged = self
+            .tokens
+            .get(self.cursor + 1)
+            .is_some_and(|token| token.kind == TokenKind::Colon);
+        if tagged && self.keyword("array") {
+            self.advance();
+            self.advance();
+            return self.array_literal(nodes, depth, opening);
+        }
+        let integers = tagged && self.keyword("integer");
         if integers {
             self.advance();
             self.advance();
@@ -1278,6 +1389,57 @@ impl Parser<'_> {
                 ExpressionKind::Integers { elements }
             } else {
                 ExpressionKind::Vector { elements }
+            },
+            Span::new(opening.start, end),
+        ))
+    }
+
+    fn array_literal(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+        opening: Span,
+    ) -> Result<usize, ParseError> {
+        let mut elements = Vec::new();
+        let empty_element_type = if self.at(&TokenKind::Less) {
+            self.advance();
+            let mut remaining = MAX_SOURCE_TYPE_NODES - 1;
+            let element = self.source_type(false, 1, &mut remaining, true)?;
+            self.type_close()?;
+            Some(element)
+        } else {
+            if self.at(&TokenKind::RightBracket) {
+                return Err(self
+                    .expected("an array element or '<type>'")
+                    .with_help("write a typed empty array such as [array: <integer>]"));
+            }
+            loop {
+                if elements.len() == MAX_ARRAY_LENGTH {
+                    return Err(ParseError::new(
+                        DiagnosticKind::ArrayLimit,
+                        self.current().map_or(opening, |token| token.span),
+                        "array literal exceeds 4096 elements",
+                    ));
+                }
+                elements.push(self.logical_or(nodes, depth + 1)?);
+                if !self.at(&TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+                if self.at(&TokenKind::RightBracket) {
+                    break;
+                }
+            }
+            None
+        };
+        let end = self
+            .punctuation(TokenKind::RightBracket, "']' after array literal")?
+            .end;
+        Ok(push(
+            nodes,
+            ExpressionKind::Array {
+                elements,
+                empty_element_type,
             },
             Span::new(opening.start, end),
         ))
@@ -1537,6 +1699,18 @@ impl Parser<'_> {
             _ => Err(self.expected("a literal, variable name, or '('")),
         }
     }
+}
+
+fn is_type_close(kind: &TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::Greater
+            | TokenKind::ShiftRight
+            | TokenKind::UnsignedRight
+            | TokenKind::GreaterEqual
+            | TokenKind::RightEqual
+            | TokenKind::UnsignedEqual
+    )
 }
 
 fn assignment_operator(kind: &TokenKind) -> Option<AssignmentOperator> {

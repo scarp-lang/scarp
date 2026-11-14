@@ -261,7 +261,9 @@ try {
         $json = Invoke-ScarpProcess -Executable $executable -Arguments @('modules', '--json', $source)
         if ($json.ExitCode -ne 0 -or $json.Stderr.Length -ne 0) { throw "Packaged $example JSON inspection failed" }
         $metadata = [System.Text.Encoding]::UTF8.GetString($json.Stdout) | ConvertFrom-Json -AsHashtable
-        $expectedSchema = if ($example -in @('tuples', 'core_input_tuple')) { 2 } else { 1 }
+        $expectedSchema = if ($example -eq 'fixed_arrays') { 3 }
+        elseif ($example -in @('tuples', 'core_input_tuple')) { 2 }
+        else { 1 }
         if ($metadata.schema_version -ne $expectedSchema -or $metadata.entry -ne 0 -or $metadata.modules.Count -lt 1) {
             throw "Packaged $example JSON schema failed"
         }

@@ -7,7 +7,8 @@ use crate::{
     limits::Budget,
     numeric::{self, Builtin},
     resolver::{self, ResolvedCall, ResolvedExpression},
-    value::{finite_number, type_mismatch, TupleValue, Value, ValueType},
+    types::SourceType,
+    value::{finite_number, type_mismatch, ArrayValue, TupleValue, Value, ValueType},
 };
 
 /// Evaluate a standalone integer expression, preserving the v0.0.1 return type.
@@ -38,7 +39,8 @@ enum Task {
     BitNot(Span),
     Vector(usize, bool, Span),
     Tuple(usize, Span),
-    Index(Span),
+    Array(usize, Span),
+    Index(usize, Span),
     Builtin(Builtin, usize, Span),
     BigIntDivMod(usize, Span),
     UserCall(usize, usize, Span),
@@ -114,10 +116,11 @@ impl Workspace {
                 Task::Visit(index) => expression.syntax.nodes()[*index].span,
                 Task::UserCall(_, _, span)
                 | Task::Tuple(_, span)
+                | Task::Array(_, span)
                 | Task::Input(_, span)
                 | Task::Vector(_, _, span)
                 | Task::BitNot(span)
-                | Task::Index(span)
+                | Task::Index(_, span)
                 | Task::Builtin(_, _, span)
                 | Task::BigIntDivMod(_, span)
                 | Task::Negate(span)
@@ -153,6 +156,12 @@ impl Workspace {
                                 tasks.push(Task::Visit(element));
                             }
                         }
+                        ExpressionKind::Array { elements, .. } => {
+                            tasks.push(Task::Array(index, node.span));
+                            for &element in elements.iter().rev() {
+                                tasks.push(Task::Visit(element));
+                            }
+                        }
                         ExpressionKind::Vector { elements }
                         | ExpressionKind::Integers { elements } => {
                             tasks.push(Task::Vector(
@@ -170,7 +179,7 @@ impl Workspace {
                             operator_span,
                             ..
                         } => {
-                            tasks.push(Task::Index(*operator_span));
+                            tasks.push(Task::Index(*index, *operator_span));
                             tasks.push(Task::Visit(*index));
                             tasks.push(Task::Visit(*vector));
                         }
@@ -240,6 +249,41 @@ impl Workspace {
                     }
                 }
                 Task::Tuple(count, span) => finish_tuple(values, count, budget, span)?,
+                Task::Array(node, span) => {
+                    let ExpressionKind::Array {
+                        elements,
+                        empty_element_type,
+                    } = &expression.syntax.nodes()[node].kind
+                    else {
+                        unreachable!("fixed array task");
+                    };
+                    let count = elements.len();
+                    let start = values.len() - count;
+                    let element = empty_element_type
+                        .clone()
+                        .unwrap_or_else(|| values[start].kind());
+                    budget.charge((count + element.node_count() + 1) as u64, span)?;
+                    let bytes = ArrayValue::allocation_bytes(&element, count).ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::ArrayAllocation,
+                            span,
+                            "fixed array allocation size overflow",
+                        )
+                    })?;
+                    budget.charge_array_allocation(bytes, span)?;
+                    let kind =
+                        SourceType::array(element, count).expect("resolved fixed array shape");
+                    let mut elements = Vec::new();
+                    elements.try_reserve_exact(count).map_err(|_| {
+                        Diagnostic::new(
+                            DiagnosticKind::ArrayAllocation,
+                            span,
+                            "could not reserve fixed array storage",
+                        )
+                    })?;
+                    elements.extend(values.drain(start..));
+                    values.push(Value::Array(ArrayValue::from_checked(kind, elements)));
+                }
                 Task::Vector(count, integers, span) => {
                     budget.charge(count as u64, span)?;
                     let start = values.len() - count;
@@ -262,7 +306,7 @@ impl Workspace {
                     values.truncate(start);
                     values.push(numeric::vector(elements, span)?);
                 }
-                Task::Index(span) => {
+                Task::Index(index_node, span) => {
                     let index = values.pop().unwrap().require_integer(span)?;
                     let value = values.pop().unwrap();
                     if let Some(tuple) = value.as_tuple() {
@@ -278,6 +322,23 @@ impl Workspace {
                                 )
                             })?;
                         values.push(element);
+                        continue;
+                    }
+                    if let Some(array) = value.as_array() {
+                        let element = usize::try_from(index)
+                            .ok()
+                            .and_then(|index| array.elements().get(index))
+                            .ok_or_else(|| {
+                                Diagnostic::new(
+                                    DiagnosticKind::ArrayIndex,
+                                    expression.syntax.nodes()[index_node].span,
+                                    format!(
+                                        "index {index} is outside fixed array length {}",
+                                        array.len()
+                                    ),
+                                )
+                            })?;
+                        values.push(element.clone());
                         continue;
                     }
                     if let Some(array) = value.as_integers() {
@@ -402,8 +463,8 @@ impl Workspace {
                     if let (Some(a), Some(b)) = (left.as_integers(), right.as_integers()) {
                         budget.charge(a.len().max(b.len()) as u64, span)?;
                     }
-                    if let (Some(a), Some(b)) = (left.as_tuple(), right.as_tuple()) {
-                        budget.charge(a.work().max(b.work()), span)?;
+                    if let (Some(a), Some(b)) = (left.composite_work(), right.composite_work()) {
+                        budget.charge(a.max(b), span)?;
                     }
                     values.push(apply_binary_with_budget(
                         operator, &left, &right, budget, span,
