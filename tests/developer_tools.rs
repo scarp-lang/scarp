@@ -20,15 +20,14 @@ fn json(program: &modules::ModuleProgram) -> Vec<u8> {
 #[test]
 fn every_diagnostic_code_has_a_unique_stable_lookup_and_explanation() {
     let mut codes = std::collections::HashSet::new();
-    assert_eq!(Kind::ALL.len(), 63);
-    // E0062-E0064 are reserved for fixed arrays. Assertions use E0065; interactive prompts use E0066.
-    for (&kind, number) in Kind::ALL.iter().zip((1..=61).chain([65, 66])) {
+    assert_eq!(Kind::ALL.len(), 66);
+    for (&kind, number) in Kind::ALL.iter().zip(1..=66) {
         assert_eq!(kind.code(), format!("E{number:04}"));
         assert!(codes.insert(kind.code()));
         assert_eq!(Kind::from_code(kind.code()), Some(kind));
         assert!(!kind.explanation().is_empty());
     }
-    for invalid in ["E0000", "E0062", "E9999", "e0007", "E00007", "7", ""] {
+    for invalid in ["E0000", "E0067", "E9999", "e0007", "E00007", "7", ""] {
         assert_eq!(Kind::from_code(invalid), None);
     }
     assert_eq!(Kind::AssertionFailure.code(), "E0065");

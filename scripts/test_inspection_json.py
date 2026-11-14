@@ -73,6 +73,26 @@ class InspectionJsonTests(unittest.TestCase):
         self.assertEqual(result.stdout, b"")
         self.assertTrue(result.stderr.startswith(b"error[E0008]"))
 
+    def test_fixed_array_inventory_and_downstream_schema_selection(self):
+        inventories = [
+            self.parse("examples/inspection_json.srp"),
+            self.parse("examples/tuples.srp"),
+            self.parse("examples/fixed_arrays.srp"),
+        ]
+        self.assertEqual([obj["schema_version"] for obj in inventories], [1, 2, 3])
+        modules = inventories[2]["modules"]
+        self.assertEqual(len(modules), 1)
+        module = modules[0]
+        source = (ROOT / module["path"]).read_bytes()
+        self.assertEqual(len(module["symbols"]), 1)
+        function = module["symbols"][0]
+        self.assertEqual(source[slice(*function["span"])], b"labels")
+        self.assertEqual(function["result"], "array<string, 2>")
+        parameter = function["parameters"][0]
+        self.assertEqual(source[slice(*parameter["span"])], b"values")
+        self.assertEqual(parameter["type"], "array<string, 2>")
+        self.assertTrue(parameter["has_default"])
+
     def test_json_is_repeatable_and_old_text_mode_still_works(self):
         first = invoke("modules", "--json", "examples/inspection_json.srp")
         second = invoke("modules", "--json", "examples/inspection_json.srp")

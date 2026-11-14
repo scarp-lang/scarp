@@ -136,6 +136,7 @@ impl Work {
                         ))
                     }
                     ExpressionKind::Tuple { .. }
+                    | ExpressionKind::Array { .. }
                     | ExpressionKind::Vector { .. }
                     | ExpressionKind::Integers { .. }
                     | ExpressionKind::Index { .. } => return Err(Diagnostic::new(
@@ -145,7 +146,7 @@ impl Work {
                     )
                     .with_related(declaration.span, "constant initialized here")
                     .with_help(
-                        "construct or index tuples, vectors and tiles inside a function or entry script",
+                        "construct or index tuples, arrays, vectors and tiles inside a function or entry script",
                     )),
                     ExpressionKind::Name(name) => {
                         if let Some(&target) = names.get(name.as_str()) {

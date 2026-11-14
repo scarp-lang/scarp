@@ -139,6 +139,7 @@ pub(super) fn prepare<'a>(
         .with_vector_bytes(options.max_vector_bytes)
         .with_text_bytes(options.max_text_bytes)
         .with_tuple_bytes(options.max_tuple_bytes)
+        .with_array_bytes(options.max_array_bytes)
         .with_bigint_limits(options.max_bigint_digits, options.max_bigint_bytes);
     let mut events = Vec::new();
     let mut calls = 0_u64;
@@ -360,11 +361,8 @@ pub(super) fn prepare<'a>(
                                         frame.output.as_ref().unwrap().span,
                                     )?;
                                 }
-                                if let Some(tuple) = value.as_tuple() {
-                                    budget.charge(
-                                        tuple.work(),
-                                        frame.output.as_ref().unwrap().span,
-                                    )?;
+                                if let Some(work) = value.composite_work() {
+                                    budget.charge(work, frame.output.as_ref().unwrap().span)?;
                                 }
                                 if let Some(tile) = value.as_tile() {
                                     // Formatting visits cells and row delimiters,
@@ -689,6 +687,7 @@ fn charge_capture(
     let payload = match value {
         PrintValue::String(text) => text.len(),
         PrintValue::Value(Value::Tuple(tuple)) => tuple.capture_bytes(),
+        PrintValue::Value(Value::Array(array)) => array.capture_bytes(),
         PrintValue::Value(Value::BigInt(number)) => number
             .payload_bytes()
             .max(number.decimal_digits() + usize::from(number.is_negative())),
@@ -698,15 +697,18 @@ fn charge_capture(
         PrintValue::Value(Value::Tile(tile)) => tile.len().saturating_mul(8).saturating_add(16),
         _ => 8,
     };
-    let amount = payload.saturating_add(64);
-    if amount > options.max_capture_bytes.saturating_sub(*used) {
+    let available = options.max_capture_bytes.saturating_sub(*used);
+    let Some(amount) = payload
+        .checked_add(64)
+        .filter(|&amount| amount <= available)
+    else {
         return Err(Diagnostic::new(
             DiagnosticKind::CaptureLimit,
             span,
             format!("output snapshot storage limit of {} exceeded", options.max_capture_bytes),
         )
         .with_help("reduce selected output or raise --max-capture-bytes / ExecutionOptions.max_capture_bytes"));
-    }
+    };
     *used += amount;
     Ok(())
 }

@@ -1,0 +1,10 @@
+pure funcra labels(values: array<string, 2> = [array: "नमस्ते", "Scarp"])
+    -> array<string, 2> ensures result == values; {
+    return values;
+}
+
+var index = 1;
+bind grid = [array: [array: 1, 2], [array: 3, 4]];
+bind empty = [array: <array<integer, 2>>];
+print(labels()[index], grid[index][0], empty);
+print(labels(), grid[0] == [array: 1, 2]);
