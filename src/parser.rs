@@ -133,7 +133,6 @@ impl Parser<'_> {
 
     // Only compact container state survives recursive block parsing. Leaf
     // declarations/output have larger temporaries and finish in a separate call.
-    #[inline(never)]
     fn statement_list(
         &mut self,
         depth: usize,
@@ -303,7 +302,6 @@ impl Parser<'_> {
         }
     }
 
-    #[inline(never)]
     fn container_statement(
         &mut self,
         depth: usize,
@@ -621,7 +619,6 @@ impl Parser<'_> {
     }
 
     // Keep declaration temporaries out of recursive statement-list frames.
-    #[inline(never)]
     fn declaration(&mut self) -> Result<Statement, ParseError> {
         let token = self.current().expect("declaration keyword is present");
         let TokenKind::Identifier(name) = &token.kind else {
@@ -1145,7 +1142,6 @@ impl Parser<'_> {
         })
     }
 
-    #[inline(never)]
     fn block(&mut self, depth: usize) -> Result<(Vec<Statement>, Span), ParseError> {
         let opening = self.punctuation(TokenKind::LeftBrace, "'{'")?;
         if depth >= MAX_BLOCK_DEPTH {
