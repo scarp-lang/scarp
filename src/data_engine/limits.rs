@@ -60,6 +60,8 @@ pub enum DataResource {
     DiffDepth,
     MigrationNodes,
     MigrationDepth,
+    InspectionNodes,
+    InspectionDepth,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

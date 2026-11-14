@@ -297,3 +297,46 @@ destructuring, generic function calls, pattern clauses or `match` syntax
 has been enabled. Do not interpret passing Rust host tests as compiler-native
 feature completeness. The compiler's existing public language behavior and
 released CLI remain unchanged.
+
+## Experimental schema evolution and migration
+
+The host data engine now also contains a semantic schema comparison API and an
+explicit source-to-target schema migration API. The comparison identifies
+nominal definition changes, field additions/removals/reorders, type changes,
+variant case changes, and transitively affected definitions using the
+schema dependency graph.
+
+Comparison risk classifications are conservative and are **not** a guarantee
+that code using an old schema will compile against a newer one. Adding a
+variant case is considered breaking because exhaustive matches can become
+incomplete. Registration-order differences alone do not imply a schema
+change; member order and names do.
+
+Migration preserves immutable values and refuses implicit numeric coercion,
+renaming or data loss. Added fields require explicit, type-checked defaults.
+Removing fields requires an explicit caller option; missing or renamed variant
+cases are errors. The runtime validates both source and destination data,
+and charges bounded migration visits and depth independently of the existing
+Scarp interpreter.
+
+Importantly, semantic compatibility and binary interchange are different:
+the strict schema-bound v2 envelope still rejects different complete schema
+registries, even when a semantic comparison classifies a change as compatible.
+Future language integration needs explicit migration syntax, compiler
+resolution and versioned persistent schema IDs before this can serve as a
+stable serialized application data model.
+
+## Typed value inspection
+
+The host-side inspection walker returns deterministic root-relative paths,
+type descriptors and value categories for verified immutable data. It visits
+nominal fields in declaration order and map entries in key order, and can
+inspect nested variants, option/result cases and collections without executing
+user code. The reader enforces independent maximum depth and visit quotas,
+and reports structural node counts plus visible string payload byte totals.
+The generated paths are accepted by the experimental `select_path` API.
+
+Source-language tuple/array internals remain opaque in this visitor because
+they do not yet have a stable typed path-segment representation. No inspector
+API is currently exposed from a Scarp `.srp` program, and the visitor's
+snapshots are not part of a stable debugger protocol.

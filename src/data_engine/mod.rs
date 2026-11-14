@@ -7,8 +7,10 @@
 //! after the language syntax and effect/ownership contracts are reviewed.
 pub mod collections;
 pub mod diff;
+pub mod evolution;
 pub mod generics;
 pub mod index;
+pub mod inspect;
 pub mod limits;
 pub mod migrate;
 pub mod paths;
@@ -21,9 +23,11 @@ pub mod wire;
 pub mod wire_schema;
 
 pub use diff::{DataDiff, DiffLimits};
+pub use evolution::{SchemaChange, SchemaComparison, SchemaRisk};
 pub use generics::{
     Constraint, GenericSignature, Specialization, SpecializationCache, TypeExpression,
 };
+pub use inspect::{InspectKind, InspectedNode, InspectionLimits, InspectionReport, InspectionStats};
 pub use index::{DataIndex, IndexHit, IndexLimits, IndexStats, JoinResult, JoinRow};
 pub use limits::{DataError, DataLimits, DataResource};
 pub use migrate::{MigrationOptions, MigrationResult, MigrationStats};
