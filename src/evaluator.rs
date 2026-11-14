@@ -3,6 +3,7 @@
 use crate::{
     ast::{BinaryOperator, Expression, ExpressionKind, LogicalOperator},
     diagnostics::{Diagnostic, DiagnosticKind, Span},
+    input::InputBuiltin,
     limits::Budget,
     numeric::{self, Builtin},
     resolver::{self, ResolvedCall, ResolvedExpression},
@@ -41,10 +42,7 @@ enum Task {
     Builtin(Builtin, usize, Span),
     BigIntDivMod(usize, Span),
     UserCall(usize, usize, Span),
-    ReadLine(Span),
-    ReadLineOr(Span),
-    Ask(Span),
-    AskOr(Span),
+    Input(InputBuiltin, Span),
     Visit(usize),
     Negate(Span),
     Not(Span),
@@ -56,18 +54,9 @@ enum Task {
 
 pub(crate) enum Evaluation {
     Complete(Value),
-    ReadLine(Span),
-    ReadLineOr {
-        fallback: Value,
-        span: Span,
-    },
-    Ask {
-        prompt: Value,
-        span: Span,
-    },
-    AskOr {
-        prompt: Value,
-        fallback: Value,
+    Input {
+        prompt: Option<Value>,
+        fallback: Option<Value>,
         span: Span,
     },
     Call {
@@ -91,12 +80,11 @@ impl Workspace {
         self.start(expression);
         match self.resume(expression, environment, budget)? {
             Evaluation::Complete(value) => Ok(value),
-            Evaluation::ReadLine(span) | Evaluation::ReadLineOr { span, .. } => {
-                Err(crate::input::unavailable(span))
-            }
-            Evaluation::Ask { span, .. } | Evaluation::AskOr { span, .. } => {
-                Err(crate::input::prompt_unavailable(span))
-            }
+            Evaluation::Input { prompt, span, .. } => Err(if prompt.is_some() {
+                crate::input::prompt_unavailable(span)
+            } else {
+                crate::input::unavailable(span)
+            }),
             Evaluation::Call { span, .. } => Err(Diagnostic::new(
                 DiagnosticKind::FunctionUnsupported,
                 span,
@@ -126,10 +114,7 @@ impl Workspace {
                 Task::Visit(index) => expression.syntax.nodes()[*index].span,
                 Task::UserCall(_, _, span)
                 | Task::Tuple(_, span)
-                | Task::ReadLine(span)
-                | Task::ReadLineOr(span)
-                | Task::Ask(span)
-                | Task::AskOr(span)
+                | Task::Input(_, span)
                 | Task::Vector(_, _, span)
                 | Task::BitNot(span)
                 | Task::Index(span)
@@ -149,10 +134,7 @@ impl Workspace {
                     match &node.kind {
                         ExpressionKind::UserCall { arguments, .. } => {
                             tasks.push(match &expression.calls[index] {
-                                Some(ResolvedCall::ReadLine) => Task::ReadLine(node.span),
-                                Some(ResolvedCall::ReadLineOr) => Task::ReadLineOr(node.span),
-                                Some(ResolvedCall::Ask) => Task::Ask(node.span),
-                                Some(ResolvedCall::AskOr) => Task::AskOr(node.span),
+                                Some(ResolvedCall::Input(input)) => Task::Input(*input, node.span),
                                 Some(ResolvedCall::Builtin(builtin)) => {
                                     Task::Builtin(*builtin, index, node.span)
                                 }
@@ -364,23 +346,12 @@ impl Workspace {
                     values.extend([Value::BigInt(quotient), Value::BigInt(remainder)]);
                     finish_tuple(values, 2, budget, span)?;
                 }
-                Task::ReadLine(span) => return Ok(Evaluation::ReadLine(span)),
-                Task::ReadLineOr(span) => {
-                    return Ok(Evaluation::ReadLineOr {
-                        fallback: values.pop().expect("checked read_line_or argument"),
-                        span,
-                    });
-                }
-                Task::Ask(span) => {
-                    return Ok(Evaluation::Ask {
-                        prompt: values.pop().expect("checked ask argument"),
-                        span,
-                    });
-                }
-                Task::AskOr(span) => {
-                    let fallback = values.pop().expect("checked ask_or fallback");
-                    let prompt = values.pop().expect("checked ask_or prompt");
-                    return Ok(Evaluation::AskOr {
+                Task::Input(input, span) => {
+                    let fallback = input
+                        .has_fallback()
+                        .then(|| values.pop().expect("typed fallback"));
+                    let prompt = input.prompts().then(|| values.pop().expect("typed prompt"));
+                    return Ok(Evaluation::Input {
                         prompt,
                         fallback,
                         span,

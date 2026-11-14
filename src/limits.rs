@@ -86,6 +86,25 @@ pub(crate) struct Budget {
     bigint_limit: usize,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct BudgetAmounts {
+    steps: u64,
+    vector_bytes: usize,
+    text_bytes: usize,
+    tuple_bytes: usize,
+}
+
+impl BudgetAmounts {
+    pub fn spent(self, after: Self) -> Self {
+        Self {
+            steps: self.steps - after.steps,
+            vector_bytes: self.vector_bytes - after.vector_bytes,
+            text_bytes: self.text_bytes - after.text_bytes,
+            tuple_bytes: self.tuple_bytes - after.tuple_bytes,
+        }
+    }
+}
+
 impl Budget {
     pub fn new(steps: u64) -> Self {
         Self {
@@ -210,6 +229,33 @@ impl Budget {
         self.preflight_steps(amount, span)?;
         self.remaining -= amount;
         Ok(())
+    }
+
+    pub fn remaining_amounts(&self) -> BudgetAmounts {
+        BudgetAmounts {
+            steps: self.remaining,
+            vector_bytes: self.vector_remaining,
+            text_bytes: self.text_remaining,
+            tuple_bytes: self.tuple_remaining,
+        }
+    }
+
+    /// Replay work and allocations from a successful evaluation of the same
+    /// input. If any allowance is insufficient, leave all budgets untouched so
+    /// the caller can run the evaluator and report its first failing span.
+    pub fn try_replay(&mut self, spent: BudgetAmounts) -> bool {
+        if spent.steps > self.remaining
+            || spent.vector_bytes > self.vector_remaining
+            || spent.text_bytes > self.text_remaining
+            || spent.tuple_bytes > self.tuple_remaining
+        {
+            return false;
+        }
+        self.remaining -= spent.steps;
+        self.vector_remaining -= spent.vector_bytes;
+        self.text_remaining -= spent.text_bytes;
+        self.tuple_remaining -= spent.tuple_bytes;
+        true
     }
 }
 
