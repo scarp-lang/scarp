@@ -150,12 +150,12 @@ pub(crate) enum ResolvedCall {
     },
     Builtin(Builtin),
     BigIntDivMod,
-    Input(crate::input::InputBuiltin),
+    Io(crate::input::IoBuiltin),
 }
 
 pub(crate) fn is_builtin_name(name: &str) -> bool {
     name == "bigint_divmod"
-        || crate::input::InputBuiltin::from_name(name).is_some()
+        || crate::input::IoBuiltin::from_name(name).is_some()
         || Builtin::from_name(name).is_some()
 }
 
@@ -1259,8 +1259,8 @@ fn resolve_expression(
             } => {
                 // Preserve existing user function names; kernels occupy call
                 // position only when no user declaration has this name.
-                if let Some(input) = crate::input::InputBuiltin::from_name(name)
-                    .filter(|_| !names.contains_key(name))
+                if let Some(input) =
+                    crate::input::IoBuiltin::from_name(name).filter(|_| !names.contains_key(name))
                 {
                     let expected = input.arity();
                     if arguments.len() != expected
@@ -1281,7 +1281,9 @@ fn resolve_expression(
                         )?;
                     }
                     if pure {
-                        let message = if input.prompts() {
+                        let message = if input.output_target().is_some() {
+                            "pure expressions cannot flush program output"
+                        } else if input.prompts() {
                             "pure expressions cannot prompt for program input"
                         } else {
                             "pure expressions cannot read program input"
@@ -1293,8 +1295,8 @@ fn resolve_expression(
                         ));
                     }
                     slots.push(None);
-                    calls.push(Some(ResolvedCall::Input(input)));
-                    types.push(ValueType::String.into());
+                    calls.push(Some(ResolvedCall::Io(input)));
+                    types.push(input.result_type());
                     continue;
                 }
                 // Composite numerical intrinsic: its result is a structural tuple,

@@ -1,0 +1,2 @@
+bind name = ask_or("Name> ", "Guest");
+print("Hello", name);

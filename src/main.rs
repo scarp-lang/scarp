@@ -149,8 +149,8 @@ Execution-limit options: --max-steps, --max-prints, --max-call-depth, --max-call
 --max-tuple-bytes, --max-array-bytes, --max-bigint-digits, --max-bigint-bytes,
 --max-input-line-bytes, --max-input-bytes, --max-input-reads.
 --input-file PATH uses an explicit file instead of stdin for program input.
---interactive enables ask(prompt) and ask_or(prompt, fallback) to flush prompts,
-using stdin or an explicitly selected --input-file. Prompts are not rolled back.
+--interactive enables input(prompt), ask, ask_or, input_integer, input_float
+and input_bigint. Prompts are flushed before reading stdin or --input-file.
 Options precede the source path. -- permits filenames beginning with a dash.
 Program-argument forwarding and project entrypoint execution are not supported.
 read_line reads redirected UTF-8 stdin or --input-file PATH, or terminal input
@@ -158,8 +158,9 @@ with --interactive. Without --interactive, prompt calls report E0054.
 Input-file paths are relative to the working directory and are read under input quotas.
 Input defaults: 65536 raw bytes per line, 1048576 total bytes, 4096 reads.
 CR/LF count toward input/text quotas. Input cannot be rolled back; output stays buffered.
-Only --interactive permits immediate flushed prompts; normal program output
-remains buffered until evaluation succeeds.
+try_read_line() returns (false, \"\") only at ordinary EOF. The flush_stdout()
+and flush_stderr() calls publish the selected stream immediately with
+--interactive. Otherwise, output and flushes replay after successful evaluation.
 ";
 
 const CREATE_HELP: &str = "Usage: scarp create [--] <new-directory>
@@ -195,7 +196,8 @@ It does not support regex/globs; use 1..128 bytes, no leading dash, separators,
 colon or control characters. An empty selection reports zero tests.
 Files are sorted lexicographically, limited to 64, and checked for symlinks.
 An absent tests/ directory counts as an empty suite.
-An optional sibling NAME.stdin fixture supplies bounded per-test input.
+Optional sibling NAME.stdin, NAME.stdout and NAME.stderr fixtures supply
+bounded per-test input and compare expected output using exact UTF-8 bytes.
 Tests run only trusted Scarp code with existing deterministic default budgets.
 Interactive stdin and ordinary program stdout are not forwarded.
 A suite with no tests succeeds by default and reports an explicit zero-test result.

@@ -40,13 +40,13 @@ expression functions. Interpolation and custom formatting remain proposals.
 
 The entire program is checked for syntax, names, and types. Only the selected
 control-flow path is evaluated. That path prepares output snapshots before
-writing either stream. A later reachable arithmetic error, invalid repeat count,
-or exhausted budget prevents all program output, including stderr. Later
+writing either stream. In regular execution, a later arithmetic error, invalid repeat count or
+exhausted budget prevents replay of both streams. Later
 mutations cannot change an earlier captured value. `scarp check` evaluates the
 same selected path and limits silently, without retaining output events.
 
 `--max-prints` counts selected output statements across both streams, including
-empty raw writes. Each additional argument separator consumes one work step;
+empty raw writes and explicit flush calls. Each additional argument separator consumes one work step;
 expression work uses the existing step budget. These limits do not cap the byte
 length of a single string. See [budgets](budgets.md).
 
@@ -55,6 +55,20 @@ diagnostics also use stderr, but source/evaluation errors occur before program
 output is replayed. I/O failures can happen after earlier bytes were accepted;
 those bytes cannot be rolled back. Broken pipes retain the CLI's existing normal
 termination behavior.
+
+## Explicit stream flushing (alpha.10 development)
+
+`flush_stdout()` flushes stdout and `flush_stderr()` flushes stderr. They take no
+arguments, return unit and are impure. With `--interactive` or the interactive
+Rust embedding API, a call writes the selected stream's pending events in order
+and flushes that writer. The other stream's events stay buffered. The runtime
+reports E0067 at the call if the write or flush fails. Bytes already made
+visible stay visible on a later error.
+
+In ordinary execution, flushes replay in order alongside writes after
+successful evaluation. Repeated calls count individually toward the output
+call limit, and flushing does not refund the capture budget. Embedding with
+only a stdout writer requires the dual-writer API if a stderr flush is selected.
 
 ## Rust embedding
 

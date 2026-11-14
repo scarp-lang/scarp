@@ -84,7 +84,7 @@ try {
     foreach ($directory in @('examples', 'docs')) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $directory) -Destination $packageRoot -Recurse
     }
-    if ($version -in @('0.0.5-alpha.2', '0.0.5-alpha.3', '0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7', '0.0.6-alpha.8', '0.0.6-alpha.9')) {
+    if ($version -in @('0.0.5-alpha.2', '0.0.5-alpha.3', '0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7', '0.0.6-alpha.8', '0.0.6-alpha.9', '0.0.6-alpha.10')) {
         $releaseMetadataPath = Join-Path $projectRoot '.github/release-metadata.json'
         $releaseMetadata = Get-Content -LiteralPath $releaseMetadataPath -Raw | ConvertFrom-Json
         if ($releaseMetadata.schema_version -cne 1 -or $releaseMetadata.version -cne $version -or $releaseMetadata.documentation_repository -cne 'https://github.com/scarp-lang/scarp-docs') {
@@ -147,7 +147,7 @@ try {
         if ($staticNavigation.ExitCode -ne 0 -or $staticNavigation.Stderr.Length -ne 0) { throw 'Packaged navigation must not evaluate runtime arithmetic' }
     }
 
-    if ($version -in @('0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7', '0.0.6-alpha.8', '0.0.6-alpha.9')) {
+    if ($version -in @('0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7', '0.0.6-alpha.8', '0.0.6-alpha.9', '0.0.6-alpha.10')) {
         # Exercise the actual extracted distributable, not a development binary.
         $projectPath = Join-Path $stagingRoot 'alpha4-project-smoke'
         $created = Invoke-ScarpProcess -Executable $executable -Arguments @('create', $projectPath)
@@ -158,7 +158,7 @@ try {
         if ($projectVerify.ExitCode -ne 0 -or $projectVerify.Stdout.Length -ne 0 -or $projectVerify.Stderr.Length -ne 0) {
             throw 'Packaged Scarp project static verification failed'
         }
-        if ($version -in @('0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7', '0.0.6-alpha.8', '0.0.6-alpha.9')) {
+        if ($version -in @('0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7', '0.0.6-alpha.8', '0.0.6-alpha.9', '0.0.6-alpha.10')) {
             $projectModules = Invoke-ScarpProcess -Executable $executable -Arguments @('inspect', 'modules', '--json', $projectPath)
             if ($projectModules.ExitCode -ne 0 -or $projectModules.Stderr.Length -ne 0) {
                 throw 'Packaged project directory module inspection failed'
@@ -185,7 +185,7 @@ try {
         $failure = [Text.Encoding]::UTF8.GetString($invalid.Stderr) | ConvertFrom-Json -ErrorAction Stop
         if ($failure.schema_version -ne 1) { throw 'Packaged project traversal JSON schema differs' }
     }
-    if ($version -in @('0.0.6-alpha.8', '0.0.6-alpha.9')) {
+    if ($version -in @('0.0.6-alpha.8', '0.0.6-alpha.9', '0.0.6-alpha.10')) {
         $modernProject = Join-Path $stagingRoot 'Scarp calculator smoke'
         $initialized = Invoke-ScarpProcess -Executable $executable -Arguments @('init', $modernProject)
         if ($initialized.ExitCode -ne 0 -or $initialized.Stderr.Length -ne 0) {
@@ -227,13 +227,29 @@ try {
         if ($failed.ExitCode -ne 1 -or $failed.Stderr.Length -ne 0 -or $failure.failed -ne 1 -or $failure.tests[0].error -notmatch 'E0065') {
             throw 'Packaged assertion failure did not report E0065'
         }
-        if ($version -eq '0.0.6-alpha.9') {
+        if ($version -in @('0.0.6-alpha.9', '0.0.6-alpha.10')) {
             $structured = Invoke-ScarpProcess -Executable $executable -Arguments @('test', '--json=v2', '--require-tests', '--filter', 'input', $modernProject)
             $report = [Text.Encoding]::UTF8.GetString($structured.Stdout) | ConvertFrom-Json -ErrorAction Stop
             $case = $report.tests[0]
             if ($structured.ExitCode -ne 1 -or $structured.Stderr.Length -ne 0 -or $report.schema_version -ne 2 -or $report.failed -ne 1 -or $case.phase -cne 'runtime' -or $case.diagnostic.code -cne 'E0065' -or $case.diagnostic.primary.path -cne 'tests/input.srp') {
                 throw 'Packaged structured test diagnostic differs'
             }
+        }
+    }
+    if ($version -eq '0.0.6-alpha.10') {
+        $interactive = Join-Path $extractedPackage 'examples/interactive/greeting'
+        $prompted = Invoke-ScarpProcess -Executable $executable -Arguments @(
+            'exec', '--interactive', '--input-file', ($interactive + '.stdin'), ($interactive + '.srp')
+        )
+        $expected = [IO.File]::ReadAllBytes($interactive + '.stdout')
+        if ($prompted.ExitCode -ne 0 -or $prompted.Stderr.Length -ne 0 -or
+                [Convert]::ToBase64String($prompted.Stdout) -cne [Convert]::ToBase64String($expected)) {
+            throw 'Packaged interactive example failed'
+        }
+        $eof = Invoke-ScarpProcess -Executable $executable -Arguments @('exec', '--interactive', ($interactive + '.srp'))
+        if ($eof.ExitCode -ne 0 -or $eof.Stderr.Length -ne 0 -or
+                [Text.Encoding]::UTF8.GetString($eof.Stdout) -cne "Name> Hello Guest`n") {
+            throw 'Packaged interactive EOF fallback failed'
         }
     }
     $canonicalInspect = Invoke-ScarpProcess -Executable $executable -Arguments @('inspect', 'modules', '--json', '--diagnostic-format=json', (Join-Path $extractedPackage 'examples/hello.srp'))
@@ -266,6 +282,15 @@ try {
         else { 1 }
         if ($metadata.schema_version -ne $expectedSchema -or $metadata.entry -ne 0 -or $metadata.modules.Count -lt 1) {
             throw "Packaged $example JSON schema failed"
+        }
+    }
+    foreach ($example in @('typed_calculator', 'exact_integer')) {
+        $source = Join-Path $extractedPackage "examples/interactive/$example.srp"
+        $inputPath = Join-Path $extractedPackage "examples/interactive/$example.stdin"
+        $expected = [IO.File]::ReadAllBytes((Join-Path $extractedPackage "examples/interactive/$example.stdout"))
+        $actual = Invoke-ScarpProcess -Executable $executable -Arguments @('exec', '--interactive', '--input-file', $inputPath, $source)
+        if ($actual.ExitCode -ne 0 -or $actual.Stderr.Length -ne 0 -or [Convert]::ToBase64String($actual.Stdout) -cne [Convert]::ToBase64String($expected)) {
+            throw "Packaged interactive $example output differs"
         }
     }
     $explanation = Invoke-ScarpProcess -Executable $executable -Arguments @('explain', 'E0044')
