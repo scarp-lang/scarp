@@ -18,7 +18,7 @@ contracts](../project-testing.md), and [assertion syntax](../assertions.md).
 Scarp v0.0.6-alpha.9 adds `scarp test --json=v2`
 for [structured diagnostics](../project-testing.md#structured-failure-reports).
 
-**Development candidate only (not in published alpha.9):** `scarp exec
+**Published in v0.0.6-alpha.10:** `scarp exec
 --input-file DATA.txt app.srp` selects a UTF-8 file as the program's explicit
 input source. `run FILE`, `run PROJECT` and `launch PROJECT` accept the
 same option. An input file takes priority over ambient stdin; normal input
@@ -27,13 +27,13 @@ relative to the process working directory, not automatically to the Scarp
 source directory. Static commands reject the flag. Input is streamed through
 a buffered file reader rather than loaded into memory all at once.
 
-**Integration candidate (not in published alpha.9):** `--interactive`
+**Published in v0.0.6-alpha.10:** `--interactive`
 allows `ask(prompt)` and `ask_or(prompt, fallback)` to flush a prompt before
 reading a line from stdin or an input file. `--interactive --input-file DATA.txt` makes
 interactive programs reproducible without reading ambient stdin; prompts are
 visible even if later input or runtime execution fails. Without `--interactive`,
 prompt built-ins report E0054. `ask_or` uses the fallback only at EOF.
-Alpha.10 development also includes `input(prompt)` and the typed variants
+Alpha.10 also includes `input(prompt)` and the typed variants
 `input_integer`, `input_float` and `input_bigint`. `try_read_line()` handles
 EOF from any explicitly selected reader. `flush_stdout()` and
 `flush_stderr()` publish the selected stream during interactive execution

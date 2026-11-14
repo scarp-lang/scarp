@@ -1,10 +1,17 @@
 # Scarp
 
+**0.0.6-alpha.10** adds [typed console input and EOF-aware reads](docs/program-input.md),
+[independent stream flushing](docs/output.md), and
+[exact project output fixtures](docs/project-testing.md). It also adds
+[fixed arrays](docs/fixed-arrays.md) and advanced [BigInt operations](docs/bigint.md).
+The latest published prerelease is
+[0.0.6-alpha.10](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.10),
+with verified packages for Windows x64, Linux x64, and macOS Apple Silicon.
+[Release notes](docs/releases/v0.0.6-alpha.10-publication.md) ·
+[Verification record](docs/releases/v0.0.6-alpha.10-validation.md)
+
 **0.0.6-alpha.9** adds [bounded BigInt](docs/bigint.md) and opt-in
 [structured project test reports](docs/project-testing.md#structured-failure-reports).
-The latest published prerelease is
-[0.0.6-alpha.9](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.9),
-with verified packages for Windows x64, Linux x64, and macOS Apple Silicon.
 [Release notes](docs/releases/v0.0.6-alpha.9-publication.md) ·
 [Verification record](docs/releases/v0.0.6-alpha.9-validation.md)
 
