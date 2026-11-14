@@ -372,6 +372,13 @@ impl Parser<'_> {
                 .with_help("reduce the number of nested statement blocks"));
             }
         }
+        #[cfg(debug_assertions)]
+        if count >= 32 {
+            let _ = std::io::Write::write_all(
+                &mut std::io::stderr(),
+                b"SCARP_STACK_FAST:braces\n",
+            );
+        }
         self.cursor += count;
         let mut body = self.statement_list(depth + count, true)?;
         for offset in (0..count).rev() {
@@ -1794,6 +1801,13 @@ impl Parser<'_> {
         };
         if max_openings < 4 {
             return Ok(None);
+        }
+        #[cfg(debug_assertions)]
+        if max_openings >= 32 {
+            let _ = std::io::Write::write_all(
+                &mut std::io::stderr(),
+                b"SCARP_STACK_FAST:grouped_integer\n",
+            );
         }
         enum Operator {
             Opening(Span),
