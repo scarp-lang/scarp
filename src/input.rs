@@ -43,7 +43,7 @@ pub(crate) fn prompt_unavailable(span: Span) -> Diagnostic {
     Diagnostic::new(
         Kind::InputUnavailable,
         span,
-        "ask requires interactive input and a prompt writer",
+        "interactive input prompts require an explicit reader and prompt writer",
     )
     .with_help(
         "enable --interactive on scarp exec/run, or use an explicit interactive Rust host API",

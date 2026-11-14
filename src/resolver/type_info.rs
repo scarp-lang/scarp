@@ -13,6 +13,7 @@ pub(super) struct ProgramTypes {
     input: Option<TypeId>,
     input_fallback: Option<TypeId>,
     prompt: Option<TypeId>,
+    prompt_fallback: Option<TypeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,6 +74,7 @@ impl TypedExpression<'_> {
                     Some(ResolvedCall::ReadLine) => self.types.input,
                     Some(ResolvedCall::ReadLineOr) => self.types.input_fallback,
                     Some(ResolvedCall::Ask) => self.types.prompt,
+                    Some(ResolvedCall::AskOr) => self.types.prompt_fallback,
                     None => None,
                 };
                 TypedNode {
@@ -236,6 +238,7 @@ pub(super) fn build(
     let mut input = None;
     let mut input_fallback = None;
     let mut prompt = None;
+    let mut prompt_fallback = None;
     for (_, expression) in expressions(program) {
         for (index, call) in expression.calls.iter().enumerate() {
             if matches!(call, Some(ResolvedCall::ReadLine)) && input.is_none() {
@@ -271,6 +274,17 @@ pub(super) fn build(
                         .map_err(|error| failure(error, expression.syntax.nodes()[index].span))?,
                 );
             }
+            if matches!(call, Some(ResolvedCall::AskOr)) && prompt_fallback.is_none() {
+                prompt_fallback = Some(
+                    registry
+                        .intern(TypeKind::Function {
+                            parameters: vec![ValueType::String.id(), ValueType::String.id()].into(),
+                            result: ValueType::String.id(),
+                            effect: FunctionEffect::Impure,
+                        })
+                        .map_err(|error| failure(error, expression.syntax.nodes()[index].span))?,
+                );
+            }
             if let Some(ResolvedCall::Builtin(builtin)) = call {
                 if let std::collections::btree_map::Entry::Vacant(entry) = builtins.entry(*builtin)
                 {
@@ -298,5 +312,6 @@ pub(super) fn build(
         input,
         input_fallback,
         prompt,
+        prompt_fallback,
     })
 }
