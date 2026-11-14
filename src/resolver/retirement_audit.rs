@@ -130,10 +130,9 @@ fn audit_frame(
             ResolvedStatement::Destructure { slots, value } => {
                 read_slots(value, &state)?;
                 for slot in slots.iter().flatten() {
-                    *state_out
-                        .get_mut(*slot)
-                        .ok_or_else(|| format!("destructure initializes out-of-range slot {slot}"))? =
-                        true;
+                    *state_out.get_mut(*slot).ok_or_else(|| {
+                        format!("destructure initializes out-of-range slot {slot}")
+                    })? = true;
                 }
                 successors.push(pc + 1);
             }
