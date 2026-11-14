@@ -146,17 +146,16 @@ Execute a checked Scarp source file with the existing interpreter.
 --diagnostic-format=json is available for real compiler errors.
 Execution-limit options: --max-steps, --max-prints, --max-call-depth, --max-calls,
 --max-live-slots, --max-capture-bytes, --max-vector-bytes, --max-text-bytes,
---max-tuple-bytes, --max-bigint-digits, --max-bigint-bytes,
+--max-tuple-bytes, --max-array-bytes, --max-bigint-digits, --max-bigint-bytes,
 --max-input-line-bytes, --max-input-bytes, --max-input-reads.
 --input-file PATH uses an explicit file instead of stdin for program input.
---interactive enables ask(prompt) to flush prompt text before a bounded read,
+--interactive enables ask(prompt) and ask_or(prompt, fallback) to flush prompts,
 using stdin or an explicitly selected --input-file. Prompts are not rolled back.
-Options precede the
-source path. -- before a filename permits filenames beginning with a dash.
+Options precede the source path. -- permits filenames beginning with a dash.
 Program-argument forwarding and project entrypoint execution are not supported.
 read_line reads redirected UTF-8 stdin or --input-file PATH, or terminal input
-with --interactive. Without --interactive, ask reports E0054. Input-file paths are relative to the current
-working directory, and file contents are read incrementally under input quotas.
+with --interactive. Without --interactive, prompt calls report E0054.
+Input-file paths are relative to the working directory and are read under input quotas.
 Input defaults: 65536 raw bytes per line, 1048576 total bytes, 4096 reads.
 CR/LF count toward input/text quotas. Input cannot be rolled back; output stays buffered.
 Only --interactive permits immediate flushed prompts; normal program output
@@ -217,13 +216,13 @@ No dependencies, lockfiles or network operations are involved.
 Errors go to stderr and do not emit partial successful JSON output.
 ";
 
-const LAUNCH_HELP: &str =
-    "Usage: scarp launch [--diagnostic-format=json|text] [budget options] [--] <project-directory>
+const LAUNCH_HELP: &str = "Usage: scarp launch [--diagnostic-format=json|text] [budget options] [--] <project-directory>
 
 Load scarp.project or legacy Scarp.project from an explicit project directory, validate its entrypoint
 and execute the .srp file through the existing interpreter. The entrypoint
 must stay inside the project. Runtime budgets and diagnostic formats are
-identical to scarp exec. No implicit ancestor search or artifact generation.
+identical to scarp exec. Accepts --interactive and --input-file PATH.
+No implicit ancestor search or artifact generation.
 ";
 
 const GUIDE_HELP: &str = "Usage: scarp guide [command [subcommand]]
@@ -284,14 +283,15 @@ Vector and tile buffers share this cumulative quota; retirement does not refund 
 --max-text-bytes 8388608 limits cumulative new UTF-8 payload (1048576 bytes per string).
 --max-tuple-bytes 8388608 limits cumulative immutable tuple member/type payload.
 --max-bigint-digits 10000 (ceiling 1000000), --max-bigint-bytes 8388608 (limbs and scratch).
+--max-array-bytes 8388608 limits cumulative immutable fixed-array member/type payload.
 String sharing and direct literal output do not allocate text payload; retirement gives no refund.
 Snapshot bytes are a logical storage cap, not an exact process-memory limit.
 Counts are unsigned decimal digits, zero is valid, and each option may occur once.
 Example: scarp run --max-steps 2000000 --max-prints 10 examples/repeat.srp
 Use scarp check with the same options to evaluate without printing.
 read_line requires redirected UTF-8 stdin or --input-file PATH by default.
---interactive enables terminal input and visible ask(prompt) output, and works
-with --input-file for reproducible interactive-program fixtures.
+--interactive enables terminal input and visible ask/ask_or prompts, and works
+with --input-file for repeatable interactive-program tests.
 --max-input-line-bytes 65536, --max-input-bytes 1048576, --max-input-reads 4096.
 Raw input counts CR/LF and uses the text/work budgets. Output stays buffered.
 --diagnostic-format=json writes schema-1 errors to stderr, with local UTF-8 byte spans
@@ -313,6 +313,7 @@ Vector and tile buffers share this cumulative quota; retirement does not refund 
 --max-text-bytes 8388608 limits cumulative new UTF-8 payload (1048576 bytes per string).
 --max-tuple-bytes 8388608 limits cumulative immutable tuple member/type payload.
 --max-bigint-digits 10000 (ceiling 1000000), --max-bigint-bytes 8388608 (limbs and scratch).
+--max-array-bytes 8388608 limits cumulative immutable fixed-array member/type payload.
 String sharing and direct literal output do not allocate text payload; retirement gives no refund.
 All resource options take unsigned decimal counts, allow zero, and may occur once.
 Input-limit options are accepted, but check never reads stdin: a selected read_line
@@ -1033,6 +1034,7 @@ fn execution_limit_flag(flag: &str) -> bool {
             | "--max-tuple-bytes"
             | "--max-bigint-digits"
             | "--max-bigint-bytes"
+            | "--max-array-bytes"
             | "--max-input-line-bytes"
             | "--max-input-bytes"
             | "--max-input-reads"
@@ -1186,6 +1188,7 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
                         options.max_bigint_digits = value;
                     }
                     "--max-bigint-bytes" => options.max_bigint_bytes = value,
+                    "--max-array-bytes" => options.max_array_bytes = value,
                     "--max-input-line-bytes" => input_limits.max_line_bytes = value,
                     "--max-input-bytes" => input_limits.max_total_bytes = value,
                     "--max-input-reads" => input_limits.max_reads = value,

@@ -28,11 +28,15 @@ source directory. Static commands reject the flag. Input is streamed through
 a buffered file reader rather than loaded into memory all at once.
 
 **Integration candidate (not in published alpha.9):** `--interactive`
-explicitly allows `ask(prompt)` to write and flush a prompt before reading a
-line from stdin or an input file. `--interactive --input-file DATA.txt` makes
+allows `ask(prompt)` and `ask_or(prompt, fallback)` to flush a prompt before
+reading a line from stdin or an input file. `--interactive --input-file DATA.txt` makes
 interactive programs reproducible without reading ambient stdin; prompts are
 visible even if later input or runtime execution fails. Without `--interactive`,
-`ask` reports E0054 (also when `--input-file` was supplied).
+both prompt built-ins report E0054. `ask_or` uses the fallback only at EOF.
+
+Development builds accept `--max-array-bytes` on `exec`, `run`, `launch`, and
+`check`. The default cumulative fixed-array payload limit is 8,388,608 bytes.
+See [fixed arrays](../fixed-arrays.md) for the backing-storage charge.
 
 **v0.0.6-alpha.6 published prerelease:** `exec`/`run`/`launch` support redirected
 UTF-8 `read_line()` with `--max-input-line-bytes`, `--max-input-bytes` and
@@ -181,8 +185,10 @@ top-level `scarp ast` alias.
 
 ## Historical and existing CLI contracts
 
-Since alpha.2, `scarp modules --json [--] <path>` emits schema-version-1 metadata with
-file-local UTF-8 byte spans. `scarp explain E####` prints a code explanation without
+Since alpha.2, `scarp modules --json [--] <path>` emits metadata with file-local
+UTF-8 byte spans. Primitive signatures use schema 1, tuple signatures use schema
+2, and signatures containing a fixed array use schema 3 on development builds.
+`scarp explain E####` prints a code explanation without
 source I/O. See [JSON inspection and explanations](../module-json.md) for schema,
 ordering, flags, writer errors and status rules. Both commands are implemented;
 build/compile/fmt/test/bench/doc/doctor remain unavailable CLI commands.

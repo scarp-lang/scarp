@@ -1,6 +1,7 @@
 use scarp::{
     diagnostics::DiagnosticKind as Kind,
     modules::{
+        self,
         cache::{CacheLimits, CacheStatus, CachedCompileError, CompilationCache},
         ConstantLimits, MemorySourceLoader, ModuleLimits, SourceLoadError, SourceLoader,
     },
@@ -84,6 +85,95 @@ fn unchanged_program_reuses_only_resolved_semantics_and_still_reloads_sources() 
     let stats = cache.stats();
     assert_eq!((stats.entries, stats.hits, stats.misses), (1, 1, 1));
     assert_eq!((stats.evictions, stats.bypasses), (0, 0));
+}
+
+#[test]
+fn changed_diagnostic_qualifiers_refresh_both_compilation_caches() {
+    use scarp::modules::cache::{EditorCompilationCache, EditorCompileLimits};
+
+    struct Qualified<'a> {
+        inner: &'a MemorySourceLoader,
+        qualifier: &'a str,
+    }
+
+    impl SourceLoader for Qualified<'_> {
+        fn resolve(
+            &self,
+            importer: Option<&str>,
+            specifier: &str,
+        ) -> Result<String, SourceLoadError> {
+            self.inner.resolve(importer, specifier)
+        }
+
+        fn load(&self, identity: &str, max_bytes: usize) -> Result<String, SourceLoadError> {
+            self.inner.load(identity, max_bytes)
+        }
+
+        fn diagnostic_qualifier(&self, identity: &str) -> Option<String> {
+            (identity == "lib.srp").then(|| self.qualifier.to_owned())
+        }
+    }
+
+    let inner = loader(&[
+        (
+            "main.srp",
+            r#"import "lib.srp" as lib; print(lib.fail(0));"#,
+        ),
+        (
+            "lib.srp",
+            "pub funcra fail(input: integer) -> integer { return 42 / input; }",
+        ),
+    ]);
+    let first = Qualified {
+        inner: &inner,
+        qualifier: "first/lib.srp",
+    };
+    let second = Qualified {
+        inner: &inner,
+        qualifier: "second/lib.srp",
+    };
+    let mut compiler = CompilationCache::new(CacheLimits::default());
+    let mut editor = EditorCompilationCache::new(Default::default());
+    let revisions = [4, 8];
+    for (source, expected) in [
+        (&first, CacheStatus::Stored),
+        (&second, CacheStatus::Stored),
+        (&second, CacheStatus::Hit),
+    ] {
+        let cold =
+            modules::compile_with_loader("main.srp", source, ModuleLimits::default()).unwrap();
+        let cached = compile(&mut compiler, source, &revisions).unwrap();
+        let graph = modules::load("main.srp", source, ModuleLimits::default()).unwrap();
+        let indexed = editor
+            .resolve(graph, EditorCompileLimits::default(), |_| Some(4), None)
+            .unwrap();
+        let expected_error = cold
+            .check(ExecutionOptions::default())
+            .unwrap_err()
+            .diagnostic;
+        assert_eq!(cached.status, expected);
+        assert_eq!(indexed.status, expected);
+        assert_eq!(
+            cached
+                .program
+                .check(ExecutionOptions::default())
+                .unwrap_err()
+                .diagnostic,
+            expected_error
+        );
+        assert_eq!(
+            indexed
+                .program
+                .check(ExecutionOptions::default())
+                .unwrap_err()
+                .diagnostic,
+            expected_error
+        );
+        assert!(expected_error
+            .related
+            .iter()
+            .any(|label| label.message.contains(source.qualifier)));
+    }
 }
 
 #[test]

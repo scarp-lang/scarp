@@ -1,4 +1,4 @@
-//! Explicit BigInt constructors/conversions; no implicit numeric coercion.
+//! Explicit, bounded BigInt operations; never coerce to float or i64 implicitly.
 use super::*;
 use crate::bigint::BigInt;
 
@@ -22,13 +22,115 @@ pub(super) fn evaluate(
             argument_span(0),
         )
         .map(Value::BigInt),
+        Builtin::BigIntPow => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .pow(
+                args[1].as_integer().expect("typed integer"),
+                budget,
+                argument_span(1),
+            )
+            .map(Value::BigInt),
+        Builtin::BigIntGcd => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .gcd(args[1].as_bigint().expect("typed bigint"), budget, span)
+            .map(Value::BigInt),
+        Builtin::BigIntLcm => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .lcm(args[1].as_bigint().expect("typed bigint"), budget, span)
+            .map(Value::BigInt),
+        Builtin::BigIntSqrt => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .integer_sqrt(budget, argument_span(0))
+            .map(Value::BigInt),
+        Builtin::BigIntPowMod => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .pow_mod(
+                args[1].as_integer().expect("typed integer"),
+                args[2].as_bigint().expect("typed bigint"),
+                budget,
+                argument_span(1),
+                argument_span(2),
+            )
+            .map(Value::BigInt),
+        Builtin::BigIntFromRadix => BigInt::from_radix(
+            args[0].as_str().expect("typed string"),
+            args[1].as_integer().expect("typed integer"),
+            budget,
+            argument_span(0),
+            argument_span(1),
+        )
+        .map(Value::BigInt),
+        Builtin::BigIntToRadix => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .to_radix(
+                args[1].as_integer().expect("typed integer"),
+                budget,
+                argument_span(0),
+                argument_span(1),
+            )
+            .map(Value::String),
+        Builtin::BigIntAnd | Builtin::BigIntOr | Builtin::BigIntXor => {
+            use crate::bigint::bitwise::BitwiseOperation;
+            let operation = match function {
+                Builtin::BigIntAnd => BitwiseOperation::And,
+                Builtin::BigIntOr => BitwiseOperation::Or,
+                _ => BitwiseOperation::Xor,
+            };
+            args[0]
+                .as_bigint()
+                .expect("typed bigint")
+                .bitwise(
+                    args[1].as_bigint().expect("typed bigint"),
+                    operation,
+                    budget,
+                    span,
+                )
+                .map(Value::BigInt)
+        }
+        Builtin::BigIntNot => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .bitwise_not(budget, argument_span(0))
+            .map(Value::BigInt),
+        Builtin::BigIntShl | Builtin::BigIntShr => {
+            let value = args[0].as_bigint().expect("typed bigint");
+            let count = args[1].as_integer().expect("typed integer");
+            if function == Builtin::BigIntShl {
+                value.shift_left(count, budget, argument_span(1))
+            } else {
+                value.shift_right(count, budget, argument_span(1))
+            }
+            .map(Value::BigInt)
+        }
         _ => {
             let value = args[0].as_bigint().expect("typed bigint");
             budget.check_bigint_digits(value.decimal_digits(), argument_span(0))?;
-            budget.charge(1, span)?;
             match function {
-                Builtin::BigIntAbs => Ok(Value::BigInt(value.absolute())),
-                Builtin::BigIntToInteger => value.to_integer().map(Value::Integer).ok_or_else(|| Diagnostic::new(DiagnosticKind::NumericConversion, argument_span(0), "bigint is outside the signed 64-bit integer range").with_help("keep the exact bigint value or select a value from -9223372036854775808 through 9223372036854775807")),
+                Builtin::BigIntAbs => {
+                    budget.charge(1, span)?;
+                    Ok(Value::BigInt(value.absolute()))
+                }
+                Builtin::BigIntToInteger => {
+                    budget.charge(1, span)?;
+                    value.to_integer().map(Value::Integer).ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::NumericConversion,
+                            argument_span(0),
+                            "bigint is outside the signed 64-bit integer range",
+                        )
+                        .with_help("keep the exact bigint value or select a value from -9223372036854775808 through 9223372036854775807")
+                    })
+                }
+                Builtin::BigIntBitLength => value
+                    .bit_length(budget, argument_span(0))
+                    .map(Value::Integer),
+                Builtin::BigIntToText => value.to_text(budget, argument_span(0)).map(Value::String),
                 _ => unreachable!("checked bigint dispatch"),
             }
         }

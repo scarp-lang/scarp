@@ -143,14 +143,13 @@ pub(crate) enum ResolvedCall {
         parameters: Vec<usize>,
     },
     Builtin(Builtin),
-    ReadLine,
-    ReadLineOr,
-    Ask,
-    AskOr,
+    BigIntDivMod,
+    Input(crate::input::InputBuiltin),
 }
 
 pub(crate) fn is_builtin_name(name: &str) -> bool {
-    matches!(name, "read_line" | "read_line_or" | "ask" | "ask_or")
+    name == "bigint_divmod"
+        || crate::input::InputBuiltin::from_name(name).is_some()
         || Builtin::from_name(name).is_some()
 }
 
@@ -987,11 +986,45 @@ fn resolve_expression(
                     require_value(&types[element], syntax.nodes()[element].span)?;
                     members.push(types[element].clone());
                 }
+                let limit = if members.iter().any(SourceType::contains_array) {
+                    DiagnosticKind::ArrayLimit
+                } else {
+                    DiagnosticKind::TupleLimit
+                };
                 let kind = SourceType::tuple(members).ok_or_else(|| {
+                    Diagnostic::new(limit, node.span, "tuple exceeds structural shape limits")
+                })?;
+                (kind, None)
+            }
+            ExpressionKind::Array {
+                elements,
+                empty_element_type,
+            } => {
+                let element_type = if let Some((&first, rest)) = elements.split_first() {
+                    let first_span = syntax.nodes()[first].span;
+                    let kind = &types[first];
+                    require_value(kind, first_span)?;
+                    for &element in rest {
+                        require_type(&types[element], kind, syntax.nodes()[element].span).map_err(
+                            |error| {
+                                error.with_related(
+                                    first_span,
+                                    "the first array element has this type",
+                                )
+                            },
+                        )?;
+                    }
+                    kind
+                } else {
+                    empty_element_type
+                        .as_ref()
+                        .expect("parser supplied element type")
+                };
+                let kind = SourceType::array(element_type, elements.len()).ok_or_else(|| {
                     Diagnostic::new(
-                        DiagnosticKind::TupleLimit,
+                        DiagnosticKind::ArrayLimit,
                         node.span,
-                        "tuple shape exceeds arity, depth or structural-node limits",
+                        "array exceeds structural or expanded shape limits",
                     )
                 })?;
                 (kind, None)
@@ -1022,6 +1055,18 @@ fn resolve_expression(
                 operator_span,
                 source_literal,
             } => {
+                if let Some(array) = types[*vector].as_array() {
+                    require_type(
+                        &types[*index],
+                        ValueType::Integer,
+                        syntax.nodes()[*index].span,
+                    )?;
+                    let element = array.element().clone();
+                    slots.push(None);
+                    calls.push(None);
+                    types.push(element);
+                    continue;
+                }
                 if let Some(elements) = types[*vector].tuple_elements() {
                     let mut literal = *index;
                     while let ExpressionKind::Group { expression } = syntax.nodes()[literal].kind {
@@ -1080,54 +1125,18 @@ fn resolve_expression(
             } => {
                 // Preserve existing user function names; kernels occupy call
                 // position only when no user declaration has this name.
-                if matches!(name.as_str(), "read_line" | "read_line_or")
-                    && !names.contains_key(name)
+                if let Some(input) = crate::input::InputBuiltin::from_name(name)
+                    .filter(|_| !names.contains_key(name))
                 {
-                    let with_fallback = name == "read_line_or";
-                    let expected = if with_fallback { 1 } else { 0 };
+                    let expected = input.arity();
                     if arguments.len() != expected
                         || arguments.iter().any(|argument| argument.label.is_some())
                     {
+                        let qualifier = if input.prompts() { " string" } else { "" };
                         return Err(Diagnostic::new(
                             DiagnosticKind::CallArguments,
                             *function_span,
-                            format!("{name} requires {expected} positional arguments"),
-                        ));
-                    }
-                    if with_fallback {
-                        let fallback = &arguments[0];
-                        require_type(
-                            &types[fallback.expression],
-                            ValueType::String,
-                            syntax.nodes()[fallback.expression].span,
-                        )?;
-                    }
-                    if pure {
-                        return Err(Diagnostic::new(
-                            DiagnosticKind::ImpureFunction,
-                            *function_span,
-                            "pure expressions cannot read program input",
-                        ));
-                    }
-                    slots.push(None);
-                    calls.push(Some(if with_fallback {
-                        ResolvedCall::ReadLineOr
-                    } else {
-                        ResolvedCall::ReadLine
-                    }));
-                    types.push(ValueType::String.into());
-                    continue;
-                }
-                if matches!(name.as_str(), "ask" | "ask_or") && !names.contains_key(name) {
-                    let with_fallback = name == "ask_or";
-                    let expected = if with_fallback { 2 } else { 1 };
-                    if arguments.len() != expected
-                        || arguments.iter().any(|argument| argument.label.is_some())
-                    {
-                        return Err(Diagnostic::new(
-                            DiagnosticKind::CallArguments,
-                            *function_span,
-                            format!("{name} requires {expected} positional string arguments"),
+                            format!("{name} requires {expected} positional{qualifier} arguments"),
                         ));
                     }
                     for argument in arguments {
@@ -1138,19 +1147,45 @@ fn resolve_expression(
                         )?;
                     }
                     if pure {
+                        let message = if input.prompts() {
+                            "pure expressions cannot prompt for program input"
+                        } else {
+                            "pure expressions cannot read program input"
+                        };
                         return Err(Diagnostic::new(
                             DiagnosticKind::ImpureFunction,
                             *function_span,
-                            "pure expressions cannot prompt for program input",
+                            message,
                         ));
                     }
                     slots.push(None);
-                    calls.push(Some(if with_fallback {
-                        ResolvedCall::AskOr
-                    } else {
-                        ResolvedCall::Ask
-                    }));
+                    calls.push(Some(ResolvedCall::Input(input)));
                     types.push(ValueType::String.into());
+                    continue;
+                }
+                // Composite numerical intrinsic: its result is a structural tuple,
+                // not a primitive Builtin. User-declared functions can shadow it.
+                if name == "bigint_divmod" && !names.contains_key(name) {
+                    if arguments.len() != 2 || arguments.iter().any(|a| a.label.is_some()) {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::CallArguments,
+                            *function_span,
+                            "bigint_divmod requires two positional bigint arguments",
+                        ));
+                    }
+                    for argument in arguments {
+                        require_type(
+                            &types[argument.expression],
+                            ValueType::BigInt,
+                            syntax.nodes()[argument.expression].span,
+                        )?;
+                    }
+                    let kind =
+                        SourceType::tuple(vec![ValueType::BigInt.into(), ValueType::BigInt.into()])
+                            .expect("two primitive members form a valid source tuple");
+                    slots.push(None);
+                    calls.push(Some(ResolvedCall::BigIntDivMod));
+                    types.push(kind);
                     continue;
                 }
                 if let Some(builtin) =

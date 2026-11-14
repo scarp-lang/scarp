@@ -95,6 +95,9 @@ Rust API/schema migration before adopting that source.
 - [Read-only project metadata](project-info.md)
 - [Boolean assertions](assertions.md)
 
+**Development fixed arrays:** [immutable fixed-size arrays](fixed-arrays.md)
+support homogeneous structural types, checked indexing and module interfaces.
+
 ## Guides and what each adds
 
 The [feature-completeness matrix](development/feature-matrix.md) distinguishes
