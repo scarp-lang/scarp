@@ -1743,11 +1743,129 @@ impl Parser<'_> {
 
     // Keep the nested expression stack bounded even with 64 nested groups.
     #[inline(never)]
+    /// Parse deeply nested parenthesized integer infix expressions with a
+    /// bounded *heap* operator stack instead of recursively consuming every
+    /// logical/arithmetic precedence frame for each pair of parentheses.
+    ///
+    /// This is a conservative fast path. It requires a balanced, syntactically
+    /// valid region consisting exclusively of integer literals, known binary
+    /// arithmetic/bitwise operators, and parentheses. All mixed expressions,
+    /// tuples, function calls, conditions, unary signs and invalid syntax
+    /// continue through the existing complete grammar without reinterpretation.
+    ///
+    /// Only four-or-more nested groups use this path; ordinary source remains
+    /// on the original parser. Each Group retains its original byte spans and
+    /// every operator is reduced using the existing precedence table.
+    fn grouped_integer_infix(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+    ) -> Result<Option<usize>, ParseError> {
+        if !self.pending.is_empty() {
+            return Ok(None);
+        }
+        let start = self.cursor;
+        let mut openings = 0usize;
+        let mut max_openings = 0usize;
+        let mut expecting_operand = true;
+        let mut final_position = None;
+        for (position, token) in self.tokens.iter().enumerate().skip(start) {
+            match &token.kind {
+                TokenKind::LeftParen if expecting_operand => {
+                    openings += 1;
+                    max_openings = max_openings.max(openings);
+                }
+                TokenKind::Integer(_) if expecting_operand => expecting_operand = false,
+                TokenKind::RightParen if !expecting_operand && openings > 0 => {
+                    openings -= 1;
+                    if openings == 0 {
+                        final_position = Some(position);
+                        break;
+                    }
+                }
+                kind if !expecting_operand && infix_operator(kind).is_some() => {
+                    expecting_operand = true;
+                }
+                _ => return Ok(None),
+            }
+        }
+        let Some(final_position) = final_position else {
+            return Ok(None);
+        };
+        if max_openings < 4 {
+            return Ok(None);
+        }
+        enum Operator {
+            Opening(Span),
+            Binary(BinaryOperator, Span, u8),
+        }
+        let mut operators: Vec<Operator> = Vec::new();
+        let mut operands: Vec<usize> = Vec::new();
+        while self.cursor <= final_position {
+            let token = self.current().expect("preflight validated expression");
+            match &token.kind {
+                TokenKind::LeftParen => {
+                    let span = token.span;
+                    self.expression_depth(depth + operators.iter()
+                        .filter(|op| matches!(op, Operator::Opening(_))).count(), span)?;
+                    operators.push(Operator::Opening(span));
+                    self.advance();
+                }
+                TokenKind::Integer(_) => {
+                    operands.push(self.atom(nodes)?);
+                }
+                TokenKind::RightParen => {
+                    let closing = token.span;
+                    self.advance();
+                    loop {
+                        match operators.pop().expect("preflight checked balanced groups") {
+                            Operator::Opening(opening) => {
+                                let expression = operands.pop()
+                                    .expect("preflight checked group operand");
+                                operands.push(push(
+                                    nodes,
+                                    ExpressionKind::Group { expression },
+                                    Span::new(opening.start, closing.end),
+                                ));
+                                break;
+                            }
+                            Operator::Binary(operator, span, _) => {
+                                reduce_binary(nodes, &mut operands, operator, span);
+                            }
+                        }
+                    }
+                }
+                kind => {
+                    let (operator, precedence) =
+                        infix_operator(kind).expect("preflight validated infix operator");
+                    let span = token.span;
+                    self.advance();
+                    while matches!(
+                        operators.last(),
+                        Some(Operator::Binary(_, _, old)) if *old >= precedence
+                    ) {
+                        let Some(Operator::Binary(operator, span, _)) = operators.pop() else {
+                            unreachable!("checked binary operator");
+                        };
+                        reduce_binary(nodes, &mut operands, operator, span);
+                    }
+                    operators.push(Operator::Binary(operator, span, precedence));
+                }
+            }
+        }
+        debug_assert!(operators.is_empty());
+        debug_assert_eq!(operands.len(), 1);
+        Ok(operands.pop())
+    }
+
     fn group_expression(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
         depth: usize,
     ) -> Result<usize, ParseError> {
+        if let Some(compact) = self.grouped_integer_infix(nodes, depth)? {
+            return Ok(compact);
+        }
         let opening = self.current().unwrap().span;
         self.expression_depth(depth, opening)?;
         self.advance();
