@@ -1742,8 +1742,6 @@ impl Parser<'_> {
         Ok((result, end))
     }
 
-    // Keep the nested expression stack bounded even with 64 nested groups.
-    #[inline(never)]
     /// Parse deeply nested parenthesized integer infix expressions with a
     /// bounded *heap* operator stack instead of recursively consuming every
     /// logical/arithmetic precedence frame for each pair of parentheses.
@@ -1866,6 +1864,8 @@ impl Parser<'_> {
         Ok(operands.pop())
     }
 
+    // Keep the nested expression stack bounded even with 64 nested groups.
+    #[inline(never)]
     fn group_expression(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
