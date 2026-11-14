@@ -1,9 +1,9 @@
 # Feature completeness and development roadmap
 
-Cargo declares `0.0.6-alpha.9`, the published prerelease with structured test
-reports and bounded BigInt arithmetic. Alpha.8 added declarative projects,
-project tests, and assertions. Alpha.7 introduced typed conditional expressions
-and Unicode scalar string escapes.
+Cargo declares `0.0.6-alpha.10` on the development candidate. The latest
+published prerelease, alpha.9, added structured test reports and bounded BigInt
+arithmetic. Alpha.8 added declarative projects, project tests, and assertions.
+Alpha.7 introduced typed conditional expressions and Unicode scalar string escapes.
 [Alpha.9 verification](../releases/v0.0.6-alpha.9-validation.md)
 
 The published alpha.6 adds bounded program input, six scalar/text utilities and
@@ -53,7 +53,7 @@ requires separate architecture and multiple implementation phases.
 | Feature | Current status | Missing subfeatures | Dependencies | Priority | Complexity | Required tests | Documentation |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | UTF-8 source and lexical rules | Implemented; ASCII identifiers | Unicode identifier policy, additional escapes | Lexer/source spans | P2 | M | BOM, invalid UTF-8, boundaries, truncation | Lexical grammar |
-| Parser and AST | Flat expressions, bounded statements, typed declarations | General composite types beyond tuple | Structural tuple type grammar | P0 | S | AST spans, malformed annotations, depth | Grammar/API migration |
+| Parser and AST | Flat expressions, bounded statements, typed declarations | Further general composite types | Structural tuple and fixed-array grammar | P0 | S | AST spans, malformed annotations, depth | Grammar/API migration |
 | Immutable/mutable bindings | Implemented bind/var and optional annotations | Deferred initialization remains intentionally absent | Parser, typed resolver | P0 | S | Inferred/annotated parity, mismatch, shadowing | Variables/tutorial |
 | Initialization analysis | Initializers mandatory; resolve before insertion | Deferred/conditional initialization not designed | CFG/data-flow first | P2 | L | Self-use, branch joins, loops | Initialization contract |
 | Lexical shadowing | Implemented | Rich pattern bindings | Resolver scopes | P2 | M | Shadowing initializer, duplicates, captures | Scope rules |
@@ -65,7 +65,7 @@ requires separate architecture and multiple implementation phases.
 | Scalar/text foundations (published alpha.6) | Six pure intrinsics for explicit decimal parsing/formatting, Unicode trim and literal replacement; absent from published alpha.5 | Char/byte types, split/join and general collections remain separate | Existing typed built-in registry and text/work budgets | P0 | M | Exact scalar round trips, invalid input, resource bounds, module/CLI parity | [Contract](../text-foundations.md) |
 | Characters and bytes | Missing | Distinct types, decoding and conversion rules | Type representation and allocation limits | P2 | L | Encoding/invalid sequences, host parity | Type proposal |
 | Immutable heterogeneous tuples | Published alpha.6; absent from alpha.5 | Empty tuples, dynamic indices, destructuring and tuple constants deferred | Structural SourceType, tuple values, registry and bounded interpreter integration | P0 | L | Creation, projection, calls/modules, equality/display, quotas, spans and host migration | [Tuple contract](../tuples.md) |
-| Fixed typed arrays | Deferred; proposal 0036 | Types, literals, indexing and whole-value semantics | Composite source/value boundary | P1 | L | Length/index/type errors, quotas and modules | Array proposal |
+| Fixed typed arrays | Development interpreter supports homogeneous literals, typed empty arrays, checked indexing and whole-value replacement | Slicing, iteration and native array ABI deferred | Structural source types, immutable payload and schema 3 | P1 | L | Length/index/type errors, quotas, output, module and host parity | [Fixed arrays](../fixed-arrays.md) |
 | Dynamic typed lists | Numeric vectors only | General element types and mutation policy | Composite types, allocation budgets | P2 | XL | Aliasing, shape, limits, retirement | Collection contract |
 | Maps/sets | Missing | Key equality/hash policy, deterministic iteration | Composite types and allocation accounting | P2 | XL | Collisions/order/limits, Unicode keys | Collection contract |
 | Optional/structured errors | Missing | Tagged values and propagation | Variants and match typing | P1 | L | Success/error paths, exhaustive handling | Error model |
@@ -73,8 +73,8 @@ requires separate architecture and multiple implementation phases.
 | Enums/tagged variants | Missing | Constructors, pattern typing | Composite types and exhaustiveness | P1 | L | Exhaustive/redundant patterns, recursion | Variant/match design |
 | Generics/type aliases | Missing | Type parameters, constraints, monomorphization policy | Composite types and stable IR | P2 | XL | Substitution, recursion bounds, diagnostics | Type-system design |
 | Arithmetic/comparison/logic | Strict primitive kinds and typed conditional expressions | Conditional expressions in constants or native emission | Typed expression nodes | P1 | M | Precedence, short circuit, dead-branch typing | Expressions |
-| BigInt (published alpha.9) | Exact signed runtime arithmetic, comparisons, explicit conversions, typed functions/modules, configurable limits | Constant folding, optimized large multiplication/division, native backend and decimal arithmetic | Independent safe-Rust magnitude engine and shared Budget | P1 | L | Seeded Rust/Python oracles, budgets, CLI/module parity, opt-in large fixtures | [BigInt](../bigint.md) |
-| Indexing/slicing | Numeric vectors/windows and tile cells/lanes | General strings/collections and multidimensional syntax | Composite types; text scalar policy | P1 | L | Bounds, visible windows, backing lifetime | Collection guides |
+| BigInt | Published alpha.9 adds exact signed runtime arithmetic. The alpha.10 candidate adds power, number theory, radix conversion, signed bitwise operations and divmod | Constant folding, large multiplication/division optimization and native lowering | Independent safe-Rust magnitude engine and shared Budget | P1 | L | Seeded Rust/Python oracles, budgets, CLI/module parity, opt-in large fixtures | [BigInt](../bigint.md) |
+| Indexing/slicing | Numeric vectors/windows, tile cells/lanes, tuple projection and fixed-array indexing | General strings/collections and multidimensional syntax | Composite types and text scalar policy | P1 | L | Bounds, visible windows, backing lifetime | Collection guides |
 | If/while/repeat | Implemented and bounded | General collection iteration/ranges | Iterator/range type design | P1 | L | Empty/range bounds, controls, budgets | Iteration grammar |
 | Break/continue/early return | Implemented with retirement | Labeled control only if justified | CFG and scope cleanup | P2 | M | Nested exits, contracts, retirement | Control flow |
 | Pattern matching | Missing | Patterns, exhaustiveness, binding analysis | Variants/composite types | P1 | L | Missing/redundant arms, scope joins | Match design |
@@ -97,7 +97,7 @@ requires separate architecture and multiple implementation phases.
 | Sampled scientific calculus | Published v0.0.6-alpha.4: bounded `sample_area`, `sample_slopes` and `sample_cumulative_area` for finite samples | Adaptive integration, pointwise derivatives, higher-order schemes | Finite vector registry and execution budgets | P1 | M | Analytic linear oracle, irregular grid, overflow, subnormal, shape, work and allocation | [Sampled calculus contract](../sampled-calculus.md) |
 | General text/algorithms | Unicode length/codepoint/search/prefix/suffix implemented | General collection sorting/search | Allocation/work policy, collection types | P0 | M | Unicode semantics, deterministic search, limits | Standard library |
 | Formatting/JSON/serialization | Versioned module metadata JSON implemented | Language value JSON, general formatting and serialization | Error/composite values; bounded parsing | P1 | L | Escaping, schemas, invalid data, limits | Format/version policy |
-| Program line input | Published alpha.6; absent from alpha.5 | Terminal prompts/ask explicitly deferred | Explicit BufRead capability, independent input quotas and existing work/text/output budgets | P0 | M | UTF-8/CRLF/EOF, purity, atomic replay, static nonexecution, injected readers, CLI and exact limits | [Compiler input contract](../program-input.md) |
+| Program line input | Published alpha.6 adds bounded line input. The alpha.10 candidate adds explicit files, EOF fallback and opt-in flushed prompts | Broader I/O capability design | Explicit BufRead capability, independent input quotas and existing work/text/output budgets | P0 | M | UTF-8/CRLF/EOF, purity, atomic replay, static nonexecution, injected readers, CLI and exact limits | [Compiler input contract](../program-input.md) |
 | Filesystem/network/process I/O | Explicit source loader only | External capability model and structured errors | Effects, permissions, errors | P2 | XL | Denied access, roots, no ambient authority | Security model |
 | Dates/time/random/environment | Missing | Explicit nondeterministic host capabilities | Effects/host interfaces | P3 | L | Seed/replay, denied host calls | Capability APIs |
 | Numerical AI kernels | Published: vectors/tiles, stable softmax/loss/gradients, RMS, alpha.3 Top-K and temperature-controlled softmax, alpha.4 cosine similarity; published alpha.5 adds deterministic Top-P and Pearson correlation | Generalized tensors/broadcasting and shape types (proposal 0036) | Composite numeric type/shape design | P1 | XL | Reference models, shapes, budgets, precision | Tensor proposal |

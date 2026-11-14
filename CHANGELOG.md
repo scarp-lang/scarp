@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.6-alpha.10 — development candidate
+
+- Add `read_line_or`, explicit UTF-8 input files, and opt-in terminal prompts
+  with `ask` and `ask_or`. Keep EOF distinct from empty lines and input errors.
+- Add immutable fixed-size arrays, including typed empty values, nested
+  values, checked indexing, and an independent allocation limit.
+  Array-bearing module inventories use JSON schema 3.
+- Add advanced exact BigInt arithmetic, number theory, radix conversion,
+  signed bitwise operations, and a single-pass quotient/remainder tuple.
+- Add opt-in constant and revision-aware editor caches. Reduce allocations
+  during scalar IR verification and retain cold-build diagnostic parity.
+
 ## 0.0.6-alpha.9 — published GitHub prerelease, 2026-11-13
 
 - Add opt-in `scarp test --json=v2` with compile, fixture, and runtime

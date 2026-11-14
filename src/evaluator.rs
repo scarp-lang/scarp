@@ -3,10 +3,12 @@
 use crate::{
     ast::{BinaryOperator, Expression, ExpressionKind, LogicalOperator},
     diagnostics::{Diagnostic, DiagnosticKind, Span},
+    input::InputBuiltin,
     limits::Budget,
     numeric::{self, Builtin},
     resolver::{self, ResolvedCall, ResolvedExpression},
-    value::{finite_number, type_mismatch, Value, ValueType},
+    types::SourceType,
+    value::{finite_number, type_mismatch, ArrayValue, TupleValue, Value, ValueType},
 };
 
 /// Evaluate a standalone integer expression, preserving the v0.0.1 return type.
@@ -37,13 +39,12 @@ enum Task {
     BitNot(Span),
     Vector(usize, bool, Span),
     Tuple(usize, Span),
-    Index(Span),
+    Array(usize, Span),
+    Index(usize, Span),
     Builtin(Builtin, usize, Span),
+    BigIntDivMod(usize, Span),
     UserCall(usize, usize, Span),
-    ReadLine(Span),
-    ReadLineOr(Span),
-    Ask(Span),
-    AskOr(Span),
+    Input(InputBuiltin, Span),
     Visit(usize),
     Negate(Span),
     Not(Span),
@@ -55,18 +56,9 @@ enum Task {
 
 pub(crate) enum Evaluation {
     Complete(Value),
-    ReadLine(Span),
-    ReadLineOr {
-        fallback: Value,
-        span: Span,
-    },
-    Ask {
-        prompt: Value,
-        span: Span,
-    },
-    AskOr {
-        prompt: Value,
-        fallback: Value,
+    Input {
+        prompt: Option<Value>,
+        fallback: Option<Value>,
         span: Span,
     },
     Call {
@@ -90,12 +82,11 @@ impl Workspace {
         self.start(expression);
         match self.resume(expression, environment, budget)? {
             Evaluation::Complete(value) => Ok(value),
-            Evaluation::ReadLine(span) | Evaluation::ReadLineOr { span, .. } => {
-                Err(crate::input::unavailable(span))
-            }
-            Evaluation::Ask { span, .. } | Evaluation::AskOr { span, .. } => {
-                Err(crate::input::prompt_unavailable(span))
-            }
+            Evaluation::Input { prompt, span, .. } => Err(if prompt.is_some() {
+                crate::input::prompt_unavailable(span)
+            } else {
+                crate::input::unavailable(span)
+            }),
             Evaluation::Call { span, .. } => Err(Diagnostic::new(
                 DiagnosticKind::FunctionUnsupported,
                 span,
@@ -125,14 +116,13 @@ impl Workspace {
                 Task::Visit(index) => expression.syntax.nodes()[*index].span,
                 Task::UserCall(_, _, span)
                 | Task::Tuple(_, span)
-                | Task::ReadLine(span)
-                | Task::ReadLineOr(span)
-                | Task::Ask(span)
-                | Task::AskOr(span)
+                | Task::Array(_, span)
+                | Task::Input(_, span)
                 | Task::Vector(_, _, span)
                 | Task::BitNot(span)
-                | Task::Index(span)
+                | Task::Index(_, span)
                 | Task::Builtin(_, _, span)
+                | Task::BigIntDivMod(_, span)
                 | Task::Negate(span)
                 | Task::Not(span)
                 | Task::Boolean(span)
@@ -147,12 +137,12 @@ impl Workspace {
                     match &node.kind {
                         ExpressionKind::UserCall { arguments, .. } => {
                             tasks.push(match &expression.calls[index] {
-                                Some(ResolvedCall::ReadLine) => Task::ReadLine(node.span),
-                                Some(ResolvedCall::ReadLineOr) => Task::ReadLineOr(node.span),
-                                Some(ResolvedCall::Ask) => Task::Ask(node.span),
-                                Some(ResolvedCall::AskOr) => Task::AskOr(node.span),
+                                Some(ResolvedCall::Input(input)) => Task::Input(*input, node.span),
                                 Some(ResolvedCall::Builtin(builtin)) => {
                                     Task::Builtin(*builtin, index, node.span)
+                                }
+                                Some(ResolvedCall::BigIntDivMod) => {
+                                    Task::BigIntDivMod(index, node.span)
                                 }
                                 _ => Task::UserCall(index, arguments.len(), node.span),
                             });
@@ -162,6 +152,12 @@ impl Workspace {
                         }
                         ExpressionKind::Tuple { elements } => {
                             tasks.push(Task::Tuple(elements.len(), node.span));
+                            for &element in elements.iter().rev() {
+                                tasks.push(Task::Visit(element));
+                            }
+                        }
+                        ExpressionKind::Array { elements, .. } => {
+                            tasks.push(Task::Array(index, node.span));
                             for &element in elements.iter().rev() {
                                 tasks.push(Task::Visit(element));
                             }
@@ -183,7 +179,7 @@ impl Workspace {
                             operator_span,
                             ..
                         } => {
-                            tasks.push(Task::Index(*operator_span));
+                            tasks.push(Task::Index(*index, *operator_span));
                             tasks.push(Task::Visit(*index));
                             tasks.push(Task::Visit(*vector));
                         }
@@ -278,6 +274,41 @@ impl Workspace {
                     })?;
                     values.push(Value::Tuple(tuple));
                 }
+                Task::Array(node, span) => {
+                    let ExpressionKind::Array {
+                        elements,
+                        empty_element_type,
+                    } = &expression.syntax.nodes()[node].kind
+                    else {
+                        unreachable!("fixed array task");
+                    };
+                    let count = elements.len();
+                    let start = values.len() - count;
+                    let element = empty_element_type
+                        .clone()
+                        .unwrap_or_else(|| values[start].kind());
+                    budget.charge((count + element.node_count() + 1) as u64, span)?;
+                    let bytes = ArrayValue::allocation_bytes(&element, count).ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::ArrayAllocation,
+                            span,
+                            "fixed array allocation size overflow",
+                        )
+                    })?;
+                    budget.charge_array_allocation(bytes, span)?;
+                    let kind =
+                        SourceType::array(element, count).expect("resolved fixed array shape");
+                    let mut elements = Vec::new();
+                    elements.try_reserve_exact(count).map_err(|_| {
+                        Diagnostic::new(
+                            DiagnosticKind::ArrayAllocation,
+                            span,
+                            "could not reserve fixed array storage",
+                        )
+                    })?;
+                    elements.extend(values.drain(start..));
+                    values.push(Value::Array(ArrayValue::from_checked(kind, elements)));
+                }
                 Task::Vector(count, integers, span) => {
                     budget.charge(count as u64, span)?;
                     let start = values.len() - count;
@@ -300,7 +331,7 @@ impl Workspace {
                     values.truncate(start);
                     values.push(numeric::vector(elements, span)?);
                 }
-                Task::Index(span) => {
+                Task::Index(index_node, span) => {
                     let index = values.pop().unwrap().require_integer(span)?;
                     let value = values.pop().unwrap();
                     if let Some(tuple) = value.as_tuple() {
@@ -316,6 +347,23 @@ impl Workspace {
                                 )
                             })?;
                         values.push(element);
+                        continue;
+                    }
+                    if let Some(array) = value.as_array() {
+                        let element = usize::try_from(index)
+                            .ok()
+                            .and_then(|index| array.elements().get(index))
+                            .ok_or_else(|| {
+                                Diagnostic::new(
+                                    DiagnosticKind::ArrayIndex,
+                                    expression.syntax.nodes()[index_node].span,
+                                    format!(
+                                        "index {index} is outside fixed array length {}",
+                                        array.len()
+                                    ),
+                                )
+                            })?;
+                        values.push(element.clone());
                         continue;
                     }
                     if let Some(array) = value.as_integers() {
@@ -366,23 +414,30 @@ impl Workspace {
                     values.truncate(start);
                     values.push(value);
                 }
-                Task::ReadLine(span) => return Ok(Evaluation::ReadLine(span)),
-                Task::ReadLineOr(span) => {
-                    return Ok(Evaluation::ReadLineOr {
-                        fallback: values.pop().expect("checked read_line_or argument"),
-                        span,
-                    });
+                Task::BigIntDivMod(node, span) => {
+                    let ExpressionKind::UserCall { arguments, .. } =
+                        &expression.syntax.nodes()[node].kind
+                    else {
+                        unreachable!("resolved bigint_divmod call")
+                    };
+                    debug_assert_eq!(arguments.len(), 2);
+                    let start = values.len() - 2;
+                    let (quotient, remainder) = crate::bigint::divmod(
+                        values[start].as_bigint().expect("typed bigint"),
+                        values[start + 1].as_bigint().expect("typed bigint"),
+                        budget,
+                        expression.syntax.nodes()[arguments[1].expression].span,
+                    )?;
+                    values.truncate(start);
+                    values.extend([Value::BigInt(quotient), Value::BigInt(remainder)]);
+                    finish_tuple(values, 2, budget, span)?;
                 }
-                Task::Ask(span) => {
-                    return Ok(Evaluation::Ask {
-                        prompt: values.pop().expect("checked ask argument"),
-                        span,
-                    });
-                }
-                Task::AskOr(span) => {
-                    let fallback = values.pop().expect("checked ask_or fallback");
-                    let prompt = values.pop().expect("checked ask_or prompt");
-                    return Ok(Evaluation::AskOr {
+                Task::Input(input, span) => {
+                    let fallback = input
+                        .has_fallback()
+                        .then(|| values.pop().expect("typed fallback"));
+                    let prompt = input.prompts().then(|| values.pop().expect("typed prompt"));
+                    return Ok(Evaluation::Input {
                         prompt,
                         fallback,
                         span,
@@ -433,8 +488,8 @@ impl Workspace {
                     if let (Some(a), Some(b)) = (left.as_integers(), right.as_integers()) {
                         budget.charge(a.len().max(b.len()) as u64, span)?;
                     }
-                    if let (Some(a), Some(b)) = (left.as_tuple(), right.as_tuple()) {
-                        budget.charge(a.work().max(b.work()), span)?;
+                    if let (Some(a), Some(b)) = (left.composite_work(), right.composite_work()) {
+                        budget.charge(a.max(b), span)?;
                     }
                     values.push(apply_binary_with_budget(
                         operator, &left, &right, budget, span,
@@ -578,6 +633,37 @@ pub(crate) fn apply_binary(
         BinaryOperator::Equal | BinaryOperator::NotEqual => unreachable!("equality handled above"),
     };
     result.map(Value::Integer).ok_or_else(|| overflow(span))
+}
+
+fn finish_tuple(
+    values: &mut Vec<Value>,
+    count: usize,
+    budget: &mut Budget,
+    span: Span,
+) -> Result<(), Diagnostic> {
+    budget.charge(count as u64, span)?;
+    let start = values.len() - count;
+    let bytes = TupleValue::allocation_bytes(&values[start..]).ok_or_else(|| {
+        Diagnostic::new(
+            DiagnosticKind::TupleAllocation,
+            span,
+            "tuple allocation size overflow",
+        )
+    })?;
+    budget.charge_tuple_allocation(bytes, span)?;
+    let mut elements = Vec::new();
+    elements.try_reserve_exact(count).map_err(|_| {
+        Diagnostic::new(
+            DiagnosticKind::TupleAllocation,
+            span,
+            "could not reserve tuple storage",
+        )
+    })?;
+    elements.extend(values.drain(start..));
+    let tuple = TupleValue::new(elements)
+        .ok_or_else(|| Diagnostic::new(DiagnosticKind::TupleLimit, span, "invalid tuple shape"))?;
+    values.push(Value::Tuple(tuple));
+    Ok(())
 }
 
 fn overflow(span: Span) -> Diagnostic {

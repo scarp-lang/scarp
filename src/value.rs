@@ -6,7 +6,9 @@ use crate::diagnostics::{Diagnostic, DiagnosticKind, Span};
 
 pub use crate::types::PrimitiveType as ValueType;
 use crate::types::SourceType;
+mod array;
 mod tuple;
+pub use array::ArrayValue;
 pub use tuple::TupleValue;
 
 pub const MAX_TEXT_BYTES: usize = 1024 * 1024;
@@ -325,6 +327,7 @@ pub enum Value {
     String(Arc<str>),
     Tuple(TupleValue),
     BigInt(crate::bigint::BigInt),
+    Array(ArrayValue),
 }
 
 impl Value {
@@ -333,6 +336,7 @@ impl Value {
         match self {
             Self::Tuple(value) => value.kind().clone(),
             Self::BigInt(_) => ValueType::BigInt.into(),
+            Self::Array(value) => value.kind().clone(),
             Self::Unit => ValueType::Unit.into(),
             Self::Integer(_) => ValueType::Integer.into(),
             Self::Float(_) => ValueType::Float.into(),
@@ -349,6 +353,21 @@ impl Value {
             Some(value)
         } else {
             None
+        }
+    }
+
+    pub fn as_array(&self) -> Option<&ArrayValue> {
+        match self {
+            Self::Array(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn composite_work(&self) -> Option<u64> {
+        match self {
+            Self::Tuple(value) => Some(value.work()),
+            Self::Array(value) => Some(value.work()),
+            _ => None,
         }
     }
 
@@ -454,6 +473,7 @@ impl fmt::Display for Value {
         match self {
             Self::Tuple(value) => value.fmt(f),
             Self::BigInt(value) => value.fmt(f),
+            Self::Array(value) => value.fmt(f),
             Self::Unit => f.write_str("unit"),
             Self::Integer(value) => value.fmt(f),
             Self::Float(value) => value.fmt(f),

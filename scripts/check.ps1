@@ -32,6 +32,8 @@ try {
     Invoke-Cargo -CargoArguments @('run', '--locked', '--example', 'tuple_types')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', 'examples/tuples.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'check', 'examples/tuples.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', 'examples/fixed_arrays.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'check', 'examples/fixed_arrays.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--example', 'program_input')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/program_input.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/core_input_tuple.srp')
