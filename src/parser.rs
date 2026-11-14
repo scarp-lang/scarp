@@ -311,6 +311,7 @@ impl Parser<'_> {
     ///
     /// A preflight of matching braces is required: if a parent has further
     /// statements after the child block, fall back to the general parser.
+    #[inline(never)]
     fn compact_block_chain(&mut self, depth: usize) -> Result<Option<Statement>, ParseError> {
         if !self.pending.is_empty() {
             return Ok(None);
@@ -372,10 +373,6 @@ impl Parser<'_> {
                 .with_help("reduce the number of nested statement blocks"));
             }
         }
-        #[cfg(debug_assertions)]
-        if count >= 32 {
-            let _ = std::io::Write::write_all(&mut std::io::stderr(), b"SCARP_STACK_FAST:braces\n");
-        }
         self.cursor += count;
         let mut body = self.statement_list(depth + count, true)?;
         for offset in (0..count).rev() {
@@ -386,12 +383,6 @@ impl Parser<'_> {
                 span,
             };
             body = vec![node];
-        }
-        #[cfg(debug_assertions)]
-        if count >= 32 {
-            let _ = std::io::Write::write_all(
-                &mut std::io::stderr(), b"SCARP_STACK_FAST:braces_complete\n",
-            );
         }
         Ok(body.pop())
     }
@@ -1766,6 +1757,7 @@ impl Parser<'_> {
     /// Only four-or-more nested groups use this path; ordinary source remains
     /// on the original parser. Each Group retains its original byte spans and
     /// every operator is reduced using the existing precedence table.
+    #[inline(never)]
     fn grouped_integer_infix(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
@@ -1804,13 +1796,6 @@ impl Parser<'_> {
         };
         if max_openings < 4 {
             return Ok(None);
-        }
-        #[cfg(debug_assertions)]
-        if max_openings >= 32 {
-            let _ = std::io::Write::write_all(
-                &mut std::io::stderr(),
-                b"SCARP_STACK_FAST:grouped_integer\n",
-            );
         }
         enum Operator {
             Opening(Span),
@@ -1878,12 +1863,6 @@ impl Parser<'_> {
         }
         debug_assert!(operators.is_empty());
         debug_assert_eq!(operands.len(), 1);
-        #[cfg(debug_assertions)]
-        if max_openings >= 32 {
-            let _ = std::io::Write::write_all(
-                &mut std::io::stderr(), b"SCARP_STACK_FAST:grouped_complete\n",
-            );
-        }
         Ok(operands.pop())
     }
 

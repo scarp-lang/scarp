@@ -177,33 +177,7 @@ fn bit_precedence_nesting_fits_the_existing_small_parser_stack() {
                 ")".repeat(MAX_EXPRESSION_DEPTH),
                 "}".repeat(MAX_BLOCK_DEPTH)
             );
-            let brace_only = format!(
-                "{}print(1);{}",
-                "{".repeat(MAX_BLOCK_DEPTH),
-                "}".repeat(MAX_BLOCK_DEPTH)
-            );
-            use std::io::Write as _;
-            std::io::stderr()
-                .write_all(b"SCARP_STACK_STAGE:braces_only\n")
-                .unwrap();
-            std::mem::forget(scarp::parse(&brace_only).unwrap());
-            let expression_only = format!(
-                "print({}1{});",
-                "1|(".repeat(MAX_EXPRESSION_DEPTH),
-                ")".repeat(MAX_EXPRESSION_DEPTH)
-            );
-            std::io::stderr()
-                .write_all(b"SCARP_STACK_STAGE:expression_only\n")
-                .unwrap();
-            std::mem::forget(scarp::parse(&expression_only).unwrap());
-            std::io::stderr()
-                .write_all(b"SCARP_STACK_STAGE:combined\n")
-                .unwrap();
-            let program = scarp::parse(&source).unwrap();
-            std::io::stderr()
-                .write_all(b"SCARP_STACK_STAGE:combined_returned\n")
-                .unwrap();
-            program
+            scarp::parse(&source).unwrap()
         })
         .unwrap()
         .join()

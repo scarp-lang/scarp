@@ -73,7 +73,7 @@ fn brace_chain_with_nested_conditionals_preserves_all_branches() {
 }
 #[test]
 fn nested_blocks_with_destructuring_preserve_scope_retirement() {
-    let source = "{{ {bind (a, b) = (3, 4); print(a+b);} } print(7);";
+    let source = "{{ {bind (a, b) = (3, 4); print(a+b);} } } print(7);";
     assert_eq!(output(source), b"7\n7\n");
 }
 #[test]
