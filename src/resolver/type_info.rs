@@ -10,9 +10,7 @@ pub(super) struct ProgramTypes {
     bindings: Vec<TypeId>,
     functions: Vec<TypeId>,
     builtins: BTreeMap<Builtin, TypeId>,
-    input: Option<TypeId>,
-    input_fallback: Option<TypeId>,
-    prompt: Option<TypeId>,
+    input: [Option<TypeId>; 3],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,9 +68,7 @@ impl TypedExpression<'_> {
                     Some(ResolvedCall::Builtin(builtin)) => {
                         self.types.builtins.get(&builtin).copied()
                     }
-                    Some(ResolvedCall::ReadLine) => self.types.input,
-                    Some(ResolvedCall::ReadLineOr) => self.types.input_fallback,
-                    Some(ResolvedCall::Ask) => self.types.prompt,
+                    Some(ResolvedCall::Input(input)) => self.types.input[input.arity()],
                     None => None,
                 };
                 TypedNode {
@@ -233,52 +229,34 @@ pub(super) fn build(
         functions.push(id);
     }
     let mut builtins = BTreeMap::new();
-    let mut input = None;
-    let mut input_fallback = None;
-    let mut prompt = None;
+    let mut input = [None; 3];
     for (_, expression) in expressions(program) {
         for (index, call) in expression.calls.iter().enumerate() {
-            if matches!(call, Some(ResolvedCall::ReadLine)) && input.is_none() {
-                input = Some(
-                    registry
-                        .intern(TypeKind::Function {
-                            parameters: Vec::new().into(),
-                            result: ValueType::String.id(),
-                            effect: FunctionEffect::Impure,
-                        })
-                        .map_err(|error| failure(error, expression.syntax.nodes()[index].span))?,
-                );
-            }
-            if matches!(call, Some(ResolvedCall::ReadLineOr)) && input_fallback.is_none() {
-                input_fallback = Some(
-                    registry
-                        .intern(TypeKind::Function {
-                            parameters: vec![ValueType::String.id()].into(),
-                            result: ValueType::String.id(),
-                            effect: FunctionEffect::Impure,
-                        })
-                        .map_err(|error| failure(error, expression.syntax.nodes()[index].span))?,
-                );
-            }
-            if matches!(call, Some(ResolvedCall::Ask)) && prompt.is_none() {
-                prompt = Some(
-                    registry
-                        .intern(TypeKind::Function {
-                            parameters: vec![ValueType::String.id()].into(),
-                            result: ValueType::String.id(),
-                            effect: FunctionEffect::Impure,
-                        })
-                        .map_err(|error| failure(error, expression.syntax.nodes()[index].span))?,
-                );
-            }
-            if let Some(ResolvedCall::Builtin(builtin)) = call {
-                if let std::collections::btree_map::Entry::Vacant(entry) = builtins.entry(*builtin)
-                {
-                    let id = builtin
-                        .intern_signature(&mut registry)
-                        .map_err(|error| failure(error, expression.syntax.nodes()[index].span))?;
-                    entry.insert(id);
+            let span = expression.syntax.nodes()[index].span;
+            match call {
+                Some(ResolvedCall::Input(builtin)) if input[builtin.arity()].is_none() => {
+                    let arity = builtin.arity();
+                    input[arity] = Some(
+                        registry
+                            .intern(TypeKind::Function {
+                                parameters: vec![ValueType::String.id(); arity].into(),
+                                result: ValueType::String.id(),
+                                effect: FunctionEffect::Impure,
+                            })
+                            .map_err(|error| failure(error, span))?,
+                    );
                 }
+                Some(ResolvedCall::Builtin(builtin)) => {
+                    if let std::collections::btree_map::Entry::Vacant(entry) =
+                        builtins.entry(*builtin)
+                    {
+                        let id = builtin
+                            .intern_signature(&mut registry)
+                            .map_err(|error| failure(error, span))?;
+                        entry.insert(id);
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -296,7 +274,5 @@ pub(super) fn build(
         functions,
         builtins,
         input,
-        input_fallback,
-        prompt,
     })
 }

@@ -8,6 +8,38 @@ use crate::{
     value::{Value, MAX_TEXT_BYTES},
 };
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum InputBuiltin {
+    ReadLine,
+    ReadLineOr,
+    Ask,
+    AskOr,
+}
+
+impl InputBuiltin {
+    pub(crate) fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "read_line" => Some(Self::ReadLine),
+            "read_line_or" => Some(Self::ReadLineOr),
+            "ask" => Some(Self::Ask),
+            "ask_or" => Some(Self::AskOr),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn prompts(self) -> bool {
+        matches!(self, Self::Ask | Self::AskOr)
+    }
+
+    pub(crate) fn has_fallback(self) -> bool {
+        matches!(self, Self::ReadLineOr | Self::AskOr)
+    }
+
+    pub(crate) fn arity(self) -> usize {
+        usize::from(self.prompts()) + usize::from(self.has_fallback())
+    }
+}
+
 /// Independent input quotas; existing `ExecutionOptions` struct literals remain valid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InputLimits {
@@ -16,7 +48,7 @@ pub struct InputLimits {
     pub max_line_bytes: usize,
     /// Cumulative raw bytes consumed from the supplied buffered reader.
     pub max_total_bytes: usize,
-    /// Selected `read_line()` calls, including a call that encounters EOF.
+    /// Selected input calls, including a call that encounters EOF.
     pub max_reads: usize,
 }
 
@@ -43,7 +75,7 @@ pub(crate) fn prompt_unavailable(span: Span) -> Diagnostic {
     Diagnostic::new(
         Kind::InputUnavailable,
         span,
-        "ask requires interactive input and a prompt writer",
+        "interactive input prompts require an explicit reader and prompt writer",
     )
     .with_help(
         "enable --interactive on scarp exec/run, or use an explicit interactive Rust host API",
@@ -91,6 +123,16 @@ impl<'a> InputState<'a> {
         }
     }
 
+    fn check_read_limits(&self, span: Span) -> Result<(), Diagnostic> {
+        if self.reads >= self.limits.max_reads {
+            return Err(limit(span, "input line-read quota exceeded"));
+        }
+        if self.consumed >= self.limits.max_total_bytes || self.limits.max_line_bytes == 0 {
+            return Err(limit(span, "input byte quota exhausted before line read"));
+        }
+        Ok(())
+    }
+
     /// Visible prompts are intentionally not transactional. Preflight local
     /// quotas before showing the prompt, and charge work for prompt length.
     pub(crate) fn ask(
@@ -102,12 +144,7 @@ impl<'a> InputState<'a> {
         if self.reader.is_none() || self.prompt_writer.is_none() {
             return Err(prompt_unavailable(span));
         }
-        if self.reads >= self.limits.max_reads {
-            return Err(limit(span, "input line-read quota exceeded"));
-        }
-        if self.consumed >= self.limits.max_total_bytes || self.limits.max_line_bytes == 0 {
-            return Err(limit(span, "input byte quota exhausted before line read"));
-        }
+        self.check_read_limits(span)?;
         budget.charge(prompt.len() as u64, span)?;
         // A selected read must be able to pay for its first buffer probe.
         // Preflight it before the prompt becomes irrevocably visible, without
@@ -117,19 +154,19 @@ impl<'a> InputState<'a> {
             .prompt_writer
             .as_deref_mut()
             .expect("checked prompt writer");
-        writer
-            .write_all(prompt.as_bytes())
-            .and_then(|_| writer.flush())
-            .map_err(|_| {
-                Diagnostic::new(
-                    Kind::PromptIo,
-                    span,
-                    "interactive prompt could not be written and flushed",
-                )
-                .with_help(
-                    "check the host prompt writer; visible prompt bytes cannot be rolled back",
-                )
-            })?;
+        let mut remaining = prompt.as_bytes();
+        while !remaining.is_empty() {
+            match writer.write(remaining) {
+                Ok(written) if (1..=remaining.len()).contains(&written) => {
+                    remaining = &remaining[written..];
+                }
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => {
+                    budget.charge(1, span)?
+                }
+                _ => return Err(prompt_io(span)),
+            }
+        }
+        writer.flush().map_err(|_| prompt_io(span))?;
         self.read_line(budget, span)
     }
 
@@ -138,14 +175,12 @@ impl<'a> InputState<'a> {
         budget: &mut Budget,
         span: Span,
     ) -> Result<Value, Diagnostic> {
-        let reader = self.reader.as_mut().ok_or_else(|| unavailable(span))?;
-        if self.reads >= self.limits.max_reads {
-            return Err(limit(span, "input line-read quota exceeded"));
+        if self.reader.is_none() {
+            return Err(unavailable(span));
         }
+        self.check_read_limits(span)?;
+        let reader = self.reader.as_mut().expect("checked input reader");
         self.reads += 1;
-        if self.consumed >= self.limits.max_total_bytes || self.limits.max_line_bytes == 0 {
-            return Err(limit(span, "input byte quota exhausted before line read"));
-        }
         let line_limit = self.limits.max_line_bytes.min(MAX_TEXT_BYTES);
         let mut bytes = Vec::new();
         loop {
@@ -234,6 +269,15 @@ impl<'a> InputState<'a> {
     }
 }
 
+fn prompt_io(span: Span) -> Diagnostic {
+    Diagnostic::new(
+        Kind::PromptIo,
+        span,
+        "interactive prompt could not be written and flushed",
+    )
+    .with_help("check the host prompt writer; visible prompt bytes cannot be rolled back")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -268,6 +312,33 @@ mod tests {
             assert_eq!(error.kind, Kind::InputEof);
         }
         assert_eq!(stdout, b">");
+        assert_eq!(reader.position(), 0);
+    }
+
+    #[test]
+    fn an_interrupted_prompt_writer_cannot_retry_past_the_work_limit() {
+        #[derive(Default)]
+        struct InterruptedWriter(usize);
+
+        impl Write for InterruptedWriter {
+            fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+                self.0 += 1;
+                Err(io::ErrorKind::Interrupted.into())
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                panic!("the interrupted prompt should never flush");
+            }
+        }
+
+        let mut reader = Cursor::new(b"Ada\n");
+        let mut writer = InterruptedWriter::default();
+        let mut input = InputState::interactive(&mut reader, &mut writer, InputLimits::default());
+        let error = input
+            .ask(">", &mut Budget::new(3), Span::default())
+            .unwrap_err();
+        assert_eq!(error.kind, Kind::ExecutionLimit);
+        assert_eq!(writer.0, 3);
         assert_eq!(reader.position(), 0);
     }
 }

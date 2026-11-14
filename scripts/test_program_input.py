@@ -61,6 +61,7 @@ def main():
 
         if os.name == "posix":
             import pty
+            import select
             master, slave = pty.openpty()
             try:
                 # No terminal input or EOF is supplied. A hidden blocking read
@@ -77,6 +78,32 @@ def main():
                 )
                 assert result.returncode == 0 and result.stdout == b"ok\n" and not result.stderr, result
                 count += 2
+
+                source.write_text('print(ask_or("Name> ", "Guest"));', encoding="utf-8")
+                # Wait for the prompt while the terminal has no input queued.
+                # Reading line-buffered input first would block the handshake.
+                with subprocess.Popen(
+                    [binary, "exec", "--interactive", str(source)], stdin=slave,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0,
+                ) as child:
+                    try:
+                        expected_prompt = b"Name> "
+                        prompt = bytearray()
+                        while len(prompt) < len(expected_prompt):
+                            ready, _, _ = select.select([child.stdout], [], [], 5)
+                            assert ready, "interactive prompt was not flushed before terminal input"
+                            chunk = os.read(child.stdout.fileno(), len(expected_prompt) - len(prompt))
+                            assert chunk, "Scarp exited before flushing its prompt"
+                            prompt.extend(chunk)
+                        assert prompt == expected_prompt, prompt
+                        os.write(master, "नमस्ते 🌍\n".encode("utf-8"))
+                        stdout, stderr = child.communicate(timeout=5)
+                        assert child.returncode == 0 and not stderr, (child.returncode, stderr)
+                        assert stdout == "नमस्ते 🌍\n".encode("utf-8"), stdout
+                        count += 1
+                    finally:
+                        if child.poll() is None:
+                            child.kill()
             finally:
                 os.close(slave)
                 os.close(master)
