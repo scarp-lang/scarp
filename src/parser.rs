@@ -564,8 +564,7 @@ impl Parser<'_> {
             )
             .with_help("use bind (first, second) = tuple; or bind [item] = array;"));
         }
-        let mut trailing_comma = false;
-        loop {
+        let trailing_comma = loop {
             let (name, span) = self.identifier().map_err(|error| {
                 error.with_help("destructuring accepts names or '_' placeholders, not expressions")
             })?;
@@ -587,13 +586,11 @@ impl Parser<'_> {
             }
             bindings.push((name, span));
             if !self.at(&TokenKind::Comma) {
-                trailing_comma = false;
-                break;
+                break false;
             }
             self.advance();
-            trailing_comma = true;
             if self.at(&close) {
-                break;
+                break true;
             }
         }
         let close_label = if array { "']'" } else { "')'" };
