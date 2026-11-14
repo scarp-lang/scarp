@@ -181,6 +181,13 @@ fn modules_preserve_exact_decimal_types_and_runtime_failure_locations() {
 }
 
 #[test]
+fn decimal_example_fixture_matches_compiler_output() {
+    let source = include_str!("../examples/decimal_exact.srp");
+    let expected = include_bytes!("../examples/decimal_exact.stdout");
+    assert_eq!(run(source).as_bytes(), expected);
+}
+
+#[test]
 fn experimental_native_backends_reject_exact_decimal_instead_of_coercing() {
     let source = r#"bind price: decimal = decimal("1.20"); print(price);"#;
     assert_eq!(

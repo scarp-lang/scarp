@@ -1,6 +1,6 @@
 # Proposal 0042: bounded exact decimal scalars
 
-Status: **Phase 1 host-side Rust arithmetic core; Scarp source-language support NOT implemented**.
+Status: **Phase 1 host-side Rust core merged**; **Phase 2 typed Scarp source-language prototype is draft PR #248 and not in a published release**.
 
 Scarp's existing float remains finite IEEE-754 binary64. This proposal adds a separate exact base-10 numeric representation and does not rename, reinterpret, or silently coerce existing float, integer, or bigint values.
 
@@ -44,33 +44,35 @@ assert_eq!(third.to_string(), "0.33");
 
 This is Rust API code, **not executable Scarp source**.
 
-## Proposed Scarp syntax — design only
+## Phase 2 experimental Scarp syntax — draft PR #248 only
 
 ~~~scarp
 bind price: decimal = decimal("199.99");
 bind tax: decimal = decimal("0.18");
-// Decimal arithmetic, explicit rounding and formatting: future work.
+bind total = price + price * tax;
+print(decimal_format(total, 2, "half_even")); // 235.99
+print(decimal_div_rounded(decimal("1"), decimal("3"), 2, "half_even")); // 0.33
 ~~~
 
-Do not publish this as an executable Scarp example: lexer/parser/resolver/value/runtime integration is still missing. The constructor spelling is a proposal, not a currently supported built-in.
+This is executable **only on the reviewed source integration branch** once its CI gates pass. The published compiler remains v0.0.6-alpha.9, which does not support a decimal source type. For the draft syntax, see [the development guide](../decimal.md).
 
-## Implementation gates before source-language use
+## Remaining gates before publishing source-level Decimal
 
-1. Lexer/parser/AST: decide contextual decimal keyword and explicit text constructor without changing float literal meaning.
-2. Type checker/resolver: add a separate decimal type, reject implicit mixing with integer/float/bigint, support typed functions, constants, tuples and modules.
-3. Runtime: add decimal values and checked arithmetic, comparison, division and diagnostic spans. Preserve atomic output on failure.
-4. Resource budgets: cap literal length, conversions, memory, work and snapshots. Avoid host-dependent rounding.
-5. Native backends: either implement correct decimal lowering or return an explicit unsupported-type diagnostic; never silently lower to C double or Rust f64.
-6. End-to-end verification: successful and negative examples, scalar/variable/function/module tests, rounding boundaries, overflows, signed zero and differential oracle tests.
-7. Docs and ecosystem: update Scarp language docs and by-example only after compiler-verified runnable support.
+1. **In prototype PR #248:** the parser recognizes the explicit `decimal` type name and constructor call without reinterpreting float literals or introducing a new literal token.
+2. **In prototype PR #248:** resolver and runtime enforce a distinct Decimal type across bindings, functions, arrays, tuples and imported function signatures; no implicit numeric mixing.
+3. **In prototype PR #248:** exact arithmetic and comparisons, typed E0067–E0069 errors and transactional output are exercised by end-to-end tests. The text constructor is not a valid module constant initializer because module constant calls are still forbidden.
+4. Audit fixed-width precision/scale work charges, source span accuracy, format/rounding boundaries and output snapshots under reduced host limits.
+5. Native backends must continue rejecting Decimal with E0049; do not lower to binary64. Implement exact native/WASM lowering in a separate design/review stage.
+6. Require full Linux, macOS, Windows and minimum Rust CI on the final branch head, plus differential numeric tests and compiler compatibility checks.
+7. Only after merge, review and explicit release approval may public docs, packages, playground and IDE ecosystems advertise `.srp` Decimal support.
 
 ## Design questions requiring review
 
 - Maintain 28 coefficient digits/18 fractional digits, or expand to 34 significant digits with larger exponent range?
-- Should exact division error on repeating results by default, or require a rounding context for every division?
+- Review the prototype decision that `/` is exact-only and rejects repeating quotients; rounded division requires a named rounding mode.
 - Which fixed-width formatting API will be appropriate for currency-specific applications?
 - How should decimal contracts and native/WASM serialization be implemented?
 
 ## Release discipline
 
-Phase 1 introduces a host library and tests only. It does not make decimal available in .srp code, does not change a release tag, and must not be merged as a complete decimal language feature. Require passing cross-platform CI, code review, and a separate end-to-end integration PR before advertising source support.
+The Phase 1 host library is merged without publishing any new tag. Phase 2 in draft PR #248 introduces source-language support but is **not** merged or released. Do not advertise `.srp` Decimal until that PR passes final CI and review, merges through the protected branch, and an explicitly authorized release includes the final code.
