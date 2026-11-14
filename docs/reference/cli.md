@@ -18,6 +18,15 @@ contracts](../project-testing.md), and [assertion syntax](../assertions.md).
 Scarp v0.0.6-alpha.9 adds `scarp test --json=v2`
 for [structured diagnostics](../project-testing.md#structured-failure-reports).
 
+**Development candidate only (not in published alpha.9):** `scarp exec
+--input-file DATA.txt app.srp` selects a UTF-8 file as the program's explicit
+input source. `run FILE`, `run PROJECT` and `launch PROJECT` accept the
+same option. An input file takes priority over ambient stdin; normal input
+quotas, UTF-8 errors and transactional output remain unchanged. The path is
+relative to the process working directory, not automatically to the Scarp
+source directory. Static commands reject the flag. Input is streamed through
+a buffered file reader rather than loaded into memory all at once.
+
 **v0.0.6-alpha.6 published prerelease:** `exec`/`run`/`launch` support redirected
 UTF-8 `read_line()` with `--max-input-line-bytes`, `--max-input-bytes` and
 `--max-input-reads`. `--max-tuple-bytes` limits new tuple payload. Terminal reads
