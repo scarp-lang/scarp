@@ -1,6 +1,6 @@
 //! First source-language bridge to the experimental composite data engine:
- //! flat tuple/fixed-array destructuring with exact types, lexical scoping,
- //! unique immutable or mutable slots and one-time initializer evaluation.
+//! flat tuple/fixed-array destructuring with exact types, lexical scoping,
+//! unique immutable or mutable slots and one-time initializer evaluation.
 use scarp::{
     ast::Statement,
     diagnostics::{Diagnostic, DiagnosticKind as Kind},
@@ -43,10 +43,7 @@ fn source_array_destructuring_runs_with_homogeneous_values() {
 }
 #[test]
 fn source_singleton_tuple_requires_a_comma() {
-    assert_eq!(
-        run(r#"bind (item,) = (42,); print(item);"#),
-        b"42\n"
-    );
+    assert_eq!(run(r#"bind (item,) = (42,); print(item);"#), b"42\n");
     assert_eq!(
         check_error("bind (item) = (42,);", Kind::UnexpectedToken).kind,
         Kind::UnexpectedToken
@@ -65,13 +62,15 @@ fn mutable_destructured_slots_follow_existing_assignment_rules() {
                a += b; print(a, b);"#),
         b"5 changed\n10 7\n"
     );
-    check_error("bind (first, second) = (1, 2); first = 4;", Kind::ImmutableAssignment);
+    check_error(
+        "bind (first, second) = (1, 2); first = 4;",
+        Kind::ImmutableAssignment,
+    );
 }
 #[test]
 fn wildcard_discards_values_without_binding_or_hidden_slots() {
-    let compiled = scarp::compile(
-        r#"bind (_, second, _) = (true, 9, "unused"); print(second);"#
-    ).unwrap();
+    let compiled =
+        scarp::compile(r#"bind (_, second, _) = (true, 9, "unused"); print(second);"#).unwrap();
     assert_eq!(compiled.binding_count(), 1);
     let mut out = Vec::new();
     interpreter::execute(&compiled, &mut out).unwrap();
@@ -150,15 +149,17 @@ fn function_call_graph_discovers_calls_inside_destructure_initializers() {
         print(consume());
     "#;
     let program = scarp::compile(source).unwrap();
-    let consume = program.functions().iter().find(|f| f.name == "consume").unwrap();
+    let consume = program
+        .functions()
+        .iter()
+        .find(|f| f.name == "consume")
+        .unwrap();
     assert!(consume.callees.contains(&"pair".to_owned()));
     assert_eq!(run(source), b"3\n");
 }
 #[test]
 fn repeated_execution_of_precompiled_program_uses_fresh_storage() {
-    let compiled = scarp::compile(
-        "var [x, y] = [array: 2, 3]; x += y; print(x, y);"
-    ).unwrap();
+    let compiled = scarp::compile("var [x, y] = [array: 2, 3]; x += y; print(x, y);").unwrap();
     for _ in 0..4 {
         let mut out = Vec::new();
         interpreter::execute(&compiled, &mut out).unwrap();
@@ -178,9 +179,8 @@ fn destructured_bindings_shadow_outer_names_only_in_inner_scope() {
 }
 #[test]
 fn nested_block_scope_retirement_discards_all_destructured_slots() {
-    let compiled = scarp::compile(
-        "bind root=1; { bind (x,y)=(2,3); print(x+y); } print(root);"
-    ).unwrap();
+    let compiled =
+        scarp::compile("bind root=1; { bind (x,y)=(2,3); print(x+y); } print(root);").unwrap();
     let mut out = Vec::new();
     interpreter::execute(&compiled, &mut out).unwrap();
     assert_eq!(out, b"5\n1\n");
@@ -188,10 +188,7 @@ fn nested_block_scope_retirement_discards_all_destructured_slots() {
 }
 #[test]
 fn duplicate_names_in_same_tuple_or_array_pattern_are_rejected() {
-    for source in [
-        "bind (x, x) = (1, 2);",
-        "var [x, y, x] = [array: 1, 2, 3];",
-    ] {
+    for source in ["bind (x, x) = (1, 2);", "var [x, y, x] = [array: 1, 2, 3];"] {
         let err = check_error(source, Kind::DuplicateBinding);
         assert!(err.message.contains("more than once"));
     }
@@ -254,7 +251,8 @@ fn ast_retains_original_member_spans_and_mutability() {
         mutable,
         initializer,
         span,
-    } = &parsed.statements[0] else {
+    } = &parsed.statements[0]
+    else {
         panic!("expected destructuring statement");
     };
     assert!(!array);
@@ -274,22 +272,34 @@ fn array_pattern_parses_and_preserves_mutable_flag() {
         array,
         mutable,
         ..
-    } = &parsed.statements[0] else {
+    } = &parsed.statements[0]
+    else {
         panic!("expected array destructure");
     };
     assert!(*array && *mutable);
-    assert_eq!(bindings.iter().map(|(name,_)|name.as_str()).collect::<Vec<_>>(),
-        vec!["x","_","y"]);
+    assert_eq!(
+        bindings
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["x", "_", "y"]
+    );
 }
 #[test]
 fn max_array_binding_count_is_enforced_in_parser() {
-    let names = (0..129).map(|n|format!("value{n}")).collect::<Vec<_>>().join(",");
+    let names = (0..129)
+        .map(|n| format!("value{n}"))
+        .collect::<Vec<_>>()
+        .join(",");
     let source = format!("bind [{names}] = 1;");
     assert_eq!(scarp::parse(&source).unwrap_err().kind, Kind::ArrayLimit);
 }
 #[test]
 fn max_tuple_binding_count_is_enforced_in_parser() {
-    let names = (0..33).map(|n|format!("value{n}")).collect::<Vec<_>>().join(",");
+    let names = (0..33)
+        .map(|n| format!("value{n}"))
+        .collect::<Vec<_>>()
+        .join(",");
     let source = format!("bind ({names}) = 1;");
     assert_eq!(scarp::parse(&source).unwrap_err().kind, Kind::TupleLimit);
 }
@@ -314,7 +324,9 @@ fn pattern_declaration_count_is_one_source_statement() {
 fn destructure_does_not_change_unsupported_native_backend_contract() {
     let program = scarp::compile("bind (a, b) = (1, 2); print(a+b);").unwrap();
     assert!(scarp::c_backend::emit_program(&program).is_err());
-    assert!(scarp::native_object::emit_elf64_integer_kernel("bind (a,b)=(1,2); print(a);").is_err());
+    assert!(
+        scarp::native_object::emit_elf64_integer_kernel("bind (a,b)=(1,2); print(a);").is_err()
+    );
 }
 #[test]
 fn check_and_run_share_the_same_compiled_destructuring_semantics() {

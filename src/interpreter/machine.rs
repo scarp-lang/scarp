@@ -281,17 +281,16 @@ pub(super) fn prepare<'a>(
                         match std::mem::replace(&mut frame.completion, Completion::Discard) {
                             Completion::Store(slot) => frame.environment[slot] = value,
                             Completion::Destructure(slots, span) => {
-                                let elements = match &value {
-                                    Value::Tuple(tuple) => tuple.elements(),
-                                    Value::Array(array) => array.elements(),
-                                    _ => {
-                                        return Err(Diagnostic::new(
+                                let elements =
+                                    match &value {
+                                        Value::Tuple(tuple) => tuple.elements(),
+                                        Value::Array(array) => array.elements(),
+                                        _ => return Err(Diagnostic::new(
                                             DiagnosticKind::TypeMismatch,
                                             span,
                                             "destructuring source must be a typed tuple or array",
-                                        ))
-                                    }
-                                };
+                                        )),
+                                    };
                                 if elements.len() != slots.len() {
                                     return Err(Diagnostic::new(
                                         DiagnosticKind::TypeMismatch,
