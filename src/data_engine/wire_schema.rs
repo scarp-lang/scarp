@@ -8,11 +8,11 @@
 //! Nominal identities are local compiler coordinates, not promised globally
 //! stable IDs. The descriptor has to match exactly on both sides. This is a
 //! developmental format, not a persistence ABI or a cryptographic signature.
-use crate::types::{DefinitionId, PrimitiveType, SourceType};
 use super::limits::{bounded, DataError, DataResource};
 use super::schema::{DataType, DefinitionKind, MapKeyType, SchemaRegistry};
 use super::value::Datum;
 use super::wire::WireLimits;
+use crate::types::{DefinitionId, PrimitiveType, SourceType};
 
 const MAGIC_V2: &[u8; 5] = b"SCDB\x02";
 
@@ -23,23 +23,36 @@ struct DescriptorEncoder {
 }
 impl DescriptorEncoder {
     fn new(limits: WireLimits) -> Self {
-        Self { bytes: Vec::new(), limits, visited: 0 }
+        Self {
+            bytes: Vec::new(),
+            limits,
+            visited: 0,
+        }
     }
     fn node(&mut self, depth: usize) -> Result<(), DataError> {
         bounded(depth, self.limits.max_depth, DataResource::WireDepth)?;
         self.visited = self.visited.checked_add(1).ok_or(DataError::Limit {
-            resource: DataResource::WireNodes, limit: self.limits.max_nodes,
+            resource: DataResource::WireNodes,
+            limit: self.limits.max_nodes,
         })?;
         bounded(self.visited, self.limits.max_nodes, DataResource::WireNodes)
     }
     fn bytes(&mut self, data: &[u8]) -> Result<(), DataError> {
-        let total = self.bytes.len().checked_add(data.len()).ok_or(DataError::Limit {
-            resource: DataResource::WireBytes, limit: self.limits.max_bytes,
-        })?;
+        let total = self
+            .bytes
+            .len()
+            .checked_add(data.len())
+            .ok_or(DataError::Limit {
+                resource: DataResource::WireBytes,
+                limit: self.limits.max_bytes,
+            })?;
         bounded(total, self.limits.max_bytes, DataResource::WireBytes)?;
-        self.bytes.try_reserve(data.len()).map_err(|_| DataError::Limit {
-            resource: DataResource::WireBytes, limit: self.limits.max_bytes,
-        })?;
+        self.bytes
+            .try_reserve(data.len())
+            .map_err(|_| DataError::Limit {
+                resource: DataResource::WireBytes,
+                limit: self.limits.max_bytes,
+            })?;
         self.bytes.extend_from_slice(data);
         Ok(())
     }
@@ -187,19 +200,28 @@ impl SchemaRegistry {
         let message = self.encode_wire(root, value, limits)?;
         let descriptor_length =
             u32::try_from(descriptor.len()).map_err(|_| DataError::InvalidWire)?;
-        let prefix_size = MAGIC_V2.len().checked_add(4)
+        let prefix_size = MAGIC_V2
+            .len()
+            .checked_add(4)
             .and_then(|v| v.checked_add(descriptor.len()))
             .ok_or(DataError::Limit {
-                resource: DataResource::WireBytes, limit: limits.max_bytes,
+                resource: DataResource::WireBytes,
+                limit: limits.max_bytes,
             })?;
-        let total = prefix_size.checked_add(message.len()).ok_or(DataError::Limit {
-            resource: DataResource::WireBytes, limit: limits.max_bytes,
-        })?;
+        let total = prefix_size
+            .checked_add(message.len())
+            .ok_or(DataError::Limit {
+                resource: DataResource::WireBytes,
+                limit: limits.max_bytes,
+            })?;
         bounded(total, limits.max_bytes, DataResource::WireBytes)?;
         let mut output = Vec::new();
-        output.try_reserve_exact(total).map_err(|_| DataError::Limit {
-            resource: DataResource::WireBytes, limit: limits.max_bytes,
-        })?;
+        output
+            .try_reserve_exact(total)
+            .map_err(|_| DataError::Limit {
+                resource: DataResource::WireBytes,
+                limit: limits.max_bytes,
+            })?;
         output.extend_from_slice(MAGIC_V2);
         output.extend_from_slice(&descriptor_length.to_le_bytes());
         output.extend_from_slice(&descriptor);
@@ -224,10 +246,11 @@ impl SchemaRegistry {
             return Err(DataError::InvalidWire);
         }
         let offset = MAGIC_V2.len();
-        let length = bytes.get(offset..offset + 4).ok_or(DataError::InvalidWire)?;
-        let declared = u32::from_le_bytes(
-            length.try_into().map_err(|_| DataError::InvalidWire)?,
-        ) as usize;
+        let length = bytes
+            .get(offset..offset + 4)
+            .ok_or(DataError::InvalidWire)?;
+        let declared =
+            u32::from_le_bytes(length.try_into().map_err(|_| DataError::InvalidWire)?) as usize;
         if declared != expected.len() {
             return Err(DataError::InvalidWire);
         }

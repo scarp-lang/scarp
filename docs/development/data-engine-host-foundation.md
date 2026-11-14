@@ -36,8 +36,8 @@ Scarp source code accepts.
 
 ## Explicitly not implemented
 
-- No \`.srp\` grammar for \`record\`, \`variant\`, \`list\`, \`map\`, \`some\`,
-  \`none\`, \`ok\`, \`err\`, \`match\`, or destructuring.
+- No `.srp` grammar for `record`, `variant`, `list`, `map`, `some`,
+  `none`, `ok`, `err`, `match`, or destructuring.
 - No new public Scarp primitive value kinds.
 - No compiler-owned AST, source span or diagnostic code for these constructs.
 - No source-level exhaustive checking or editor symbol-index integration.
@@ -51,20 +51,20 @@ Scarp source code accepts.
 
 ## API model
 
-The engine lives in \`src/data_engine/\` and exports its public types through
-\`scarp::data_engine\`. The value and schema subsystems are separated.
+The engine lives in `src/data_engine/` and exports its public types through
+`scarp::data_engine`. The value and schema subsystems are separated.
 
-A \`DefinitionId\` uses the same module/declaration pair as the existing
+A `DefinitionId` uses the same module/declaration pair as the existing
 compiler type registry. It is **not** a cross-process persistent identifier
 and must not be serialized as a durable type ID.
 
-\`DataType::Source(SourceType)\` is the only bridge to current Scarp types.
+`DataType::Source(SourceType)` is the only bridge to current Scarp types.
 Other arms describe nominal records, nominal variants, dynamic lists, maps,
 optional values, and typed outcomes.
 
-\`SchemaRegistry\` owns a bounded set of declarations. A registration either
+`SchemaRegistry` owns a bounded set of declarations. A registration either
 passes validation entirely or has no effect. An equivalent member list with
-a distinct \`DefinitionId\` remains a distinct nominal type.
+a distinct `DefinitionId` remains a distinct nominal type.
 
 Names use the current source identifier convention: ASCII letter/underscore
 at the start and ASCII letters, digits or underscore subsequently. The host
@@ -84,24 +84,24 @@ not consume the cumulative type-node budget.
 
 ## Value semantics
 
-Every \`Datum\` is a shared or copied immutable value. Record, variant, list
+Every `Datum` is a shared or copied immutable value. Record, variant, list
 and map fields cannot be set directly because their backing payload is
 private. The only mutation-like APIs produce a *new* verified snapshot.
 
-A \`RecordValue\` stores its nominal declaration identity and field values
-in the order of the schema. \`record_named\` validates exact membership and
+A `RecordValue` stores its nominal declaration identity and field values
+in the order of the schema. `record_named` validates exact membership and
 canonicalizes order. Duplicate and missing fields fail.
 
-A \`VariantValue\` stores its declaration identity, case index and optional
-payload. Case index is internal: \`case_name\` is the stable host-facing
+A `VariantValue` stores its declaration identity, case index and optional
+payload. Case index is internal: `case_name` is the stable host-facing
 inspection path. A unit case cannot carry a value; a payload case must carry
 exactly the declared type.
 
-A \`ListValue\` preserves one element type even when empty. Creation, append,
+A `ListValue` preserves one element type even when empty. Creation, append,
 replacement and removal validate the resulting value. Previously returned
 lists remain unchanged.
 
-A \`MapValue\` preserves the key and value types even when empty. Entries are
+A `MapValue` preserves the key and value types even when empty. Entries are
 sorted by signed integer order or UTF-8 byte order. Duplicate entries fail,
 and inserting an existing key creates a new map with the new value. There is
 no undefined hash iteration order, locale-dependent comparison, or silent
@@ -112,7 +112,7 @@ their declared type, not inferred from a bare null sentinel.
 
 ## Validation and resource accounting
 
-\`verify\` traverses a bounded stack of type/value pairs instead of recursively
+`verify` traverses a bounded stack of type/value pairs instead of recursively
 calling Rust functions for each nested datum. It checks:
 
 - Exact type identity (nominal or structural).
@@ -132,14 +132,14 @@ Scarp numerical/bigint payloads continue to belong to their existing type
 engines. The logical quotas are deliberately **not** stated as exact operating
 system memory quotas.
 
-The current implementation uses ordinary fallible \`Result\` paths for
+The current implementation uses ordinary fallible `Result` paths for
 validation. It does not rewrite the existing interpreter's resource ledger.
 That integration must preserve the current atomic-output guarantee.
 
 ## Pattern semantics
 
-\`match_pattern\` accepts an immutable host pattern and a datum. It returns
-either \`Some(bindings)\`, \`None\` for an ordinary mismatch, or a typed error.
+`match_pattern` accepts an immutable host pattern and a datum. It returns
+either `Some(bindings)`, `None` for an ordinary mismatch, or a typed error.
 
 - Bindings are cloned immutable snapshots, never mutable references into
   a live writer.
@@ -151,7 +151,7 @@ either \`Some(bindings)\`, \`None\` for an ordinary mismatch, or a typed error.
 - A matched pattern never partially publishes bindings on a failed match.
 - Pattern traversal has an independent work/depth budget.
 
-\`variant_coverage\` conservatively determines whether all cases have
+`variant_coverage` conservatively determines whether all cases have
 unconditional top-level arms, identifies missing cases in declaration order,
 and marks arms unreachable after a catch-all or fully covering earlier arm.
 A payload pattern with literal or nested field conditions cannot claim to
@@ -163,7 +163,7 @@ does not replace compiler analysis.
 
 ## Example host use
 
-\`\`\`rust
+```rust
 use scarp::data_engine::{
     DataType as T, Datum as V, Definition, Field, SchemaRegistry,
 };
@@ -188,12 +188,12 @@ let newer = schemas.replace_field(&original, "age", V::integer(21))?;
 assert_eq!(schemas.field(&original, "age")?, &V::integer(20));
 assert_eq!(schemas.field(&newer, "age")?, &V::integer(21));
 # Ok::<(), scarp::data_engine::DataError>(())
-\`\`\`
+```
 
 ## Host compatibility and testing
 
 This change adds one opt-in public module, leaving existing
-\`scarp::compile\`, \`scarp::run\`, \`scarp check\`, \`scarp exec\`, module linking,
+`scarp::compile`, `scarp::run`, `scarp check`, `scarp exec`, module linking,
 numeric kernels and existing Value/SourceType representations unchanged.
 
 The conformance suite covers nominal identity, schema registration rollback,
@@ -205,11 +205,11 @@ and safe sharing across Rust threads.
 
 Before accepting this branch as an integration foundation, require:
 
-1. \`cargo fmt --all -- --check\`
-2. \`cargo clippy --locked --all-targets -- -D warnings\`
-3. \`cargo test --locked\`
-4. \`cargo test --locked --release\`
-5. \`cargo build --locked\`
+1. `cargo fmt --all -- --check`
+2. `cargo clippy --locked --all-targets -- -D warnings`
+3. `cargo test --locked`
+4. `cargo test --locked --release`
+5. `cargo build --locked`
 6. Existing editor/module/native-object integration tests
 7. Linux, Windows, macOS and Rust 1.74 matrix at the exact PR head
 8. Independent API review for public type stability and limit semantics
@@ -218,9 +218,9 @@ Before accepting this branch as an integration foundation, require:
 
 These are explicit further implementation phases, not already completed work.
 
-**Language and AST:** Define original \`.srp\` grammar and source spans for
+**Language and AST:** Define original `.srp` grammar and source spans for
 record declarations, tagged variants, typed list/map constructors, field
-projection, optional/outcome values, patterns and \`match\`.
+projection, optional/outcome values, patterns and `match`.
 
 **Resolver:** Adopt nominal definition identities, introduce field visibility,
 recursive schema lookup and exhaustive branch analysis. Resolve against
@@ -252,22 +252,22 @@ authorization is implied.
 These parts are subsequent development work within this draft PR, not part of
 a released Scarp source-language feature:
 
-- \`paths.rs\`: exact typed nested selection, immutable leaf replacement, and
+- `paths.rs`: exact typed nested selection, immutable leaf replacement, and
   transactional ordered patch execution for records, variants, typed lists,
   maps, optionals and outcomes.
-- \`generics.rs\`: first-order type templates and exact substitution with
+- `generics.rs`: first-order type templates and exact substitution with
   constraints and a bounded cache keyed by complete schema contents.
-- \`schema_graph.rs\`: forward-linked atomic nominal declarations, dependency
+- `schema_graph.rs`: forward-linked atomic nominal declarations, dependency
   graph analysis, cycle detection and deterministic invalidation queries.
-- \`query.rs\`: pure typed predicate preflight, projection, integer sum, key
+- `query.rs`: pure typed predicate preflight, projection, integer sum, key
   grouping, and explicit scan/work/output quotas.
-- \`index.rs\`: persistent typed secondary indexes, deterministic text-prefix
+- `index.rs`: persistent typed secondary indexes, deterministic text-prefix
   and integer-range lookup, original-row materialization and bounded joins.
-- \`diff.rs\`: deterministic structural patches with maximum graph-visit,
+- `diff.rs`: deterministic structural patches with maximum graph-visit,
   operation, and recursion-depth budgets; roundtrip reconciliation checks.
-- \`wire.rs\`: experimental type-checked canonical value codec v1, with
+- `wire.rs`: experimental type-checked canonical value codec v1, with
   strict decoding and no stable ABI guarantee.
-- \`wire_schema.rs\`: opt-in v2 exact schema descriptor envelope that checks
+- `wire_schema.rs`: opt-in v2 exact schema descriptor envelope that checks
   declared member names, order, variant cases, roots, nominal identities
   and the entire registered schema before decoding the v1 value payload.
 
@@ -292,8 +292,8 @@ quota. Malformed sizes and trailing payloads are rejected.
 
 ### Scope boundary
 
-This is still **host API only**. No new \`.srp\` parser, type declarations,
-destructuring, generic function calls, pattern clauses or \`match\` syntax
+This is still **host API only**. No new `.srp` parser, type declarations,
+destructuring, generic function calls, pattern clauses or `match` syntax
 has been enabled. Do not interpret passing Rust host tests as compiler-native
 feature completeness. The compiler's existing public language behavior and
 released CLI remain unchanged.
