@@ -10,6 +10,7 @@ pub mod diff;
 pub mod generics;
 pub mod index;
 pub mod limits;
+pub mod migrate;
 pub mod paths;
 pub mod pattern;
 pub mod query;
@@ -24,6 +25,7 @@ pub use generics::{
     Constraint, GenericSignature, Specialization, SpecializationCache, TypeExpression,
 };
 pub use index::{DataIndex, IndexHit, IndexLimits, IndexStats, JoinResult, JoinRow};
+pub use migrate::{MigrationOptions, MigrationResult, MigrationStats};
 pub use limits::{DataError, DataLimits, DataResource};
 pub use paths::{PatchOperation, PathSegment};
 pub use pattern::{Bindings, Coverage, Pattern};
