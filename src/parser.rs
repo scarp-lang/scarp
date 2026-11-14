@@ -302,11 +302,95 @@ impl Parser<'_> {
         }
     }
 
+    /// Collapse a consecutive brace-only chain into one physical parse frame.
+    ///
+    /// Every intermediate block contains exactly one child block and no
+    /// sibling statements. Their AST and byte spans remain identical to the
+    /// ordinary recursive parser, but 64 nested braces do not retain 64
+    /// statement-list frames while parsing a deeply nested expression.
+    ///
+    /// A preflight of matching braces is required: if a parent has further
+    /// statements after the child block, fall back to the general parser.
+    fn compact_block_chain(&mut self, depth: usize) -> Result<Option<Statement>, ParseError> {
+        if !self.pending.is_empty() {
+            return Ok(None);
+        }
+        let start = self.cursor;
+        let mut count = 0usize;
+        while matches!(
+            self.tokens.get(start + count).map(|t| &t.kind),
+            Some(TokenKind::LeftBrace)
+        ) {
+            count += 1;
+            // Stop before bounds that would violate the normal depth limit.
+            if count > MAX_BLOCK_DEPTH {
+                break;
+            }
+        }
+        if count < 2 {
+            return Ok(None);
+        }
+        let mut balance = 0usize;
+        let mut inner_close = None;
+        for (position, token) in self.tokens.iter().enumerate().skip(start + count - 1) {
+            match token.kind {
+                TokenKind::LeftBrace => balance += 1,
+                TokenKind::RightBrace => {
+                    balance -= 1;
+                    if balance == 0 {
+                        inner_close = Some(position);
+                        break;
+                    }
+                }
+                TokenKind::Eof => return Ok(None),
+                _ => {}
+            }
+        }
+        let Some(inner_close) = inner_close else {
+            return Ok(None);
+        };
+        // A string with an unmatched parent block is still handled by the
+        // standard parser; optimization does not change syntax diagnostics.
+        if (1..count).any(|offset| {
+            !matches!(
+                self.tokens.get(inner_close + offset).map(|t| &t.kind),
+                Some(TokenKind::RightBrace)
+            )
+        }) {
+            return Ok(None);
+        }
+        // Check the same nesting limit as one-by-one block() calls, before
+        // advancing cursor or allocating any AST nodes.
+        for offset in 0..count {
+            if depth + offset >= MAX_BLOCK_DEPTH {
+                let opening = self.tokens[start + offset].span;
+                return Err(ParseError::new(
+                    DiagnosticKind::BlockNesting,
+                    opening,
+                    format!("block nesting exceeds {MAX_BLOCK_DEPTH} levels"),
+                )
+                .with_help("reduce the number of nested statement blocks"));
+            }
+        }
+        self.cursor += count;
+        let mut body = self.statement_list(depth + count, true)?;
+        for offset in (0..count).rev() {
+            let end = self.punctuation(TokenKind::RightBrace, "'}'")?.end;
+            let span = Span::new(self.tokens[start + offset].span.start, end);
+            let node = Statement::Block { statements: body, span };
+            body = vec![node];
+        }
+        Ok(body.pop())
+    }
+
     fn container_statement(
         &mut self,
         depth: usize,
         in_block: bool,
     ) -> Result<Statement, ParseError> {
+        if let Some(compact) = self.compact_block_chain(depth)? {
+            return Ok(compact);
+        }
         match &self.current().expect("container start").kind {
             TokenKind::LeftBrace => {
                 let (statements, span) = self.block(depth)?;
