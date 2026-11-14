@@ -1,4 +1,4 @@
-# Proposal 0041: bounded exact decimal scalars
+# Proposal 0042: bounded exact decimal scalars
 
 Status: **Phase 1 host-side Rust arithmetic core; Scarp source-language support NOT implemented**.
 

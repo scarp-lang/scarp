@@ -48,8 +48,7 @@ fn rational_oracle(
             RoundingMode::AwayFromZero => true,
             RoundingMode::HalfUp => remainder * 2 >= unsigned_den,
             RoundingMode::HalfEven => {
-                remainder * 2 > unsigned_den
-                    || (remainder * 2 == unsigned_den && quotient % 2 != 0)
+                remainder * 2 > unsigned_den || (remainder * 2 == unsigned_den && quotient % 2 != 0)
             }
         }
     };
@@ -158,11 +157,12 @@ fn independently_rounded_rational_oracle_covers_all_four_modes() {
 fn decimal_precision_edges_remain_explicit_and_exact() {
     let max = "9999999999999999999999999999".parse::<Decimal>().unwrap();
     let min_unit = "0.000000000000000001".parse::<Decimal>().unwrap();
-    let max_negative = "-9999999999999999999999999999"
-        .parse::<Decimal>()
-        .unwrap();
+    let max_negative = "-9999999999999999999999999999".parse::<Decimal>().unwrap();
 
-    assert_eq!(max.checked_add(min_unit), Err(DecimalError::PrecisionExceeded));
+    assert_eq!(
+        max.checked_add(min_unit),
+        Err(DecimalError::PrecisionExceeded)
+    );
     assert_eq!(
         max_negative.checked_sub(min_unit),
         Err(DecimalError::PrecisionExceeded)
