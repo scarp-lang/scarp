@@ -592,7 +592,7 @@ impl Parser<'_> {
             if self.at(&close) {
                 break true;
             }
-        }
+        };
         let close_label = if array { "']'" } else { "')'" };
         self.punctuation(close, close_label)?;
         if !array && bindings.len() == 1 && !trailing_comma {
