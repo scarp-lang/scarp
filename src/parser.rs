@@ -374,10 +374,7 @@ impl Parser<'_> {
         }
         #[cfg(debug_assertions)]
         if count >= 32 {
-            let _ = std::io::Write::write_all(
-                &mut std::io::stderr(),
-                b"SCARP_STACK_FAST:braces\n",
-            );
+            let _ = std::io::Write::write_all(&mut std::io::stderr(), b"SCARP_STACK_FAST:braces\n");
         }
         self.cursor += count;
         let mut body = self.statement_list(depth + count, true)?;
