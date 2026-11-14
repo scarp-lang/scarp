@@ -6,12 +6,14 @@
 //! The source parser, resolver and interpreter will adopt this model only
 //! after the language syntax and effect/ownership contracts are reviewed.
 pub mod collections;
+pub mod generics;
 pub mod limits;
 pub mod paths;
 pub mod pattern;
 pub mod schema;
 pub mod value;
 
+pub use generics::{Constraint, GenericSignature, Specialization, SpecializationCache, TypeExpression};
 pub use limits::{DataError, DataLimits, DataResource};
 pub use paths::{PatchOperation, PathSegment};
 pub use pattern::{Bindings, Coverage, Pattern};

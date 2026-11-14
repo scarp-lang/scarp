@@ -13,6 +13,7 @@ pub struct DataLimits {
     pub max_collection_entries: usize,
     pub max_text_bytes: usize,
     pub max_pattern_nodes: usize,
+    pub max_specializations: usize,
 }
 impl Default for DataLimits {
     fn default() -> Self {
@@ -26,6 +27,7 @@ impl Default for DataLimits {
             max_collection_entries: 4096,
             max_text_bytes: 8 * 1024 * 1024,
             max_pattern_nodes: 8192,
+            max_specializations: 1024,
         }
     }
 }
@@ -42,6 +44,7 @@ pub enum DataResource {
     CollectionEntries,
     TextBytes,
     PatternNodes,
+    Specializations,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,6 +65,9 @@ pub enum DataError {
     InvalidKey,
     DuplicateKey,
     InvalidPattern,
+    UnboundParameter,
+    ArityMismatch,
+    UnsatisfiedConstraint,
 }
 
 impl fmt::Display for DataError {
@@ -82,6 +88,9 @@ impl fmt::Display for DataError {
             Self::InvalidKey => f.write_str("map key is incompatible with declared key type"),
             Self::DuplicateKey => f.write_str("duplicate map key"),
             Self::InvalidPattern => f.write_str("invalid or ambiguous pattern"),
+            Self::UnboundParameter => f.write_str("unbound generic type parameter"),
+            Self::ArityMismatch => f.write_str("generic function argument count mismatch"),
+            Self::UnsatisfiedConstraint => f.write_str("unsatisfied generic type constraint"),
         }
     }
 }

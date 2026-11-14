@@ -45,7 +45,7 @@ impl DataType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Field {
     pub name: String,
     pub ty: DataType,
@@ -59,7 +59,7 @@ impl Field {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariantCase {
     pub name: String,
     pub payload: Option<DataType>,
@@ -78,12 +78,12 @@ impl VariantCase {
         }
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DefinitionKind {
     Record(Vec<Field>),
     Variant(Vec<VariantCase>),
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Definition {
     pub id: DefinitionId,
     pub name: String,
