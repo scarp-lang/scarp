@@ -158,6 +158,14 @@ pub(super) fn prepare<'a>(
                         let value = input.read_line(&mut budget, span)?;
                         frame.workspace.accept(value);
                     }
+                    Evaluation::ReadLineOr { fallback, span } => {
+                        let value = match input.read_line(&mut budget, span) {
+                            Ok(value) => value,
+                            Err(error) if error.kind == DiagnosticKind::InputEof => fallback,
+                            Err(error) => return Err(error),
+                        };
+                        frame.workspace.accept(value);
+                    }
                     Evaluation::Call {
                         node,
                         arguments,

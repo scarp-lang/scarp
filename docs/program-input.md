@@ -34,6 +34,28 @@ a final nonempty unterminated line is accepted. The next selected read encounter
 EOF. Invalid UTF-8 reports E0056 without replacement. Input is never normalized,
 trimmed or implicitly converted to a number. Scalar parsing is separate PR #179.
 
+## End-of-input fallback (development main)
+
+`read_line_or(fallback: string) -> string` is an additional impure expression
+for line-oriented programs that need a sensible final value when input is
+exhausted. It consumes one selected line exactly like `read_line()` and returns
+the fallback **only** for E0055 (immediate EOF). A genuinely empty LF/CRLF line
+returns `""`, not the fallback. Other errors (unavailable input, invalid UTF-8,
+reader failure, input quota, work or text quota) remain errors. It evaluates its
+string fallback argument before performing the read, even when input exists.
+This form is not included in published alpha.6–alpha.8.
+
+```scarp
+bind first = read_line_or("Anonymous");
+bind second = read_line_or("Guest");
+print(first, second);
+```
+
+Both input expressions are rejected in pure functions, defaults and contracts.
+They obey the same reader capability, exact UTF-8 handling, input limits and
+no-output-on-runtime-error rule. Either intrinsic spelling may be shadowed by
+an explicitly defined function; that user function does not acquire input.
+
 ## Explicit host APIs and compatibility
 
 - `run_with_input` and `run_with_input_and_options` compile source then execute

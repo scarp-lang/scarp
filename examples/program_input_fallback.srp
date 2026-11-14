@@ -1,0 +1,4 @@
+// The second input line is optional; EOF selects the explicit fallback.
+bind first: string = read_line_or("Anonymous");
+bind second: string = read_line_or("Guest");
+print(first, second);
