@@ -145,10 +145,11 @@ pub(crate) enum ResolvedCall {
     Builtin(Builtin),
     ReadLine,
     ReadLineOr,
+    Ask,
 }
 
 pub(crate) fn is_builtin_name(name: &str) -> bool {
-    matches!(name, "read_line" | "read_line_or") || Builtin::from_name(name).is_some()
+    matches!(name, "read_line" | "read_line_or" | "ask") || Builtin::from_name(name).is_some()
 }
 
 /// Static function signature and call-graph information. Spans are source bytes.
@@ -1077,8 +1078,6 @@ fn resolve_expression(
             } => {
                 // Preserve existing user function names; kernels occupy call
                 // position only when no user declaration has this name.
-                // Input calls are impure and explicit. User functions with
-                // either spelling take precedence over these intrinsics.
                 if matches!(name.as_str(), "read_line" | "read_line_or")
                     && !names.contains_key(name)
                 {
@@ -1114,6 +1113,31 @@ fn resolve_expression(
                     } else {
                         ResolvedCall::ReadLine
                     }));
+                    types.push(ValueType::String.into());
+                    continue;
+                }
+                if name == "ask" && !names.contains_key(name) {
+                    if arguments.len() != 1 || arguments[0].label.is_some() {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::CallArguments,
+                            *function_span,
+                            "ask requires exactly one positional string prompt",
+                        ));
+                    }
+                    require_type(
+                        &types[arguments[0].expression],
+                        ValueType::String,
+                        syntax.nodes()[arguments[0].expression].span,
+                    )?;
+                    if pure {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::ImpureFunction,
+                            *function_span,
+                            "pure expressions cannot prompt for program input",
+                        ));
+                    }
+                    slots.push(None);
+                    calls.push(Some(ResolvedCall::Ask));
                     types.push(ValueType::String.into());
                     continue;
                 }

@@ -149,15 +149,18 @@ Execution-limit options: --max-steps, --max-prints, --max-call-depth, --max-call
 --max-tuple-bytes, --max-bigint-digits, --max-bigint-bytes,
 --max-input-line-bytes, --max-input-bytes, --max-input-reads.
 --input-file PATH uses an explicit file instead of stdin for program input.
+--interactive enables ask(prompt) to flush prompt text before a bounded read,
+using stdin or an explicitly selected --input-file. Prompts are not rolled back.
 Options precede the
 source path. -- before a filename permits filenames beginning with a dash.
 Program-argument forwarding and project entrypoint execution are not supported.
-read_line reads redirected UTF-8 stdin or --input-file PATH; otherwise terminal input
-is rejected at the selected call. Input-file paths are relative to the current
+read_line reads redirected UTF-8 stdin or --input-file PATH, or terminal input
+with --interactive. Without --interactive, ask reports E0054. Input-file paths are relative to the current
 working directory, and file contents are read incrementally under input quotas.
 Input defaults: 65536 raw bytes per line, 1048576 total bytes, 4096 reads.
 CR/LF count toward input/text quotas. Input cannot be rolled back; output stays buffered.
-No interactive prompt is displayed or flushed before a read.
+Only --interactive permits immediate flushed prompts; normal program output
+remains buffered until evaluation succeeds.
 ";
 
 const CREATE_HELP: &str = "Usage: scarp create [--] <new-directory>
@@ -286,8 +289,9 @@ Snapshot bytes are a logical storage cap, not an exact process-memory limit.
 Counts are unsigned decimal digits, zero is valid, and each option may occur once.
 Example: scarp run --max-steps 2000000 --max-prints 10 examples/repeat.srp
 Use scarp check with the same options to evaluate without printing.
-read_line requires redirected UTF-8 stdin or --input-file PATH; terminal prompts
-without an input file are not supported. --input-file works on project launch too.
+read_line requires redirected UTF-8 stdin or --input-file PATH by default.
+--interactive enables terminal input and visible ask(prompt) output, and works
+with --input-file for reproducible interactive-program fixtures.
 --max-input-line-bytes 65536, --max-input-bytes 1048576, --max-input-reads 4096.
 Raw input counts CR/LF and uses the text/work budgets. Output stays buffered.
 --diagnostic-format=json writes schema-1 errors to stderr, with local UTF-8 byte spans
@@ -812,6 +816,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         options,
         input_limits,
         input_file,
+        interactive,
         json,
         json_diagnostics,
     } = match invocation(&args) {
@@ -919,16 +924,28 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                         return 1;
                     }
                 };
-                program.execute_with_input(
-                    &mut BufReader::new(file),
+                let mut reader = BufReader::new(file);
+                if interactive {
+                    program.execute_with_interactive_input(
+                        &mut reader,
+                        output,
+                        errors,
+                        options,
+                        input_limits,
+                    )
+                } else {
+                    program.execute_with_input(&mut reader, output, errors, options, input_limits)
+                }
+            } else if interactive {
+                program.execute_with_interactive_input(
+                    &mut stdin.lock(),
                     output,
                     errors,
                     options,
                     input_limits,
                 )
             } else if stdin.is_terminal() {
-                // A selected read fails immediately; buffered output cannot
-                // serve as a visible interactive prompt in this mode.
+                // Without explicit opt-in, terminal reads remain unavailable.
                 program.execute(output, errors, options)
             } else {
                 program.execute_with_input(&mut stdin.lock(), output, errors, options, input_limits)
@@ -1053,6 +1070,7 @@ struct Invocation<'a> {
     options: ExecutionOptions,
     input_limits: InputLimits,
     input_file: Option<&'a OsStr>,
+    interactive: bool,
     json: bool,
     json_diagnostics: bool,
 }
@@ -1062,6 +1080,7 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
     let mut options = ExecutionOptions::default();
     let mut input_limits = InputLimits::default();
     let mut input_file = None;
+    let mut interactive = false;
     let mut index = 1;
     let mut seen = Vec::new();
     let mut separator = false;
@@ -1098,6 +1117,17 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
                 return Err("--json cannot be repeated");
             }
             json = true;
+            index += 1;
+            continue;
+        }
+        if argument == "--interactive" {
+            if command != "run" {
+                return Err("--interactive is available only for executable programs");
+            }
+            if interactive {
+                return Err("--interactive cannot be repeated");
+            }
+            interactive = true;
             index += 1;
             continue;
         }
@@ -1178,6 +1208,7 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
         options,
         input_limits,
         input_file,
+        interactive,
         json,
         json_diagnostics,
     })
