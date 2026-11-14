@@ -16,6 +16,9 @@ pub mod bigint;
 pub mod c_backend;
 /// Experimental exact decimal Rust API (not yet a Scarp source-language type).
 pub mod decimal;
+/// Experimental checked host-side schemas and persistent composite data values.
+/// These are not yet syntax or runtime values accepted by .srp programs.
+pub mod data_engine;
 pub mod diagnostics;
 pub mod evaluator;
 pub mod input;
