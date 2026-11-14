@@ -51,6 +51,10 @@ pub enum DataResource {
     WireBytes,
     WireNodes,
     WireDepth,
+    IndexRows,
+    IndexKeys,
+    IndexKeyBytes,
+    IndexPairs,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

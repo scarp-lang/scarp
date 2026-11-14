@@ -7,6 +7,7 @@
 //! after the language syntax and effect/ownership contracts are reviewed.
 pub mod collections;
 pub mod generics;
+pub mod index;
 pub mod limits;
 pub mod paths;
 pub mod pattern;
@@ -16,6 +17,7 @@ pub mod schema_graph;
 pub mod value;
 pub mod wire;
 
+pub use index::{DataIndex, IndexHit, IndexLimits, IndexStats, JoinResult, JoinRow};
 pub use generics::{
     Constraint, GenericSignature, Specialization, SpecializationCache, TypeExpression,
 };
