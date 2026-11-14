@@ -28,11 +28,11 @@ source directory. Static commands reject the flag. Input is streamed through
 a buffered file reader rather than loaded into memory all at once.
 
 **Integration candidate (not in published alpha.9):** `--interactive`
-explicitly allows `ask(prompt)` to write and flush a prompt before reading a
-line from stdin or an input file. `--interactive --input-file DATA.txt` makes
+allows `ask(prompt)` and `ask_or(prompt, fallback)` to flush a prompt before
+reading a line from stdin or an input file. `--interactive --input-file DATA.txt` makes
 interactive programs reproducible without reading ambient stdin; prompts are
 visible even if later input or runtime execution fails. Without `--interactive`,
-`ask` reports E0054 (also when `--input-file` was supplied).
+both prompt built-ins report E0054. `ask_or` uses the fallback only at EOF.
 
 **v0.0.6-alpha.6 published prerelease:** `exec`/`run`/`launch` support redirected
 UTF-8 `read_line()` with `--max-input-line-bytes`, `--max-input-bytes` and

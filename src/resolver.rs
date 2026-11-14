@@ -143,15 +143,11 @@ pub(crate) enum ResolvedCall {
         parameters: Vec<usize>,
     },
     Builtin(Builtin),
-    ReadLine,
-    ReadLineOr,
-    Ask,
-    AskOr,
+    Input(crate::input::InputBuiltin),
 }
 
 pub(crate) fn is_builtin_name(name: &str) -> bool {
-    matches!(name, "read_line" | "read_line_or" | "ask" | "ask_or")
-        || Builtin::from_name(name).is_some()
+    crate::input::InputBuiltin::from_name(name).is_some() || Builtin::from_name(name).is_some()
 }
 
 /// Static function signature and call-graph information. Spans are source bytes.
@@ -1080,54 +1076,18 @@ fn resolve_expression(
             } => {
                 // Preserve existing user function names; kernels occupy call
                 // position only when no user declaration has this name.
-                if matches!(name.as_str(), "read_line" | "read_line_or")
-                    && !names.contains_key(name)
+                if let Some(input) = crate::input::InputBuiltin::from_name(name)
+                    .filter(|_| !names.contains_key(name))
                 {
-                    let with_fallback = name == "read_line_or";
-                    let expected = if with_fallback { 1 } else { 0 };
+                    let expected = input.arity();
                     if arguments.len() != expected
                         || arguments.iter().any(|argument| argument.label.is_some())
                     {
+                        let qualifier = if input.prompts() { " string" } else { "" };
                         return Err(Diagnostic::new(
                             DiagnosticKind::CallArguments,
                             *function_span,
-                            format!("{name} requires {expected} positional arguments"),
-                        ));
-                    }
-                    if with_fallback {
-                        let fallback = &arguments[0];
-                        require_type(
-                            &types[fallback.expression],
-                            ValueType::String,
-                            syntax.nodes()[fallback.expression].span,
-                        )?;
-                    }
-                    if pure {
-                        return Err(Diagnostic::new(
-                            DiagnosticKind::ImpureFunction,
-                            *function_span,
-                            "pure expressions cannot read program input",
-                        ));
-                    }
-                    slots.push(None);
-                    calls.push(Some(if with_fallback {
-                        ResolvedCall::ReadLineOr
-                    } else {
-                        ResolvedCall::ReadLine
-                    }));
-                    types.push(ValueType::String.into());
-                    continue;
-                }
-                if matches!(name.as_str(), "ask" | "ask_or") && !names.contains_key(name) {
-                    let with_fallback = name == "ask_or";
-                    let expected = if with_fallback { 2 } else { 1 };
-                    if arguments.len() != expected
-                        || arguments.iter().any(|argument| argument.label.is_some())
-                    {
-                        return Err(Diagnostic::new(
-                            DiagnosticKind::CallArguments,
-                            *function_span,
-                            format!("{name} requires {expected} positional string arguments"),
+                            format!("{name} requires {expected} positional{qualifier} arguments"),
                         ));
                     }
                     for argument in arguments {
@@ -1138,18 +1098,19 @@ fn resolve_expression(
                         )?;
                     }
                     if pure {
+                        let message = if input.prompts() {
+                            "pure expressions cannot prompt for program input"
+                        } else {
+                            "pure expressions cannot read program input"
+                        };
                         return Err(Diagnostic::new(
                             DiagnosticKind::ImpureFunction,
                             *function_span,
-                            "pure expressions cannot prompt for program input",
+                            message,
                         ));
                     }
                     slots.push(None);
-                    calls.push(Some(if with_fallback {
-                        ResolvedCall::AskOr
-                    } else {
-                        ResolvedCall::Ask
-                    }));
+                    calls.push(Some(ResolvedCall::Input(input)));
                     types.push(ValueType::String.into());
                     continue;
                 }
