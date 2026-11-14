@@ -28,12 +28,32 @@ impl PathSegment {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PatchOperation {
-    Replace { path: Vec<PathSegment>, value: Datum },
-    ListPush { path: Vec<PathSegment>, value: Datum },
-    ListInsert { path: Vec<PathSegment>, index: usize, value: Datum },
-    ListRemove { path: Vec<PathSegment>, index: usize },
-    MapPut { path: Vec<PathSegment>, key: DataKey, value: Datum },
-    MapDelete { path: Vec<PathSegment>, key: DataKey },
+    Replace {
+        path: Vec<PathSegment>,
+        value: Datum,
+    },
+    ListPush {
+        path: Vec<PathSegment>,
+        value: Datum,
+    },
+    ListInsert {
+        path: Vec<PathSegment>,
+        index: usize,
+        value: Datum,
+    },
+    ListRemove {
+        path: Vec<PathSegment>,
+        index: usize,
+    },
+    MapPut {
+        path: Vec<PathSegment>,
+        key: DataKey,
+        value: Datum,
+    },
+    MapDelete {
+        path: Vec<PathSegment>,
+        key: DataKey,
+    },
 }
 impl PatchOperation {
     pub fn path(&self) -> &[PathSegment] {
@@ -51,11 +71,7 @@ impl PatchOperation {
 impl SchemaRegistry {
     /// Statically compute the exact type of a path without accessing a value.
     /// Runtime indices and keys still require checked traversal.
-    pub fn path_type(
-        &self,
-        root: &DataType,
-        path: &[PathSegment],
-    ) -> Result<DataType, DataError> {
+    pub fn path_type(&self, root: &DataType, path: &[PathSegment]) -> Result<DataType, DataError> {
         self.validate_type(root)?;
         bounded(
             path.len(),
@@ -65,26 +81,22 @@ impl SchemaRegistry {
         let mut current = root.clone();
         for segment in path {
             current = match (&current, segment) {
-                (DataType::Record(id), PathSegment::Field(name)) => {
-                    self.record(*id)?
-                        .iter()
-                        .find(|field| field.name == *name)
-                        .ok_or_else(|| DataError::UnknownField(name.clone()))?
-                        .ty
-                        .clone()
-                }
-                (DataType::Variant(id), PathSegment::VariantPayload(name)) => {
-                    self.variants(*id)?
-                        .iter()
-                        .find(|case| case.name == *name)
-                        .ok_or_else(|| DataError::UnknownCase(name.clone()))?
-                        .payload
-                        .clone()
-                        .ok_or(DataError::InvalidShape)?
-                }
-                (DataType::List(element), PathSegment::ListIndex(_)) => {
-                    element.as_ref().clone()
-                }
+                (DataType::Record(id), PathSegment::Field(name)) => self
+                    .record(*id)?
+                    .iter()
+                    .find(|field| field.name == *name)
+                    .ok_or_else(|| DataError::UnknownField(name.clone()))?
+                    .ty
+                    .clone(),
+                (DataType::Variant(id), PathSegment::VariantPayload(name)) => self
+                    .variants(*id)?
+                    .iter()
+                    .find(|case| case.name == *name)
+                    .ok_or_else(|| DataError::UnknownCase(name.clone()))?
+                    .payload
+                    .clone()
+                    .ok_or(DataError::InvalidShape)?,
+                (DataType::List(element), PathSegment::ListIndex(_)) => element.as_ref().clone(),
                 (DataType::Map(key_type, element), PathSegment::MapKey(key))
                     if *key_type == key.kind() =>
                 {
@@ -93,12 +105,8 @@ impl SchemaRegistry {
                 (DataType::Optional(element), PathSegment::OptionalSome) => {
                     element.as_ref().clone()
                 }
-                (DataType::Outcome(ok, _), PathSegment::OutcomeOk) => {
-                    ok.as_ref().clone()
-                }
-                (DataType::Outcome(_, err), PathSegment::OutcomeErr) => {
-                    err.as_ref().clone()
-                }
+                (DataType::Outcome(ok, _), PathSegment::OutcomeOk) => ok.as_ref().clone(),
+                (DataType::Outcome(_, err), PathSegment::OutcomeErr) => err.as_ref().clone(),
                 _ => return Err(DataError::TypeMismatch),
             };
         }
@@ -106,11 +114,7 @@ impl SchemaRegistry {
         Ok(current)
     }
 
-    fn step<'a>(
-        &self,
-        value: &'a Datum,
-        segment: &PathSegment,
-    ) -> Result<&'a Datum, DataError> {
+    fn step<'a>(&self, value: &'a Datum, segment: &PathSegment) -> Result<&'a Datum, DataError> {
         match (value, segment) {
             (Datum::Record(record), PathSegment::Field(name)) => self.field(record, name),
             (Datum::Variant(variant), PathSegment::VariantPayload(name)) => {
@@ -232,9 +236,7 @@ impl SchemaRegistry {
                 PatchOperation::ListPush { value, .. } => {
                     let leaf = self.select_path(root_type, &next, path)?;
                     match leaf {
-                        Datum::List(list) => {
-                            Datum::List(self.list_push(list, value.clone())?)
-                        }
+                        Datum::List(list) => Datum::List(self.list_push(list, value.clone())?),
                         _ => return Err(DataError::TypeMismatch),
                     }
                 }
@@ -255,16 +257,16 @@ impl SchemaRegistry {
                 PatchOperation::ListRemove { index, .. } => {
                     let leaf = self.select_path(root_type, &next, path)?;
                     match leaf {
-                        Datum::List(list) => {
-                            Datum::List(self.list_remove(list, *index)?.0)
-                        }
+                        Datum::List(list) => Datum::List(self.list_remove(list, *index)?.0),
                         _ => return Err(DataError::TypeMismatch),
                     }
                 }
                 PatchOperation::MapPut { key, value, .. } => {
                     let leaf = self.select_path(root_type, &next, path)?;
                     match leaf {
-                        Datum::Map(map) => Datum::Map(self.map_insert(map, key.clone(), value.clone())?),
+                        Datum::Map(map) => {
+                            Datum::Map(self.map_insert(map, key.clone(), value.clone())?)
+                        }
                         _ => return Err(DataError::TypeMismatch),
                     }
                 }
