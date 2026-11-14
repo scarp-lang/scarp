@@ -13,6 +13,7 @@ use crate::{
     resolver::{ResolvedExpression, ResolvedProgram},
     value::ValueType,
 };
+use std::borrow::Cow;
 
 const MAX_IR_REGISTERS: usize = 1024;
 const MAX_IR_STEPS: usize = 8192;
@@ -123,14 +124,14 @@ fn require_read(
     }
 }
 
-fn join(destination: &mut Option<Vec<bool>>, incoming: &[bool]) {
+fn join(destination: &mut Option<Vec<bool>>, incoming: Cow<'_, [bool]>) {
     match destination {
         Some(existing) => {
-            for (bit, other) in existing.iter_mut().zip(incoming) {
+            for (bit, other) in existing.iter_mut().zip(incoming.iter()) {
                 *bit &= *other;
             }
         }
-        None => *destination = Some(incoming.to_vec()),
+        None => *destination = Some(incoming.into_owned()),
     }
 }
 
@@ -385,8 +386,9 @@ impl ScalarExpressionIr {
             if instruction.span.start > instruction.span.end {
                 return Err(invalid(instruction.span));
             }
+            // Every edge moves forward, so this state has reached its last use.
             let mut initialized = incoming[pc]
-                .clone()
+                .take()
                 .ok_or_else(|| invalid(instruction.span))?;
             let mut branch = None;
             let types = &self.registers;
@@ -453,10 +455,10 @@ impl ScalarExpressionIr {
                     branch = Some(*target);
                 }
             }
-            join(&mut incoming[pc + 1], &initialized);
-            if let Some(target) = branch {
-                join(&mut incoming[target], &initialized);
+            if let Some(target) = branch.filter(|&target| target != pc + 1) {
+                join(&mut incoming[target], Cow::Borrowed(&initialized));
             }
+            join(&mut incoming[pc + 1], Cow::Owned(initialized));
         }
         if incoming[self.steps.len()]
             .as_ref()
@@ -593,6 +595,41 @@ mod tests {
             ir.verify().unwrap_err().kind,
             DiagnosticKind::NativeUnsupported
         );
+    }
+
+    #[test]
+    fn branch_join_requires_assignment_on_both_paths() {
+        let span = Span::new(2, 3);
+        let instruction = |kind| Instruction { kind, span };
+        let mut ir = ScalarExpressionIr {
+            registers: vec![ValueType::Boolean, ValueType::Integer],
+            slots: Vec::new(),
+            root: 1,
+            steps: vec![
+                instruction(Operation::Boolean {
+                    dst: 0,
+                    value: true,
+                }),
+                instruction(Operation::Branch {
+                    condition: 0,
+                    when_true: true,
+                    target: 3,
+                }),
+                instruction(Operation::Integer { dst: 1, value: 7 }),
+                instruction(Operation::Move { dst: 1, src: 1 }),
+            ],
+        };
+        let error = ir.verify().unwrap_err();
+        assert_eq!(error.kind, DiagnosticKind::NativeUnsupported);
+        assert_eq!(error.span, span);
+
+        // With the branch and fallthrough pointing at the same instruction,
+        // both paths initialize the integer before the join.
+        let Operation::Branch { target, .. } = &mut ir.steps[1].kind else {
+            unreachable!("test branch")
+        };
+        *target = 2;
+        ir.verify().unwrap();
     }
 
     #[test]
