@@ -161,7 +161,8 @@ impl<'a> InputState<'a> {
                     remaining = &remaining[written..];
                 }
                 Err(error) if error.kind() == io::ErrorKind::Interrupted => {
-                    budget.charge(1, span)?
+                    budget.charge(1, span)?;
+                    budget.preflight_steps(1, span)?;
                 }
                 _ => return Err(prompt_io(span)),
             }
@@ -338,7 +339,42 @@ mod tests {
             .ask(">", &mut Budget::new(3), Span::default())
             .unwrap_err();
         assert_eq!(error.kind, Kind::ExecutionLimit);
-        assert_eq!(writer.0, 3);
+        assert_eq!(writer.0, 2);
         assert_eq!(reader.position(), 0);
+    }
+
+    #[test]
+    fn prompt_retry_cannot_spend_the_first_reader_probe() {
+        struct InterruptOnce(Vec<u8>, bool);
+
+        impl Write for InterruptOnce {
+            fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+                if !std::mem::replace(&mut self.1, true) {
+                    return Err(io::ErrorKind::Interrupted.into());
+                }
+                self.0.write(bytes)
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let mut writer = InterruptOnce(Vec::new(), false);
+        let mut reader = Cursor::new(b"");
+        let mut input = InputState::interactive(&mut reader, &mut writer, InputLimits::default());
+        let error = input
+            .ask(">", &mut Budget::new(2), Span::default())
+            .unwrap_err();
+        assert_eq!(error.kind, Kind::ExecutionLimit);
+        assert!(writer.0.is_empty());
+
+        let mut writer = InterruptOnce(Vec::new(), false);
+        let mut input = InputState::interactive(&mut reader, &mut writer, InputLimits::default());
+        let error = input
+            .ask(">", &mut Budget::new(3), Span::default())
+            .unwrap_err();
+        assert_eq!(error.kind, Kind::InputEof);
+        assert_eq!(writer.0, b">");
     }
 }
