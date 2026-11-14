@@ -3,11 +3,11 @@
 //! This metadata traversal is intended for future diagnostics, editor views,
 //! debug inspectors and test tooling. It is independent of .srp source syntax
 //! and never calls user code, performs I/O or reveals mutable storage.
-use crate::value::Value;
 use super::limits::{bounded, DataError, DataResource};
 use super::paths::PathSegment;
 use super::schema::{DataType, SchemaRegistry};
 use super::value::{Datum, OutcomeValue};
+use crate::value::Value;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InspectionLimits {
@@ -69,9 +69,14 @@ impl InspectionReport {
     }
 }
 fn checked_add(
-    old: &mut usize, amount: usize, limit: usize, resource: DataResource,
+    old: &mut usize,
+    amount: usize,
+    limit: usize,
+    resource: DataResource,
 ) -> Result<(), DataError> {
-    *old = old.checked_add(amount).ok_or(DataError::Limit { resource, limit })?;
+    *old = old
+        .checked_add(amount)
+        .ok_or(DataError::Limit { resource, limit })?;
     bounded(*old, limit, resource)
 }
 impl SchemaRegistry {
@@ -95,7 +100,10 @@ impl SchemaRegistry {
         while let Some((ty, value, path, depth)) = pending.pop() {
             bounded(depth, limits.max_depth, DataResource::InspectionDepth)?;
             checked_add(
-                &mut stats.nodes, 1, limits.max_nodes, DataResource::InspectionNodes,
+                &mut stats.nodes,
+                1,
+                limits.max_nodes,
+                DataResource::InspectionNodes,
             )?;
             stats.max_depth = stats.max_depth.max(depth);
             let kind = match (&ty, value) {
@@ -123,8 +131,10 @@ impl SchemaRegistry {
                 }
                 (DataType::Variant(id), Datum::Variant(variant)) => {
                     stats.variant_nodes += 1;
-                    let case = self.variants(*id)?
-                        .get(variant.case_index()).ok_or(DataError::InvalidShape)?;
+                    let case = self
+                        .variants(*id)?
+                        .get(variant.case_index())
+                        .ok_or(DataError::InvalidShape)?;
                     if let (Some(ty), Some(payload)) = (&case.payload, variant.payload()) {
                         let mut child_path = path.clone();
                         child_path.push(PathSegment::VariantPayload(case.name.clone()));
@@ -189,7 +199,12 @@ impl SchemaRegistry {
                 }
                 _ => return Err(DataError::TypeMismatch),
             };
-            nodes.push(InspectedNode { path, ty, kind, depth });
+            nodes.push(InspectedNode {
+                path,
+                ty,
+                kind,
+                depth,
+            });
         }
         Ok(InspectionReport { nodes, stats })
     }

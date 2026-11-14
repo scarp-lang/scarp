@@ -3,11 +3,11 @@
 //! This module compares schema declarations by existing compiler DefinitionId.
 //! It does not infer a migration from equal struct layout or reinterpret a
 //! variant case index; all changes are reported with explicit semantic risk.
-use std::collections::{BTreeMap, BTreeSet};
-use crate::types::DefinitionId;
 use super::limits::DataError;
 use super::schema::{DataType, Definition, DefinitionKind, SchemaRegistry};
 use super::schema_graph::SchemaGraph;
+use crate::types::DefinitionId;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SchemaRisk {
@@ -20,18 +20,61 @@ pub enum SchemaRisk {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SchemaChange {
-    DefinitionAdded { id: DefinitionId, name: String },
-    DefinitionRemoved { id: DefinitionId, name: String },
-    DefinitionRenamed { id: DefinitionId, before: String, after: String },
-    DefinitionKindChanged { id: DefinitionId },
-    FieldAdded { id: DefinitionId, name: String, ty: DataType },
-    FieldRemoved { id: DefinitionId, name: String },
-    FieldTypeChanged { id: DefinitionId, name: String, before: DataType, after: DataType },
-    FieldReordered { id: DefinitionId, name: String, before: usize, after: usize },
-    CaseAdded { id: DefinitionId, name: String },
-    CaseRemoved { id: DefinitionId, name: String },
-    CasePayloadChanged { id: DefinitionId, name: String },
-    CaseReordered { id: DefinitionId, name: String, before: usize, after: usize },
+    DefinitionAdded {
+        id: DefinitionId,
+        name: String,
+    },
+    DefinitionRemoved {
+        id: DefinitionId,
+        name: String,
+    },
+    DefinitionRenamed {
+        id: DefinitionId,
+        before: String,
+        after: String,
+    },
+    DefinitionKindChanged {
+        id: DefinitionId,
+    },
+    FieldAdded {
+        id: DefinitionId,
+        name: String,
+        ty: DataType,
+    },
+    FieldRemoved {
+        id: DefinitionId,
+        name: String,
+    },
+    FieldTypeChanged {
+        id: DefinitionId,
+        name: String,
+        before: DataType,
+        after: DataType,
+    },
+    FieldReordered {
+        id: DefinitionId,
+        name: String,
+        before: usize,
+        after: usize,
+    },
+    CaseAdded {
+        id: DefinitionId,
+        name: String,
+    },
+    CaseRemoved {
+        id: DefinitionId,
+        name: String,
+    },
+    CasePayloadChanged {
+        id: DefinitionId,
+        name: String,
+    },
+    CaseReordered {
+        id: DefinitionId,
+        name: String,
+        before: usize,
+        after: usize,
+    },
 }
 impl SchemaChange {
     pub fn definition(&self) -> DefinitionId {
@@ -86,7 +129,10 @@ fn id_key(id: DefinitionId) -> (u32, u32) {
     (id.module, id.declaration)
 }
 fn changed_id(key: (u32, u32)) -> DefinitionId {
-    DefinitionId { module: key.0, declaration: key.1 }
+    DefinitionId {
+        module: key.0,
+        declaration: key.1,
+    }
 }
 fn named_fields(
     before: &[(String, DataType)],
@@ -96,7 +142,10 @@ fn named_fields(
 ) {
     for (old_index, (name, old_type)) in before.iter().enumerate() {
         match after.iter().position(|(other, _)| other == name) {
-            None => changes.push(SchemaChange::FieldRemoved { id, name: name.clone() }),
+            None => changes.push(SchemaChange::FieldRemoved {
+                id,
+                name: name.clone(),
+            }),
             Some(new_index) => {
                 let new_type = &after[new_index].1;
                 if old_type != new_type {
@@ -109,7 +158,10 @@ fn named_fields(
                 }
                 if old_index != new_index {
                     changes.push(SchemaChange::FieldReordered {
-                        id, name: name.clone(), before: old_index, after: new_index,
+                        id,
+                        name: name.clone(),
+                        before: old_index,
+                        after: new_index,
                     });
                 }
             }
@@ -117,19 +169,21 @@ fn named_fields(
     }
     for (name, ty) in after {
         if !before.iter().any(|(old_name, _)| old_name == name) {
-            changes.push(SchemaChange::FieldAdded { id, name: name.clone(), ty: ty.clone() });
+            changes.push(SchemaChange::FieldAdded {
+                id,
+                name: name.clone(),
+                ty: ty.clone(),
+            });
         }
     }
 }
-fn compare_definition(
-    before: &Definition,
-    after: &Definition,
-    changes: &mut Vec<SchemaChange>,
-) {
+fn compare_definition(before: &Definition, after: &Definition, changes: &mut Vec<SchemaChange>) {
     let id = before.id;
     if before.name != after.name {
         changes.push(SchemaChange::DefinitionRenamed {
-            id, before: before.name.clone(), after: after.name.clone(),
+            id,
+            before: before.name.clone(),
+            after: after.name.clone(),
         });
     }
     match (&before.kind, &after.kind) {
@@ -142,17 +196,22 @@ fn compare_definition(
             for (index, case) in old.iter().enumerate() {
                 match new.iter().position(|new_case| new_case.name == case.name) {
                     None => changes.push(SchemaChange::CaseRemoved {
-                        id, name: case.name.clone(),
+                        id,
+                        name: case.name.clone(),
                     }),
                     Some(new_index) => {
                         if case.payload != new[new_index].payload {
                             changes.push(SchemaChange::CasePayloadChanged {
-                                id, name: case.name.clone(),
+                                id,
+                                name: case.name.clone(),
                             });
                         }
                         if index != new_index {
                             changes.push(SchemaChange::CaseReordered {
-                                id, name: case.name.clone(), before: index, after: new_index,
+                                id,
+                                name: case.name.clone(),
+                                before: index,
+                                after: new_index,
                             });
                         }
                     }
@@ -160,7 +219,10 @@ fn compare_definition(
             }
             for case in new {
                 if !old.iter().any(|before| before.name == case.name) {
-                    changes.push(SchemaChange::CaseAdded { id, name: case.name.clone() });
+                    changes.push(SchemaChange::CaseAdded {
+                        id,
+                        name: case.name.clone(),
+                    });
                 }
             }
         }
@@ -191,10 +253,12 @@ impl SchemaRegistry {
             match (old.get(&key), new.get(&key)) {
                 (Some(before), Some(after)) => compare_definition(before, after, &mut changes),
                 (Some(before), None) => changes.push(SchemaChange::DefinitionRemoved {
-                    id: before.id, name: before.name.clone(),
+                    id: before.id,
+                    name: before.name.clone(),
                 }),
                 (None, Some(after)) => changes.push(SchemaChange::DefinitionAdded {
-                    id: after.id, name: after.name.clone(),
+                    id: after.id,
+                    name: after.name.clone(),
                 }),
                 (None, None) => unreachable!("union must refer to at least one declaration"),
             }
@@ -202,16 +266,21 @@ impl SchemaRegistry {
                 changed_ids.push(changed_id(key));
             }
         }
-        let risk = changes.iter().map(SchemaChange::risk).max().unwrap_or(SchemaRisk::Compatible);
-        SchemaComparison { changes, risk, changed_ids }
+        let risk = changes
+            .iter()
+            .map(SchemaChange::risk)
+            .max()
+            .unwrap_or(SchemaRisk::Compatible);
+        SchemaComparison {
+            changes,
+            risk,
+            changed_ids,
+        }
     }
     /// Collect direct schema changes and all transitively dependent nominal
     /// definitions in either the old or new registry, in stable ID order.
     /// Removed definitions still appear in the impact set.
-    pub fn schema_impact(
-        &self,
-        target: &SchemaRegistry,
-    ) -> Result<Vec<DefinitionId>, DataError> {
+    pub fn schema_impact(&self, target: &SchemaRegistry) -> Result<Vec<DefinitionId>, DataError> {
         let comparison = self.compare_schema(target);
         let before = SchemaGraph::new(self)?;
         let after = SchemaGraph::new(target)?;

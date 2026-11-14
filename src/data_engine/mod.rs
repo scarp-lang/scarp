@@ -27,8 +27,10 @@ pub use evolution::{SchemaChange, SchemaComparison, SchemaRisk};
 pub use generics::{
     Constraint, GenericSignature, Specialization, SpecializationCache, TypeExpression,
 };
-pub use inspect::{InspectKind, InspectedNode, InspectionLimits, InspectionReport, InspectionStats};
 pub use index::{DataIndex, IndexHit, IndexLimits, IndexStats, JoinResult, JoinRow};
+pub use inspect::{
+    InspectKind, InspectedNode, InspectionLimits, InspectionReport, InspectionStats,
+};
 pub use limits::{DataError, DataLimits, DataResource};
 pub use migrate::{MigrationOptions, MigrationResult, MigrationStats};
 pub use paths::{PatchOperation, PathSegment};
