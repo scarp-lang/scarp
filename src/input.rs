@@ -3,32 +3,50 @@
 use std::io::{self, BufRead, Write};
 
 use crate::{
+    ast::OutputTarget,
     diagnostics::{Diagnostic, DiagnosticKind as Kind, Span},
     limits::Budget,
-    value::{Value, MAX_TEXT_BYTES},
+    numeric::{self, Builtin},
+    types::SourceType,
+    value::{Value, ValueType, MAX_TEXT_BYTES},
 };
 
-#[derive(Clone, Copy, Debug)]
-pub(crate) enum InputBuiltin {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum IoBuiltin {
     ReadLine,
     ReadLineOr,
     Ask,
     AskOr,
+    TryReadLine,
+    Integer,
+    Float,
+    BigInt,
+    FlushStdout,
+    FlushStderr,
 }
 
-impl InputBuiltin {
+impl IoBuiltin {
     pub(crate) fn from_name(name: &str) -> Option<Self> {
         match name {
             "read_line" => Some(Self::ReadLine),
             "read_line_or" => Some(Self::ReadLineOr),
-            "ask" => Some(Self::Ask),
+            "ask" | "input" => Some(Self::Ask),
             "ask_or" => Some(Self::AskOr),
+            "try_read_line" => Some(Self::TryReadLine),
+            "input_integer" => Some(Self::Integer),
+            "input_float" => Some(Self::Float),
+            "input_bigint" => Some(Self::BigInt),
+            "flush_stdout" => Some(Self::FlushStdout),
+            "flush_stderr" => Some(Self::FlushStderr),
             _ => None,
         }
     }
 
     pub(crate) fn prompts(self) -> bool {
-        matches!(self, Self::Ask | Self::AskOr)
+        matches!(
+            self,
+            Self::Ask | Self::AskOr | Self::Integer | Self::Float | Self::BigInt
+        )
     }
 
     pub(crate) fn has_fallback(self) -> bool {
@@ -37,6 +55,46 @@ impl InputBuiltin {
 
     pub(crate) fn arity(self) -> usize {
         usize::from(self.prompts()) + usize::from(self.has_fallback())
+    }
+
+    pub(crate) fn result_type(self) -> SourceType {
+        match self {
+            Self::TryReadLine => {
+                SourceType::tuple(vec![ValueType::Boolean.into(), ValueType::String.into()])
+                    .expect("valid input tuple type")
+            }
+            Self::Integer => ValueType::Integer.into(),
+            Self::Float => ValueType::Float.into(),
+            Self::BigInt => ValueType::BigInt.into(),
+            Self::FlushStdout | Self::FlushStderr => ValueType::Unit.into(),
+            _ => ValueType::String.into(),
+        }
+    }
+
+    pub(crate) fn output_target(self) -> Option<OutputTarget> {
+        match self {
+            Self::FlushStdout => Some(OutputTarget::Stdout),
+            Self::FlushStderr => Some(OutputTarget::Stderr),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn convert(
+        self,
+        value: Value,
+        budget: &mut Budget,
+        span: Span,
+    ) -> Result<Value, Diagnostic> {
+        let (conversion, action) = match self {
+            Self::Integer => (Builtin::TextToInteger, "input_integer"),
+            Self::Float => (Builtin::TextToFloat, "input_float"),
+            Self::BigInt => (Builtin::BigInt, "input_bigint"),
+            _ => return Ok(value),
+        };
+        numeric::evaluate_with_budget(conversion, &[value], budget, span).map_err(|mut error| {
+            error.message = format!("{action}: {}", error.message);
+            error
+        })
     }
 }
 
@@ -91,6 +149,7 @@ fn limit(span: Span, message: &str) -> Diagnostic {
 pub(crate) struct InputState<'a> {
     reader: Option<&'a mut dyn BufRead>,
     prompt_writer: Option<&'a mut dyn Write>,
+    error_writer: Option<&'a mut dyn Write>,
     limits: InputLimits,
     consumed: usize,
     reads: usize,
@@ -101,6 +160,7 @@ impl<'a> InputState<'a> {
         Self {
             reader,
             prompt_writer: None,
+            error_writer: None,
             limits,
             consumed: 0,
             reads: 0,
@@ -117,9 +177,22 @@ impl<'a> InputState<'a> {
         Self {
             reader: Some(reader),
             prompt_writer: Some(prompt_writer),
+            error_writer: None,
             limits,
             consumed: 0,
             reads: 0,
+        }
+    }
+
+    pub(crate) fn with_error_writer(mut self, writer: &'a mut dyn Write) -> Self {
+        self.error_writer = Some(writer);
+        self
+    }
+
+    pub(crate) fn output_writer(&mut self, target: OutputTarget) -> Option<&mut (dyn Write + 'a)> {
+        match target {
+            OutputTarget::Stdout => self.prompt_writer.as_deref_mut(),
+            OutputTarget::Stderr => self.error_writer.as_deref_mut(),
         }
     }
 

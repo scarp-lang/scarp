@@ -2,8 +2,11 @@
 
 ## 0.0.6-alpha.10 — development candidate
 
-- Add `read_line_or`, explicit UTF-8 input files, and opt-in terminal prompts
-  with `ask` and `ask_or`. Keep EOF distinct from empty lines and input errors.
+- Add explicit UTF-8 input files, EOF-aware reads and opt-in terminal prompts.
+  `input_integer`, `input_float` and `input_bigint` parse checked values.
+  `try_read_line` keeps EOF distinct from empty lines and input errors.
+- Add stdout and stderr flush calls, plus exact `.stdout` and `.stderr`
+  comparison fixtures for project tests in both JSON report formats.
 - Add immutable fixed-size arrays, including typed empty values, nested
   values, checked indexing, and an independent allocation limit.
   Array-bearing module inventories use JSON schema 3.
@@ -11,6 +14,7 @@
   signed bitwise operations, and a single-pass quotient/remainder tuple.
 - Add opt-in constant and revision-aware editor caches. Reduce allocations
   during scalar IR verification and retain cold-build diagnostic parity.
+- Add an experimental exact Decimal foundation for Rust hosts.
 
 ## 0.0.6-alpha.9 — published GitHub prerelease, 2026-11-13
 

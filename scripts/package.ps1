@@ -284,6 +284,15 @@ try {
             throw "Packaged $example JSON schema failed"
         }
     }
+    foreach ($example in @('typed_calculator', 'exact_integer')) {
+        $source = Join-Path $extractedPackage "examples/interactive/$example.srp"
+        $inputPath = Join-Path $extractedPackage "examples/interactive/$example.stdin"
+        $expected = [IO.File]::ReadAllBytes((Join-Path $extractedPackage "examples/interactive/$example.stdout"))
+        $actual = Invoke-ScarpProcess -Executable $executable -Arguments @('exec', '--interactive', '--input-file', $inputPath, $source)
+        if ($actual.ExitCode -ne 0 -or $actual.Stderr.Length -ne 0 -or [Convert]::ToBase64String($actual.Stdout) -cne [Convert]::ToBase64String($expected)) {
+            throw "Packaged interactive $example output differs"
+        }
+    }
     $explanation = Invoke-ScarpProcess -Executable $executable -Arguments @('explain', 'E0044')
     if ($explanation.ExitCode -ne 0 -or $explanation.Stderr.Length -ne 0 -or -not [System.Text.Encoding]::UTF8.GetString($explanation.Stdout).StartsWith('E0044: ')) {
         throw 'Packaged diagnostic explanation failed'
