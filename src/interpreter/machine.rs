@@ -675,6 +675,7 @@ fn charge_capture(
         PrintValue::Value(Value::BigInt(number)) => number
             .payload_bytes()
             .max(number.decimal_digits() + usize::from(number.is_negative())),
+        PrintValue::Value(Value::Decimal(_)) => 48,
         PrintValue::Value(Value::String(text)) => text.len(),
         PrintValue::Value(Value::Vector(vector)) => vector.len().saturating_mul(8),
         PrintValue::Value(Value::Integers(vector)) => vector.len().saturating_mul(8),

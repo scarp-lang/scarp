@@ -435,6 +435,10 @@ impl Workspace {
                     values.push(match value {
                         Value::Float(value) => finite(-value.get(), span)?,
                         Value::BigInt(value) => Value::BigInt(value.negated()),
+                        Value::Decimal(value) => Value::Decimal(
+                            crate::decimal::Decimal::new(-value.coefficient(), value.scale())
+                                .expect("bounded canonical decimal negation"),
+                        ),
                         _ => Value::Integer(
                             value
                                 .require_integer(span)?
@@ -519,6 +523,11 @@ pub(crate) fn apply_binary_with_budget(
     if let (Some(left), Some(right)) = (left.as_bigint(), right.as_bigint()) {
         return crate::bigint::binary(operator, left, right, budget, span);
     }
+    if left.as_decimal().is_some() && right.as_decimal().is_some() {
+        // All decimal arithmetic is fixed-width, with at most 18 digit steps.
+        // Charge a conservative work fee before invoking the exact kernel.
+        budget.charge(64, span)?;
+    }
     apply_binary(operator, left, right, span)
 }
 
@@ -537,6 +546,9 @@ pub(crate) fn apply_binary(
         } else {
             left != right
         }));
+    }
+    if let (Some(left), Some(right)) = (left.as_decimal(), right.as_decimal()) {
+        return numeric::decimals::binary(operator, left, right, span);
     }
     if left.kind() == ValueType::Float || right.kind() == ValueType::Float {
         let left = left.require_float(span)?;

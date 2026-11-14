@@ -168,6 +168,9 @@ diagnostic_catalogue! {
 
     AssertionFailure => ("E0065", "A selected assert(condition) statement evaluated to false. Check the boolean predicate and test inputs; an optional bounded literal message is included in the diagnostic. Assertions run only when reached and never emit ordinary program output."),
     PromptIo => ("E0066", "An explicitly enabled interactive prompt could not be written and flushed. Check the host stdout/prompt writer. A partially visible prompt cannot be rolled back, but buffered print events are not replayed on failure."),
+    InvalidDecimal => ("E0067", "Invalid exact decimal text or rounding mode. Use ASCII decimal digits with an optional sign and fractional part, or one of half_even, half_up, toward_zero and away_from_zero for rounding. No implicit float conversion occurs."),
+    DecimalLimit => ("E0068", "Exact decimal precision or scale limit exceeded. Coefficients have at most 28 canonical digits and at most 18 fractional places. Use explicit rounding, smaller operands or a different numeric type; no silent f64 fallback occurs."),
+    DecimalInexact => ("E0069", "Exact decimal division or conversion would lose precision. Select an explicitly rounded operation, or use a terminating quotient within the 28-digit and 18-place bounds."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
