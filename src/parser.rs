@@ -377,7 +377,10 @@ impl Parser<'_> {
         for offset in (0..count).rev() {
             let end = self.punctuation(TokenKind::RightBrace, "'}'")?.end;
             let span = Span::new(self.tokens[start + offset].span.start, end);
-            let node = Statement::Block { statements: body, span };
+            let node = Statement::Block {
+                statements: body,
+                span,
+            };
             body = vec![node];
         }
         Ok(body.pop())
