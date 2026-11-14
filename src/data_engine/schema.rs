@@ -173,34 +173,41 @@ impl SchemaRegistry {
     /// Atomically register mutually dependent declarations in one graph.
     /// Forward references are checked against a private candidate registry;
     /// failure leaves all existing definitions and quotas unchanged.
-    pub fn register_batch(
-        &mut self,
-        definitions: Vec<Definition>,
-    ) -> Result<(), DataError> {
+    pub fn register_batch(&mut self, definitions: Vec<Definition>) -> Result<(), DataError> {
         if definitions.is_empty() {
             return Ok(());
         }
-        let prospective = self.definitions.len().checked_add(definitions.len())
+        let prospective = self
+            .definitions
+            .len()
+            .checked_add(definitions.len())
             .ok_or(DataError::Limit {
                 resource: DataResource::Definitions,
                 limit: self.limits.max_definitions,
             })?;
-        bounded(prospective,self.limits.max_definitions,DataResource::Definitions)?;
+        bounded(
+            prospective,
+            self.limits.max_definitions,
+            DataResource::Definitions,
+        )?;
         let mut staged = self.clone();
         for definition in &definitions {
             identifier(&definition.name)?;
             if staged.indices.contains_key(&definition.id) {
                 return Err(DataError::DuplicateDefinition);
             }
-            let index=staged.definitions.len();
-            staged.indices.insert(definition.id,index);
+            let index = staged.definitions.len();
+            staged.indices.insert(definition.id, index);
             staged.definitions.push(definition.clone());
         }
-        let mut nodes=self.total_type_nodes;
+        let mut nodes = self.total_type_nodes;
         for definition in &definitions {
-            bounded(definition.member_count(),self.limits.max_members_per_definition,
-                DataResource::Members)?;
-            let mut names=HashSet::new();
+            bounded(
+                definition.member_count(),
+                self.limits.max_members_per_definition,
+                DataResource::Members,
+            )?;
+            let mut names = HashSet::new();
             match &definition.kind {
                 DefinitionKind::Record(fields) => {
                     for field in fields {
@@ -208,7 +215,7 @@ impl SchemaRegistry {
                         if !names.insert(field.name.as_str()) {
                             return Err(DataError::DuplicateName(field.name.clone()));
                         }
-                        staged.validate_type_inner(&field.ty,&mut nodes)?;
+                        staged.validate_type_inner(&field.ty, &mut nodes)?;
                     }
                 }
                 DefinitionKind::Variant(cases) => {
@@ -220,15 +227,15 @@ impl SchemaRegistry {
                         if !names.insert(case.name.as_str()) {
                             return Err(DataError::DuplicateName(case.name.clone()));
                         }
-                        if let Some(ty)=&case.payload {
-                            staged.validate_type_inner(ty,&mut nodes)?;
+                        if let Some(ty) = &case.payload {
+                            staged.validate_type_inner(ty, &mut nodes)?;
                         }
                     }
                 }
             }
         }
-        staged.total_type_nodes=nodes;
-        *self=staged;
+        staged.total_type_nodes = nodes;
+        *self = staged;
         Ok(())
     }
     /// Validate a host type without allocating or adding a definition.
@@ -236,11 +243,7 @@ impl SchemaRegistry {
         let mut nodes = 0;
         self.validate_type_inner(ty, &mut nodes)
     }
-    fn validate_type_inner(
-        &self,
-        ty: &DataType,
-        nodes: &mut usize,
-    ) -> Result<(), DataError> {
+    fn validate_type_inner(&self, ty: &DataType, nodes: &mut usize) -> Result<(), DataError> {
         let mut pending = vec![(ty, 1usize)];
         while let Some((part, depth)) = pending.pop() {
             bounded(depth, self.limits.max_type_depth, DataResource::TypeDepth)?;

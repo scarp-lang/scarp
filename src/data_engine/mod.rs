@@ -20,8 +20,8 @@ pub use generics::{
 pub use limits::{DataError, DataLimits, DataResource};
 pub use paths::{PatchOperation, PathSegment};
 pub use pattern::{Bindings, Coverage, Pattern};
-pub use schema_graph::SchemaGraph;
 pub use schema::{
     DataType, Definition, DefinitionKind, Field, MapKeyType, SchemaRegistry, VariantCase,
 };
+pub use schema_graph::SchemaGraph;
 pub use value::{DataKey, Datum, ListValue, MapValue, OutcomeValue, RecordValue, VariantValue};
