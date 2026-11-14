@@ -387,6 +387,12 @@ impl Parser<'_> {
             };
             body = vec![node];
         }
+        #[cfg(debug_assertions)]
+        if count >= 32 {
+            let _ = std::io::Write::write_all(
+                &mut std::io::stderr(), b"SCARP_STACK_FAST:braces_complete\n",
+            );
+        }
         Ok(body.pop())
     }
 
@@ -1872,6 +1878,12 @@ impl Parser<'_> {
         }
         debug_assert!(operators.is_empty());
         debug_assert_eq!(operands.len(), 1);
+        #[cfg(debug_assertions)]
+        if max_openings >= 32 {
+            let _ = std::io::Write::write_all(
+                &mut std::io::stderr(), b"SCARP_STACK_FAST:grouped_complete\n",
+            );
+        }
         Ok(operands.pop())
     }
 

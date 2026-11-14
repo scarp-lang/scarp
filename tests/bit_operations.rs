@@ -199,7 +199,11 @@ fn bit_precedence_nesting_fits_the_existing_small_parser_stack() {
             std::io::stderr()
                 .write_all(b"SCARP_STACK_STAGE:combined\n")
                 .unwrap();
-            scarp::parse(&source).unwrap()
+            let program = scarp::parse(&source).unwrap();
+            std::io::stderr()
+                .write_all(b"SCARP_STACK_STAGE:combined_returned\n")
+                .unwrap();
+            program
         })
         .unwrap()
         .join()
