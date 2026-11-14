@@ -49,7 +49,11 @@ impl Differ<'_> {
             resource: DataResource::DiffNodes,
             limit: self.limits.max_visited,
         })?;
-        bounded(self.visited, self.limits.max_visited, DataResource::DiffNodes)
+        bounded(
+            self.visited,
+            self.limits.max_visited,
+            DataResource::DiffNodes,
+        )
     }
     fn emit(&mut self, op: PatchOperation) -> Result<(), DataError> {
         bounded(
@@ -121,34 +125,30 @@ impl Differ<'_> {
                     _ => Err(DataError::InvalidShape),
                 }
             }
-            (DataType::Optional(inner), Datum::Optional(a), Datum::Optional(b)) => {
-                match (a, b) {
-                    (Some(left), Some(right)) => {
-                        path.push(PathSegment::OptionalSome);
-                        self.compare(inner, left, right, path, depth + 1)?;
-                        path.pop();
-                        Ok(())
-                    }
-                    _ => self.replace(path, after),
+            (DataType::Optional(inner), Datum::Optional(a), Datum::Optional(b)) => match (a, b) {
+                (Some(left), Some(right)) => {
+                    path.push(PathSegment::OptionalSome);
+                    self.compare(inner, left, right, path, depth + 1)?;
+                    path.pop();
+                    Ok(())
                 }
-            }
-            (DataType::Outcome(ok, err), Datum::Outcome(a), Datum::Outcome(b)) => {
-                match (a, b) {
-                    (OutcomeValue::Ok(left), OutcomeValue::Ok(right)) => {
-                        path.push(PathSegment::OutcomeOk);
-                        self.compare(ok, left, right, path, depth + 1)?;
-                        path.pop();
-                        Ok(())
-                    }
-                    (OutcomeValue::Err(left), OutcomeValue::Err(right)) => {
-                        path.push(PathSegment::OutcomeErr);
-                        self.compare(err, left, right, path, depth + 1)?;
-                        path.pop();
-                        Ok(())
-                    }
-                    _ => self.replace(path, after),
+                _ => self.replace(path, after),
+            },
+            (DataType::Outcome(ok, err), Datum::Outcome(a), Datum::Outcome(b)) => match (a, b) {
+                (OutcomeValue::Ok(left), OutcomeValue::Ok(right)) => {
+                    path.push(PathSegment::OutcomeOk);
+                    self.compare(ok, left, right, path, depth + 1)?;
+                    path.pop();
+                    Ok(())
                 }
-            }
+                (OutcomeValue::Err(left), OutcomeValue::Err(right)) => {
+                    path.push(PathSegment::OutcomeErr);
+                    self.compare(err, left, right, path, depth + 1)?;
+                    path.pop();
+                    Ok(())
+                }
+                _ => self.replace(path, after),
+            },
             (DataType::List(inner), Datum::List(a), Datum::List(b)) => {
                 let overlap = a.len().min(b.len());
                 for index in 0..overlap {
