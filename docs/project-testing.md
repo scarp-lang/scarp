@@ -135,12 +135,12 @@ ordering, and case statuses as schema 1. A failed case has `phase` and
 | `phase` | Cause |
 | --- | --- |
 | `compile` | Loading, parsing, linking, or statically checking the test or its imports failed |
-| `fixture` | The selected test compiled, but its sibling `.stdin` could not be safely opened or read |
-| `runtime` | The test failed during execution, including assertion failures and input decoding errors |
+| `fixture` | The selected test compiled, but a sibling input/output fixture could not be loaded |
+| `runtime` | The test failed during execution, including assertion failures, input decoding errors and expected-output mismatches |
 
 `diagnostic` uses the compiler's schema 1 diagnostic envelope. It carries
 the original code, message, primary location, related locations, and help.
-Fixture setup errors have a null code and primary location. Source locations
+Fixture setup errors and output mismatches have a null code and primary location. Source locations
 use project-relative paths with forward slashes, half-open UTF-8 byte spans,
 and one-based Unicode-scalar line and column positions. Unavailable locations
 are null. The file loader reports relative paths in its diagnostic messages.
@@ -276,3 +276,16 @@ The `scarp run FILE.srp`, `scarp exec FILE.srp`,
 remain unchanged by this test runner. Existing `Scarp.project` files
 are supported without conversion. No automated project discovery in
 ancestor directories is performed.
+
+## Optional per-test stdout and stderr fixtures (alpha.10 development)
+
+Use sibling `tests/NAME.stdout` and `tests/NAME.stderr` files alongside
+`tests/NAME.srp` to compare the selected streams. Each fixture is optional.
+An empty fixture expects an empty stream. Both compare exact UTF-8 bytes,
+including spaces and LF line endings. Keep expected bytes intact in version
+control. Each fixture is limited to 1 MiB and must be a regular file within
+the project root. List mode and filters keep their existing behavior.
+
+An output mismatch reports the stream, zero-based byte offset, expected
+length and actual length. Expected and actual bytes are omitted from
+both JSON report versions. Project tests run without interactive prompts.
