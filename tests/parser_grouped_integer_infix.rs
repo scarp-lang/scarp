@@ -6,6 +6,19 @@ use scarp::{
     diagnostics::DiagnosticKind,
     parser::MAX_EXPRESSION_DEPTH,
 };
+fn print_expression(statement: &Statement) -> &scarp::ast::Expression {
+    match statement {
+        Statement::Println {
+            argument: PrintArgument::Expression(expression), ..
+        } => expression,
+        Statement::Output { arguments, .. } => match &arguments[0] {
+            PrintArgument::Expression(expression) => expression,
+            _ => panic!("expected output expression"),
+        },
+        _ => panic!("expected output statement"),
+    }
+}
+
 fn output(source: &str) -> Vec<u8> {
     let mut out = Vec::new();
     scarp::run(source, &mut out).unwrap();
@@ -97,12 +110,7 @@ fn nested_integer_literal_boundaries_keep_original_diagnostics() {
 fn original_group_ast_spans_are_preserved_under_iterative_lowering() {
     let source = "print(((((42)))));";
     let ast = scarp::parse(source).unwrap();
-    let Statement::Output { arguments, .. } = &ast.statements[0] else {
-        panic!("expected output statement");
-    };
-    let PrintArgument::Expression(expression) = &arguments[0] else {
-        panic!("expected expression");
-    };
+    let expression = print_expression(&ast.statements[0]);
     let mut root = expression.root();
     let mut groups = 0;
     while let E::Group { expression: inner } = &expression.nodes()[root].kind {
@@ -121,12 +129,7 @@ fn nested_infix_groups_preserve_exact_operator_span() {
     assert_eq!(error.kind, DiagnosticKind::UnexpectedToken);
     let valid = "print((((1|2))));";
     let ast = scarp::parse(valid).unwrap();
-    let Statement::Output { arguments, .. } = &ast.statements[0] else {
-        panic!("expected output");
-    };
-    let PrintArgument::Expression(expr) = &arguments[0] else {
-        panic!("expected expression");
-    };
+    let expr = print_expression(&ast.statements[0]);
     let op = expr
         .nodes()
         .iter()
