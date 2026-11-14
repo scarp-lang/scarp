@@ -155,39 +155,23 @@ pub(super) fn prepare<'a>(
                     .workspace
                     .resume(expression, &frame.environment, &mut budget)?
                 {
-                    Evaluation::ReadLine(span) => {
-                        let value = input.read_line(&mut budget, span)?;
-                        frame.workspace.accept(value);
-                    }
-                    Evaluation::ReadLineOr { fallback, span } => {
-                        let value = match input.read_line(&mut budget, span) {
-                            Ok(value) => value,
-                            Err(error) if error.kind == DiagnosticKind::InputEof => fallback,
-                            Err(error) => return Err(error),
-                        };
-                        frame.workspace.accept(value);
-                    }
-                    Evaluation::Ask { prompt, span } => {
-                        let value = input.ask(
-                            prompt.as_str().expect("statically checked ask prompt"),
-                            &mut budget,
-                            span,
-                        )?;
-                        frame.workspace.accept(value);
-                    }
-                    Evaluation::AskOr {
+                    Evaluation::Input {
                         prompt,
                         fallback,
                         span,
                     } => {
-                        let value = match input.ask(
-                            prompt.as_str().expect("statically checked ask_or prompt"),
-                            &mut budget,
-                            span,
-                        ) {
-                            Ok(value) => value,
-                            Err(error) if error.kind == DiagnosticKind::InputEof => fallback,
-                            Err(error) => return Err(error),
+                        let read = if let Some(prompt) = prompt {
+                            input.ask(prompt.as_str().expect("typed prompt"), &mut budget, span)
+                        } else {
+                            input.read_line(&mut budget, span)
+                        };
+                        let value = match (read, fallback) {
+                            (Err(error), Some(fallback))
+                                if error.kind == DiagnosticKind::InputEof =>
+                            {
+                                fallback
+                            }
+                            (result, _) => result?,
                         };
                         frame.workspace.accept(value);
                     }

@@ -10,7 +10,7 @@ struct Symbol {
     info: SymbolInfo,
     definition: Span,
     target: Option<FunctionTarget>,
-    constant: Option<ExpressionKind>,
+    constant: Option<Value>,
 }
 struct FunctionTarget {
     name: String,
@@ -36,6 +36,7 @@ fn collect(
     graph: &ModuleGraph,
     remaining: &mut usize,
     limits: ConstantLimits,
+    mut cache: Option<&mut cache::ConstantCache>,
 ) -> Result<(Vec<Table>, Vec<ConstantDependency>), Diagnostic> {
     let mut tables: Vec<Option<Table>> = (0..graph.modules.len()).map(|_| None).collect();
     let mut dependencies = vec![Vec::new(); graph.modules.len()];
@@ -70,12 +71,17 @@ fn collect(
                         ));
                     }
                     let unqualified = graph.modules.len() == 1;
+                    let qualifier = module
+                        .diagnostic_qualifier
+                        .as_deref()
+                        .unwrap_or(&module.identity);
                     let size = if unqualified {
                         function.name.len()
                     } else {
                         module
                             .identity
                             .len()
+                            .max(qualifier.len())
                             .checked_add(function.name.len())
                             .and_then(|n| n.checked_add(2))
                             .ok_or_else(|| limit(function.name_span, "symbol identity bytes"))?
@@ -84,10 +90,6 @@ fn collect(
                     let target = if unqualified {
                         function.name.clone()
                     } else {
-                        let qualifier = module
-                            .diagnostic_qualifier
-                            .as_deref()
-                            .unwrap_or(&module.identity);
                         format!("{qualifier}::{}", function.name)
                     };
                     Symbol {
@@ -119,48 +121,65 @@ fn collect(
                     mutable,
                     initializer,
                     annotation,
+                    span,
                     ..
                 } if id != 0 || public => {
                     crate::resolver::check_name(name, *name_span)?;
                     if *mutable {
                         return Err(syntax(*name_span, "library variables cannot be mutable"));
                     }
-                    let value = work.evaluate(initializer, annotation.clone(), |name, span| {
-                        let symbol = lookup_symbol(&table, |target| tables[target].as_ref().expect("completed dependency"), name, span)?
-                            .ok_or_else(|| crate::resolver::unknown_name(name, span)
-                                .with_help("constant initializers may reference only earlier module constants or imported public constants"))?;
-                        let value = symbol.constant.as_ref().ok_or_else(|| Diagnostic::new(Kind::ModuleSymbol, span,
-                            format!("{name:?} is a function, not a scalar constant"))
-                            .with_related(symbol.info.span, "function declared here")
-                            .with_help("call functions at runtime; use a scalar constant in this initializer"))?;
-                        if let ExpressionKind::String(text) = value { consume(remaining, text.len(), span)?; }
-                        dependencies[id].push(ConstantDependency {
-                            source: id, declaration: *name_span,
-                            target: name.split_once('.').map_or(id, |(alias, _)| table.aliases[alias]),
-                            target_declaration: symbol.info.span, span,
-                        });
-                        Ok(value.clone())
-                    }).map_err(|error| error.with_related(*name_span, "constant initialized here"))?;
-                    let kind = value.kind();
-                    let value = match value {
-                        Value::Integer(n) => ExpressionKind::Integer(n),
-                        Value::Float(n) => ExpressionKind::Float(n),
-                        Value::Boolean(b) => ExpressionKind::Boolean(b),
-                        Value::String(text) => {
-                            // Literal storage remains covered by source limits,
-                            // as before. Reference-derived strings create new
-                            // folded storage in addition to substitution text.
-                            if initializer
-                                .nodes()
-                                .iter()
-                                .any(|node| matches!(&node.kind, ExpressionKind::Name(_)))
-                            {
-                                consume(remaining, text.len(), *name_span)?;
+                    let cached = cache.as_deref_mut().map(|cache| {
+                        let declaration = &graph.sources.text[span.start..span.end];
+                        (cache, module.identity.as_str(), declaration)
+                    });
+                    let value = work
+                        .evaluate(initializer, annotation.clone(), cached, |name, span| {
+                            let imported_table = |target: SourceId| {
+                                tables[target].as_ref().expect("completed dependency")
+                            };
+                            let symbol = lookup_symbol(&table, imported_table, name, span)?
+                                .ok_or_else(|| {
+                                    crate::resolver::unknown_name(name, span).with_help(
+                                        "constant initializers may reference only earlier module constants or imported public constants",
+                                    )
+                                })?;
+                            let value = symbol.constant.as_ref().ok_or_else(|| {
+                                Diagnostic::new(
+                                    Kind::ModuleSymbol,
+                                    span,
+                                    format!("{name:?} is a function, not a scalar constant"),
+                                )
+                                .with_related(symbol.info.span, "function declared here")
+                                .with_help("call functions at runtime; use a scalar constant in this initializer")
+                            })?;
+                            if let Value::String(text) = value {
+                                consume(remaining, text.len(), span)?;
                             }
-                            ExpressionKind::String(text.to_string())
+                            let target = name
+                                .split_once('.')
+                                .map_or(id, |(alias, _)| table.aliases[alias]);
+                            dependencies[id].push(ConstantDependency {
+                                source: id,
+                                declaration: *name_span,
+                                target,
+                                target_declaration: symbol.info.span,
+                                span,
+                            });
+                            Ok(value.clone())
+                        })
+                        .map_err(|error| error.with_related(*name_span, "constant initialized here"))?;
+                    let kind = value.kind();
+                    if let Value::String(text) = &value {
+                        // Reference-derived strings consume folded storage in
+                        // addition to the substitution text charged above.
+                        if initializer
+                            .nodes()
+                            .iter()
+                            .any(|node| matches!(&node.kind, ExpressionKind::Name(_)))
+                        {
+                            consume(remaining, text.len(), *name_span)?;
                         }
-                        _ => unreachable!("validated scalar constant"),
-                    };
+                    }
                     Symbol {
                         definition: *name_span,
                         info: SymbolInfo {
@@ -429,7 +448,7 @@ impl Rewriter<'_> {
                     }
                     if let Some(symbol) = self.symbol(name, node.span)? {
                         let size = match &symbol.constant {
-                            Some(ExpressionKind::String(text)) => text.len(),
+                            Some(Value::String(text)) => text.len(),
                             _ => symbol
                                 .target
                                 .as_ref()
@@ -438,7 +457,7 @@ impl Rewriter<'_> {
                         consume(self.remaining, size, node.span)?;
                         let symbol = self.symbol(name, node.span)?.unwrap();
                         node.kind = if let Some(value) = &symbol.constant {
-                            value.clone()
+                            constants::literal(value)
                         } else {
                             ExpressionKind::Name(symbol.target.as_ref().unwrap().name.clone())
                         };
@@ -632,16 +651,18 @@ pub(super) fn resolve(
     graph: ModuleGraph,
     constants: ConstantLimits,
     types: crate::types::TypeLimits,
+    constant_cache: Option<&mut cache::ConstantCache>,
 ) -> Result<ModuleProgram, ModuleDiagnostic> {
-    resolve_impl(graph, constants, types, None).map(|(program, _)| program)
+    resolve_impl(graph, constants, types, None, constant_cache).map(|(program, _)| program)
 }
 pub(super) fn resolve_indexed(
     graph: ModuleGraph,
     constants: ConstantLimits,
     types: crate::types::TypeLimits,
     limits: symbols::IndexLimits,
+    constant_cache: Option<&mut cache::ConstantCache>,
 ) -> Result<symbols::IndexedProgram, ModuleDiagnostic> {
-    resolve_impl(graph, constants, types, Some(limits)).map(|(program, index)| {
+    resolve_impl(graph, constants, types, Some(limits), constant_cache).map(|(program, index)| {
         symbols::IndexedProgram::new(program, index.expect("requested symbol index"))
     })
 }
@@ -650,10 +671,11 @@ fn resolve_impl(
     constants: ConstantLimits,
     types: crate::types::TypeLimits,
     index_limits: Option<symbols::IndexLimits>,
+    constant_cache: Option<&mut cache::ConstantCache>,
 ) -> Result<(ModuleProgram, Option<symbols::SymbolIndex>), ModuleDiagnostic> {
     let result = (|| -> Result<_, Diagnostic> {
         let mut remaining = graph.limits.max_expansion_bytes;
-        let (tables, dependencies) = collect(&graph, &mut remaining, constants)?;
+        let (tables, dependencies) = collect(&graph, &mut remaining, constants, constant_cache)?;
         let mut navigation = index_limits.map(|limits| symbols::Builder::new(&graph, limits));
         let mut statements = Vec::new();
         let mut info = Vec::new();
@@ -706,6 +728,11 @@ fn resolve_impl(
     match result {
         Ok((program, modules, constant_dependencies, navigation)) => {
             let inspection = inspection::Inspection::new(&graph.modules, &modules);
+            let diagnostic_qualifiers = graph
+                .modules
+                .into_iter()
+                .map(|module| module.diagnostic_qualifier)
+                .collect();
             debug_assert_eq!(inspection.function_count(), program.functions().len());
             let index = navigation.map(|b| b.finish(sources.clone()));
             Ok((
@@ -713,6 +740,7 @@ fn resolve_impl(
                     program,
                     sources,
                     modules,
+                    diagnostic_qualifiers,
                     inspection,
                     constant_dependencies,
                 },

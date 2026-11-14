@@ -42,6 +42,18 @@ pub(super) struct Work {
     budget: Budget,
     workspace: Workspace,
 }
+
+/// Convert a successfully evaluated module constant into a literal node.
+pub(super) fn literal(value: &Value) -> ExpressionKind {
+    match value {
+        Value::Integer(value) => ExpressionKind::Integer(*value),
+        Value::Float(value) => ExpressionKind::Float(*value),
+        Value::Boolean(value) => ExpressionKind::Boolean(*value),
+        Value::String(value) => ExpressionKind::String(value.to_string()),
+        _ => unreachable!("validated scalar constant"),
+    }
+}
+
 struct Declaration<'a> {
     name: &'a str,
     span: Span,
@@ -228,12 +240,46 @@ impl Work {
         &mut self,
         expression: &Expression,
         annotation: Option<crate::ast::TypeAnnotation>,
-        mut reference: impl FnMut(&str, Span) -> Result<ExpressionKind, Diagnostic>,
+        cached: Option<(&mut cache::ConstantCache, &str, &str)>,
+        mut reference: impl FnMut(&str, Span) -> Result<Value, Diagnostic>,
+    ) -> Result<Value, Diagnostic> {
+        let Some((cache, identity, declaration)) = cached else {
+            return self.evaluate_bound(expression, annotation, reference);
+        };
+
+        // Resolve every reference against the current graph before probing.
+        // Even skipped operands must pass visibility and expansion checks
+        // and produce dependency edges at their current source positions.
+        let mut references = Vec::new();
+        for node in expression.nodes() {
+            if let ExpressionKind::Name(name) = &node.kind {
+                references.push(reference(name, node.span)?);
+            }
+        }
+        if let Some(value) = cache.try_reuse(identity, declaration, &references, &mut self.budget) {
+            return Ok(value);
+        }
+
+        let mut values = references.iter();
+        let before = self.budget.remaining_amounts();
+        let value = self.evaluate_bound(expression, annotation, |_, _| {
+            Ok(values.next().expect("resolved each reference").clone())
+        })?;
+        let spent = before.spent(self.budget.remaining_amounts());
+        cache.store(identity, declaration, references, value.clone(), spent);
+        Ok(value)
+    }
+
+    fn evaluate_bound(
+        &mut self,
+        expression: &Expression,
+        annotation: Option<crate::ast::TypeAnnotation>,
+        mut reference: impl FnMut(&str, Span) -> Result<Value, Diagnostic>,
     ) -> Result<Value, Diagnostic> {
         let mut syntax = expression.clone();
         for node in &mut syntax.nodes {
             if let ExpressionKind::Name(name) = &node.kind {
-                node.kind = reference(name, node.span)?;
+                node.kind = literal(&reference(name, node.span)?);
             }
         }
         let resolved = crate::resolver::resolve_closed_expression(syntax)?;
