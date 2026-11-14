@@ -164,71 +164,81 @@ impl SchemaRegistry {
             _ => Err(DataError::InvalidDefinition),
         }
     }
+    /// Register one declaration. Self-recursive references are permitted,
+    /// but the referenced identity must have the appropriate nominal kind.
     pub fn register(&mut self, definition: Definition) -> Result<(), DataError> {
-        bounded(
-            self.definitions.len().saturating_add(1),
-            self.limits.max_definitions,
-            DataResource::Definitions,
-        )?;
-        if self.indices.contains_key(&definition.id) {
-            return Err(DataError::DuplicateDefinition);
+        self.register_batch(vec![definition])
+    }
+
+    /// Atomically register mutually dependent declarations in one graph.
+    /// Forward references are checked against a private candidate registry;
+    /// failure leaves all existing definitions and quotas unchanged.
+    pub fn register_batch(
+        &mut self,
+        definitions: Vec<Definition>,
+    ) -> Result<(), DataError> {
+        if definitions.is_empty() {
+            return Ok(());
         }
-        identifier(&definition.name)?;
-        let count = definition.member_count();
-        bounded(
-            count,
-            self.limits.max_members_per_definition,
-            DataResource::Members,
-        )?;
-        let mut names = HashSet::new();
-        let mut nodes = self.total_type_nodes;
-        match &definition.kind {
-            DefinitionKind::Record(fields) => {
-                for field in fields {
-                    identifier(&field.name)?;
-                    if !names.insert(field.name.as_str()) {
-                        return Err(DataError::DuplicateName(field.name.clone()));
+        let prospective = self.definitions.len().checked_add(definitions.len())
+            .ok_or(DataError::Limit {
+                resource: DataResource::Definitions,
+                limit: self.limits.max_definitions,
+            })?;
+        bounded(prospective,self.limits.max_definitions,DataResource::Definitions)?;
+        let mut staged = self.clone();
+        for definition in &definitions {
+            identifier(&definition.name)?;
+            if staged.indices.contains_key(&definition.id) {
+                return Err(DataError::DuplicateDefinition);
+            }
+            let index=staged.definitions.len();
+            staged.indices.insert(definition.id,index);
+            staged.definitions.push(definition.clone());
+        }
+        let mut nodes=self.total_type_nodes;
+        for definition in &definitions {
+            bounded(definition.member_count(),self.limits.max_members_per_definition,
+                DataResource::Members)?;
+            let mut names=HashSet::new();
+            match &definition.kind {
+                DefinitionKind::Record(fields) => {
+                    for field in fields {
+                        identifier(&field.name)?;
+                        if !names.insert(field.name.as_str()) {
+                            return Err(DataError::DuplicateName(field.name.clone()));
+                        }
+                        staged.validate_type_inner(&field.ty,&mut nodes)?;
                     }
-                    self.validate_type_inner(&field.ty, definition.id, &mut nodes)?;
+                }
+                DefinitionKind::Variant(cases) => {
+                    if cases.is_empty() {
+                        return Err(DataError::InvalidShape);
+                    }
+                    for case in cases {
+                        identifier(&case.name)?;
+                        if !names.insert(case.name.as_str()) {
+                            return Err(DataError::DuplicateName(case.name.clone()));
+                        }
+                        if let Some(ty)=&case.payload {
+                            staged.validate_type_inner(ty,&mut nodes)?;
+                        }
+                    }
                 }
             }
-            DefinitionKind::Variant(cases) => {
-                if cases.is_empty() {
-                    return Err(DataError::InvalidShape);
-                }
-                for case in cases {
-                    identifier(&case.name)?;
-                    if !names.insert(case.name.as_str()) {
-                        return Err(DataError::DuplicateName(case.name.clone()));
-                    }
-                    if let Some(ty) = &case.payload {
-                        self.validate_type_inner(ty, definition.id, &mut nodes)?;
-                    }
-                }
-            }
         }
-        let index = self.definitions.len();
-        self.indices.insert(definition.id, index);
-        self.definitions.push(definition);
-        self.total_type_nodes = nodes;
+        staged.total_type_nodes=nodes;
+        *self=staged;
         Ok(())
     }
     /// Validate a host type without allocating or adding a definition.
     pub fn validate_type(&self, ty: &DataType) -> Result<(), DataError> {
         let mut nodes = 0;
-        self.validate_type_inner(
-            ty,
-            DefinitionId {
-                module: u32::MAX,
-                declaration: u32::MAX,
-            },
-            &mut nodes,
-        )
+        self.validate_type_inner(ty, &mut nodes)
     }
     fn validate_type_inner(
         &self,
         ty: &DataType,
-        owner: DefinitionId,
         nodes: &mut usize,
     ) -> Result<(), DataError> {
         let mut pending = vec![(ty, 1usize)];
@@ -246,14 +256,10 @@ impl SchemaRegistry {
                     }
                 }
                 DataType::Record(id) => {
-                    if *id != owner {
-                        self.record(*id)?;
-                    }
+                    self.record(*id)?;
                 }
                 DataType::Variant(id) => {
-                    if *id != owner {
-                        self.variants(*id)?;
-                    }
+                    self.variants(*id)?;
                 }
                 DataType::List(inner) | DataType::Optional(inner) | DataType::Map(_, inner) => {
                     pending.push((inner, depth + 1));

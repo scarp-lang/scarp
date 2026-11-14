@@ -355,7 +355,7 @@ fn generic_source_structural_types_are_preserved() {
     let r = Registry::default();
     let pair = SourceType::tuple(vec![P::Integer.into(), P::String.into()]).unwrap();
     let want = T::Source(pair.clone());
-    let inferred = identity().infer(&r, &[want.clone()]).unwrap();
+    let inferred = identity().infer(&r, std::slice::from_ref(&want)).unwrap();
     assert_eq!(inferred.result, want);
 }
 #[test]
