@@ -45,6 +45,9 @@ pub enum DataResource {
     TextBytes,
     PatternNodes,
     Specializations,
+    QuerySteps,
+    QueryScan,
+    QueryOutput,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,6 +69,7 @@ pub enum DataError {
     DuplicateKey,
     InvalidPattern,
     CyclicDefinition,
+    ArithmeticOverflow,
     UnboundParameter,
     ArityMismatch,
     UnsatisfiedConstraint,
@@ -90,6 +94,7 @@ impl fmt::Display for DataError {
             Self::DuplicateKey => f.write_str("duplicate map key"),
             Self::InvalidPattern => f.write_str("invalid or ambiguous pattern"),
             Self::CyclicDefinition => f.write_str("nominal declaration dependency cycle"),
+            Self::ArithmeticOverflow => f.write_str("query integer arithmetic overflow"),
             Self::UnboundParameter => f.write_str("unbound generic type parameter"),
             Self::ArityMismatch => f.write_str("generic function argument count mismatch"),
             Self::UnsatisfiedConstraint => f.write_str("unsatisfied generic type constraint"),

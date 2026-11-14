@@ -9,6 +9,7 @@ pub mod collections;
 pub mod generics;
 pub mod limits;
 pub mod paths;
+pub mod query;
 pub mod pattern;
 pub mod schema;
 pub mod schema_graph;
@@ -19,6 +20,7 @@ pub use generics::{
 };
 pub use limits::{DataError, DataLimits, DataResource};
 pub use paths::{PatchOperation, PathSegment};
+pub use query::{Predicate, QueryLimits, QueryPlan, QueryResult, QueryStats};
 pub use pattern::{Bindings, Coverage, Pattern};
 pub use schema::{
     DataType, Definition, DefinitionKind, Field, MapKeyType, SchemaRegistry, VariantCase,
