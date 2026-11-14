@@ -8,11 +8,13 @@
 pub mod collections;
 pub mod limits;
 pub mod pattern;
+pub mod paths;
 pub mod schema;
 pub mod value;
 
 pub use limits::{DataError, DataLimits, DataResource};
 pub use pattern::{Bindings, Coverage, Pattern};
+pub use paths::{PatchOperation, PathSegment};
 pub use schema::{
     DataType, Definition, DefinitionKind, Field, MapKeyType, SchemaRegistry, VariantCase,
 };
