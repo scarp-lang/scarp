@@ -1,8 +1,11 @@
 # Feature completeness and development roadmap
 
-Cargo declares `0.0.6-alpha.10` on the development candidate. The latest
-published prerelease, alpha.9, added structured test reports and bounded BigInt
-arithmetic. Alpha.8 added declarative projects, project tests, and assertions.
+Cargo declares `0.0.6-alpha.10`. The published alpha.10 adds typed console input,
+EOF detection, stream flushing, exact output fixtures, fixed arrays and expanded
+BigInt arithmetic. [Alpha.10 verification](../releases/v0.0.6-alpha.10-validation.md)
+
+Alpha.9 added structured test reports and bounded BigInt arithmetic.
+Alpha.8 added declarative projects, project tests, and assertions.
 Alpha.7 introduced typed conditional expressions and Unicode scalar string escapes.
 [Alpha.9 verification](../releases/v0.0.6-alpha.9-validation.md)
 
@@ -73,7 +76,7 @@ requires separate architecture and multiple implementation phases.
 | Enums/tagged variants | Missing | Constructors, pattern typing | Composite types and exhaustiveness | P1 | L | Exhaustive/redundant patterns, recursion | Variant/match design |
 | Generics/type aliases | Missing | Type parameters, constraints, monomorphization policy | Composite types and stable IR | P2 | XL | Substitution, recursion bounds, diagnostics | Type-system design |
 | Arithmetic/comparison/logic | Strict primitive kinds and typed conditional expressions | Conditional expressions in constants or native emission | Typed expression nodes | P1 | M | Precedence, short circuit, dead-branch typing | Expressions |
-| BigInt | Published alpha.9 adds exact signed runtime arithmetic. The alpha.10 candidate adds power, number theory, radix conversion, signed bitwise operations and divmod | Constant folding, large multiplication/division optimization and native lowering | Independent safe-Rust magnitude engine and shared Budget | P1 | L | Seeded Rust/Python oracles, budgets, CLI/module parity, opt-in large fixtures | [BigInt](../bigint.md) |
+| BigInt | Published alpha.9 adds exact signed runtime arithmetic. Alpha.10 adds power, number theory, radix conversion, signed bitwise operations and divmod | Constant folding, large multiplication/division optimization and native lowering | Independent safe-Rust magnitude engine and shared Budget | P1 | L | Seeded Rust/Python oracles, budgets, CLI/module parity, opt-in large fixtures | [BigInt](../bigint.md) |
 | Indexing/slicing | Numeric vectors/windows, tile cells/lanes, tuple projection and fixed-array indexing | General strings/collections and multidimensional syntax | Composite types and text scalar policy | P1 | L | Bounds, visible windows, backing lifetime | Collection guides |
 | If/while/repeat | Implemented and bounded | General collection iteration/ranges | Iterator/range type design | P1 | L | Empty/range bounds, controls, budgets | Iteration grammar |
 | Break/continue/early return | Implemented with retirement | Labeled control only if justified | CFG and scope cleanup | P2 | M | Nested exits, contracts, retirement | Control flow |
@@ -97,7 +100,7 @@ requires separate architecture and multiple implementation phases.
 | Sampled scientific calculus | Published v0.0.6-alpha.4: bounded `sample_area`, `sample_slopes` and `sample_cumulative_area` for finite samples | Adaptive integration, pointwise derivatives, higher-order schemes | Finite vector registry and execution budgets | P1 | M | Analytic linear oracle, irregular grid, overflow, subnormal, shape, work and allocation | [Sampled calculus contract](../sampled-calculus.md) |
 | General text/algorithms | Unicode length/codepoint/search/prefix/suffix implemented | General collection sorting/search | Allocation/work policy, collection types | P0 | M | Unicode semantics, deterministic search, limits | Standard library |
 | Formatting/JSON/serialization | Versioned module metadata JSON implemented | Language value JSON, general formatting and serialization | Error/composite values; bounded parsing | P1 | L | Escaping, schemas, invalid data, limits | Format/version policy |
-| Program line input | Published alpha.6 adds bounded line input. The alpha.10 candidate adds explicit files, EOF fallback and opt-in flushed prompts | Broader I/O capability design | Explicit BufRead capability, independent input quotas and existing work/text/output budgets | P0 | M | UTF-8/CRLF/EOF, purity, atomic replay, static nonexecution, injected readers, CLI and exact limits | [Compiler input contract](../program-input.md) |
+| Program line input | Published alpha.6 adds bounded line input. Alpha.10 adds explicit files, EOF fallback and opt-in flushed prompts | Broader I/O capability design | Explicit BufRead capability, independent input quotas and existing work/text/output budgets | P0 | M | UTF-8/CRLF/EOF, purity, atomic replay, static nonexecution, injected readers, CLI and exact limits | [Compiler input contract](../program-input.md) |
 | Filesystem/network/process I/O | Explicit source loader only | External capability model and structured errors | Effects, permissions, errors | P2 | XL | Denied access, roots, no ambient authority | Security model |
 | Dates/time/random/environment | Missing | Explicit nondeterministic host capabilities | Effects/host interfaces | P3 | L | Seed/replay, denied host calls | Capability APIs |
 | Numerical AI kernels | Published: vectors/tiles, stable softmax/loss/gradients, RMS, alpha.3 Top-K and temperature-controlled softmax, alpha.4 cosine similarity; published alpha.5 adds deterministic Top-P and Pearson correlation | Generalized tensors/broadcasting and shape types (proposal 0036) | Composite numeric type/shape design | P1 | XL | Reference models, shapes, budgets, precision | Tensor proposal |
