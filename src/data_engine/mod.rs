@@ -17,10 +17,10 @@ pub mod schema_graph;
 pub mod value;
 pub mod wire;
 
-pub use index::{DataIndex, IndexHit, IndexLimits, IndexStats, JoinResult, JoinRow};
 pub use generics::{
     Constraint, GenericSignature, Specialization, SpecializationCache, TypeExpression,
 };
+pub use index::{DataIndex, IndexHit, IndexLimits, IndexStats, JoinResult, JoinRow};
 pub use limits::{DataError, DataLimits, DataResource};
 pub use paths::{PatchOperation, PathSegment};
 pub use pattern::{Bindings, Coverage, Pattern};
@@ -29,5 +29,5 @@ pub use schema::{
     DataType, Definition, DefinitionKind, Field, MapKeyType, SchemaRegistry, VariantCase,
 };
 pub use schema_graph::SchemaGraph;
-pub use wire::WireLimits;
 pub use value::{DataKey, Datum, ListValue, MapValue, OutcomeValue, RecordValue, VariantValue};
+pub use wire::WireLimits;

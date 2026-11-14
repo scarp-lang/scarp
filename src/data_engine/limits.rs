@@ -105,7 +105,9 @@ impl fmt::Display for DataError {
             Self::CyclicDefinition => f.write_str("nominal declaration dependency cycle"),
             Self::ArithmeticOverflow => f.write_str("query integer arithmetic overflow"),
             Self::InvalidWire => f.write_str("invalid or noncanonical binary data"),
-            Self::UnsupportedWireType => f.write_str("source type not supported by experimental binary format"),
+            Self::UnsupportedWireType => {
+                f.write_str("source type not supported by experimental binary format")
+            }
             Self::UnboundParameter => f.write_str("unbound generic type parameter"),
             Self::ArityMismatch => f.write_str("generic function argument count mismatch"),
             Self::UnsatisfiedConstraint => f.write_str("unsatisfied generic type constraint"),
