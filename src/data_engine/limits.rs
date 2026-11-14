@@ -55,6 +55,9 @@ pub enum DataResource {
     IndexKeys,
     IndexKeyBytes,
     IndexPairs,
+    DiffNodes,
+    DiffOperations,
+    DiffDepth,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -6,6 +6,7 @@
 //! The source parser, resolver and interpreter will adopt this model only
 //! after the language syntax and effect/ownership contracts are reviewed.
 pub mod collections;
+pub mod diff;
 pub mod generics;
 pub mod index;
 pub mod limits;
@@ -17,6 +18,7 @@ pub mod schema_graph;
 pub mod value;
 pub mod wire;
 
+pub use diff::{DataDiff, DiffLimits};
 pub use generics::{
     Constraint, GenericSignature, Specialization, SpecializationCache, TypeExpression,
 };
