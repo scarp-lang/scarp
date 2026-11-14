@@ -127,10 +127,14 @@ fn nested_infix_groups_preserve_exact_operator_span() {
     let PrintArgument::Expression(expr) = &arguments[0] else {
         panic!("expected expression");
     };
-    let op = expr.nodes().iter().find_map(|node|match &node.kind {
-        E::Binary {operator_span, ..}=>Some(operator_span),
-        _=>None,
-    }).unwrap();
+    let op = expr
+        .nodes()
+        .iter()
+        .find_map(|node| match &node.kind {
+            E::Binary { operator_span, .. } => Some(operator_span),
+            _ => None,
+        })
+        .unwrap();
     assert_eq!(&valid[op.start..op.end], "|");
 }
 #[test]

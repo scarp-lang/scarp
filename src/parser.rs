@@ -1806,8 +1806,14 @@ impl Parser<'_> {
             match &token.kind {
                 TokenKind::LeftParen => {
                     let span = token.span;
-                    self.expression_depth(depth + operators.iter()
-                        .filter(|op| matches!(op, Operator::Opening(_))).count(), span)?;
+                    self.expression_depth(
+                        depth
+                            + operators
+                                .iter()
+                                .filter(|op| matches!(op, Operator::Opening(_)))
+                                .count(),
+                        span,
+                    )?;
                     operators.push(Operator::Opening(span));
                     self.advance();
                 }
@@ -1820,8 +1826,8 @@ impl Parser<'_> {
                     loop {
                         match operators.pop().expect("preflight checked balanced groups") {
                             Operator::Opening(opening) => {
-                                let expression = operands.pop()
-                                    .expect("preflight checked group operand");
+                                let expression =
+                                    operands.pop().expect("preflight checked group operand");
                                 operands.push(push(
                                     nodes,
                                     ExpressionKind::Group { expression },
