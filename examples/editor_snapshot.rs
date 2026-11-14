@@ -3,31 +3,27 @@
 
 use scarp::modules::{
     self,
-    symbols::{
-        editor::{EditorLimits, EditorQueryError, EditorSnapshot, Utf16Position},
-        IndexLimits,
-    },
+    cache::{CacheStatus, EditorCacheLimits, EditorCompilationCache, EditorCompileLimits},
+    symbols::editor::{EditorQueryError, Utf16Position},
     MemorySourceLoader, ModuleLimits,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let source = "import \"lib.srp\" as m;\nprint(m.twice(n: 5));\n";
+    let library = "pub pure funcra twice(n: integer)->integer{return n*2;}";
     let mut loader = MemorySourceLoader::new();
-    loader.insert("main.srp", source)?;
-    loader.insert(
-        "lib.srp",
-        "pub pure funcra twice(n: integer)->integer{return n*2;}",
-    )?;
+    loader.set_document("main.srp", source, 3)?;
+    loader.set_document("lib.srp", library, 8)?;
 
-    let compiled = modules::compile_indexed_with_loader(
-        "main.srp",
-        &loader,
-        ModuleLimits::default(),
-        IndexLimits::default(),
-    )?;
-    // Revisions are supplied by the editor in the compiler's SourceId order.
+    let mut cache = EditorCompilationCache::new(EditorCacheLimits::default());
+    let compile = |cache: &mut EditorCompilationCache, loader: &MemorySourceLoader| {
+        let graph = modules::load("main.srp", loader, ModuleLimits::default())?;
+        cache.resolve_with_loaded_revisions(graph, EditorCompileLimits::default(), None)
+    };
+    let compiled = compile(&mut cache, &loader)?;
+    let editor = &compiled.snapshot;
+    // Queries use the revisions in the returned program's SourceId order.
     let versions = [3, 8];
-    let editor = EditorSnapshot::new(compiled.index(), &versions, EditorLimits::default())?;
     let offset = source.find("twice").expect("example has a call");
     let position = editor.byte_to_utf16(&versions, 0, offset)?;
     let definition = editor
@@ -43,7 +39,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     assert_eq!(editor.find_references(&versions, definition.id)?.count(), 1);
 
-    // A changed import rejects even a lookup in the unchanged entry file.
+    // Advancing the import's revision invalidates queries against the old view.
+    loader.set_document("lib.srp", library, 9)?;
+    let refreshed = compile(&mut cache, &loader)?;
+    assert_eq!(refreshed.status, CacheStatus::Hit);
+    assert!(refreshed
+        .snapshot
+        .goto_definition(&[3, 9], 0, position)?
+        .is_some());
     assert!(matches!(
         editor.goto_definition(&[3, 9], 0, position),
         Err(EditorQueryError::StaleVersion { source: 1, .. })
