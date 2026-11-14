@@ -17,17 +17,17 @@ fn run(source: &str) -> String {
 fn fails_atomically(source: &str, kind: Kind) {
     let mut out = Vec::new();
     let mut err = Vec::new();
-    let failure = scarp::run_with_io_and_options(
-        source,
-        &mut out,
-        &mut err,
-        ExecutionOptions::default(),
-    ).unwrap_err();
+    let failure =
+        scarp::run_with_io_and_options(source, &mut out, &mut err, ExecutionOptions::default())
+            .unwrap_err();
     let RunError::Diagnostic(problem) = failure else {
         panic!("expected a typed decimal diagnostic");
     };
     assert_eq!(problem.kind, kind, "{source}");
-    assert!(out.is_empty() && err.is_empty(), "failed runs never replay prints");
+    assert!(
+        out.is_empty() && err.is_empty(),
+        "failed runs never replay prints"
+    );
 }
 
 #[test]
@@ -83,7 +83,8 @@ fn decimal_is_a_real_typed_value_in_functions_arrays_tuples_and_signatures() {
     assert!(compiled
         .type_registry()
         .iter()
-        .any(|(id, kind)| id == decimal && matches!(kind, TypeKind::Primitive(PrimitiveType::Decimal))));
+        .any(|(id, kind)| id == decimal
+            && matches!(kind, TypeKind::Primitive(PrimitiveType::Decimal))));
     assert_eq!(run(source), "235.99 exact\n3.1 3\n");
 }
 
@@ -114,14 +115,32 @@ fn runtime_errors_are_typed_and_do_not_commit_partial_output() {
     for (expr, kind) in [
         (r#"decimal("nope")"#, Kind::InvalidDecimal),
         (r#"decimal("0.0000000000000000001")"#, Kind::DecimalLimit),
-        (r#"decimal("99999999999999999999999999999")"#, Kind::DecimalLimit),
+        (
+            r#"decimal("99999999999999999999999999999")"#,
+            Kind::DecimalLimit,
+        ),
         (r#"decimal("1") / decimal("3")"#, Kind::DecimalInexact),
         (r#"decimal("1") / decimal("0")"#, Kind::DivisionByZero),
-        (r#"decimal_round(decimal("1"), 19, "half_even")"#, Kind::DecimalLimit),
-        (r#"decimal_round(decimal("1"), -1, "half_even")"#, Kind::DecimalLimit),
-        (r#"decimal_round(decimal("1"), 2, "unsupported")"#, Kind::InvalidDecimal),
-        (r#"decimal("9999999999999999999999999999") * decimal("2")"#, Kind::DecimalLimit),
-        (r#"decimal_to_integer(decimal("1.5"))"#, Kind::DecimalInexact),
+        (
+            r#"decimal_round(decimal("1"), 19, "half_even")"#,
+            Kind::DecimalLimit,
+        ),
+        (
+            r#"decimal_round(decimal("1"), -1, "half_even")"#,
+            Kind::DecimalLimit,
+        ),
+        (
+            r#"decimal_round(decimal("1"), 2, "unsupported")"#,
+            Kind::InvalidDecimal,
+        ),
+        (
+            r#"decimal("9999999999999999999999999999") * decimal("2")"#,
+            Kind::DecimalLimit,
+        ),
+        (
+            r#"decimal_to_integer(decimal("1.5"))"#,
+            Kind::DecimalInexact,
+        ),
     ] {
         let src = format!("print(\"pending\"); eprint(\"pending\"); print({expr});");
         fails_atomically(&src, kind);
@@ -132,22 +151,31 @@ fn runtime_errors_are_typed_and_do_not_commit_partial_output() {
 fn modules_preserve_exact_decimal_types_and_runtime_failure_locations() {
     let mut loader = MemorySourceLoader::new();
     loader
-        .insert("lib.srp", r#"
+        .insert(
+            "lib.srp",
+            r#"
             pub pure funcra calculate(net: decimal) -> decimal {
                 return net + decimal("0.25");
             }
-        "#)
+        "#,
+        )
         .unwrap();
     loader
-        .insert("main.srp", r#"
+        .insert(
+            "main.srp",
+            r#"
             import "lib.srp" as lib;
             print(lib.calculate(decimal("1.15")));
-        "#)
+        "#,
+        )
         .unwrap();
-    let program = modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap();
+    let program =
+        modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap();
     program.check(ExecutionOptions::default()).unwrap();
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    program.execute(&mut out, &mut err, ExecutionOptions::default()).unwrap();
+    program
+        .execute(&mut out, &mut err, ExecutionOptions::default())
+        .unwrap();
     assert_eq!(out, b"1.4\n");
     assert!(err.is_empty());
 }
@@ -155,9 +183,14 @@ fn modules_preserve_exact_decimal_types_and_runtime_failure_locations() {
 #[test]
 fn experimental_native_backends_reject_exact_decimal_instead_of_coercing() {
     let source = r#"bind price: decimal = decimal("1.20"); print(price);"#;
-    assert_eq!(scarp::c_backend::emit_c(source).unwrap_err().kind, Kind::NativeUnsupported);
     assert_eq!(
-        scarp::native_object::emit_elf64_integer_kernel(source).unwrap_err().kind,
+        scarp::c_backend::emit_c(source).unwrap_err().kind,
+        Kind::NativeUnsupported
+    );
+    assert_eq!(
+        scarp::native_object::emit_elf64_integer_kernel(source)
+            .unwrap_err()
+            .kind,
         Kind::NativeUnsupported
     );
 }

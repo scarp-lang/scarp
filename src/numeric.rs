@@ -7,8 +7,8 @@ use crate::{
 };
 
 mod bigints;
-pub(crate) mod decimals;
 mod correlation;
+pub(crate) mod decimals;
 mod integers;
 mod kernels;
 mod nucleus;
@@ -261,7 +261,9 @@ impl Builtin {
         match self {
             Self::Decimal => &[String],
             Self::DecimalFromInteger => &[Integer],
-            Self::DecimalToInteger | Self::DecimalToText | Self::DecimalAbs => &[ValueType::Decimal],
+            Self::DecimalToInteger | Self::DecimalToText | Self::DecimalAbs => {
+                &[ValueType::Decimal]
+            }
             Self::DecimalRound | Self::DecimalFormat => &[ValueType::Decimal, Integer, String],
             Self::DecimalDivRounded => &[ValueType::Decimal, ValueType::Decimal, Integer, String],
             Self::BigInt => &[String],
@@ -343,8 +345,11 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
-            Self::Decimal | Self::DecimalFromInteger | Self::DecimalAbs
-            | Self::DecimalRound | Self::DecimalDivRounded => ValueType::Decimal,
+            Self::Decimal
+            | Self::DecimalFromInteger
+            | Self::DecimalAbs
+            | Self::DecimalRound
+            | Self::DecimalDivRounded => ValueType::Decimal,
             Self::DecimalToInteger => ValueType::Integer,
             Self::DecimalToText | Self::DecimalFormat => ValueType::String,
             Self::BigInt
@@ -431,9 +436,17 @@ impl Builtin {
     }
 
     fn is_decimal(self) -> bool {
-        matches!(self, Self::Decimal | Self::DecimalFromInteger | Self::DecimalToInteger
-            | Self::DecimalToText | Self::DecimalAbs | Self::DecimalRound
-            | Self::DecimalFormat | Self::DecimalDivRounded)
+        matches!(
+            self,
+            Self::Decimal
+                | Self::DecimalFromInteger
+                | Self::DecimalToInteger
+                | Self::DecimalToText
+                | Self::DecimalAbs
+                | Self::DecimalRound
+                | Self::DecimalFormat
+                | Self::DecimalDivRounded
+        )
     }
 
     fn is_bigint(self) -> bool {

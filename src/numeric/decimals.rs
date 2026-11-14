@@ -9,10 +9,9 @@ use crate::{
 
 pub(crate) fn diagnostic(error: DecimalError, span: Span) -> Diagnostic {
     let (kind, message) = match error {
-        DecimalError::InvalidSyntax => (
-            DiagnosticKind::InvalidDecimal,
-            "invalid exact decimal text",
-        ),
+        DecimalError::InvalidSyntax => {
+            (DiagnosticKind::InvalidDecimal, "invalid exact decimal text")
+        }
         DecimalError::ScaleExceeded => (
             DiagnosticKind::DecimalLimit,
             "decimal exceeds 18 fractional places",
@@ -21,10 +20,9 @@ pub(crate) fn diagnostic(error: DecimalError, span: Span) -> Diagnostic {
             DiagnosticKind::DecimalLimit,
             "decimal exceeds the 28-digit coefficient limit",
         ),
-        DecimalError::DivisionByZero => (
-            DiagnosticKind::DivisionByZero,
-            "decimal division by zero",
-        ),
+        DecimalError::DivisionByZero => {
+            (DiagnosticKind::DivisionByZero, "decimal division by zero")
+        }
         DecimalError::Inexact => (
             DiagnosticKind::DecimalInexact,
             "exact decimal operation requires explicit rounding",
@@ -147,7 +145,11 @@ pub(super) fn evaluate(
             args[0]
                 .as_decimal()
                 .expect("typed numerator")
-                .div_rounded(args[1].as_decimal().expect("typed denominator"), scale, mode)
+                .div_rounded(
+                    args[1].as_decimal().expect("typed denominator"),
+                    scale,
+                    mode,
+                )
                 .map(Value::Decimal)
                 .map_err(|error| diagnostic(error, argument_span(1)))
         }

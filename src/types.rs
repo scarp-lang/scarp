@@ -61,7 +61,10 @@ impl PrimitiveType {
         })
     }
     pub(crate) fn is_numeric(self) -> bool {
-        matches!(self, Self::Integer | Self::Float | Self::BigInt | Self::Decimal)
+        matches!(
+            self,
+            Self::Integer | Self::Float | Self::BigInt | Self::Decimal
+        )
     }
     pub(crate) const fn name(self) -> &'static str {
         match self {
