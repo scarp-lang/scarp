@@ -167,6 +167,24 @@ pub fn execute_with_input_and_options(
     replay(events, stdout, stderr)
 }
 
+/// Explicit interactive capability. Prompts are written and flushed to stdout
+/// during evaluation, while ordinary print/eprint events remain transactional.
+/// Earlier visible prompts cannot be rolled back if later execution fails.
+pub fn execute_with_interactive_input_and_options(
+    program: &ResolvedProgram,
+    input: &mut impl io::BufRead,
+    stdout: &mut impl Write,
+    stderr: &mut impl Write,
+    options: ExecutionOptions,
+    input_limits: InputLimits,
+) -> Result<(), RunError> {
+    let events = {
+        let mut state = InputState::interactive(input, stdout, input_limits);
+        machine::prepare(program, true, options, &mut state).map_err(RunError::Diagnostic)?
+    };
+    replay(events, stdout, stderr)
+}
+
 fn replay(
     events: Vec<OutputEvent<'_>>,
     stdout: &mut impl Write,

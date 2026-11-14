@@ -72,6 +72,52 @@ quotas bound compiler-controlled work, not time spent inside a host I/O call.
 Reader implementations and buffering may read ahead; raw quotas count bytes
 consumed through `BufRead::consume`, not underlying operating-system reads.
 
+## End-of-input fallback (development main)
+
+`read_line_or(fallback: string) -> string` is an additional impure expression
+for line-oriented programs that need a sensible final value when input is
+exhausted. It consumes one selected line exactly like `read_line()` and returns
+the fallback **only** for E0055 (immediate EOF). A genuinely empty LF/CRLF line
+returns `""`, not the fallback. Other errors (unavailable input, invalid UTF-8,
+reader failure, input quota, work or text quota) remain errors. It evaluates its
+string fallback argument before performing the read, even when input exists.
+This form is not included in published alpha.6–alpha.8.
+
+```scarp
+bind first = read_line_or("Anonymous");
+bind second = read_line_or("Guest");
+print(first, second);
+```
+
+Both input expressions are rejected in pure functions, defaults and contracts.
+They obey the same reader capability, exact UTF-8 handling, input limits and
+no-output-on-runtime-error rule. Either intrinsic spelling may be shadowed by
+an explicitly defined function; that user function does not acquire input.
+
+## Prompt fallback (stacked development proposal)
+
+`ask_or(prompt: string, fallback: string) -> string` combines immediate
+prompt output with the precise EOF semantics of `read_line_or`. It requires
+the same explicit interactive capability as `ask`, and first writes and
+flushes the UTF-8 prompt. It returns `fallback` **only** if the selected
+read reaches immediate EOF (E0055). An empty line is valid empty text,
+and a final unterminated line is valid input. Invalid UTF-8, unavailable
+interactive output, quota violations and writer/reader failures remain errors.
+
+```scarp
+bind name = ask_or("Name: ", "Guest");
+print("Welcome", name);
+```
+
+Both string arguments evaluate before the prompt is shown or input is read,
+from left to right, even when input is available. Like other intrinsic
+calls, `ask_or` is impure, can be shadowed by a declared Scarp function,
+and has a typed `(string, string) -> string` signature. When EOF occurs
+the already flushed prompt remains visible and ordinary buffered output
+still replays, because the fallback permits evaluation to succeed.
+This proposed feature is not in published alpha.9 or the three original
+I/O branches and requires separate validation before integration.
+
 ## Quotas, allocation and work
 
 Input limits are a separate public `InputLimits` value; existing public runtime
@@ -129,13 +175,42 @@ input or runtime failure writes no program output; already consumed input
 cannot be restored. Output replay can partially write before an output I/O
 failure, as before. Stream switches retain their existing flush behavior.
 
-`ask` is **not implemented**. Neither `write("Name: ")` nor `print` displays a
-prompt before an input read. A future separate interactive mode or prompt API
-must explicitly write and flush the prompt before waiting, and document that
-visible prompt bytes cannot be rolled back after later failure. It needs its
-own destination, flush/broken-pipe, EOF, nonterminal and cancellation tests.
-This development slice deliberately rejects terminal input instead of hiding
-that contract behind buffered output. No password input is introduced.
+**Development feature, not in published v0.0.6-alpha.9:** `ask(prompt: string)
+-> string` is an impure expression that writes and flushes a UTF-8 prompt
+to the explicitly supplied stdout writer before reading one bounded UTF-8 line.
+Unlike `write("Name: "); read_line()`, the prompt is visible immediately.
+An empty prompt is valid, and prompt text has no implicit newline.
+
+CLI execution requires an explicit `--interactive` option to enable prompts
+and terminal stdin. The opt-in works with redirected stdin and also with
+`--input-file PATH` for reproducible interactive program testing; without it, `ask` returns E0054 without writing a prompt or consuming
+input. The Rust embedding APIs `run_with_interactive_input`,
+`run_with_interactive_input_and_options`, interpreter
+`execute_with_interactive_input_and_options` and module
+`execute_with_interactive_input` require caller-supplied readers/writers.
+There is no ambient library stdin acquisition. All existing default execution
+APIs stay noninteractive, including `check` and `verify`.
+
+```scarp
+bind name: string = ask("Your name: ");
+print("Welcome", name);
+```
+
+Prompt text is emitted and flushed **during** evaluation, before a potentially
+blocking host read. Therefore visible prompt bytes cannot be rolled back after
+EOF, invalid UTF-8, a later runtime error or a subsequent failed output replay.
+Ordinary `print`/`write`/`eprint`/`ewrite` events remain buffered until
+successful evaluation. For example, an ordinary `print` before `ask` will
+be replayed *after* the immediate prompt. Use `ask` for prompt text.
+Input quotas are preflighted before the prompt, where possible. The runtime
+also checks that at least one work step remains for the first reader-buffer probe
+before making the prompt visible. This check does not consume a step; the actual
+read still charges it normally. Later reader/scanning work may fail after a
+prompt has already appeared. E0066 reports a prompt write/flush failure with
+no arbitrary host error text. Host blocking,
+cancellation and deadlines remain the caller's responsibility. No password
+echo control, formatting or new input data type is introduced.
+
 
 ## Verification
 

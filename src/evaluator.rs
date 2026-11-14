@@ -41,6 +41,9 @@ enum Task {
     Builtin(Builtin, usize, Span),
     UserCall(usize, usize, Span),
     ReadLine(Span),
+    ReadLineOr(Span),
+    Ask(Span),
+    AskOr(Span),
     Visit(usize),
     Negate(Span),
     Not(Span),
@@ -53,6 +56,19 @@ enum Task {
 pub(crate) enum Evaluation {
     Complete(Value),
     ReadLine(Span),
+    ReadLineOr {
+        fallback: Value,
+        span: Span,
+    },
+    Ask {
+        prompt: Value,
+        span: Span,
+    },
+    AskOr {
+        prompt: Value,
+        fallback: Value,
+        span: Span,
+    },
     Call {
         node: usize,
         arguments: Vec<Value>,
@@ -74,7 +90,12 @@ impl Workspace {
         self.start(expression);
         match self.resume(expression, environment, budget)? {
             Evaluation::Complete(value) => Ok(value),
-            Evaluation::ReadLine(span) => Err(crate::input::unavailable(span)),
+            Evaluation::ReadLine(span) | Evaluation::ReadLineOr { span, .. } => {
+                Err(crate::input::unavailable(span))
+            }
+            Evaluation::Ask { span, .. } | Evaluation::AskOr { span, .. } => {
+                Err(crate::input::prompt_unavailable(span))
+            }
             Evaluation::Call { span, .. } => Err(Diagnostic::new(
                 DiagnosticKind::FunctionUnsupported,
                 span,
@@ -105,6 +126,9 @@ impl Workspace {
                 Task::UserCall(_, _, span)
                 | Task::Tuple(_, span)
                 | Task::ReadLine(span)
+                | Task::ReadLineOr(span)
+                | Task::Ask(span)
+                | Task::AskOr(span)
                 | Task::Vector(_, _, span)
                 | Task::BitNot(span)
                 | Task::Index(span)
@@ -124,6 +148,9 @@ impl Workspace {
                         ExpressionKind::UserCall { arguments, .. } => {
                             tasks.push(match &expression.calls[index] {
                                 Some(ResolvedCall::ReadLine) => Task::ReadLine(node.span),
+                                Some(ResolvedCall::ReadLineOr) => Task::ReadLineOr(node.span),
+                                Some(ResolvedCall::Ask) => Task::Ask(node.span),
+                                Some(ResolvedCall::AskOr) => Task::AskOr(node.span),
                                 Some(ResolvedCall::Builtin(builtin)) => {
                                     Task::Builtin(*builtin, index, node.span)
                                 }
@@ -340,6 +367,27 @@ impl Workspace {
                     values.push(value);
                 }
                 Task::ReadLine(span) => return Ok(Evaluation::ReadLine(span)),
+                Task::ReadLineOr(span) => {
+                    return Ok(Evaluation::ReadLineOr {
+                        fallback: values.pop().expect("checked read_line_or argument"),
+                        span,
+                    });
+                }
+                Task::Ask(span) => {
+                    return Ok(Evaluation::Ask {
+                        prompt: values.pop().expect("checked ask argument"),
+                        span,
+                    });
+                }
+                Task::AskOr(span) => {
+                    let fallback = values.pop().expect("checked ask_or fallback");
+                    let prompt = values.pop().expect("checked ask_or prompt");
+                    return Ok(Evaluation::AskOr {
+                        prompt,
+                        fallback,
+                        span,
+                    });
+                }
                 Task::UserCall(node, count, span) => {
                     let arguments = values.split_off(values.len() - count);
                     return Ok(Evaluation::Call {

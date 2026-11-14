@@ -305,6 +305,33 @@ impl ModuleProgram {
             RunError::Output(error) => ModuleRunError::Output(error),
         })
     }
+
+    /// Explicit opt-in interactive prompts with source-mapped diagnostics.
+    /// Visible prompts cannot be rolled back after subsequent runtime failures.
+    pub fn execute_with_interactive_input(
+        &self,
+        input: &mut impl io::BufRead,
+        stdout: &mut impl io::Write,
+        stderr: &mut impl io::Write,
+        options: ExecutionOptions,
+        input_limits: crate::InputLimits,
+    ) -> Result<(), ModuleRunError> {
+        interpreter::execute_with_interactive_input_and_options(
+            &self.program,
+            input,
+            stdout,
+            stderr,
+            options,
+            input_limits,
+        )
+        .map_err(|error| match error {
+            RunError::Diagnostic(diagnostic) => ModuleRunError::Diagnostic(ModuleDiagnostic {
+                diagnostic,
+                sources: self.sources.clone(),
+            }),
+            RunError::Output(error) => ModuleRunError::Output(error),
+        })
+    }
 }
 
 #[derive(Debug, Clone)]

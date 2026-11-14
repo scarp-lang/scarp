@@ -1,6 +1,6 @@
 //! Explicit, bounded program input. No library API accesses process stdin.
 
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Write};
 
 use crate::{
     diagnostics::{Diagnostic, DiagnosticKind as Kind, Span},
@@ -36,7 +36,18 @@ pub(crate) fn unavailable(span: Span) -> Diagnostic {
         span,
         "read_line requires an explicit input reader; this execution mode has none",
     )
-    .with_help("use run_with_input / execute_with_input, or redirect stdin to scarp exec; check never reads stdin and terminal prompts are not yet supported")
+    .with_help("use run_with_input / execute_with_input, redirect stdin to scarp exec, or explicitly enable --interactive for terminal input; check never reads stdin")
+}
+
+pub(crate) fn prompt_unavailable(span: Span) -> Diagnostic {
+    Diagnostic::new(
+        Kind::InputUnavailable,
+        span,
+        "interactive input prompts require an explicit reader and prompt writer",
+    )
+    .with_help(
+        "enable --interactive on scarp exec/run, or use an explicit interactive Rust host API",
+    )
 }
 
 fn limit(span: Span, message: &str) -> Diagnostic {
@@ -47,6 +58,7 @@ fn limit(span: Span, message: &str) -> Diagnostic {
 
 pub(crate) struct InputState<'a> {
     reader: Option<&'a mut dyn BufRead>,
+    prompt_writer: Option<&'a mut dyn Write>,
     limits: InputLimits,
     consumed: usize,
     reads: usize,
@@ -56,10 +68,69 @@ impl<'a> InputState<'a> {
     pub(crate) fn new(reader: Option<&'a mut dyn BufRead>, limits: InputLimits) -> Self {
         Self {
             reader,
+            prompt_writer: None,
             limits,
             consumed: 0,
             reads: 0,
         }
+    }
+
+    /// The caller explicitly supplies both capabilities; no ambient stdin or
+    /// stdout is acquired through the library.
+    pub(crate) fn interactive(
+        reader: &'a mut dyn BufRead,
+        prompt_writer: &'a mut dyn Write,
+        limits: InputLimits,
+    ) -> Self {
+        Self {
+            reader: Some(reader),
+            prompt_writer: Some(prompt_writer),
+            limits,
+            consumed: 0,
+            reads: 0,
+        }
+    }
+
+    /// Visible prompts are intentionally not transactional. Preflight local
+    /// quotas before showing the prompt, and charge work for prompt length.
+    pub(crate) fn ask(
+        &mut self,
+        prompt: &str,
+        budget: &mut Budget,
+        span: Span,
+    ) -> Result<Value, Diagnostic> {
+        if self.reader.is_none() || self.prompt_writer.is_none() {
+            return Err(prompt_unavailable(span));
+        }
+        if self.reads >= self.limits.max_reads {
+            return Err(limit(span, "input line-read quota exceeded"));
+        }
+        if self.consumed >= self.limits.max_total_bytes || self.limits.max_line_bytes == 0 {
+            return Err(limit(span, "input byte quota exhausted before line read"));
+        }
+        budget.charge(prompt.len() as u64, span)?;
+        // A selected read must be able to pay for its first buffer probe.
+        // Preflight it before the prompt becomes irrevocably visible, without
+        // changing the established work charge when the read actually starts.
+        budget.preflight_steps(1, span)?;
+        let writer = self
+            .prompt_writer
+            .as_deref_mut()
+            .expect("checked prompt writer");
+        writer
+            .write_all(prompt.as_bytes())
+            .and_then(|_| writer.flush())
+            .map_err(|_| {
+                Diagnostic::new(
+                    Kind::PromptIo,
+                    span,
+                    "interactive prompt could not be written and flushed",
+                )
+                .with_help(
+                    "check the host prompt writer; visible prompt bytes cannot be rolled back",
+                )
+            })?;
+        self.read_line(budget, span)
     }
 
     pub(crate) fn read_line(
@@ -160,5 +231,43 @@ impl<'a> InputState<'a> {
             .with_help("encode program input as UTF-8; invalid bytes are never replaced silently")
         })?;
         Ok(Value::from(text))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn prompt_is_not_exposed_without_work_for_first_read() {
+        let mut reader = Cursor::new(b"Ada\n");
+        let mut stdout = Vec::new();
+        let mut budget = Budget::new(6);
+        let span = Span::default();
+        {
+            let mut input =
+                InputState::interactive(&mut reader, &mut stdout, InputLimits::default());
+            let error = input.ask("Name: ", &mut budget, span).unwrap_err();
+            assert_eq!(error.kind, Kind::ExecutionLimit);
+        }
+        assert!(stdout.is_empty());
+        assert_eq!(reader.position(), 0);
+    }
+
+    #[test]
+    fn first_read_probe_is_not_charged_twice() {
+        let mut reader = Cursor::new(b"");
+        let mut stdout = Vec::new();
+        let mut budget = Budget::new(2);
+        let span = Span::default();
+        {
+            let mut input =
+                InputState::interactive(&mut reader, &mut stdout, InputLimits::default());
+            let error = input.ask(">", &mut budget, span).unwrap_err();
+            assert_eq!(error.kind, Kind::InputEof);
+        }
+        assert_eq!(stdout, b">");
+        assert_eq!(reader.position(), 0);
     }
 }

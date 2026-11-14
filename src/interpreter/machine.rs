@@ -158,6 +158,38 @@ pub(super) fn prepare<'a>(
                         let value = input.read_line(&mut budget, span)?;
                         frame.workspace.accept(value);
                     }
+                    Evaluation::ReadLineOr { fallback, span } => {
+                        let value = match input.read_line(&mut budget, span) {
+                            Ok(value) => value,
+                            Err(error) if error.kind == DiagnosticKind::InputEof => fallback,
+                            Err(error) => return Err(error),
+                        };
+                        frame.workspace.accept(value);
+                    }
+                    Evaluation::Ask { prompt, span } => {
+                        let value = input.ask(
+                            prompt.as_str().expect("statically checked ask prompt"),
+                            &mut budget,
+                            span,
+                        )?;
+                        frame.workspace.accept(value);
+                    }
+                    Evaluation::AskOr {
+                        prompt,
+                        fallback,
+                        span,
+                    } => {
+                        let value = match input.ask(
+                            prompt.as_str().expect("statically checked ask_or prompt"),
+                            &mut budget,
+                            span,
+                        ) {
+                            Ok(value) => value,
+                            Err(error) if error.kind == DiagnosticKind::InputEof => fallback,
+                            Err(error) => return Err(error),
+                        };
+                        frame.workspace.accept(value);
+                    }
                     Evaluation::Call {
                         node,
                         arguments,
