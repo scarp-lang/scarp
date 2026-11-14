@@ -1163,8 +1163,8 @@ fn resolve_expression(
                     types.push(ValueType::String.into());
                     continue;
                 }
-                // Composite numerical intrinsic: its return type is structural,
-                // so it must not pretend to be a primitive-only Builtin.
+                // Composite numerical intrinsic: its result is a structural tuple,
+                // not a primitive Builtin. User-declared functions can shadow it.
                 if name == "bigint_divmod" && !names.contains_key(name) {
                     if arguments.len() != 2 || arguments.iter().any(|a| a.label.is_some()) {
                         return Err(Diagnostic::new(

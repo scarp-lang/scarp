@@ -248,32 +248,7 @@ impl Workspace {
                         }
                     }
                 }
-                Task::Tuple(count, span) => {
-                    budget.charge(count as u64, span)?;
-                    let start = values.len() - count;
-                    let bytes = crate::value::TupleValue::allocation_bytes(&values[start..])
-                        .ok_or_else(|| {
-                            Diagnostic::new(
-                                DiagnosticKind::TupleAllocation,
-                                span,
-                                "tuple allocation size overflow",
-                            )
-                        })?;
-                    budget.charge_tuple_allocation(bytes, span)?;
-                    let mut elements = Vec::new();
-                    elements.try_reserve_exact(count).map_err(|_| {
-                        Diagnostic::new(
-                            DiagnosticKind::TupleAllocation,
-                            span,
-                            "could not reserve tuple storage",
-                        )
-                    })?;
-                    elements.extend(values.drain(start..));
-                    let tuple = crate::value::TupleValue::new(elements).ok_or_else(|| {
-                        Diagnostic::new(DiagnosticKind::TupleLimit, span, "invalid tuple shape")
-                    })?;
-                    values.push(Value::Tuple(tuple));
-                }
+                Task::Tuple(count, span) => finish_tuple(values, count, budget, span)?,
                 Task::Array(node, span) => {
                     let ExpressionKind::Array {
                         elements,

@@ -136,9 +136,8 @@ const INSPECT_MODULES_HELP: &str =
 Statically check the source module graph and list real imports, dependencies,
 declarations and typed signatures without executing runtime statements.
 An explicit project directory resolves scarp.project or legacy Scarp.project.
---json emits module inventory schema 1 for primitives, 2 for tuple types,
-and 3 when an inventory type contains a fixed array. --diagnostic-format=json
-selects schema-1 diagnostics on stderr.
+--json emits existing schema-version-1 module metadata; --diagnostic-format=json
+selects JSON stderr only for actual errors.
 ";
 
 const EXEC_HELP: &str = "Usage: scarp exec [budget options] [--] <file.srp>
@@ -344,7 +343,7 @@ evaluated during compilation with separate work limits. No runtime-budget option
 Uses the same trusted source root and default module-loading limits as run/check.
 Filenames are escaped; dependency labels use the loader's canonical paths.
 --diagnostic-format=json writes schema-1 errors to stderr; --json controls successful metadata.
---json emits module inventory schema 1, 2 or 3 with file-local UTF-8 byte spans.
+--json emits schema-version-1 JSON with file-local UTF-8 byte spans.
 Example: scarp modules examples/module_inspection.srp
 ";
 

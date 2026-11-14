@@ -10,8 +10,8 @@ pub(super) struct ProgramTypes {
     bindings: Vec<TypeId>,
     functions: Vec<TypeId>,
     builtins: BTreeMap<Builtin, TypeId>,
-    input: [Option<TypeId>; 3],
     divmod: Option<TypeId>,
+    input: [Option<TypeId>; 3],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -231,8 +231,8 @@ pub(super) fn build(
         functions.push(id);
     }
     let mut builtins = BTreeMap::new();
-    let mut input = [None; 3];
     let mut divmod = None;
+    let mut input = [None; 3];
     for (_, expression) in expressions(program) {
         for (index, call) in expression.calls.iter().enumerate() {
             let span = expression.syntax.nodes()[index].span;
@@ -253,7 +253,8 @@ pub(super) fn build(
                     divmod = Some(
                         registry
                             .intern(TypeKind::Function {
-                                parameters: vec![ValueType::BigInt.id(); 2].into(),
+                                parameters: vec![ValueType::BigInt.id(), ValueType::BigInt.id()]
+                                    .into(),
                                 result: expression.types[index],
                                 effect: FunctionEffect::Pure,
                             })
