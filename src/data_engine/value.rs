@@ -1,8 +1,8 @@
 //! Persistent immutable values for the experimental data engine.
-use std::{cmp::Ordering, sync::Arc};
+use super::schema::{DataType, MapKeyType};
 use crate::types::DefinitionId;
 use crate::value::Value;
-use super::schema::{DataType, MapKeyType};
+use std::{cmp::Ordering, sync::Arc};
 
 /// Unlike an unrestricted hashmap key, keys have explicit semantics and order.
 /// Exact integer order and UTF-8 byte order are deterministic across platforms.
@@ -22,13 +22,20 @@ impl Ord for DataKey {
     }
 }
 impl PartialOrd for DataKey {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 impl DataKey {
     pub fn kind(&self) -> MapKeyType {
-        match self { Self::Integer(_) => MapKeyType::Integer, Self::Text(_) => MapKeyType::Text }
+        match self {
+            Self::Integer(_) => MapKeyType::Integer,
+            Self::Text(_) => MapKeyType::Text,
+        }
     }
-    pub fn text(s: impl Into<Arc<str>>) -> Self { Self::Text(s.into()) }
+    pub fn text(s: impl Into<Arc<str>>) -> Self {
+        Self::Text(s.into())
+    }
 }
 
 /// This enum is intentionally not grafted into the current source-language
@@ -45,15 +52,27 @@ pub enum Datum {
     Outcome(OutcomeValue),
 }
 impl Datum {
-    pub fn integer(value: i64) -> Self { Self::Source(Value::Integer(value)) }
-    pub fn boolean(value: bool) -> Self { Self::Source(Value::Boolean(value)) }
+    pub fn integer(value: i64) -> Self {
+        Self::Source(Value::Integer(value))
+    }
+    pub fn boolean(value: bool) -> Self {
+        Self::Source(Value::Boolean(value))
+    }
     pub fn text(value: impl Into<Arc<str>>) -> Self {
         Self::Source(Value::String(value.into()))
     }
-    pub fn some(value: Self) -> Self { Self::Optional(Some(Arc::new(value))) }
-    pub fn none() -> Self { Self::Optional(None) }
-    pub fn ok(value: Self) -> Self { Self::Outcome(OutcomeValue::Ok(Arc::new(value))) }
-    pub fn err(value: Self) -> Self { Self::Outcome(OutcomeValue::Err(Arc::new(value))) }
+    pub fn some(value: Self) -> Self {
+        Self::Optional(Some(Arc::new(value)))
+    }
+    pub fn none() -> Self {
+        Self::Optional(None)
+    }
+    pub fn ok(value: Self) -> Self {
+        Self::Outcome(OutcomeValue::Ok(Arc::new(value)))
+    }
+    pub fn err(value: Self) -> Self {
+        Self::Outcome(OutcomeValue::Err(Arc::new(value)))
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordValue {
@@ -61,10 +80,18 @@ pub struct RecordValue {
     pub(super) values: Arc<[Datum]>,
 }
 impl RecordValue {
-    pub fn identity(&self) -> DefinitionId { self.identity }
-    pub fn values(&self) -> &[Datum] { &self.values }
-    pub fn len(&self) -> usize { self.values.len() }
-    pub fn is_empty(&self) -> bool { self.values.is_empty() }
+    pub fn identity(&self) -> DefinitionId {
+        self.identity
+    }
+    pub fn values(&self) -> &[Datum] {
+        &self.values
+    }
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariantValue {
@@ -73,9 +100,15 @@ pub struct VariantValue {
     pub(super) payload: Option<Arc<Datum>>,
 }
 impl VariantValue {
-    pub fn identity(&self) -> DefinitionId { self.identity }
-    pub fn case_index(&self) -> usize { self.case_index }
-    pub fn payload(&self) -> Option<&Datum> { self.payload.as_deref() }
+    pub fn identity(&self) -> DefinitionId {
+        self.identity
+    }
+    pub fn case_index(&self) -> usize {
+        self.case_index
+    }
+    pub fn payload(&self) -> Option<&Datum> {
+        self.payload.as_deref()
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ListValue {
@@ -83,11 +116,21 @@ pub struct ListValue {
     pub(super) values: Arc<[Datum]>,
 }
 impl ListValue {
-    pub fn element_type(&self) -> &DataType { &self.element }
-    pub fn values(&self) -> &[Datum] { &self.values }
-    pub fn len(&self) -> usize { self.values.len() }
-    pub fn is_empty(&self) -> bool { self.values.is_empty() }
-    pub fn get(&self, index: usize) -> Option<&Datum> { self.values.get(index) }
+    pub fn element_type(&self) -> &DataType {
+        &self.element
+    }
+    pub fn values(&self) -> &[Datum] {
+        &self.values
+    }
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+    pub fn get(&self, index: usize) -> Option<&Datum> {
+        self.values.get(index)
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MapValue {
@@ -96,21 +139,40 @@ pub struct MapValue {
     pub(super) pairs: Arc<[(DataKey, Datum)]>,
 }
 impl MapValue {
-    pub fn key_type(&self) -> MapKeyType { self.keys }
-    pub fn element_type(&self) -> &DataType { &self.element }
-    pub fn entries(&self) -> &[(DataKey,Datum)] { &self.pairs }
-    pub fn len(&self) -> usize { self.pairs.len() }
-    pub fn is_empty(&self) -> bool { self.pairs.is_empty() }
+    pub fn key_type(&self) -> MapKeyType {
+        self.keys
+    }
+    pub fn element_type(&self) -> &DataType {
+        &self.element
+    }
+    pub fn entries(&self) -> &[(DataKey, Datum)] {
+        &self.pairs
+    }
+    pub fn len(&self) -> usize {
+        self.pairs.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.pairs.is_empty()
+    }
     pub fn get(&self, key: &DataKey) -> Option<&Datum> {
-        self.pairs.binary_search_by(|(entry,_)| entry.cmp(key))
-            .ok().map(|index| &self.pairs[index].1)
+        self.pairs
+            .binary_search_by(|(entry, _)| entry.cmp(key))
+            .ok()
+            .map(|index| &self.pairs[index].1)
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum OutcomeValue { Ok(Arc<Datum>), Err(Arc<Datum>) }
+pub enum OutcomeValue {
+    Ok(Arc<Datum>),
+    Err(Arc<Datum>),
+}
 impl OutcomeValue {
-    pub fn is_ok(&self) -> bool { matches!(self, Self::Ok(_)) }
+    pub fn is_ok(&self) -> bool {
+        matches!(self, Self::Ok(_))
+    }
     pub fn payload(&self) -> &Datum {
-        match self { Self::Ok(v) | Self::Err(v) => v }
+        match self {
+            Self::Ok(v) | Self::Err(v) => v,
+        }
     }
 }

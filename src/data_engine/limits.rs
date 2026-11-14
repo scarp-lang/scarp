@@ -33,13 +33,23 @@ impl Default for DataLimits {
 /// Logical limits are not claims about the allocator's RSS usage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DataResource {
-    Definitions, Members, TypeDepth, TypeNodes, ValueDepth, ValueNodes,
-    CollectionEntries, TextBytes, PatternNodes,
+    Definitions,
+    Members,
+    TypeDepth,
+    TypeNodes,
+    ValueDepth,
+    ValueNodes,
+    CollectionEntries,
+    TextBytes,
+    PatternNodes,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DataError {
-    Limit { resource: DataResource, limit: usize },
+    Limit {
+        resource: DataResource,
+        limit: usize,
+    },
     InvalidName(String),
     DuplicateName(String),
     DuplicateDefinition,
@@ -57,8 +67,9 @@ pub enum DataError {
 impl fmt::Display for DataError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Limit { resource, limit } =>
-                write!(f, "data engine {resource:?} limit {limit} exceeded"),
+            Self::Limit { resource, limit } => {
+                write!(f, "data engine {resource:?} limit {limit} exceeded")
+            }
             Self::InvalidName(n) => write!(f, "invalid identifier: {n}"),
             Self::DuplicateName(n) => write!(f, "duplicate name: {n}"),
             Self::DuplicateDefinition => f.write_str("definition identity already exists"),
@@ -76,10 +87,12 @@ impl fmt::Display for DataError {
 }
 impl std::error::Error for DataError {}
 
-pub(crate) fn bounded(
-    value: usize, limit: usize, resource: DataResource,
-) -> Result<(), DataError> {
-    if value > limit { Err(DataError::Limit { resource, limit }) } else { Ok(()) }
+pub(crate) fn bounded(value: usize, limit: usize, resource: DataResource) -> Result<(), DataError> {
+    if value > limit {
+        Err(DataError::Limit { resource, limit })
+    } else {
+        Ok(())
+    }
 }
 
 pub(crate) fn identifier(name: &str) -> Result<(), DataError> {
@@ -102,23 +115,40 @@ pub(crate) struct Meter {
 }
 impl Meter {
     pub(crate) fn new(limits: DataLimits) -> Self {
-        Self { limits, nodes: 0, bytes: 0 }
+        Self {
+            limits,
+            nodes: 0,
+            bytes: 0,
+        }
     }
     pub(crate) fn node(&mut self, depth: usize) -> Result<(), DataError> {
         bounded(depth, self.limits.max_value_depth, DataResource::ValueDepth)?;
-        self.nodes = self.nodes.checked_add(1)
-            .ok_or(DataError::Limit {
-                resource: DataResource::ValueNodes, limit: self.limits.max_value_nodes,
-            })?;
-        bounded(self.nodes, self.limits.max_value_nodes, DataResource::ValueNodes)
+        self.nodes = self.nodes.checked_add(1).ok_or(DataError::Limit {
+            resource: DataResource::ValueNodes,
+            limit: self.limits.max_value_nodes,
+        })?;
+        bounded(
+            self.nodes,
+            self.limits.max_value_nodes,
+            DataResource::ValueNodes,
+        )
     }
     pub(crate) fn text(&mut self, length: usize) -> Result<(), DataError> {
         self.bytes = self.bytes.checked_add(length).ok_or(DataError::Limit {
-            resource: DataResource::TextBytes, limit: self.limits.max_text_bytes,
+            resource: DataResource::TextBytes,
+            limit: self.limits.max_text_bytes,
         })?;
-        bounded(self.bytes, self.limits.max_text_bytes, DataResource::TextBytes)
+        bounded(
+            self.bytes,
+            self.limits.max_text_bytes,
+            DataResource::TextBytes,
+        )
     }
     pub(crate) fn entries(&self, count: usize) -> Result<(), DataError> {
-        bounded(count, self.limits.max_collection_entries, DataResource::CollectionEntries)
+        bounded(
+            count,
+            self.limits.max_collection_entries,
+            DataResource::CollectionEntries,
+        )
     }
 }
