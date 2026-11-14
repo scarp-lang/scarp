@@ -9,7 +9,8 @@ use scarp::{
 fn print_expression(statement: &Statement) -> &scarp::ast::Expression {
     match statement {
         Statement::Println {
-            argument: PrintArgument::Expression(expression), ..
+            argument: PrintArgument::Expression(expression),
+            ..
         } => expression,
         Statement::Output { arguments, .. } => match &arguments[0] {
             PrintArgument::Expression(expression) => expression,
@@ -119,7 +120,8 @@ fn original_group_ast_spans_are_preserved_under_iterative_lowering() {
         root = *inner;
         groups += 1;
     }
-    assert_eq!(groups, 5);
+    // The first '(' opens print's argument list; four are AST Group nodes.
+    assert_eq!(groups, 4);
     assert!(matches!(expression.nodes()[root].kind, E::Integer(42)));
 }
 #[test]
