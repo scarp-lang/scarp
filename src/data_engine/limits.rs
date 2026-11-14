@@ -115,8 +115,12 @@ impl fmt::Display for DataError {
             Self::UnsupportedWireType => {
                 f.write_str("source type not supported by experimental binary format")
             }
-            Self::DroppedField(name) => write!(f, "migration would remove field without permission: {name}"),
-            Self::MissingMigrationDefault(name) => write!(f, "migration requires explicit default for field: {name}"),
+            Self::DroppedField(name) => {
+                write!(f, "migration would remove field without permission: {name}")
+            }
+            Self::MissingMigrationDefault(name) => {
+                write!(f, "migration requires explicit default for field: {name}")
+            }
             Self::UnboundParameter => f.write_str("unbound generic type parameter"),
             Self::ArityMismatch => f.write_str("generic function argument count mismatch"),
             Self::UnsatisfiedConstraint => f.write_str("unsatisfied generic type constraint"),

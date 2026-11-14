@@ -4,11 +4,11 @@
 //! a field. New fields require caller-provided checked defaults; removing a
 //! field requires explicit permission. Every rebuilt value is verified by the
 //! target registry before being exposed. It is not an on-disk ABI migrator.
-use std::collections::HashMap;
-use crate::types::DefinitionId;
 use super::limits::{bounded, DataError, DataResource};
 use super::schema::{DataType, SchemaRegistry};
 use super::value::{Datum, OutcomeValue};
+use crate::types::DefinitionId;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct MigrationOptions {
@@ -83,23 +83,41 @@ impl Migrator<'_> {
             resource: DataResource::MigrationNodes,
             limit: self.options.max_nodes,
         })?;
-        bounded(self.stats.visited, self.options.max_nodes, DataResource::MigrationNodes)
+        bounded(
+            self.stats.visited,
+            self.options.max_nodes,
+            DataResource::MigrationNodes,
+        )
     }
     fn insert_field(&mut self) -> Result<(), DataError> {
-        self.stats.inserted_fields = self.stats.inserted_fields.checked_add(1)
-            .ok_or(DataError::Limit {
-                resource: DataResource::MigrationNodes,
-                limit: self.options.max_nodes,
-            })?;
-        bounded(self.stats.inserted_fields, self.options.max_nodes, DataResource::MigrationNodes)
+        self.stats.inserted_fields =
+            self.stats
+                .inserted_fields
+                .checked_add(1)
+                .ok_or(DataError::Limit {
+                    resource: DataResource::MigrationNodes,
+                    limit: self.options.max_nodes,
+                })?;
+        bounded(
+            self.stats.inserted_fields,
+            self.options.max_nodes,
+            DataResource::MigrationNodes,
+        )
     }
     fn remove_field(&mut self) -> Result<(), DataError> {
-        self.stats.removed_fields = self.stats.removed_fields.checked_add(1)
-            .ok_or(DataError::Limit {
-                resource: DataResource::MigrationNodes,
-                limit: self.options.max_nodes,
-            })?;
-        bounded(self.stats.removed_fields, self.options.max_nodes, DataResource::MigrationNodes)
+        self.stats.removed_fields =
+            self.stats
+                .removed_fields
+                .checked_add(1)
+                .ok_or(DataError::Limit {
+                    resource: DataResource::MigrationNodes,
+                    limit: self.options.max_nodes,
+                })?;
+        bounded(
+            self.stats.removed_fields,
+            self.options.max_nodes,
+            DataResource::MigrationNodes,
+        )
     }
     fn migrate(
         &mut self,
@@ -110,9 +128,7 @@ impl Migrator<'_> {
     ) -> Result<Datum, DataError> {
         self.node(depth)?;
         match (old_ty, new_ty, value) {
-            (DataType::Source(a), DataType::Source(b), Datum::Source(source))
-                if a == b =>
-            {
+            (DataType::Source(a), DataType::Source(b), Datum::Source(source)) if a == b => {
                 Ok(Datum::Source(source.clone()))
             }
             (DataType::Record(old_id), DataType::Record(new_id), Datum::Record(old_record))
@@ -124,20 +140,22 @@ impl Migrator<'_> {
                     return Err(DataError::InvalidShape);
                 }
                 if !self.options.allow_drop_fields {
-                    for old in old_fields {
+                    for old in &old_fields {
                         if !new_fields.iter().any(|new| new.name == old.name) {
                             return Err(DataError::DroppedField(old.name.clone()));
                         }
                     }
                 } else {
-                    for old in old_fields {
+                    for old in &old_fields {
                         if !new_fields.iter().any(|new| new.name == old.name) {
                             self.remove_field()?;
                         }
                     }
                 }
                 let mut values = Vec::new();
-                values.try_reserve_exact(new_fields.len()).map_err(|_| DataError::InvalidShape)?;
+                values
+                    .try_reserve_exact(new_fields.len())
+                    .map_err(|_| DataError::InvalidShape)?;
                 for new in new_fields {
                     let migrated = if let Some(index) =
                         old_fields.iter().position(|old| old.name == new.name)
@@ -149,7 +167,9 @@ impl Migrator<'_> {
                             depth + 1,
                         )?
                     } else {
-                        let default = self.options.get_default(*new_id, &new.name)
+                        let default = self
+                            .options
+                            .get_default(*new_id, &new.name)
                             .ok_or_else(|| DataError::MissingMigrationDefault(new.name.clone()))?
                             .clone();
                         self.target.verify(&new.ty, &default)?;
@@ -163,56 +183,78 @@ impl Migrator<'_> {
             (DataType::Variant(old_id), DataType::Variant(new_id), Datum::Variant(old_variant))
                 if old_id == new_id && old_variant.identity() == *old_id =>
             {
-                let old_case = self.source.variants(*old_id)?
+                let old_case = self
+                    .source
+                    .variants(*old_id)?
                     .get(old_variant.case_index())
                     .ok_or(DataError::InvalidShape)?
                     .clone();
-                let new_case = self.target.variants(*new_id)?
-                    .iter().find(|c| c.name == old_case.name)
+                let new_case = self
+                    .target
+                    .variants(*new_id)?
+                    .iter()
+                    .find(|c| c.name == old_case.name)
                     .ok_or_else(|| DataError::UnknownCase(old_case.name.clone()))?
                     .clone();
-                let payload = match (
-                    &old_case.payload,
-                    &new_case.payload,
-                    old_variant.payload(),
-                ) {
+                let payload = match (&old_case.payload, &new_case.payload, old_variant.payload()) {
                     (None, None, None) => None,
-                    (Some(a), Some(b), Some(payload)) =>
-                        Some(self.migrate(a, b, payload, depth + 1)?),
+                    (Some(a), Some(b), Some(payload)) => {
+                        Some(self.migrate(a, b, payload, depth + 1)?)
+                    }
                     _ => return Err(DataError::TypeMismatch),
                 };
                 Ok(Datum::Variant(self.target.new_variant(
-                    *new_id, &new_case.name, payload,
+                    *new_id,
+                    &new_case.name,
+                    payload,
                 )?))
             }
             (DataType::List(a), DataType::List(b), Datum::List(list))
                 if a.as_ref() == list.element_type() =>
             {
                 let mut converted = Vec::new();
-                converted.try_reserve_exact(list.len()).map_err(|_| DataError::InvalidShape)?;
+                converted
+                    .try_reserve_exact(list.len())
+                    .map_err(|_| DataError::InvalidShape)?;
                 for value in list.values() {
                     converted.push(self.migrate(a, b, value, depth + 1)?);
                 }
-                Ok(Datum::List(self.target.new_list(b.as_ref().clone(), converted)?))
+                Ok(Datum::List(
+                    self.target.new_list(b.as_ref().clone(), converted)?,
+                ))
             }
             (DataType::Map(old_key, a), DataType::Map(new_key, b), Datum::Map(map))
                 if old_key == new_key && old_key == &map.key_type() =>
             {
                 let mut converted = Vec::new();
-                converted.try_reserve_exact(map.len()).map_err(|_| DataError::InvalidShape)?;
+                converted
+                    .try_reserve_exact(map.len())
+                    .map_err(|_| DataError::InvalidShape)?;
                 for (key, value) in map.entries() {
                     converted.push((key.clone(), self.migrate(a, b, value, depth + 1)?));
                 }
-                Ok(Datum::Map(self.target.new_map(*new_key, b.as_ref().clone(), converted)?))
+                Ok(Datum::Map(self.target.new_map(
+                    *new_key,
+                    b.as_ref().clone(),
+                    converted,
+                )?))
             }
-            (DataType::Optional(_), DataType::Optional(_), Datum::Optional(None)) =>
-                Ok(Datum::none()),
-            (DataType::Optional(a), DataType::Optional(b), Datum::Optional(Some(value))) =>
-                Ok(Datum::some(self.migrate(a, b, value, depth + 1)?)),
-            (DataType::Outcome(a, _), DataType::Outcome(b, _), Datum::Outcome(OutcomeValue::Ok(v))) =>
-                Ok(Datum::ok(self.migrate(a, b, v, depth + 1)?)),
-            (DataType::Outcome(_, a), DataType::Outcome(_, b), Datum::Outcome(OutcomeValue::Err(v))) =>
-                Ok(Datum::err(self.migrate(a, b, v, depth + 1)?)),
+            (DataType::Optional(_), DataType::Optional(_), Datum::Optional(None)) => {
+                Ok(Datum::none())
+            }
+            (DataType::Optional(a), DataType::Optional(b), Datum::Optional(Some(value))) => {
+                Ok(Datum::some(self.migrate(a, b, value, depth + 1)?))
+            }
+            (
+                DataType::Outcome(a, _),
+                DataType::Outcome(b, _),
+                Datum::Outcome(OutcomeValue::Ok(v)),
+            ) => Ok(Datum::ok(self.migrate(a, b, v, depth + 1)?)),
+            (
+                DataType::Outcome(_, a),
+                DataType::Outcome(_, b),
+                Datum::Outcome(OutcomeValue::Err(v)),
+            ) => Ok(Datum::err(self.migrate(a, b, v, depth + 1)?)),
             _ => Err(DataError::TypeMismatch),
         }
     }
@@ -239,6 +281,9 @@ impl SchemaRegistry {
         };
         let value = migrator.migrate(source_type, target_type, source_value, 1)?;
         target.verify(target_type, &value)?;
-        Ok(MigrationResult { value, stats: migrator.stats })
+        Ok(MigrationResult {
+            value,
+            stats: migrator.stats,
+        })
     }
 }

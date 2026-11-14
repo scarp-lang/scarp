@@ -25,8 +25,8 @@ pub use generics::{
     Constraint, GenericSignature, Specialization, SpecializationCache, TypeExpression,
 };
 pub use index::{DataIndex, IndexHit, IndexLimits, IndexStats, JoinResult, JoinRow};
-pub use migrate::{MigrationOptions, MigrationResult, MigrationStats};
 pub use limits::{DataError, DataLimits, DataResource};
+pub use migrate::{MigrationOptions, MigrationResult, MigrationStats};
 pub use paths::{PatchOperation, PathSegment};
 pub use pattern::{Bindings, Coverage, Pattern};
 pub use query::{Predicate, QueryLimits, QueryPlan, QueryResult, QueryStats};
