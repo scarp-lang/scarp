@@ -65,6 +65,27 @@ is E0037. Put construction in an exported function. BigInt constant folding
 requires a separate compiler-budget design; a `bind` in an entry script is a
 runtime binding, not a folded library constant.
 
+## Advanced operations in development
+
+| Built-in | Result and domain |
+| --- | --- |
+| `bigint_pow(x, exponent)` | Exact power. The integer exponent must be nonnegative. `0^0` yields `1`. |
+| `bigint_gcd(a, b)` / `bigint_lcm(a, b)` | Nonnegative results for signed inputs. `gcd(0,0)` and `lcm(0,x)` yield zero. |
+| `bigint_sqrt(x)` | Largest integer whose square is at most `x`. Requires a nonnegative input. |
+| `bigint_bit_length(x)` | Bit width of the magnitude, with zero returning `0`. |
+| `bigint_to_text(x)` | Canonical signed decimal text. |
+| `bigint_from_radix(text, base)` / `bigint_to_radix(x, base)` | Exact signed conversion for integer bases 2 through 36. Input accepts ASCII digits and letters in either case. Output uses lowercase. |
+| `bigint_and(a,b)`, `bigint_or(a,b)`, `bigint_xor(a,b)`, `bigint_not(x)` | Signed infinite two’s-complement semantics. |
+| `bigint_shl(x,n)` / `bigint_shr(x,n)` | Exact left shift and sign-extending right shift. Shift counts are nonnegative integers. |
+| `bigint_pow_mod(x, exponent, modulus)` | Nonnegative residue for a nonnegative integer exponent and strictly positive BigInt modulus. Uses variable-time arithmetic. |
+| `bigint_divmod(a,b)` | `tuple<bigint,bigint>` with truncating quotient and dividend-signed remainder. Divisor must be nonzero. |
+
+Radix parsing checks both the original digit count and the result’s decimal
+digit count against `--max-bigint-digits`. Radix formatting pays text allocation
+and work quotas. Modular multiplication intermediates pay the ordinary BigInt
+limits. Run [`examples/bigint_exact.srp`](../examples/bigint_exact.srp) with the
+development compiler.
+
 ## Resource limits
 
 | Resource | Default | Contract |

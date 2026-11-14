@@ -10,6 +10,7 @@ pub(super) struct ProgramTypes {
     bindings: Vec<TypeId>,
     functions: Vec<TypeId>,
     builtins: BTreeMap<Builtin, TypeId>,
+    divmod: Option<TypeId>,
     input: Option<TypeId>,
     input_fallback: Option<TypeId>,
     prompt: Option<TypeId>,
@@ -73,6 +74,7 @@ impl TypedExpression<'_> {
                     }
                     Some(ResolvedCall::ReadLine) => self.types.input,
                     Some(ResolvedCall::ReadLineOr) => self.types.input_fallback,
+                    Some(ResolvedCall::BigIntDivMod) => self.types.divmod,
                     Some(ResolvedCall::Ask) => self.types.prompt,
                     Some(ResolvedCall::AskOr) => self.types.prompt_fallback,
                     None => None,
@@ -235,6 +237,7 @@ pub(super) fn build(
         functions.push(id);
     }
     let mut builtins = BTreeMap::new();
+    let mut divmod = None;
     let mut input = None;
     let mut input_fallback = None;
     let mut prompt = None;
@@ -261,6 +264,18 @@ pub(super) fn build(
                             effect: FunctionEffect::Impure,
                         })
                         .map_err(|error| failure(error, expression.syntax.nodes()[index].span))?,
+                );
+            }
+            if matches!(call, Some(ResolvedCall::BigIntDivMod)) && divmod.is_none() {
+                let span = expression.syntax.nodes()[index].span;
+                divmod = Some(
+                    registry
+                        .intern(TypeKind::Function {
+                            parameters: vec![ValueType::BigInt.id(), ValueType::BigInt.id()].into(),
+                            result: expression.types[index],
+                            effect: FunctionEffect::Pure,
+                        })
+                        .map_err(|error| failure(error, span))?,
                 );
             }
             if matches!(call, Some(ResolvedCall::Ask)) && prompt.is_none() {
@@ -309,6 +324,7 @@ pub(super) fn build(
         bindings,
         functions,
         builtins,
+        divmod,
         input,
         input_fallback,
         prompt,
