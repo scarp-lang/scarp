@@ -12,6 +12,12 @@ use crate::{
     value::{Value, ValueType},
 };
 
+mod advanced;
+pub(crate) mod bitwise;
+mod modular;
+mod number_theory;
+mod radix;
+
 const BASE: u64 = 1_000_000_000;
 /// Initial implementation ceiling; hosts may select a smaller per-value limit.
 pub const MAX_BIGINT_DIGITS: usize = 1_000_000;
@@ -296,20 +302,57 @@ fn multiply(
     finish(result, left.negative != right.negative, budget, span)
 }
 
-enum DivisionResult {
+enum DivisionOutputs {
     Quotient,
     Remainder,
+    Both,
 }
 
-/// Long division finds each base-10^9 quotient digit by binary search.
-/// Both operators prepay the same work and materialize only their result.
-fn divide(
+pub(crate) fn divmod(
     left: &BigInt,
     right: &BigInt,
-    result: DivisionResult,
+    budget: &mut Budget,
+    span: Span,
+) -> Result<(BigInt, BigInt), Diagnostic> {
+    budget.check_bigint_digits(left.decimal_digits().max(right.decimal_digits()), span)?;
+    let (quotient, remainder) = divide(left, right, DivisionOutputs::Both, budget, span)?;
+    Ok((
+        quotient.expect("requested quotient"),
+        remainder.expect("requested remainder"),
+    ))
+}
+
+fn quotient(
+    left: &BigInt,
+    right: &BigInt,
     budget: &mut Budget,
     span: Span,
 ) -> Result<BigInt, Diagnostic> {
+    divide(left, right, DivisionOutputs::Quotient, budget, span)
+        .map(|(quotient, _)| quotient.expect("requested quotient"))
+}
+
+fn remainder(
+    left: &BigInt,
+    right: &BigInt,
+    budget: &mut Budget,
+    span: Span,
+) -> Result<BigInt, Diagnostic> {
+    divide(left, right, DivisionOutputs::Remainder, budget, span)
+        .map(|(_, remainder)| remainder.expect("requested remainder"))
+}
+
+/// Long division finds each base-10^9 quotient digit by binary search.
+/// Every mode pays the same work and materializes only its requested results.
+fn divide(
+    left: &BigInt,
+    right: &BigInt,
+    outputs: DivisionOutputs,
+    budget: &mut Budget,
+    span: Span,
+) -> Result<(Option<BigInt>, Option<BigInt>), Diagnostic> {
+    let keep_quotient = !matches!(outputs, DivisionOutputs::Remainder);
+    let keep_remainder = !matches!(outputs, DivisionOutputs::Quotient);
     if right.is_zero() {
         return Err(
             Diagnostic::new(DiagnosticKind::DivisionByZero, span, "division by zero")
@@ -319,10 +362,10 @@ fn divide(
     let (n, m) = (left.limbs.len(), right.limbs.len());
     budget.charge(n.max(m).max(1) as u64, span)?;
     if magnitude_cmp(&left.limbs, &right.limbs) == Ordering::Less {
-        return match result {
-            DivisionResult::Quotient => finish(Vec::new(), false, budget, span),
-            DivisionResult::Remainder => Ok(left.clone()),
-        };
+        let quotient = keep_quotient
+            .then(|| finish(Vec::new(), false, budget, span))
+            .transpose()?;
+        return Ok((quotient, keep_remainder.then(|| left.clone())));
     }
     let count = n - m + 1;
     let work = if m == 1 {
@@ -334,7 +377,7 @@ fn divide(
             .saturating_add((n as u64).saturating_mul(4))
     };
     budget.charge(work, span)?;
-    let mut quotient = if matches!(result, DivisionResult::Quotient) {
+    let mut quotient = if keep_quotient {
         let mut limbs = buffer(count, budget, span)?;
         limbs.resize(count, 0);
         Some(limbs)
@@ -352,14 +395,19 @@ fn divide(
             }
             remainder = current % divisor;
         }
-        if let Some(quotient) = quotient {
-            return finish(quotient, left.negative != right.negative, budget, span);
-        }
-        let mut rest = buffer(usize::from(remainder != 0), budget, span)?;
-        if remainder != 0 {
-            rest.push(remainder as u32);
-        }
-        rest
+        let quotient = quotient
+            .map(|limbs| finish(limbs, left.negative != right.negative, budget, span))
+            .transpose()?;
+        let remainder = keep_remainder
+            .then(|| {
+                let mut limbs = buffer(usize::from(remainder != 0), budget, span)?;
+                if remainder != 0 {
+                    limbs.push(remainder as u32);
+                }
+                finish(limbs, left.negative, budget, span)
+            })
+            .transpose()?;
+        return Ok((quotient, remainder));
     } else {
         let capacity = m.checked_add(1).ok_or_else(|| allocation(span))?;
         let mut remainder = buffer(capacity, budget, span)?;
@@ -387,10 +435,13 @@ fn divide(
         }
         remainder
     };
-    match quotient {
-        Some(quotient) => finish(quotient, left.negative != right.negative, budget, span),
-        None => finish(remainder, left.negative, budget, span),
-    }
+    let quotient = quotient
+        .map(|limbs| finish(limbs, left.negative != right.negative, budget, span))
+        .transpose()?;
+    let remainder = keep_remainder
+        .then(|| finish(remainder, left.negative, budget, span))
+        .transpose()?;
+    Ok((quotient, remainder))
 }
 fn multiply_small(limbs: &[u32], digit: u32, result: &mut Vec<u32>) {
     result.clear();
@@ -419,10 +470,8 @@ pub(crate) fn binary(
         Add => add(left, right, budget, span).map(Value::BigInt),
         Subtract => add(left, &right.negated(), budget, span).map(Value::BigInt),
         Multiply => multiply(left, right, budget, span).map(Value::BigInt),
-        Divide => divide(left, right, DivisionResult::Quotient, budget, span).map(Value::BigInt),
-        Remainder => {
-            divide(left, right, DivisionResult::Remainder, budget, span).map(Value::BigInt)
-        }
+        Divide => quotient(left, right, budget, span).map(Value::BigInt),
+        Remainder => remainder(left, right, budget, span).map(Value::BigInt),
         Equal | NotEqual | Less | LessEqual | Greater | GreaterEqual => {
             budget.charge(left.limbs.len().max(right.limbs.len()).max(1) as u64, span)?;
             let order = left.cmp(right);
