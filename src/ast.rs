@@ -91,6 +91,16 @@ pub enum Statement {
         initializer: Expression,
         span: Span,
     },
+    /// Source-level tuple or fixed-array binding pattern. Every element is
+    /// resolved once from one initializer; "_" discards its corresponding value.
+    /// This is a first source integration step, not nominal record syntax.
+    Destructure {
+        bindings: Vec<(String, Span)>,
+        mutable: bool,
+        array: bool,
+        initializer: Expression,
+        span: Span,
+    },
     Assign {
         name: String,
         name_span: Span,
@@ -125,6 +135,7 @@ impl Statement {
             | Self::Println { span, .. }
             | Self::Output { span, .. }
             | Self::Declaration { span, .. }
+            | Self::Destructure { span, .. }
             | Self::Assign { span, .. } => *span,
         }
     }

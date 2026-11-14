@@ -107,6 +107,12 @@ pub(crate) enum ResolvedStatement {
         slot: usize,
         value: ResolvedExpression,
     },
+    /// Compiler-verified tuple/array shape with one initializer evaluation.
+    /// A None destination is the "_" discard pattern.
+    Destructure {
+        slots: Vec<Option<usize>>,
+        value: ResolvedExpression,
+    },
     Update {
         slot: usize,
         operator: BinaryOperator,
@@ -446,6 +452,125 @@ impl<'a> Resolver<'a> {
         }
         Ok(())
     }
+    /// Resolve a full flat binding pattern in a *separate call frame*. The
+    /// outer statement-list resolver is recursively entered for each block,
+    /// so retaining these pattern temporaries in that frame violates the
+    /// small-stack guarantee even when a source has no patterns at all.
+    #[inline(never)]
+    fn resolve_destructure(
+        &mut self,
+        bindings: Vec<(String, Span)>,
+        mutable: bool,
+        array: bool,
+        initializer: Expression,
+        span: Span,
+    ) -> Result<(), Diagnostic> {
+        // The initializer is resolved before any new name enters
+        // scope. No pattern member can refer to a sibling binding.
+        let value = self.expression(initializer)?;
+        require_value(&value.kind, span)?;
+        let element_types: Vec<SourceType> = if array {
+            let Some(shape) = value.kind.as_array() else {
+                return Err(Diagnostic::new(
+                    DiagnosticKind::TypeMismatch,
+                    span,
+                    format!(
+                        "an array destructuring pattern needs a fixed array, found {}",
+                        value.kind
+                    ),
+                )
+                .with_help("use [first, second] for a fixed array"));
+            };
+            if shape.len() != bindings.len() {
+                return Err(Diagnostic::new(
+                    DiagnosticKind::TypeMismatch,
+                    span,
+                    format!(
+                        "array destructuring requires {} elements, found {}",
+                        bindings.len(),
+                        shape.len()
+                    ),
+                ));
+            }
+            vec![shape.element().clone(); bindings.len()]
+        } else {
+            let Some(elements) = value.kind.tuple_elements() else {
+                return Err(Diagnostic::new(
+                    DiagnosticKind::TypeMismatch,
+                    span,
+                    format!(
+                        "a tuple destructuring pattern needs a tuple, found {}",
+                        value.kind
+                    ),
+                )
+                .with_help("use (first, second) to unpack a tuple value"));
+            };
+            if elements.len() != bindings.len() {
+                return Err(Diagnostic::new(
+                    DiagnosticKind::TypeMismatch,
+                    span,
+                    format!(
+                        "tuple destructuring requires {} elements, found {}",
+                        bindings.len(),
+                        elements.len()
+                    ),
+                ));
+            }
+            elements.to_vec()
+        };
+
+        // Check the entire pattern before allocating any slots,
+        // ensuring duplicates, shadowing and reserved words get
+        // the same diagnostics as ordinary declarations.
+        let mut seen: HashMap<String, Span> = HashMap::new();
+        for (name, name_span) in &bindings {
+            if name == "_" {
+                continue;
+            }
+            self.binding_name(name, *name_span)?;
+            if let Some(previous) = seen.insert(name.clone(), *name_span) {
+                return Err(Diagnostic::new(
+                    DiagnosticKind::DuplicateBinding,
+                    *name_span,
+                    format!("binding {name:?} occurs more than once in a pattern"),
+                )
+                .with_related(previous, "the first occurrence is here"));
+            }
+            if let Some(previous) = self.scopes.last().unwrap().get(name) {
+                return Err(Diagnostic::new(
+                    DiagnosticKind::DuplicateBinding,
+                    *name_span,
+                    format!("binding {name:?} is already declared in this scope"),
+                )
+                .with_related(previous.declaration, "the previous declaration is here"));
+            }
+        }
+
+        let mut slots = Vec::with_capacity(bindings.len());
+        for ((name, name_span), kind) in bindings.into_iter().zip(element_types) {
+            if name == "_" {
+                slots.push(None);
+                continue;
+            }
+            let slot = self.slot_types.len();
+            self.slot_types.push(kind.clone());
+            self.scopes.last_mut().unwrap().insert(
+                name,
+                Binding {
+                    slot,
+                    declaration: name_span,
+                    mutable,
+                    kind,
+                    repeat_index: false,
+                    parameter: false,
+                },
+            );
+            slots.push(Some(slot));
+        }
+        self.emit(ResolvedStatement::Destructure { slots, value }, span);
+        Ok(())
+    }
+
     fn statement_list(&mut self, statements: Vec<Statement>) -> Result<(), Diagnostic> {
         for statement in statements {
             let span = statement.span();
@@ -755,6 +880,15 @@ impl<'a> Resolver<'a> {
                             },
                         );
                     self.emit(ResolvedStatement::Store { slot, value }, span);
+                }
+                Statement::Destructure {
+                    bindings,
+                    mutable,
+                    array,
+                    initializer,
+                    span,
+                } => {
+                    self.resolve_destructure(bindings, mutable, array, initializer, span)?;
                 }
                 Statement::Println { argument, .. } => {
                     self.output(vec![argument], OutputTarget::Stdout, true, span)?;

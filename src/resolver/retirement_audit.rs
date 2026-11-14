@@ -127,6 +127,15 @@ fn audit_frame(
                     .ok_or_else(|| format!("store targets out-of-range slot {slot}"))? = true;
                 successors.push(pc + 1);
             }
+            ResolvedStatement::Destructure { slots, value } => {
+                read_slots(value, &state)?;
+                for slot in slots.iter().flatten() {
+                    *state_out.get_mut(*slot).ok_or_else(|| {
+                        format!("destructure initializes out-of-range slot {slot}")
+                    })? = true;
+                }
+                successors.push(pc + 1);
+            }
             ResolvedStatement::Update { slot, value, .. } => {
                 if !state.get(*slot).copied().unwrap_or(false) {
                     return Err(format!("update reads uninitialized or retired slot {slot}"));

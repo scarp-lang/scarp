@@ -214,6 +214,18 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                     }
                     expr(initializer, base, to_local, nodes);
                 }
+                Statement::Destructure {
+                    bindings,
+                    initializer,
+                    span: whole,
+                    ..
+                } => {
+                    span(whole, base, to_local);
+                    for (_, name_span) in bindings {
+                        span(name_span, base, to_local);
+                    }
+                    expr(initializer, base, to_local, nodes);
+                }
                 Statement::Assign {
                     name_span,
                     operator_span,

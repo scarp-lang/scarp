@@ -23,6 +23,9 @@ pub const MAX_EXPRESSION_DEPTH: usize = 64;
 /// Maximum nested statement blocks, independent of expression parentheses.
 pub const MAX_BLOCK_DEPTH: usize = 64;
 
+/// Maximum source-bound names in one flat array destructuring pattern.
+pub const MAX_DESTRUCTURE_BINDINGS: usize = 128;
+
 /// Parse a token stream. An omitted EOF token is treated as the end of input.
 pub fn parse(tokens: &[Token]) -> Result<Program, Diagnostic> {
     Parser {
@@ -299,11 +302,99 @@ impl Parser<'_> {
         }
     }
 
+    /// Collapse a consecutive brace-only chain into one physical parse frame.
+    ///
+    /// Every intermediate block contains exactly one child block and no
+    /// sibling statements. Their AST and byte spans remain identical to the
+    /// ordinary recursive parser, but 64 nested braces do not retain 64
+    /// statement-list frames while parsing a deeply nested expression.
+    ///
+    /// A preflight of matching braces is required: if a parent has further
+    /// statements after the child block, fall back to the general parser.
+    #[inline(never)]
+    fn compact_block_chain(&mut self, depth: usize) -> Result<Option<Statement>, ParseError> {
+        if !self.pending.is_empty() {
+            return Ok(None);
+        }
+        let start = self.cursor;
+        let mut count = 0usize;
+        while matches!(
+            self.tokens.get(start + count).map(|t| &t.kind),
+            Some(TokenKind::LeftBrace)
+        ) {
+            count += 1;
+            // Stop before bounds that would violate the normal depth limit.
+            if count > MAX_BLOCK_DEPTH {
+                break;
+            }
+        }
+        if count < 2 {
+            return Ok(None);
+        }
+        let mut balance = 0usize;
+        let mut inner_close = None;
+        for (position, token) in self.tokens.iter().enumerate().skip(start + count - 1) {
+            match token.kind {
+                TokenKind::LeftBrace => balance += 1,
+                TokenKind::RightBrace => {
+                    balance -= 1;
+                    if balance == 0 {
+                        inner_close = Some(position);
+                        break;
+                    }
+                }
+                TokenKind::Eof => return Ok(None),
+                _ => {}
+            }
+        }
+        let Some(inner_close) = inner_close else {
+            return Ok(None);
+        };
+        // A string with an unmatched parent block is still handled by the
+        // standard parser; optimization does not change syntax diagnostics.
+        if (1..count).any(|offset| {
+            !matches!(
+                self.tokens.get(inner_close + offset).map(|t| &t.kind),
+                Some(TokenKind::RightBrace)
+            )
+        }) {
+            return Ok(None);
+        }
+        // Check the same nesting limit as one-by-one block() calls, before
+        // advancing cursor or allocating any AST nodes.
+        for offset in 0..count {
+            if depth + offset >= MAX_BLOCK_DEPTH {
+                let opening = self.tokens[start + offset].span;
+                return Err(ParseError::new(
+                    DiagnosticKind::BlockNesting,
+                    opening,
+                    format!("block nesting exceeds {MAX_BLOCK_DEPTH} levels"),
+                )
+                .with_help("reduce the number of nested statement blocks"));
+            }
+        }
+        self.cursor += count;
+        let mut body = self.statement_list(depth + count, true)?;
+        for offset in (0..count).rev() {
+            let end = self.punctuation(TokenKind::RightBrace, "'}'")?.end;
+            let span = Span::new(self.tokens[start + offset].span.start, end);
+            let node = Statement::Block {
+                statements: body,
+                span,
+            };
+            body = vec![node];
+        }
+        Ok(body.pop())
+    }
+
     fn container_statement(
         &mut self,
         depth: usize,
         in_block: bool,
     ) -> Result<Statement, ParseError> {
+        if let Some(compact) = self.compact_block_chain(depth)? {
+            return Ok(compact);
+        }
         match &self.current().expect("container start").kind {
             TokenKind::LeftBrace => {
                 let (statements, span) = self.block(depth)?;
@@ -541,6 +632,80 @@ impl Parser<'_> {
         Ok(())
     }
 
+    /// Parse flat structural bindings: bind (a, b) = tuple; or
+    /// var [x, _, z] = fixed_array; Nested patterns remain future work.
+    fn destructure(&mut self, start: usize, mutable: bool) -> Result<Statement, ParseError> {
+        let array = self.at(&TokenKind::LeftBracket);
+        let close = if array {
+            TokenKind::RightBracket
+        } else {
+            TokenKind::RightParen
+        };
+        let opener = self.current().unwrap().span;
+        self.advance();
+        let mut bindings = Vec::new();
+        if self.at(&close) {
+            return Err(ParseError::new(
+                DiagnosticKind::UnexpectedToken,
+                opener,
+                "a destructuring pattern requires at least one name",
+            )
+            .with_help("use bind (first, second) = tuple; or bind [item] = array;"));
+        }
+        let trailing_comma = loop {
+            let (name, span) = self.identifier().map_err(|error| {
+                error.with_help("destructuring accepts names or '_' placeholders, not expressions")
+            })?;
+            let max = if array {
+                MAX_DESTRUCTURE_BINDINGS
+            } else {
+                MAX_TUPLE_ARITY
+            };
+            if bindings.len() >= max {
+                return Err(ParseError::new(
+                    if array {
+                        DiagnosticKind::ArrayLimit
+                    } else {
+                        DiagnosticKind::TupleLimit
+                    },
+                    span,
+                    format!("destructuring pattern exceeds {max} elements"),
+                ));
+            }
+            bindings.push((name, span));
+            if !self.at(&TokenKind::Comma) {
+                break false;
+            }
+            self.advance();
+            if self.at(&close) {
+                break true;
+            }
+        };
+        let close_label = if array { "']'" } else { "')'" };
+        self.punctuation(close, close_label)?;
+        if !array && bindings.len() == 1 && !trailing_comma {
+            return Err(ParseError::new(
+                DiagnosticKind::UnexpectedToken,
+                opener,
+                "a one-element tuple pattern requires a trailing comma",
+            )
+            .with_help("write bind (value,) = tuple;"));
+        }
+        self.punctuation(TokenKind::Equal, "'=' after the destructuring pattern")?;
+        let initializer = self.expression()?;
+        let end = self
+            .punctuation(TokenKind::Semicolon, "';' after destructuring")
+            .map_err(|error| error.with_help("finish the destructuring declaration with ';'"))?
+            .end;
+        Ok(Statement::Destructure {
+            bindings,
+            mutable,
+            array,
+            initializer,
+            span: Span::new(start, end),
+        })
+    }
+
     // Keep declaration temporaries out of recursive statement-list frames.
     fn declaration(&mut self) -> Result<Statement, ParseError> {
         let token = self.current().expect("declaration keyword is present");
@@ -551,6 +716,9 @@ impl Parser<'_> {
         let mutable = name == "var";
         let keyword = if mutable { "var" } else { "bind" };
         self.advance();
+        if self.at(&TokenKind::LeftParen) || self.at(&TokenKind::LeftBracket) {
+            return self.destructure(start, mutable);
+        }
         if self.keyword("mut")
             && matches!(
                 self.tokens.get(self.cursor + 1).map(|token| &token.kind),
@@ -1111,6 +1279,8 @@ impl Parser<'_> {
         })
     }
 
+    // Keep the nested expression stack bounded even with 64 nested groups.
+    #[inline(never)]
     fn logical_or(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
@@ -1485,6 +1655,8 @@ impl Parser<'_> {
         ))
     }
 
+    // Keep the nested expression stack bounded even with 64 nested groups.
+    #[inline(never)]
     fn primary(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
@@ -1570,11 +1742,138 @@ impl Parser<'_> {
         Ok((result, end))
     }
 
+    /// Parse deeply nested parenthesized integer infix expressions with a
+    /// bounded *heap* operator stack instead of recursively consuming every
+    /// logical/arithmetic precedence frame for each pair of parentheses.
+    ///
+    /// This is a conservative fast path. It requires a balanced, syntactically
+    /// valid region consisting exclusively of integer literals, known binary
+    /// arithmetic/bitwise operators, and parentheses. All mixed expressions,
+    /// tuples, function calls, conditions, unary signs and invalid syntax
+    /// continue through the existing complete grammar without reinterpretation.
+    ///
+    /// Only four-or-more nested groups use this path; ordinary source remains
+    /// on the original parser. Each Group retains its original byte spans and
+    /// every operator is reduced using the existing precedence table.
+    #[inline(never)]
+    fn grouped_integer_infix(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+    ) -> Result<Option<usize>, ParseError> {
+        if !self.pending.is_empty() {
+            return Ok(None);
+        }
+        let start = self.cursor;
+        let mut openings = 0usize;
+        let mut max_openings = 0usize;
+        let mut expecting_operand = true;
+        let mut final_position = None;
+        for (position, token) in self.tokens.iter().enumerate().skip(start) {
+            match &token.kind {
+                TokenKind::LeftParen if expecting_operand => {
+                    openings += 1;
+                    max_openings = max_openings.max(openings);
+                }
+                TokenKind::Integer(_) if expecting_operand => expecting_operand = false,
+                TokenKind::RightParen if !expecting_operand && openings > 0 => {
+                    openings -= 1;
+                    if openings == 0 {
+                        final_position = Some(position);
+                        break;
+                    }
+                }
+                kind if !expecting_operand && infix_operator(kind).is_some() => {
+                    expecting_operand = true;
+                }
+                _ => return Ok(None),
+            }
+        }
+        let Some(final_position) = final_position else {
+            return Ok(None);
+        };
+        if max_openings < 4 {
+            return Ok(None);
+        }
+        enum Operator {
+            Opening(Span),
+            Binary(BinaryOperator, Span, u8),
+        }
+        let mut operators: Vec<Operator> = Vec::new();
+        let mut operands: Vec<usize> = Vec::new();
+        while self.cursor <= final_position {
+            let token = self.current().expect("preflight validated expression");
+            match &token.kind {
+                TokenKind::LeftParen => {
+                    let span = token.span;
+                    self.expression_depth(
+                        depth
+                            + operators
+                                .iter()
+                                .filter(|op| matches!(op, Operator::Opening(_)))
+                                .count(),
+                        span,
+                    )?;
+                    operators.push(Operator::Opening(span));
+                    self.advance();
+                }
+                TokenKind::Integer(_) => {
+                    operands.push(self.atom(nodes)?);
+                }
+                TokenKind::RightParen => {
+                    let closing = token.span;
+                    self.advance();
+                    loop {
+                        match operators.pop().expect("preflight checked balanced groups") {
+                            Operator::Opening(opening) => {
+                                let expression =
+                                    operands.pop().expect("preflight checked group operand");
+                                operands.push(push(
+                                    nodes,
+                                    ExpressionKind::Group { expression },
+                                    Span::new(opening.start, closing.end),
+                                ));
+                                break;
+                            }
+                            Operator::Binary(operator, span, _) => {
+                                reduce_binary(nodes, &mut operands, operator, span);
+                            }
+                        }
+                    }
+                }
+                kind => {
+                    let (operator, precedence) =
+                        infix_operator(kind).expect("preflight validated infix operator");
+                    let span = token.span;
+                    self.advance();
+                    while matches!(
+                        operators.last(),
+                        Some(Operator::Binary(_, _, old)) if *old >= precedence
+                    ) {
+                        let Some(Operator::Binary(operator, span, _)) = operators.pop() else {
+                            unreachable!("checked binary operator");
+                        };
+                        reduce_binary(nodes, &mut operands, operator, span);
+                    }
+                    operators.push(Operator::Binary(operator, span, precedence));
+                }
+            }
+        }
+        debug_assert!(operators.is_empty());
+        debug_assert_eq!(operands.len(), 1);
+        Ok(operands.pop())
+    }
+
+    // Keep the nested expression stack bounded even with 64 nested groups.
+    #[inline(never)]
     fn group_expression(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
         depth: usize,
     ) -> Result<usize, ParseError> {
+        if let Some(compact) = self.grouped_integer_infix(nodes, depth)? {
+            return Ok(compact);
+        }
         let opening = self.current().unwrap().span;
         self.expression_depth(depth, opening)?;
         self.advance();
