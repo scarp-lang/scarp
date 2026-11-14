@@ -1,4 +1,4 @@
-//! Host-side exact decimal API. Source-language decimal is NOT available yet.
+//! Host-side exact decimal API and explicit Scarp source-language integration.
 use scarp::decimal::{Decimal, DecimalError, RoundingMode};
 
 fn d(text: &str) -> Decimal {
@@ -42,7 +42,8 @@ fn exact_accounting_example_and_explicit_rounding() {
 }
 
 #[test]
-fn source_level_type_does_not_exist_until_separate_integration() {
+fn explicit_decimal_source_type_is_supported_without_implicit_coercion() {
+    assert!(scarp::compile("bind amount: decimal = decimal(\"10.5\"); print(amount);").is_ok());
     assert!(scarp::compile("bind amount: decimal = 10;").is_err());
 }
 
