@@ -1,10 +1,16 @@
-//! First source-language bridge to the experimental composite data engine:
-//! flat tuple/fixed-array destructuring with exact types, lexical scoping,
-//! unique immutable or mutable slots and one-time initializer evaluation.
+//! Structural tuple and fixed-array bindings, from parsing through execution.
 use scarp::{
-    ast::Statement,
+    ast::{PatternKind, Statement},
     diagnostics::{Diagnostic, DiagnosticKind as Kind},
-    interpreter, ExecutionOptions, RunError,
+    interpreter,
+    modules::{
+        self,
+        cache::{SyntaxCache, SyntaxCacheLimits},
+        symbols::IndexLimits,
+        MemorySourceLoader, ModuleLimits,
+    },
+    types::{MAX_COMPOSITE_DEPTH, MAX_EXPANDED_VALUE_NODES},
+    ExecutionOptions, RunError,
 };
 
 fn run(source: &str) -> Vec<u8> {
@@ -242,12 +248,11 @@ fn empty_patterns_are_rejected_instead_of_accepting_untyped_empty_tuples() {
     check_error("bind [] = [array: <integer>];", Kind::UnexpectedToken);
 }
 #[test]
-fn ast_retains_original_member_spans_and_mutability() {
-    let source = "bind (alpha, _, gamma) = (1, true, 3);";
+fn ast_retains_preorder_shape_spans_and_mutability() {
+    let source = "// नमस्ते 🌍\nvar [(alpha, _), (gamma, delta)] = data;";
     let parsed = scarp::parse(source).unwrap();
     let Statement::Destructure {
-        bindings,
-        array,
+        pattern,
         mutable,
         initializer,
         span,
@@ -255,35 +260,29 @@ fn ast_retains_original_member_spans_and_mutability() {
     else {
         panic!("expected destructuring statement");
     };
-    assert!(!array);
-    assert!(!mutable);
-    assert_eq!(bindings.len(), 3);
-    for (name, original) in bindings {
-        assert_eq!(&source[original.start..original.end], name);
-    }
-    assert_eq!(&source[span.start..span.end], source);
-    assert!(!initializer.nodes().is_empty());
-}
-#[test]
-fn array_pattern_parses_and_preserves_mutable_flag() {
-    let parsed = scarp::parse("var [x, _, y] = [array: 1, 2, 3];").unwrap();
-    let Statement::Destructure {
-        bindings,
-        array,
-        mutable,
-        ..
-    } = &parsed.statements[0]
-    else {
-        panic!("expected array destructure");
-    };
-    assert!(*array && *mutable);
+    assert!(*mutable);
+    let observed: Vec<_> = pattern
+        .nodes()
+        .iter()
+        .map(|node| (&node.kind, &source[node.span.start..node.span.end]))
+        .collect();
     assert_eq!(
-        bindings
-            .iter()
-            .map(|(name, _)| name.as_str())
-            .collect::<Vec<_>>(),
-        vec!["x", "_", "y"]
+        observed,
+        vec![
+            (&PatternKind::Array(2), "[(alpha, _), (gamma, delta)]"),
+            (&PatternKind::Tuple(2), "(alpha, _)"),
+            (&PatternKind::Name("alpha".into()), "alpha"),
+            (&PatternKind::Discard, "_"),
+            (&PatternKind::Tuple(2), "(gamma, delta)"),
+            (&PatternKind::Name("gamma".into()), "gamma"),
+            (&PatternKind::Name("delta".into()), "delta"),
+        ]
     );
+    assert_eq!(
+        &source[span.start..span.end],
+        "var [(alpha, _), (gamma, delta)] = data;"
+    );
+    assert!(!initializer.nodes().is_empty());
 }
 #[test]
 fn max_array_binding_count_is_enforced_in_parser() {
@@ -348,4 +347,273 @@ fn standard_budget_prevents_unbounded_destructuring_computation() {
     let result = scarp::run_with_options(source, &mut out, options);
     assert!(result.is_err());
     assert!(out.is_empty());
+}
+
+#[test]
+fn nested_mixed_patterns_evaluate_once_and_preserve_order_and_types() {
+    let source = r#"
+        funcra load() -> tuple<array<tuple<integer,string>, 2>, tuple<boolean,integer>> {
+            print("loaded");
+            return ([array: (3, "ignored"), (4, "boxes")], (true, 2));
+        }
+        var ([(price, _), (quantity, label)], (_, extra)) = load();
+        quantity += extra;
+        print(price * quantity, label, extra);
+    "#;
+    let p = scarp::compile(source).unwrap();
+    assert_eq!(p.binding_count(), 4);
+    let mut out = Vec::new();
+    interpreter::execute(&p, &mut out).unwrap();
+    assert_eq!(out, b"loaded\n18 boxes 2\n");
+}
+
+#[test]
+fn nested_bindings_retire_on_loop_continue_and_break() {
+    assert_eq!(
+        run(r#"
+        var total = 0;
+        repeat 4 as index {
+            bind ((value,), [increment]) = ((index,), [array: 3]);
+            if index == 1 { continue; }
+            if index == 3 { break; }
+            total += value + increment;
+        }
+        print(total);
+    "#),
+        b"8\n"
+    );
+}
+
+#[test]
+fn nested_mismatches_point_to_the_smallest_bad_group() {
+    for (source, subpattern, message) in [
+        (
+            "bind ((value,), tail) = (4, true);",
+            "(value,)",
+            "needs a tuple",
+        ),
+        (
+            "bind ((value,), tail) = ((4, 5), true);",
+            "(value,)",
+            "requires 1 elements, found 2",
+        ),
+        (
+            "bind ([value], tail) = ((4,), true);",
+            "[value]",
+            "needs a fixed array",
+        ),
+        (
+            "bind ([value], tail) = ([array: 4, 5], true);",
+            "[value]",
+            "requires 1 elements, found 2",
+        ),
+    ] {
+        let error = check_error(source, Kind::TypeMismatch);
+        assert_eq!(&source[error.span.start..error.span.end], subpattern);
+        assert!(error.message.contains(message), "{error:?}");
+    }
+    for source in [
+        "bind ((a), b) = ((1,), 2);",
+        "bind ([a), b) = ([array: 1], 2);",
+        "bind ([], b) = ([array: 1], 2);",
+        "bind ([a] b) = ([array: 1], 2);",
+    ] {
+        check_error(source, Kind::UnexpectedToken);
+    }
+}
+
+#[test]
+fn duplicates_across_branches_report_both_binding_tokens() {
+    let source = "bind ((item,), [item]) = ((1,), [array: 2]);";
+    let error = check_error(source, Kind::DuplicateBinding);
+    assert_eq!(error.span.start, source.rfind("item").unwrap());
+    assert_eq!(error.related[0].span.start, source.find("item").unwrap());
+    check_error(
+        "bind ([print], tail) = ([array: 1], 2);",
+        Kind::ReservedName,
+    );
+    check_error(
+        "bind ([item], tail) = ([array: item], 2);",
+        Kind::UnknownName,
+    );
+}
+
+#[test]
+fn composite_pattern_depth_is_bounded_and_stack_independent() {
+    let depth = MAX_COMPOSITE_DEPTH;
+    let pattern = format!("{}leaf{}", "[".repeat(depth), "]".repeat(depth));
+    let value = format!("{}7{}", "[array: ".repeat(depth), "]".repeat(depth));
+    let source = format!("bind {pattern} = {value}; print(leaf);");
+    let excessive = format!("bind [{pattern}] = {value};");
+    std::thread::Builder::new()
+        .stack_size(512 * 1024)
+        .spawn(move || {
+            assert_eq!(run(&source), b"7\n");
+            let error = scarp::parse(&excessive).unwrap_err();
+            assert_eq!(error.kind, Kind::ArrayLimit);
+            assert_eq!(&excessive[error.span.start..error.span.end], "[");
+            assert_eq!(error.span.start, "bind ".len() + depth);
+        })
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+#[test]
+fn expanded_pattern_size_is_bounded_across_individually_valid_groups() {
+    let row = format!("[{}_]", "_,".repeat(127));
+    let grid = format!("[{}{row}]", format!("{row},").repeat(127));
+    let source = format!("bind [{grid},{grid},{grid},{grid}] = value;");
+    let error = scarp::parse(&source).unwrap_err();
+    assert_eq!(error.kind, Kind::TypeComplexity);
+    assert!(error
+        .message
+        .contains(&MAX_EXPANDED_VALUE_NODES.to_string()));
+}
+
+#[test]
+fn work_budget_charges_nested_members_including_discards_before_output() {
+    let flat = "print(7); bind (_, _) = ((1, 2), [array: 3, 4]);";
+    let nested = "print(7); bind ((_, _), [_, _]) = ((1, 2), [array: 3, 4]);";
+    let execute = |source, max_steps| {
+        let mut out = Vec::new();
+        let result = scarp::run_with_options(
+            source,
+            &mut out,
+            ExecutionOptions {
+                limits: scarp::ExecutionLimits {
+                    max_steps,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        );
+        (result, out)
+    };
+    let flat_min = (1..=100)
+        .find(|&steps| execute(flat, steps).0.is_ok())
+        .unwrap();
+    let nested_min = (1..=100)
+        .find(|&steps| execute(nested, steps).0.is_ok())
+        .unwrap();
+    assert_eq!(nested_min, flat_min + 4);
+    let (result, out) = execute(nested, nested_min - 1);
+    let Err(RunError::Diagnostic(error)) = result else {
+        panic!("expected step limit");
+    };
+    assert_eq!(error.kind, Kind::ExecutionLimit);
+    assert_eq!(
+        &nested[error.span.start..error.span.end],
+        &nested["print(7); ".len()..]
+    );
+    assert!(out.is_empty());
+    assert_eq!(execute(nested, nested_min).1, b"7\n");
+}
+
+#[test]
+fn module_index_connects_references_to_nested_binding_tokens() {
+    let mut loader = MemorySourceLoader::new();
+    let library = r#"// café 🌍
+        pub pure funcra calculate() -> integer {
+            var ([(amount, _)], extra) = ([array: (4, false)], 3);
+            amount += extra;
+            return amount;
+        }
+    "#;
+    loader
+        .insert(
+            "main.srp",
+            "import \"lib.srp\" as lib; print(lib.calculate());",
+        )
+        .unwrap();
+    loader.insert("lib.srp", library).unwrap();
+    let indexed = modules::compile_indexed_with_loader(
+        "main.srp",
+        &loader,
+        ModuleLimits::default(),
+        IndexLimits::default(),
+    )
+    .unwrap();
+    let index = indexed.index();
+    let amount = index
+        .goto_definition(1, library.rfind("amount").unwrap())
+        .unwrap();
+    assert_eq!(amount.name.as_ref(), "amount");
+    assert!(amount.mutable);
+    assert_eq!(
+        amount.location.unwrap().span.start,
+        library.find("amount").unwrap()
+    );
+    assert_eq!(index.find_references(amount.id).count(), 2);
+    assert!(index
+        .symbols()
+        .iter()
+        .all(|symbol| symbol.name.as_ref() != "_"));
+    let mut out = Vec::new();
+    indexed
+        .program()
+        .execute(&mut out, &mut Vec::new(), ExecutionOptions::default())
+        .unwrap();
+    assert_eq!(out, b"7\n");
+}
+
+#[test]
+fn nested_mismatch_span_stays_local_to_an_imported_source() {
+    let mut loader = MemorySourceLoader::new();
+    let library = r#"// नमस्ते 🌍
+        pub pure funcra invalid() -> integer { bind ([a], b) = (true, 2); return b; }
+    "#;
+    loader
+        .insert(
+            "main.srp",
+            "import \"lib.srp\" as lib; print(lib.invalid());",
+        )
+        .unwrap();
+    loader.insert("lib.srp", library).unwrap();
+    let error =
+        modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap_err();
+    assert_eq!(error.diagnostic.kind, Kind::TypeMismatch);
+    let site = error.sources.locate_span(error.diagnostic.span).unwrap();
+    assert_eq!(error.sources.files()[site.source].name, "lib.srp");
+    assert_eq!(&library[site.span.start..site.span.end], "[a]");
+}
+
+#[test]
+fn nested_wildcards_count_toward_syntax_cache_and_index_limits() {
+    let flat = "bind (_, _) = ((1, 2), [array: 3, 4]);";
+    let nested = "bind ((_, _), [_, _]) = ((1, 2), [array: 3, 4]);";
+    let limits = ModuleLimits::default();
+    let measure = |source| {
+        let mut loader = MemorySourceLoader::new();
+        loader.insert("main.srp", source).unwrap();
+        let mut cache = SyntaxCache::new(SyntaxCacheLimits::default());
+        let graph =
+            modules::load_with_syntax_cache("main.srp", &loader, limits, &mut cache).unwrap();
+        let indexed = modules::resolve_indexed(graph, IndexLimits::default()).unwrap();
+        (
+            cache.stats().retained_ast_nodes,
+            indexed.index().usage().work,
+        )
+    };
+    let (flat_nodes, flat_work) = measure(flat);
+    assert_eq!(measure(nested), (flat_nodes + 4, flat_work + 4));
+
+    let mut loader = MemorySourceLoader::new();
+    loader.insert("main.srp", nested).unwrap();
+    let mut cache = SyntaxCache::new(SyntaxCacheLimits {
+        max_ast_nodes: flat_nodes,
+        ..SyntaxCacheLimits::default()
+    });
+    let graph = modules::load_with_syntax_cache("main.srp", &loader, limits, &mut cache).unwrap();
+    assert_eq!(cache.stats().entries, 0);
+    assert_eq!(cache.stats().bypasses, 1);
+    let failure = modules::resolve_indexed(
+        graph,
+        IndexLimits {
+            max_work: flat_work,
+            ..IndexLimits::default()
+        },
+    )
+    .unwrap_err();
+    assert_eq!(failure.diagnostic.kind, Kind::SymbolIndexLimit);
 }

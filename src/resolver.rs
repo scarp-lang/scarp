@@ -13,8 +13,8 @@ use functions::{build_call_graph, resolve_function};
 
 use crate::{
     ast::{
-        AssignmentOperator, BinaryOperator, Expression, ExpressionKind, FunctionDeclaration,
-        OutputTarget, PrintArgument, Program, Statement,
+        AssignmentOperator, BinaryOperator, BindingPattern, Expression, ExpressionKind,
+        FunctionDeclaration, OutputTarget, PatternKind, PrintArgument, Program, Statement,
     },
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     numeric::Builtin,
@@ -108,9 +108,8 @@ pub(crate) enum ResolvedStatement {
         value: ResolvedExpression,
     },
     /// Compiler-verified tuple/array shape with one initializer evaluation.
-    /// A None destination is the "_" discard pattern.
     Destructure {
-        slots: Vec<Option<usize>>,
+        steps: Vec<DestructureStep>,
         value: ResolvedExpression,
     },
     Update {
@@ -124,6 +123,14 @@ pub(crate) enum ResolvedStatement {
         target: OutputTarget,
         newline: bool,
     },
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum DestructureStep {
+    Tuple(usize),
+    Array(usize),
+    Bind(usize),
+    Discard,
 }
 
 #[derive(Debug, Clone)]
@@ -452,122 +459,94 @@ impl<'a> Resolver<'a> {
         }
         Ok(())
     }
-    /// Resolve a full flat binding pattern in a *separate call frame*. The
-    /// outer statement-list resolver is recursively entered for each block,
-    /// so retaining these pattern temporaries in that frame violates the
-    /// small-stack guarantee even when a source has no patterns at all.
+    // Keep pattern compilation out of recursively entered statement-list frames.
     #[inline(never)]
     fn resolve_destructure(
         &mut self,
-        bindings: Vec<(String, Span)>,
+        pattern: BindingPattern,
         mutable: bool,
-        array: bool,
         initializer: Expression,
         span: Span,
     ) -> Result<(), Diagnostic> {
-        // The initializer is resolved before any new name enters
-        // scope. No pattern member can refer to a sibling binding.
+        // Resolve all initializer references before publishing any pattern names.
         let value = self.expression(initializer)?;
         require_value(&value.kind, span)?;
-        let element_types: Vec<SourceType> = if array {
-            let Some(shape) = value.kind.as_array() else {
-                return Err(Diagnostic::new(
-                    DiagnosticKind::TypeMismatch,
-                    span,
-                    format!(
-                        "an array destructuring pattern needs a fixed array, found {}",
-                        value.kind
-                    ),
-                )
-                .with_help("use [first, second] for a fixed array"));
+        let mut types = vec![&value.kind];
+        let mut seen = HashMap::new();
+        let mut bindings = Vec::new();
+        let mut steps = Vec::with_capacity(pattern.nodes().len());
+        for node in pattern.nodes() {
+            let kind = types.pop().expect("validated pattern arity");
+            let step = match &node.kind {
+                PatternKind::Tuple(arity) => {
+                    let elements = kind.tuple_elements().ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::TypeMismatch,
+                            node.span,
+                            format!("a tuple destructuring pattern needs a tuple, found {kind}"),
+                        )
+                    })?;
+                    check_pattern_arity("tuple", *arity, elements.len(), node.span)?;
+                    types.extend(elements.iter().rev());
+                    DestructureStep::Tuple(*arity)
+                }
+                PatternKind::Array(arity) => {
+                    let array = kind.as_array().ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::TypeMismatch,
+                            node.span,
+                            format!(
+                                "an array destructuring pattern needs a fixed array, found {kind}"
+                            ),
+                        )
+                    })?;
+                    check_pattern_arity("array", *arity, array.len(), node.span)?;
+                    types.resize(types.len() + *arity, array.element());
+                    DestructureStep::Array(*arity)
+                }
+                PatternKind::Name(name) => {
+                    self.binding_name(name, node.span)?;
+                    if let Some(previous) = seen.insert(name, node.span) {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::DuplicateBinding,
+                            node.span,
+                            format!("binding {name:?} occurs more than once in a pattern"),
+                        )
+                        .with_related(previous, "the first occurrence is here"));
+                    }
+                    if let Some(previous) = self.scopes.last().unwrap().get(name) {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::DuplicateBinding,
+                            node.span,
+                            format!("binding {name:?} is already declared in this scope"),
+                        )
+                        .with_related(previous.declaration, "the previous declaration is here"));
+                    }
+                    let slot = self.slot_types.len() + bindings.len();
+                    bindings.push((name, node.span, kind));
+                    DestructureStep::Bind(slot)
+                }
+                PatternKind::Discard => DestructureStep::Discard,
             };
-            if shape.len() != bindings.len() {
-                return Err(Diagnostic::new(
-                    DiagnosticKind::TypeMismatch,
-                    span,
-                    format!(
-                        "array destructuring requires {} elements, found {}",
-                        bindings.len(),
-                        shape.len()
-                    ),
-                ));
-            }
-            vec![shape.element().clone(); bindings.len()]
-        } else {
-            let Some(elements) = value.kind.tuple_elements() else {
-                return Err(Diagnostic::new(
-                    DiagnosticKind::TypeMismatch,
-                    span,
-                    format!(
-                        "a tuple destructuring pattern needs a tuple, found {}",
-                        value.kind
-                    ),
-                )
-                .with_help("use (first, second) to unpack a tuple value"));
-            };
-            if elements.len() != bindings.len() {
-                return Err(Diagnostic::new(
-                    DiagnosticKind::TypeMismatch,
-                    span,
-                    format!(
-                        "tuple destructuring requires {} elements, found {}",
-                        bindings.len(),
-                        elements.len()
-                    ),
-                ));
-            }
-            elements.to_vec()
-        };
-
-        // Check the entire pattern before allocating any slots,
-        // ensuring duplicates, shadowing and reserved words get
-        // the same diagnostics as ordinary declarations.
-        let mut seen: HashMap<String, Span> = HashMap::new();
-        for (name, name_span) in &bindings {
-            if name == "_" {
-                continue;
-            }
-            self.binding_name(name, *name_span)?;
-            if let Some(previous) = seen.insert(name.clone(), *name_span) {
-                return Err(Diagnostic::new(
-                    DiagnosticKind::DuplicateBinding,
-                    *name_span,
-                    format!("binding {name:?} occurs more than once in a pattern"),
-                )
-                .with_related(previous, "the first occurrence is here"));
-            }
-            if let Some(previous) = self.scopes.last().unwrap().get(name) {
-                return Err(Diagnostic::new(
-                    DiagnosticKind::DuplicateBinding,
-                    *name_span,
-                    format!("binding {name:?} is already declared in this scope"),
-                )
-                .with_related(previous.declaration, "the previous declaration is here"));
-            }
+            steps.push(step);
         }
-
-        let mut slots = Vec::with_capacity(bindings.len());
-        for ((name, name_span), kind) in bindings.into_iter().zip(element_types) {
-            if name == "_" {
-                slots.push(None);
-                continue;
-            }
+        debug_assert!(types.is_empty());
+        for (name, declaration, kind) in bindings {
             let slot = self.slot_types.len();
             self.slot_types.push(kind.clone());
             self.scopes.last_mut().unwrap().insert(
-                name,
+                name.clone(),
                 Binding {
                     slot,
-                    declaration: name_span,
+                    declaration,
                     mutable,
-                    kind,
+                    kind: kind.clone(),
                     repeat_index: false,
                     parameter: false,
                 },
             );
-            slots.push(Some(slot));
         }
-        self.emit(ResolvedStatement::Destructure { slots, value }, span);
+        self.emit(ResolvedStatement::Destructure { steps, value }, span);
         Ok(())
     }
 
@@ -882,13 +861,12 @@ impl<'a> Resolver<'a> {
                     self.emit(ResolvedStatement::Store { slot, value }, span);
                 }
                 Statement::Destructure {
-                    bindings,
+                    pattern,
                     mutable,
-                    array,
                     initializer,
                     span,
                 } => {
-                    self.resolve_destructure(bindings, mutable, array, initializer, span)?;
+                    self.resolve_destructure(pattern, mutable, initializer, span)?;
                 }
                 Statement::Println { argument, .. } => {
                     self.output(vec![argument], OutputTarget::Stdout, true, span)?;
@@ -1639,6 +1617,22 @@ pub(crate) fn require_type(
     } else {
         Err(type_mismatch(span, expected, found))
     }
+}
+
+fn check_pattern_arity(
+    shape: &str,
+    expected: usize,
+    actual: usize,
+    span: Span,
+) -> Result<(), Diagnostic> {
+    if actual == expected {
+        return Ok(());
+    }
+    Err(Diagnostic::new(
+        DiagnosticKind::TypeMismatch,
+        span,
+        format!("{shape} destructuring requires {expected} elements, found {actual}"),
+    ))
 }
 
 fn require_value(kind: impl Into<SourceType>, span: Span) -> Result<(), Diagnostic> {

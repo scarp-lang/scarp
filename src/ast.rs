@@ -91,13 +91,10 @@ pub enum Statement {
         initializer: Expression,
         span: Span,
     },
-    /// Source-level tuple or fixed-array binding pattern. Every element is
-    /// resolved once from one initializer; "_" discards its corresponding value.
-    /// This is a first source integration step, not nominal record syntax.
+    /// Structural binding from one initializer.
     Destructure {
-        bindings: Vec<(String, Span)>,
+        pattern: BindingPattern,
         mutable: bool,
-        array: bool,
         initializer: Expression,
         span: Span,
     },
@@ -109,6 +106,40 @@ pub enum Statement {
         value: Expression,
         span: Span,
     },
+}
+
+/// A tuple or fixed-array pattern stored in preorder, with each group followed
+/// by its child patterns. The parser validates the shape before construction.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BindingPattern {
+    pub(crate) nodes: Vec<PatternNode>,
+}
+
+impl BindingPattern {
+    pub fn nodes(&self) -> &[PatternNode] {
+        &self.nodes
+    }
+
+    pub(crate) fn bindings(&self) -> impl Iterator<Item = (&str, Span)> {
+        self.nodes.iter().filter_map(|node| match &node.kind {
+            PatternKind::Name(name) => Some((name.as_str(), node.span)),
+            _ => None,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PatternNode {
+    pub kind: PatternKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PatternKind {
+    Tuple(usize),
+    Array(usize),
+    Name(String),
+    Discard,
 }
 
 /// Optional explicit binding type, retaining its source token location.

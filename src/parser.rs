@@ -1,16 +1,17 @@
 //! Parse declarations, assignments, blocks, and print statements without execution.
 
 use crate::types::{
-    SourceType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY,
+    SourceType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_EXPANDED_VALUE_NODES,
+    MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY,
 };
 use std::collections::VecDeque;
 
 use crate::{
     ast::{
-        AssignmentOperator, BinaryOperator, CallArgument, ConditionalBranch,
+        AssignmentOperator, BinaryOperator, BindingPattern, CallArgument, ConditionalBranch,
         ConditionalExpressionBranch, Contract, Expression, ExpressionKind, ExpressionNode,
-        FunctionDeclaration, LogicalOperator, OutputTarget, Parameter, PrintArgument, Program,
-        Statement, MAX_ASSERT_MESSAGE_BYTES,
+        FunctionDeclaration, LogicalOperator, OutputTarget, Parameter, PatternKind, PatternNode,
+        PrintArgument, Program, Statement, MAX_ASSERT_MESSAGE_BYTES,
     },
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     lexer::{Token, TokenKind},
@@ -23,7 +24,7 @@ pub const MAX_EXPRESSION_DEPTH: usize = 64;
 /// Maximum nested statement blocks, independent of expression parentheses.
 pub const MAX_BLOCK_DEPTH: usize = 64;
 
-/// Maximum source-bound names in one flat array destructuring pattern.
+/// Maximum immediate members in one fixed-array destructuring group.
 pub const MAX_DESTRUCTURE_BINDINGS: usize = 128;
 
 /// Parse a token stream. An omitted EOF token is treated as the end of input.
@@ -57,6 +58,31 @@ struct Parser<'a> {
     cursor: usize,
     pending: VecDeque<Token>,
     type_end: usize,
+}
+
+struct PatternGroup {
+    node: usize,
+    array: bool,
+    arity: usize,
+    expect_member: bool,
+}
+
+impl PatternGroup {
+    fn delimiter(&self) -> (TokenKind, &'static str) {
+        if self.array {
+            (TokenKind::RightBracket, "']'")
+        } else {
+            (TokenKind::RightParen, "')'")
+        }
+    }
+
+    fn limit(&self) -> (usize, DiagnosticKind) {
+        if self.array {
+            (MAX_DESTRUCTURE_BINDINGS, DiagnosticKind::ArrayLimit)
+        } else {
+            (MAX_TUPLE_ARITY, DiagnosticKind::TupleLimit)
+        }
+    }
 }
 
 impl Parser<'_> {
@@ -632,65 +658,114 @@ impl Parser<'_> {
         Ok(())
     }
 
-    /// Parse flat structural bindings: bind (a, b) = tuple; or
-    /// var [x, _, z] = fixed_array; Nested patterns remain future work.
-    fn destructure(&mut self, start: usize, mutable: bool) -> Result<Statement, ParseError> {
+    fn open_pattern_group(&mut self, nodes: &mut Vec<PatternNode>) -> PatternGroup {
         let array = self.at(&TokenKind::LeftBracket);
-        let close = if array {
-            TokenKind::RightBracket
-        } else {
-            TokenKind::RightParen
-        };
-        let opener = self.current().unwrap().span;
-        self.advance();
-        let mut bindings = Vec::new();
-        if self.at(&close) {
-            return Err(ParseError::new(
-                DiagnosticKind::UnexpectedToken,
-                opener,
-                "a destructuring pattern requires at least one name",
-            )
-            .with_help("use bind (first, second) = tuple; or bind [item] = array;"));
-        }
-        let trailing_comma = loop {
-            let (name, span) = self.identifier().map_err(|error| {
-                error.with_help("destructuring accepts names or '_' placeholders, not expressions")
-            })?;
-            let max = if array {
-                MAX_DESTRUCTURE_BINDINGS
+        let span = self.current().expect("pattern opener").span;
+        let node = nodes.len();
+        nodes.push(PatternNode {
+            kind: if array {
+                PatternKind::Array(0)
             } else {
-                MAX_TUPLE_ARITY
-            };
-            if bindings.len() >= max {
+                PatternKind::Tuple(0)
+            },
+            span,
+        });
+        self.advance();
+        PatternGroup {
+            node,
+            array,
+            arity: 0,
+            expect_member: true,
+        }
+    }
+
+    fn binding_pattern(&mut self) -> Result<BindingPattern, ParseError> {
+        let mut nodes = Vec::new();
+        let mut groups = vec![self.open_pattern_group(&mut nodes)];
+        while let Some(group) = groups.last_mut() {
+            let (close, close_label) = group.delimiter();
+            if self.at(&close) {
+                let node = &mut nodes[group.node];
+                if group.arity == 0 {
+                    return Err(ParseError::new(
+                        DiagnosticKind::UnexpectedToken,
+                        node.span,
+                        "a destructuring pattern requires at least one member",
+                    ));
+                }
+                if !group.array && group.arity == 1 && !group.expect_member {
+                    return Err(ParseError::new(
+                        DiagnosticKind::UnexpectedToken,
+                        node.span,
+                        "a one-element tuple pattern requires a trailing comma",
+                    )
+                    .with_help("write bind (value,) = tuple;"));
+                }
+                node.span.end = self.punctuation(close, close_label)?.end;
+                node.kind = if group.array {
+                    PatternKind::Array(group.arity)
+                } else {
+                    PatternKind::Tuple(group.arity)
+                };
+                groups.pop();
+                continue;
+            }
+            if !group.expect_member {
+                if !self.at(&TokenKind::Comma) {
+                    return Err(self.expected(close_label));
+                }
+                self.advance();
+                group.expect_member = true;
+                continue;
+            }
+
+            let token = self
+                .current()
+                .ok_or_else(|| self.expected("a pattern member"))?;
+            let (max, limit) = group.limit();
+            if group.arity == max {
                 return Err(ParseError::new(
-                    if array {
-                        DiagnosticKind::ArrayLimit
-                    } else {
-                        DiagnosticKind::TupleLimit
-                    },
-                    span,
+                    limit,
+                    token.span,
                     format!("destructuring pattern exceeds {max} elements"),
                 ));
             }
-            bindings.push((name, span));
-            if !self.at(&TokenKind::Comma) {
-                break false;
+            if nodes.len() == MAX_EXPANDED_VALUE_NODES {
+                return Err(ParseError::new(
+                    DiagnosticKind::TypeComplexity,
+                    token.span,
+                    format!("destructuring pattern exceeds {MAX_EXPANDED_VALUE_NODES} nodes"),
+                ));
             }
-            self.advance();
-            if self.at(&close) {
-                break true;
+            group.arity += 1;
+            group.expect_member = false;
+            if matches!(token.kind, TokenKind::LeftParen | TokenKind::LeftBracket) {
+                if groups.len() == MAX_COMPOSITE_DEPTH {
+                    return Err(ParseError::new(
+                        limit,
+                        token.span,
+                        format!("destructuring pattern exceeds {MAX_COMPOSITE_DEPTH} levels"),
+                    ));
+                }
+                groups.push(self.open_pattern_group(&mut nodes));
+            } else {
+                let (name, span) = self.identifier().map_err(|error| {
+                    error.with_help("use a name, '_', or a nested tuple or fixed-array pattern")
+                })?;
+                let kind = if name == "_" {
+                    PatternKind::Discard
+                } else {
+                    PatternKind::Name(name)
+                };
+                nodes.push(PatternNode { kind, span });
             }
-        };
-        let close_label = if array { "']'" } else { "')'" };
-        self.punctuation(close, close_label)?;
-        if !array && bindings.len() == 1 && !trailing_comma {
-            return Err(ParseError::new(
-                DiagnosticKind::UnexpectedToken,
-                opener,
-                "a one-element tuple pattern requires a trailing comma",
-            )
-            .with_help("write bind (value,) = tuple;"));
         }
+        Ok(BindingPattern { nodes })
+    }
+
+    #[inline(never)]
+    fn destructure(&mut self, start: usize, mutable: bool) -> Result<Statement, ParseError> {
+        let pattern = self.binding_pattern()?;
         self.punctuation(TokenKind::Equal, "'=' after the destructuring pattern")?;
         let initializer = self.expression()?;
         let end = self
@@ -698,9 +773,8 @@ impl Parser<'_> {
             .map_err(|error| error.with_help("finish the destructuring declaration with ';'"))?
             .end;
         Ok(Statement::Destructure {
-            bindings,
+            pattern,
             mutable,
-            array,
             initializer,
             span: Span::new(start, end),
         })

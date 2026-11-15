@@ -36,8 +36,8 @@ Scarp source code accepts.
 
 ## Explicitly not implemented
 
-- No `.srp` grammar for `record`, `variant`, `list`, `map`, `some`,
-  `none`, `ok`, `err`, `match`, or destructuring.
+- No `.srp` grammar for host-engine `record`, `variant`, `list`, `map`,
+  `some`, `none`, `ok`, `err`, or `match`.
 - No new public Scarp primitive value kinds.
 - No compiler-owned AST, source span or diagnostic code for these constructs.
 - No source-level exhaustive checking or editor symbol-index integration.
@@ -292,11 +292,8 @@ quota. Malformed sizes and trailing payloads are rejected.
 
 ### Scope boundary
 
-This is still **host API only**. No new `.srp` parser, type declarations,
-destructuring, generic function calls, pattern clauses or `match` syntax
-has been enabled. Do not interpret passing Rust host tests as compiler-native
-feature completeness. The compiler's existing public language behavior and
-released CLI remain unchanged.
+The wire envelopes are available to Rust hosts. The source-language
+destructuring below uses the compiler's tuple and fixed-array values.
 
 ## Experimental schema evolution and migration
 
@@ -341,7 +338,7 @@ they do not yet have a stable typed path-segment representation. No inspector
 API is currently exposed from a Scarp `.srp` program, and the visitor's
 snapshots are not part of a stable debugger protocol.
 
-## Initial source-language integration: flat destructuring
+## Source-language tuple and array destructuring
 
 The first compiler-native use of structural data is intentionally narrow and
 builds upon **existing source tuples and fixed-size typed arrays**:
@@ -354,6 +351,10 @@ print(age, name, first);
 
 bind (_, final) = (true, 42);
 print(final);
+
+bind ([(quantity, price), (_, spare_price)], currency) =
+    ([array: (2, 15), (1, 7)], "INR");
+print(quantity * price + spare_price, currency);
 ```
 
 The compiler now represents a destructuring declaration as a first-class AST
@@ -365,17 +366,13 @@ rules; immutable `bind` bindings remain immutable. `_` discards a value and
 allocates no binding slot. Destructuring positions are charged to the existing
 runtime work budget before any new slots are written.
 
-Source pattern syntax is **flat only**, not recursively nested:
-- `bind (left, right) = tuple;`
-- `bind (single,) = singleton_tuple;`
-- `var [first, second] = fixed_array;`
-- `bind (_, retained) = tuple;`
-
-The array pattern is bounded to 128 elements and a tuple pattern to the
-existing maximum tuple arity (32). Empty patterns are rejected; a singleton
-tuple pattern requires the trailing comma. All pattern names are validated
-against reserved names, duplicate declarations and lexical scope.
-Malformed/mismatched patterns fail before program execution or output.
+Each tuple or array member can be a name, `_`, or another group. A name can
+also bind an entire composite value. Groups allow up to 32 tuple members or
+128 fixed-array members. The whole pattern allows up to 32 composite levels
+and 65,536 nodes. Each group needs at least one member, and a singleton tuple
+requires a trailing comma. The compiler checks names across the whole pattern
+for reserved words and duplicates. Shape errors highlight the mismatched
+group before execution begins.
 
 The module source rewriter preserves one-time evaluation and indexes the new
 bindings for editor symbol/navigation information. Existing C and native

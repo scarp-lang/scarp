@@ -7,8 +7,8 @@ use crate::{
     input::{InputState, IoBuiltin},
     limits::{Budget, ExecutionOptions},
     resolver::{
-        ResolvedArgument, ResolvedCall, ResolvedExpression, ResolvedOperation, ResolvedProgram,
-        ResolvedStatement,
+        DestructureStep, ResolvedArgument, ResolvedCall, ResolvedExpression, ResolvedOperation,
+        ResolvedProgram, ResolvedStatement,
     },
     value::Value,
 };
@@ -22,7 +22,7 @@ enum Stage {
 }
 enum Completion<'a> {
     Store(usize),
-    Destructure(&'a [Option<usize>], Span),
+    Destructure(&'a [DestructureStep], Span),
     RepeatCount(usize, usize, Span),
     Update(usize, BinaryOperator, Value, Span),
     Guard(usize, Span),
@@ -31,6 +31,59 @@ enum Completion<'a> {
     Return,
     Contract(bool, Span),
     Output,
+}
+
+fn destructure(
+    value: &Value,
+    steps: &[DestructureStep],
+    environment: &mut [Value],
+    budget: &mut Budget,
+    span: Span,
+) -> Result<(), Diagnostic> {
+    let (&root, members) = steps.split_first().expect("compiled pattern has a root");
+    let mut elements = destructure_children(value, root, span)?.iter();
+    // Charge all visited members, including wildcards and nested groups,
+    // before installing any bindings. The outer group has no member cost.
+    budget.charge(members.len() as u64, span)?;
+    let mut parents = Vec::new();
+    for &step in members {
+        while elements.as_slice().is_empty() {
+            elements = parents
+                .pop()
+                .expect("compiled pattern has matching arities");
+        }
+        let element = elements.next().expect("member of compiled pattern");
+        match step {
+            DestructureStep::Tuple(_) | DestructureStep::Array(_) => {
+                parents.push(elements);
+                elements = destructure_children(element, step, span)?.iter();
+            }
+            DestructureStep::Bind(slot) => environment[slot] = element.clone(),
+            DestructureStep::Discard => {}
+        }
+    }
+    Ok(())
+}
+
+fn destructure_children(
+    value: &Value,
+    step: DestructureStep,
+    span: Span,
+) -> Result<&[Value], Diagnostic> {
+    let (children, arity) = match step {
+        DestructureStep::Tuple(arity) => (value.as_tuple().map(|tuple| tuple.elements()), arity),
+        DestructureStep::Array(arity) => (value.as_array().map(|array| array.elements()), arity),
+        _ => unreachable!("only groups have children"),
+    };
+    children
+        .filter(|children| children.len() == arity)
+        .ok_or_else(|| {
+            Diagnostic::new(
+                DiagnosticKind::TypeMismatch,
+                span,
+                "destructuring source shape changed after resolution",
+            )
+        })
 }
 
 struct PendingOutput<'a> {
@@ -329,32 +382,14 @@ pub(super) fn prepare<'a>(
                         frame.expression = None;
                         match std::mem::replace(&mut frame.completion, Completion::Discard) {
                             Completion::Store(slot) => frame.environment[slot] = value,
-                            Completion::Destructure(slots, span) => {
-                                let elements =
-                                    match &value {
-                                        Value::Tuple(tuple) => tuple.elements(),
-                                        Value::Array(array) => array.elements(),
-                                        _ => return Err(Diagnostic::new(
-                                            DiagnosticKind::TypeMismatch,
-                                            span,
-                                            "destructuring source must be a typed tuple or array",
-                                        )),
-                                    };
-                                if elements.len() != slots.len() {
-                                    return Err(Diagnostic::new(
-                                        DiagnosticKind::TypeMismatch,
-                                        span,
-                                        "destructuring source length changed after resolution",
-                                    ));
-                                }
-                                // Account for all positions, including wildcards,
-                                // before writing any binding slot.
-                                budget.charge(slots.len() as u64, span)?;
-                                for (slot, element) in slots.iter().zip(elements) {
-                                    if let Some(slot) = slot {
-                                        frame.environment[*slot] = element.clone();
-                                    }
-                                }
+                            Completion::Destructure(steps, span) => {
+                                destructure(
+                                    &value,
+                                    steps,
+                                    &mut frame.environment,
+                                    &mut budget,
+                                    span,
+                                )?;
                             }
                             Completion::RepeatCount(count_slot, index_slot, span) => {
                                 let count = value.require_integer(span)?;
@@ -624,8 +659,8 @@ pub(super) fn prepare<'a>(
                         ResolvedStatement::Store { slot, value } => {
                             frame.start(value, Completion::Store(*slot))
                         }
-                        ResolvedStatement::Destructure { slots, value } => {
-                            frame.start(value, Completion::Destructure(slots, operation.span))
+                        ResolvedStatement::Destructure { steps, value } => {
+                            frame.start(value, Completion::Destructure(steps, operation.span))
                         }
                         ResolvedStatement::Update {
                             slot,
