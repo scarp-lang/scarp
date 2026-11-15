@@ -89,6 +89,41 @@ fn decimal_is_a_real_typed_value_in_functions_arrays_tuples_and_signatures() {
 }
 
 #[test]
+fn decimal_rendering_charges_exact_text_bytes_and_preserves_stream_atomicity() {
+    let source = r#"
+        eprint("pending");
+        print(decimal_to_text(decimal_from_integer(-7)));
+        print(decimal_format(decimal_from_integer(-7), 18, "half_even"));
+    "#;
+    // "half_even" costs 9 bytes. The two results cost 2 and 21 bytes.
+    for remaining in [0, 31, 32] {
+        let options = ExecutionOptions {
+            max_text_bytes: remaining,
+            ..ExecutionOptions::default()
+        };
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let result = scarp::run_with_io_and_options(source, &mut out, &mut err, options);
+        if remaining == 32 {
+            result.unwrap();
+            assert_eq!(out, b"-7\n-7.000000000000000000\n");
+            assert_eq!(err, b"pending\n");
+        } else {
+            let RunError::Diagnostic(problem) = result.unwrap_err() else {
+                panic!("expected the text allocation diagnostic");
+            };
+            assert_eq!(problem.kind, Kind::TextConstruction);
+            assert!(out.is_empty() && err.is_empty());
+        }
+    }
+    assert_eq!(
+        run(
+            r#"print(decimal_format(decimal("-9999999999999999999999999999"), 18, "half_even"), decimal("0.000000000000000001"));"#
+        ),
+        "-9999999999999999999999999999.000000000000000000 0.000000000000000001\n"
+    );
+}
+
+#[test]
 fn bad_decimal_types_are_rejected_at_compile_time_without_coercion() {
     for expression in [
         r#"decimal("1") + 1"#,

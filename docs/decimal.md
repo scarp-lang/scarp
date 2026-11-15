@@ -1,8 +1,7 @@
 # Exact decimal values — development compiler
 
-> **Status:** Experimental source-language feature in draft compiler PR #248.
-> The published Scarp v0.0.6-alpha.10 does **not** support this syntax.
-> This guide is for checking the feature branch, not a release announcement.
+> **Status:** Experimental source-language feature in the alpha.11 candidate.
+> Published alpha.10 exposes the Decimal core to Rust hosts.
 
 Scarp decimal values are **base-10 exact numbers**, distinct from its finite
 binary64 `float`, signed `integer`, and arbitrary-size `bigint` values.
@@ -107,6 +106,6 @@ separate visibility rules.
 
 This feature is tested in `tests/decimal_language.rs`, with its underlying
 bounded Rust core covered by `tests/decimal_core.rs` and
-`tests/decimal_cross_scale_differential.rs`. The runnable development fixture
-is `examples/decimal_exact.srp`. Cross-platform CI must pass before any merge.
-An authorized release and ecosystem synchronizations are separate tasks.
+`tests/decimal_cross_scale_differential.rs`. Run `examples/decimal_exact.srp` for
+exact arithmetic and `examples/interactive/exact_decimal.srp` with its input
+fixture for typed interactive input.

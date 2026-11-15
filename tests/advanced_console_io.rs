@@ -476,7 +476,7 @@ fn flush_calls_share_print_and_capture_budgets() {
 fn interactive_examples_match_golden_output_via_the_cli() {
     use std::{fs, path::Path, process::Command};
     let examples = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/interactive");
-    for example in ["typed_calculator", "exact_integer"] {
+    for example in ["typed_calculator", "exact_integer", "exact_decimal"] {
         let source = examples.join(format!("{example}.srp"));
         let expected = fs::read(source.with_extension("stdout")).unwrap();
         let verify = Command::new(env!("CARGO_BIN_EXE_scarp"))

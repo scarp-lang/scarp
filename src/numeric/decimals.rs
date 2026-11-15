@@ -58,7 +58,7 @@ fn places(value: i64, span: Span) -> Result<u8, Diagnostic> {
         })
 }
 
-fn allocated_text(value: String, budget: &mut Budget, span: Span) -> Result<Value, Diagnostic> {
+fn allocated_text(value: &str, budget: &mut Budget, span: Span) -> Result<Value, Diagnostic> {
     budget.charge(value.len() as u64, span)?;
     budget.charge_text_allocation(value.len(), span)?;
     Ok(Value::from(value))
@@ -106,7 +106,7 @@ pub(super) fn evaluate(
         }
         Builtin::DecimalToText => {
             let decimal = args[0].as_decimal().expect("typed decimal");
-            allocated_text(decimal.to_string(), budget, span)
+            allocated_text(decimal.canonical_text().as_str(), budget, span)
         }
         Builtin::DecimalAbs => {
             budget.charge(1, span)?;
@@ -139,9 +139,9 @@ pub(super) fn evaluate(
             let value = args[0]
                 .as_decimal()
                 .expect("typed decimal")
-                .format_fixed(scale, mode)
+                .fixed_text(scale, mode)
                 .map_err(|error| diagnostic(error, span))?;
-            allocated_text(value, budget, span)
+            allocated_text(value.as_str(), budget, span)
         }
         Builtin::DecimalDivRounded => {
             budget.charge(64, span)?;

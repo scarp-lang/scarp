@@ -76,7 +76,9 @@ def main():
         source = Path(directory) / "greeting.srp"
         source.write_text(
             'bind name = input("नाम> "); '
-            'bind age = input_integer("Age> "); print(name, age);',
+            'bind age = input_integer("Age> "); '
+            'bind amount = input_decimal("राशि> "); '
+            'print(name, age, decimal_format(amount, 2, "half_even"));',
             encoding="utf-8",
         )
         api = console_api()
@@ -107,9 +109,11 @@ def main():
                         write_line(api, handle, "नमस्ते")
                         read_prefix(child.stdout, b"Age> ")
                         write_line(api, handle, "-23")
+                        read_prefix(child.stdout, "राशि> ".encode("utf-8"))
+                        write_line(api, handle, "2.675")
                         out, err = child.communicate(timeout=10)
                         assert child.returncode == 0 and not err, (child.returncode, err)
-                        assert out == "नमस्ते -23\n".encode("utf-8"), out
+                        assert out == "नमस्ते -23 2.68\n".encode("utf-8"), out
                     finally:
                         if child.poll() is None:
                             child.kill()

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.6-alpha.11 — candidate
+
+- Expose exact base-10 `decimal` in Scarp source, with checked arithmetic,
+  comparisons, typed module interfaces and explicit conversion and rounding.
+- Add `input_decimal(prompt)` for exact decimal console input and ship an
+  interactive example with byte-exact UTF-8 fixtures.
+- Charge the text quota before allocating strings produced by decimal formatting.
+
 ## 0.0.6-alpha.10 — published GitHub prerelease, 2026-11-14
 
 - Add explicit UTF-8 input files, EOF-aware reads and opt-in terminal prompts.

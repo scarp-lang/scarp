@@ -149,8 +149,9 @@ Execution-limit options: --max-steps, --max-prints, --max-call-depth, --max-call
 --max-tuple-bytes, --max-array-bytes, --max-bigint-digits, --max-bigint-bytes,
 --max-input-line-bytes, --max-input-bytes, --max-input-reads.
 --input-file PATH uses an explicit file instead of stdin for program input.
---interactive enables input(prompt), ask, ask_or, input_integer, input_float
-and input_bigint. Prompts are flushed before reading stdin or --input-file.
+--interactive enables input(prompt), ask, ask_or and typed input calls
+input_integer, input_float, input_bigint and input_decimal.
+Prompts are flushed before reading stdin or --input-file.
 Options precede the source path. -- permits filenames beginning with a dash.
 Program-argument forwarding and project entrypoint execution are not supported.
 read_line reads redirected UTF-8 stdin or --input-file PATH, or terminal input
