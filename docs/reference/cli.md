@@ -33,7 +33,8 @@ reading a line from stdin or an input file. `--interactive --input-file DATA.txt
 interactive programs reproducible without reading ambient stdin; prompts are
 visible even if later input or runtime execution fails. Without `--interactive`,
 prompt built-ins report E0054. `ask_or` uses the fallback only at EOF.
-Alpha.10 also includes `input(prompt)` and the typed variants
+Alpha.11 adds `input_decimal(prompt)` for exact Decimal input.
+Alpha.10 includes `input(prompt)` and the typed variants
 `input_integer`, `input_float` and `input_bigint`. `try_read_line()` handles
 EOF from any explicitly selected reader. `flush_stdout()` and
 `flush_stderr()` publish the selected stream during interactive execution
@@ -79,7 +80,7 @@ Published v0.0.6-alpha.1 adds static `inspect symbols` and `inspect references`
 commands, which are absent from older alpha.5 packages.
 
 The latest published prerelease is
-[v0.0.6-alpha.9](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.9).
+[v0.0.6-alpha.11](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.11).
 It retains project-directory module inspection. The experimental C11 scalar
 source emitter is a Rust embedding API, **not** a Scarp CLI command;
 `scarp compile` still does not exist.

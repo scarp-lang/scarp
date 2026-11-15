@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.6-alpha.11 — candidate
+## 0.0.6-alpha.11 — published GitHub prerelease, 2026-11-15
 
 - Expose exact base-10 `decimal` in Scarp source, with checked arithmetic,
   comparisons, typed module interfaces and explicit conversion and rounding.
