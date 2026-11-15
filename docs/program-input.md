@@ -218,15 +218,17 @@ echo control, formatting or new input data type is introduced.
 | `input_integer(prompt)` | signed 64-bit `integer` | Yes |
 | `input_float(prompt)` | finite binary64 `float` | Yes |
 | `input_bigint(prompt)` | arbitrary-precision `bigint` within configured limits | Yes |
+| `input_decimal(prompt)` | [exact bounded `decimal`](decimal.md) | Yes on alpha.11 development source |
 | `try_read_line()` | `tuple<boolean, string>` | No, redirected or explicit input also works |
 
-`input` is an alias for `ask`. All four prompt calls take a positional string
+`input` is an alias for `ask`. Prompt calls take a positional string
 and use the same flush-before-read behavior. Typed calls reuse the existing
 decimal converters and reject whitespace, separators, non-ASCII digits and
 radix prefixes. An ASCII sign is allowed. Floats may use a decimal fraction
 and exponent and must round to a finite value. A malformed or overflowing line
 fails once. Diagnostics identify the call and omit the contents of the line.
-BigInt conversion also uses the existing digit and limb-payload limits.
+BigInt conversion uses the existing digit and limb-payload limits. Exact
+Decimal accepts a decimal point and rejects exponent notation.
 
 `try_read_line()` returns `(true, line)` for valid input, including empty or final
 unterminated lines, and `(false, "")` at ordinary EOF. Reader, encoding and

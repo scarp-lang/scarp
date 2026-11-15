@@ -327,6 +327,7 @@ pub enum Value {
     String(Arc<str>),
     Tuple(TupleValue),
     BigInt(crate::bigint::BigInt),
+    Decimal(crate::decimal::Decimal),
     Array(ArrayValue),
 }
 
@@ -336,6 +337,7 @@ impl Value {
         match self {
             Self::Tuple(value) => value.kind().clone(),
             Self::BigInt(_) => ValueType::BigInt.into(),
+            Self::Decimal(_) => ValueType::Decimal.into(),
             Self::Array(value) => value.kind().clone(),
             Self::Unit => ValueType::Unit.into(),
             Self::Integer(_) => ValueType::Integer.into(),
@@ -381,6 +383,13 @@ impl Value {
     pub fn as_bigint(&self) -> Option<&crate::bigint::BigInt> {
         match self {
             Self::BigInt(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn as_decimal(&self) -> Option<crate::decimal::Decimal> {
+        match self {
+            Self::Decimal(value) => Some(*value),
             _ => None,
         }
     }
@@ -473,6 +482,7 @@ impl fmt::Display for Value {
         match self {
             Self::Tuple(value) => value.fmt(f),
             Self::BigInt(value) => value.fmt(f),
+            Self::Decimal(value) => value.fmt(f),
             Self::Array(value) => value.fmt(f),
             Self::Unit => f.write_str("unit"),
             Self::Integer(value) => value.fmt(f),

@@ -1,7 +1,6 @@
-//! Experimental bounded exact base-10 arithmetic for future Scarp decimal.
+//! Bounded exact base-10 arithmetic shared by the host API and the interpreter.
 //!
-//! This is a host-side building block, NOT a Scarp source-language type yet.
-//! Decimal = coefficient / 10^scale. No binary float fallback.
+//! A decimal represents its signed coefficient divided by 10 raised to its scale.
 
 use std::{cmp::Ordering, fmt, str::FromStr};
 
@@ -12,6 +11,24 @@ pub const MAX_DECIMAL_SCALE: u8 = 18;
 /// Reject excessively long text before parsing; avoid unbounded work for hostile input.
 pub const MAX_DECIMAL_TEXT_BYTES: usize = 96;
 const MAX_COEFFICIENT: i128 = 10_i128.pow(MAX_DECIMAL_DIGITS) - 1;
+
+// A sign, a decimal point, 28 integral digits and 18 displayed fractional digits.
+pub(crate) struct DecimalText {
+    bytes: [u8; MAX_DECIMAL_DIGITS as usize + MAX_DECIMAL_SCALE as usize + 2],
+    len: usize,
+}
+
+impl DecimalText {
+    fn append(&mut self, bytes: &[u8]) {
+        let end = self.len + bytes.len();
+        self.bytes[self.len..end].copy_from_slice(bytes);
+        self.len = end;
+    }
+
+    pub(crate) fn as_str(&self) -> &str {
+        std::str::from_utf8(&self.bytes[..self.len]).expect("decimal rendering is ASCII")
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecimalError {
@@ -302,20 +319,52 @@ impl Decimal {
     /// rounding mode. Trailing zeroes are presentation-only and do not alter
     /// the canonical Decimal value.
     pub fn format_fixed(self, places: u8, mode: RoundingMode) -> Result<String, DecimalError> {
-        if places > MAX_DECIMAL_SCALE {
-            return Err(DecimalError::ScaleExceeded);
-        }
-        let rounded = self.round_to(places, mode)?;
-        let mut text = rounded.to_string();
-        if places > 0 {
-            if rounded.scale == 0 {
-                text.push('.');
+        Ok(self.fixed_text(places, mode)?.as_str().to_owned())
+    }
+
+    pub(crate) fn fixed_text(
+        self,
+        places: u8,
+        mode: RoundingMode,
+    ) -> Result<DecimalText, DecimalError> {
+        Ok(self.round_to(places, mode)?.render(places))
+    }
+
+    pub(crate) fn canonical_text(self) -> DecimalText {
+        self.render(self.scale)
+    }
+
+    fn render(self, places: u8) -> DecimalText {
+        let mut digits = [b'0'; MAX_DECIMAL_DIGITS as usize];
+        let mut at = digits.len();
+        let mut magnitude = self.coefficient.unsigned_abs();
+        loop {
+            at -= 1;
+            digits[at] = b'0' + (magnitude % 10) as u8;
+            magnitude /= 10;
+            if magnitude == 0 {
+                break;
             }
-            for _ in rounded.scale..places {
-                text.push('0');
-            }
         }
-        Ok(text)
+        let scale = usize::from(self.scale);
+        let split = digits.len() - scale;
+        // There is always an integral digit, even when the coefficient is
+        // shorter than the scale. Leading fractional zeroes are already set.
+        let mut text = DecimalText {
+            bytes: [0; MAX_DECIMAL_DIGITS as usize + MAX_DECIMAL_SCALE as usize + 2],
+            len: 0,
+        };
+        if self.coefficient < 0 {
+            text.append(b"-");
+        }
+        text.append(&digits[at.min(split - 1)..split]);
+        if places != 0 {
+            text.append(b".");
+            text.append(&digits[split..]);
+            let extra = usize::from(places - self.scale);
+            text.append(&[b'0'; MAX_DECIMAL_SCALE as usize][..extra]);
+        }
+        text
     }
 
     /// Never truncate a fraction during integer conversion.
@@ -491,24 +540,7 @@ impl FromStr for Decimal {
 
 impl fmt::Display for Decimal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.coefficient < 0 {
-            f.write_str("-")?;
-        }
-        let digits = self.coefficient.abs().to_string();
-        let scale = usize::from(self.scale);
-        if scale == 0 {
-            return f.write_str(&digits);
-        }
-        if digits.len() <= scale {
-            f.write_str("0.")?;
-            for _ in 0..scale - digits.len() {
-                f.write_str("0")?;
-            }
-            f.write_str(&digits)
-        } else {
-            let split = digits.len() - scale;
-            write!(f, "{}.{}", &digits[..split], &digits[split..])
-        }
+        f.write_str(self.canonical_text().as_str())
     }
 }
 

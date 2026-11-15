@@ -8,6 +8,7 @@ use crate::{
 
 mod bigints;
 mod correlation;
+pub(crate) mod decimals;
 mod integers;
 mod kernels;
 mod nucleus;
@@ -119,6 +120,14 @@ pub enum Builtin {
     BigIntNot,
     BigIntShl,
     BigIntShr,
+    Decimal,
+    DecimalFromInteger,
+    DecimalToInteger,
+    DecimalToText,
+    DecimalAbs,
+    DecimalRound,
+    DecimalFormat,
+    DecimalDivRounded,
 }
 
 impl Builtin {
@@ -138,6 +147,14 @@ impl Builtin {
     }
     pub fn from_name(name: &str) -> Option<Self> {
         Some(match name {
+            "decimal" => Self::Decimal,
+            "decimal_from_integer" => Self::DecimalFromInteger,
+            "decimal_to_integer" => Self::DecimalToInteger,
+            "decimal_to_text" => Self::DecimalToText,
+            "decimal_abs" => Self::DecimalAbs,
+            "decimal_round" => Self::DecimalRound,
+            "decimal_format" => Self::DecimalFormat,
+            "decimal_div_rounded" => Self::DecimalDivRounded,
             "bigint" => Self::BigInt,
             "bigint_from_integer" => Self::BigIntFromInteger,
             "bigint_to_integer" => Self::BigIntToInteger,
@@ -242,6 +259,13 @@ impl Builtin {
     pub fn parameter_types(self) -> &'static [ValueType] {
         use ValueType::{Float, Integer, Integers, String, Tile, Vector};
         match self {
+            Self::Decimal => &[String],
+            Self::DecimalFromInteger => &[Integer],
+            Self::DecimalToInteger | Self::DecimalToText | Self::DecimalAbs => {
+                &[ValueType::Decimal]
+            }
+            Self::DecimalRound | Self::DecimalFormat => &[ValueType::Decimal, Integer, String],
+            Self::DecimalDivRounded => &[ValueType::Decimal, ValueType::Decimal, Integer, String],
             Self::BigInt => &[String],
             Self::BigIntFromInteger => &[Integer],
             Self::BigIntToInteger
@@ -321,6 +345,13 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
+            Self::Decimal
+            | Self::DecimalFromInteger
+            | Self::DecimalAbs
+            | Self::DecimalRound
+            | Self::DecimalDivRounded => ValueType::Decimal,
+            Self::DecimalToInteger => ValueType::Integer,
+            Self::DecimalToText | Self::DecimalFormat => ValueType::String,
             Self::BigInt
             | Self::BigIntFromInteger
             | Self::BigIntAbs
@@ -401,6 +432,20 @@ impl Builtin {
                 | Self::MatMul
                 | Self::TileAdd
                 | Self::TileScale
+        )
+    }
+
+    fn is_decimal(self) -> bool {
+        matches!(
+            self,
+            Self::Decimal
+                | Self::DecimalFromInteger
+                | Self::DecimalToInteger
+                | Self::DecimalToText
+                | Self::DecimalAbs
+                | Self::DecimalRound
+                | Self::DecimalFormat
+                | Self::DecimalDivRounded
         )
     }
 
@@ -723,6 +768,9 @@ pub(crate) fn evaluate_with_spans(
     }
     if function.is_bigint() {
         return bigints::evaluate(function, args, budget, span, argument_span);
+    }
+    if function.is_decimal() {
+        return decimals::evaluate(function, args, budget, span, argument_span);
     }
     if matches!(
         function,
@@ -1090,6 +1138,14 @@ pub(crate) fn evaluate_with_spans(
             vector(values, span)
         }
         Builtin::Length
+        | Builtin::Decimal
+        | Builtin::DecimalFromInteger
+        | Builtin::DecimalToInteger
+        | Builtin::DecimalToText
+        | Builtin::DecimalAbs
+        | Builtin::DecimalRound
+        | Builtin::DecimalFormat
+        | Builtin::DecimalDivRounded
         | Builtin::BigInt
         | Builtin::BigIntFromInteger
         | Builtin::BigIntToInteger

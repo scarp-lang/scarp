@@ -1,0 +1,2 @@
+bind amount: decimal = input_decimal("राशि> ");
+print(decimal_format(amount, 2, "half_even"));

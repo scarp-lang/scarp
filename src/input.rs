@@ -21,6 +21,7 @@ pub(crate) enum IoBuiltin {
     Integer,
     Float,
     BigInt,
+    Decimal,
     FlushStdout,
     FlushStderr,
 }
@@ -36,6 +37,7 @@ impl IoBuiltin {
             "input_integer" => Some(Self::Integer),
             "input_float" => Some(Self::Float),
             "input_bigint" => Some(Self::BigInt),
+            "input_decimal" => Some(Self::Decimal),
             "flush_stdout" => Some(Self::FlushStdout),
             "flush_stderr" => Some(Self::FlushStderr),
             _ => None,
@@ -45,7 +47,7 @@ impl IoBuiltin {
     pub(crate) fn prompts(self) -> bool {
         matches!(
             self,
-            Self::Ask | Self::AskOr | Self::Integer | Self::Float | Self::BigInt
+            Self::Ask | Self::AskOr | Self::Integer | Self::Float | Self::BigInt | Self::Decimal
         )
     }
 
@@ -66,6 +68,7 @@ impl IoBuiltin {
             Self::Integer => ValueType::Integer.into(),
             Self::Float => ValueType::Float.into(),
             Self::BigInt => ValueType::BigInt.into(),
+            Self::Decimal => ValueType::Decimal.into(),
             Self::FlushStdout | Self::FlushStderr => ValueType::Unit.into(),
             _ => ValueType::String.into(),
         }
@@ -89,6 +92,7 @@ impl IoBuiltin {
             Self::Integer => (Builtin::TextToInteger, "input_integer"),
             Self::Float => (Builtin::TextToFloat, "input_float"),
             Self::BigInt => (Builtin::BigInt, "input_bigint"),
+            Self::Decimal => (Builtin::Decimal, "input_decimal"),
             _ => return Ok(value),
         };
         numeric::evaluate_with_budget(conversion, &[value], budget, span).map_err(|mut error| {

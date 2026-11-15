@@ -776,7 +776,7 @@ impl Parser<'_> {
                 ),
             )
             .with_help(
-                "use integer, float, bigint, vector, integers, tile, boolean, string, or unit for a result",
+                "use integer, float, bigint, decimal, vector, integers, tile, boolean, string, or unit for a result",
             )),
         }
     }
