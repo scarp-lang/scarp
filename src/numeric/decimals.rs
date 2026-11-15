@@ -89,12 +89,20 @@ pub(super) fn evaluate(
         }
         Builtin::DecimalToInteger => {
             budget.charge(1, span)?;
+            let input_span = argument_span(0);
             args[0]
                 .as_decimal()
                 .expect("typed decimal")
                 .to_integer_exact()
                 .map(Value::Integer)
-                .map_err(|error| diagnostic(error, argument_span(0)))
+                .map_err(|error| match error {
+                    DecimalError::PrecisionExceeded => Diagnostic::new(
+                        DiagnosticKind::NumericConversion,
+                        input_span,
+                        "exact decimal value is outside the signed 64-bit integer range",
+                    ),
+                    _ => diagnostic(error, input_span),
+                })
         }
         Builtin::DecimalToText => {
             let decimal = args[0].as_decimal().expect("typed decimal");
@@ -151,7 +159,10 @@ pub(super) fn evaluate(
                     mode,
                 )
                 .map(Value::Decimal)
-                .map_err(|error| diagnostic(error, argument_span(1)))
+                .map_err(|error| match error {
+                    DecimalError::DivisionByZero => diagnostic(error, argument_span(1)),
+                    _ => diagnostic(error, span),
+                })
         }
         _ => unreachable!("resolved decimal builtin"),
     }

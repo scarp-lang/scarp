@@ -1,7 +1,6 @@
-//! Experimental bounded exact base-10 arithmetic for future Scarp decimal.
+//! Bounded exact base-10 arithmetic shared by the host API and the interpreter.
 //!
-//! This is a host-side building block, NOT a Scarp source-language type yet.
-//! Decimal = coefficient / 10^scale. No binary float fallback.
+//! A decimal represents its signed coefficient divided by 10 raised to its scale.
 
 use std::{cmp::Ordering, fmt, str::FromStr};
 

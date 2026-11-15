@@ -127,6 +127,50 @@ fn typed_input_preserves_types_values_and_prompt_order() {
 }
 
 #[test]
+fn decimal_prompt_reads_exact_values_under_the_existing_input_contract() {
+    let source = r#"
+        funcra read_amount(prompt: string) -> decimal {
+            return input_decimal(prompt);
+        }
+        bind price = read_amount("मूल्य> ");
+        bind extra = read_amount("Extra> ");
+        assert(price + extra == decimal("0.3"));
+        print(decimal_format(price + extra, 2, "half_even"));
+    "#;
+    let data = b"+0.10\r\n0.20";
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let mut reader = Cursor::new(data);
+    let error = scarp::run_with_input(source, &mut reader, &mut stdout, &mut stderr).unwrap_err();
+    assert_eq!(diagnostic(error).kind, Kind::InputUnavailable);
+    assert_eq!(reader.position(), 0);
+    assert!(stdout.is_empty() && stderr.is_empty());
+
+    let error = scarp::run_with_interactive_input_and_options(
+        source,
+        &mut reader,
+        &mut stdout,
+        &mut stderr,
+        ExecutionOptions::default(),
+        InputLimits {
+            max_reads: 1,
+            ..InputLimits::default()
+        },
+    )
+    .unwrap_err();
+    assert_eq!(diagnostic(error).kind, Kind::InputLimit);
+    assert_eq!(stdout, "मूल्य> ".as_bytes());
+    assert_eq!(reader.position(), 7);
+    assert!(stderr.is_empty());
+
+    stdout.clear();
+    reader.set_position(0);
+    scarp::run_with_interactive_input(source, &mut reader, &mut stdout, &mut stderr).unwrap();
+    assert_eq!(stdout, "मूल्य> Extra> 0.30\n".as_bytes());
+    assert_eq!(reader.position(), data.len() as u64);
+    assert!(stderr.is_empty());
+}
+
+#[test]
 fn errors_identify_the_typed_call_without_exposing_invalid_input() {
     for (name, data, kind) in [
         (
@@ -142,6 +186,13 @@ fn errors_identify_the_typed_call_without_exposing_invalid_input() {
         ("input_float", "1.\n", Kind::NumericConversion),
         ("input_bigint", "१२३\n", Kind::InvalidBigInt),
         ("input_bigint", "1_000\n", Kind::InvalidBigInt),
+        ("input_decimal", "private marker\n", Kind::InvalidDecimal),
+        ("input_decimal", "1e4\r\n", Kind::InvalidDecimal),
+        (
+            "input_decimal",
+            "0.0000000000000000001\n",
+            Kind::DecimalLimit,
+        ),
     ] {
         let call = format!(r#"{name}("value> ")"#);
         let source = format!(r#"print("buffered"); print({call});"#);
@@ -235,6 +286,7 @@ fn type_metadata_reports_each_result_and_impurity() {
         (r#"input_integer("x")"#, Some(ValueType::Integer)),
         (r#"input_float("x")"#, Some(ValueType::Float)),
         (r#"input_bigint("x")"#, Some(ValueType::BigInt)),
+        (r#"input_decimal("x")"#, Some(ValueType::Decimal)),
         ("flush_stdout()", Some(ValueType::Unit)),
         ("flush_stderr()", Some(ValueType::Unit)),
     ];
@@ -450,6 +502,7 @@ fn both_native_backends_reject_the_new_io_calls() {
     for source in [
         "bind line = try_read_line();",
         r#"bind number = input_integer("Value> ");"#,
+        r#"bind number = input_decimal("Value> ");"#,
         "flush_stdout();",
     ] {
         assert_eq!(
@@ -470,6 +523,7 @@ fn named_or_non_string_prompt_arguments_are_rejected() {
     for (source, kind) in [
         (r#"input(prompt: "x");"#, Kind::CallArguments),
         ("input_integer(1);", Kind::TypeMismatch),
+        ("input_decimal(1);", Kind::TypeMismatch),
         (r#"try_read_line("x");"#, Kind::CallArguments),
         ("flush_stderr(1);", Kind::CallArguments),
         (

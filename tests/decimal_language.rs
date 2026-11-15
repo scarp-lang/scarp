@@ -148,6 +148,48 @@ fn runtime_errors_are_typed_and_do_not_commit_partial_output() {
 }
 
 #[test]
+fn decimal_diagnostics_identify_the_failing_argument_or_operation() {
+    assert_eq!(
+        run(
+            r#"print(decimal_to_integer(decimal("-9223372036854775808")),
+                     decimal_to_integer(decimal("9223372036854775807")));"#
+        ),
+        "-9223372036854775808 9223372036854775807\n"
+    );
+    let overflow = r#"decimal_div_rounded(decimal("9999999999999999999999999999"), decimal("0.1"), 0, "half_even")"#;
+    for (expression, kind, blamed_source, message) in [
+        (
+            r#"decimal_to_integer(decimal("9223372036854775808"))"#,
+            Kind::NumericConversion,
+            r#"decimal("9223372036854775808")"#,
+            "signed 64-bit integer range",
+        ),
+        (
+            r#"decimal_div_rounded(decimal("1"), decimal("0"), 0, "half_even")"#,
+            Kind::DivisionByZero,
+            r#"decimal("0")"#,
+            "division by zero",
+        ),
+        (
+            overflow,
+            Kind::DecimalLimit,
+            overflow,
+            "28-digit coefficient",
+        ),
+    ] {
+        let source = format!("print({expression});");
+        let mut out = Vec::new();
+        let RunError::Diagnostic(problem) = scarp::run(&source, &mut out).unwrap_err() else {
+            panic!("expected a decimal diagnostic");
+        };
+        assert_eq!(problem.kind, kind);
+        assert_eq!(&source[problem.span.start..problem.span.end], blamed_source);
+        assert!(problem.message.contains(message), "{problem:?}");
+        assert!(out.is_empty());
+    }
+}
+
+#[test]
 fn modules_preserve_exact_decimal_types_and_runtime_failure_locations() {
     let mut loader = MemorySourceLoader::new();
     loader

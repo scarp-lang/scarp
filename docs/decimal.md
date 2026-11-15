@@ -30,6 +30,11 @@ The **maximum is 28 canonical coefficient digits and 18 fractional places**.
 This is a conservative bounded format, not IEEE decimal128 and not an
 unbounded BigInt decimal.
 
+With `scarp exec --interactive`, use `input_decimal("Amount> ")` to write
+and flush a prompt before reading an exact decimal. The call returns a
+`decimal` and follows the same input quotas and error handling as the other
+typed console calls. With redirected input, use `decimal(read_line())`.
+
 ## Arithmetic, comparisons and conversion
 
 The operators `+`, `-`, `*` and `/` perform exact arithmetic. Equality
@@ -92,7 +97,8 @@ Native C11 and freestanding ELF64 scalar backends deliberately reject decimal
 programs with E0049 rather than emit a lossy binary64 conversion.
 
 Diagnostics distinguish invalid decimal text or mode (E0068), coefficient or
-scale limits (E0069), and inexact division/conversion (E0070). Division by zero
+scale limits (E0069), and inexact division/conversion (E0070). Whole values
+outside the signed 64-bit integer range report E0044 on conversion. Division by zero
 uses the existing E0008. Runtime diagnostics prevent replay of ordinary
 buffered program output. Interactive prompts retain their established
 separate visibility rules.
