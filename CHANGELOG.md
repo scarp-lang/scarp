@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.6-alpha.10 — development candidate
+## 0.0.6-alpha.10 — published GitHub prerelease, 2026-11-14
 
 - Add explicit UTF-8 input files, EOF-aware reads and opt-in terminal prompts.
   `input_integer`, `input_float` and `input_bigint` parse checked values.
