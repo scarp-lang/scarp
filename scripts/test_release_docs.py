@@ -11,7 +11,7 @@ import json
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLISHED_VERSION = "0.0.6-alpha.10"
+PUBLISHED_VERSION = "0.0.6-alpha.11"
 ALPHA6_SOURCE = "cdf6a3924ec2a36c7beca5a9aec4f01a0bce515e"
 HISTORICAL_ALPHA3 = "0.0.6-alpha.3"
 HISTORICAL_ALPHA2 = "0.0.6-alpha.2"
@@ -89,7 +89,8 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
             "docs/reference/cli.md": (f"v{PUBLISHED_VERSION}",),
             "docs/development/feature-matrix.md": (f"Cargo declares `{version}`",),
             "CHANGELOG.md": (
-                f"## {PUBLISHED_VERSION} — published GitHub prerelease, 2026-11-14",
+                f"## {PUBLISHED_VERSION} — published GitHub prerelease, 2026-11-15",
+                "## 0.0.6-alpha.10 — published GitHub prerelease, 2026-11-14",
                 "## 0.0.6-alpha.9 — published GitHub prerelease, 2026-11-13",
                 "## 0.0.6-alpha.6 — published GitHub prerelease, 2026-11-10",
             ),
@@ -98,6 +99,12 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
                 "## Compatibility and limits",
             ),
             f"docs/releases/v{PUBLISHED_VERSION}-validation.md": (
+                "Published GitHub experimental prerelease", "draft=false", "prerelease=true",
+                "79b57395957f47e1270ee542a856c844b82386de", "c935f7a6288b8657f1c7bec2eabfcdf5f5bc9480",
+                "446147628", "365aa44c7cf3985c1e7fed593d2a26bbff671652", "43726187182", "43726187071",
+                "43728347097", "43728347067", "43728751523", "SHA256SUMS",
+            ),
+            "docs/releases/v0.0.6-alpha.10-validation.md": (
                 "Published GitHub experimental prerelease", "draft=false", "prerelease=true",
                 "44fcd0f77ccb92648cdb1fc7632495c506c87cb3",
                 "43568032647", "43568031016", "43568914555", "43568914516",

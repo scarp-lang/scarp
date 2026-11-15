@@ -1,5 +1,11 @@
 # Version and API compatibility
 
+`0.0.6-alpha.11` is **a published GitHub prerelease**. It adds exact
+`decimal` values and typed console input. Rust hosts should update exhaustive
+matches on `PrimitiveType`, `Value`, `Builtin`, and `DiagnosticKind` where
+applicable. Module inventory schemas 1–3 also support the `decimal` type string.
+[Public notes](releases/v0.0.6-alpha.11-publication.md)
+
 `0.0.6-alpha.10` is **a published GitHub prerelease**. It adds typed
 console I/O, fixed arrays and expanded exact BigInt arithmetic. Rust hosts
 using exhaustive execution options need `max_array_bytes` or struct update
@@ -81,7 +87,7 @@ The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.6-alpha.10](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.10).
+[0.0.6-alpha.11](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.11).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a

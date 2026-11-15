@@ -1,6 +1,6 @@
 # Exact decimal values — development compiler
 
-> **Status:** Experimental source-language feature in the alpha.11 candidate.
+> **Status:** Experimental source-language feature published in Scarp v0.0.6-alpha.11.
 > Published alpha.10 exposes the Decimal core to Rust hosts.
 
 Scarp decimal values are **base-10 exact numbers**, distinct from its finite

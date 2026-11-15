@@ -1,6 +1,7 @@
 # Feature completeness and development roadmap
 
-Cargo declares `0.0.6-alpha.11` for the exact Decimal source candidate.
+Cargo declares `0.0.6-alpha.11`. The published alpha.11 adds exact Decimal values
+and typed decimal console input. [Alpha.11 verification](../releases/v0.0.6-alpha.11-validation.md)
 The published alpha.10 adds typed console input,
 EOF detection, stream flushing, exact output fixtures, fixed arrays and expanded
 BigInt arithmetic. [Alpha.10 verification](../releases/v0.0.6-alpha.10-validation.md)
