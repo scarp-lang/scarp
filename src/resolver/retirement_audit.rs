@@ -8,7 +8,8 @@
 //! never influences the program's memory semantics or execution budget.
 
 use super::{
-    ResolvedArgument, ResolvedExpression, ResolvedOperation, ResolvedProgram, ResolvedStatement,
+    DestructureStep, ResolvedArgument, ResolvedExpression, ResolvedOperation, ResolvedProgram,
+    ResolvedStatement,
 };
 use std::collections::VecDeque;
 
@@ -125,6 +126,17 @@ fn audit_frame(
                 *state_out
                     .get_mut(*slot)
                     .ok_or_else(|| format!("store targets out-of-range slot {slot}"))? = true;
+                successors.push(pc + 1);
+            }
+            ResolvedStatement::Destructure { steps, value } => {
+                read_slots(value, &state)?;
+                for step in steps {
+                    if let DestructureStep::Bind(slot) = step {
+                        *state_out.get_mut(*slot).ok_or_else(|| {
+                            format!("destructure initializes out-of-range slot {slot}")
+                        })? = true;
+                    }
+                }
                 successors.push(pc + 1);
             }
             ResolvedStatement::Update { slot, value, .. } => {

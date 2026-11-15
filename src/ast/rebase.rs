@@ -7,7 +7,7 @@ use super::{
 };
 use crate::diagnostics::Span;
 
-/// Relocate every span and return the number of statement/expression nodes.
+/// Relocate every span and return the number of statement, expression and pattern nodes.
 /// Parser depth limits bound the recursive statement walk; expressions are flat.
 pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> usize {
     fn span(value: &mut Span, base: usize, to_local: bool) {
@@ -211,6 +211,19 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                     span(whole, base, to_local);
                     if let Some(annotation) = annotation {
                         span(&mut annotation.span, base, to_local);
+                    }
+                    expr(initializer, base, to_local, nodes);
+                }
+                Statement::Destructure {
+                    pattern,
+                    initializer,
+                    span: whole,
+                    ..
+                } => {
+                    span(whole, base, to_local);
+                    *nodes = nodes.saturating_add(pattern.nodes.len());
+                    for node in &mut pattern.nodes {
+                        span(&mut node.span, base, to_local);
                     }
                     expr(initializer, base, to_local, nodes);
                 }
