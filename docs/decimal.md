@@ -1,7 +1,7 @@
 # Exact decimal values — development compiler
 
 > **Status:** Experimental source-language feature in draft compiler PR #248.
-> The published Scarp v0.0.6-alpha.9 does **not** support this syntax.
+> The published Scarp v0.0.6-alpha.10 does **not** support this syntax.
 > This guide is for checking the feature branch, not a release announcement.
 
 Scarp decimal values are **base-10 exact numbers**, distinct from its finite
@@ -39,7 +39,7 @@ quotients exactly representable within both limits; for example:
 ```scarp
 print(decimal("0.1") + decimal("0.2")); // 0.3
 print(decimal("1") / decimal("8"));     // 0.125
-// decimal("1") / decimal("3") reports E0069, not 0.333...
+// decimal("1") / decimal("3") reports E0070, not 0.333...
 ```
 
 The remainder operator `%` and bitwise operators reject `decimal` at
@@ -91,8 +91,8 @@ the text-based `decimal(...)` constructor; use a function or entry script.
 Native C11 and freestanding ELF64 scalar backends deliberately reject decimal
 programs with E0049 rather than emit a lossy binary64 conversion.
 
-Diagnostics distinguish invalid decimal text or mode (E0067), coefficient or
-scale limits (E0068), and inexact division/conversion (E0069). Division by zero
+Diagnostics distinguish invalid decimal text or mode (E0068), coefficient or
+scale limits (E0069), and inexact division/conversion (E0070). Division by zero
 uses the existing E0008. Runtime diagnostics prevent replay of ordinary
 buffered program output. Interactive prompts retain their established
 separate visibility rules.

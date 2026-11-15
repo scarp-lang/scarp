@@ -1,5 +1,12 @@
 # Version and API compatibility
 
+`0.0.6-alpha.10` is **a published GitHub prerelease**. It adds typed
+console I/O, fixed arrays and expanded exact BigInt arithmetic. Rust hosts
+using exhaustive execution options need `max_array_bytes` or struct update
+syntax. Array-bearing module inventories use JSON schema 3. Project test reports
+retain their existing schema versions.
+[Public notes](releases/v0.0.6-alpha.10-publication.md)
+
 `0.0.6-alpha.9` is **a published GitHub prerelease**. It adds bounded BigInt
 and opt-in `scarp test --json=v2` reports. Rust hosts with exhaustive
 `ExecutionOptions` literals need the two BigInt limit fields or struct update
@@ -74,7 +81,7 @@ The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.6-alpha.9](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.9).
+[0.0.6-alpha.10](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.10).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a

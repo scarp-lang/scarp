@@ -3,7 +3,7 @@
 use crate::{
     ast::{BinaryOperator, Expression, ExpressionKind, LogicalOperator},
     diagnostics::{Diagnostic, DiagnosticKind, Span},
-    input::InputBuiltin,
+    input::IoBuiltin,
     limits::Budget,
     numeric::{self, Builtin},
     resolver::{self, ResolvedCall, ResolvedExpression},
@@ -44,7 +44,7 @@ enum Task {
     Builtin(Builtin, usize, Span),
     BigIntDivMod(usize, Span),
     UserCall(usize, usize, Span),
-    Input(InputBuiltin, Span),
+    Io(IoBuiltin, Span),
     Visit(usize),
     Negate(Span),
     Not(Span),
@@ -56,7 +56,8 @@ enum Task {
 
 pub(crate) enum Evaluation {
     Complete(Value),
-    Input {
+    Io {
+        builtin: IoBuiltin,
         prompt: Option<Value>,
         fallback: Option<Value>,
         span: Span,
@@ -82,7 +83,18 @@ impl Workspace {
         self.start(expression);
         match self.resume(expression, environment, budget)? {
             Evaluation::Complete(value) => Ok(value),
-            Evaluation::Input { prompt, span, .. } => Err(if prompt.is_some() {
+            Evaluation::Io {
+                builtin,
+                prompt,
+                span,
+                ..
+            } => Err(if builtin.output_target().is_some() {
+                Diagnostic::new(
+                    DiagnosticKind::FunctionUnsupported,
+                    span,
+                    "stream flush requires a program execution frame",
+                )
+            } else if prompt.is_some() {
                 crate::input::prompt_unavailable(span)
             } else {
                 crate::input::unavailable(span)
@@ -98,6 +110,17 @@ impl Workspace {
     pub(crate) fn start(&mut self, expression: &ResolvedExpression) {
         self.clear();
         self.tasks.push(Task::Visit(expression.syntax.root()));
+    }
+
+    pub(crate) fn accept_input_tuple(
+        &mut self,
+        present: bool,
+        line: Value,
+        budget: &mut Budget,
+        span: Span,
+    ) -> Result<(), Diagnostic> {
+        self.values.extend([Value::Boolean(present), line]);
+        finish_tuple(&mut self.values, 2, budget, span)
     }
 
     pub(crate) fn accept(&mut self, value: Value) {
@@ -117,7 +140,7 @@ impl Workspace {
                 Task::UserCall(_, _, span)
                 | Task::Tuple(_, span)
                 | Task::Array(_, span)
-                | Task::Input(_, span)
+                | Task::Io(_, span)
                 | Task::Vector(_, _, span)
                 | Task::BitNot(span)
                 | Task::Index(_, span)
@@ -137,7 +160,7 @@ impl Workspace {
                     match &node.kind {
                         ExpressionKind::UserCall { arguments, .. } => {
                             tasks.push(match &expression.calls[index] {
-                                Some(ResolvedCall::Input(input)) => Task::Input(*input, node.span),
+                                Some(ResolvedCall::Io(input)) => Task::Io(*input, node.span),
                                 Some(ResolvedCall::Builtin(builtin)) => {
                                     Task::Builtin(*builtin, index, node.span)
                                 }
@@ -407,12 +430,13 @@ impl Workspace {
                     values.extend([Value::BigInt(quotient), Value::BigInt(remainder)]);
                     finish_tuple(values, 2, budget, span)?;
                 }
-                Task::Input(input, span) => {
+                Task::Io(input, span) => {
                     let fallback = input
                         .has_fallback()
                         .then(|| values.pop().expect("typed fallback"));
                     let prompt = input.prompts().then(|| values.pop().expect("typed prompt"));
-                    return Ok(Evaluation::Input {
+                    return Ok(Evaluation::Io {
+                        builtin: input,
                         prompt,
                         fallback,
                         span,

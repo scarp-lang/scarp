@@ -11,7 +11,7 @@ pub(super) struct ProgramTypes {
     functions: Vec<TypeId>,
     builtins: BTreeMap<Builtin, TypeId>,
     divmod: Option<TypeId>,
-    input: [Option<TypeId>; 3],
+    input: BTreeMap<crate::input::IoBuiltin, TypeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,7 +69,7 @@ impl TypedExpression<'_> {
                     Some(ResolvedCall::Builtin(builtin)) => {
                         self.types.builtins.get(&builtin).copied()
                     }
-                    Some(ResolvedCall::Input(input)) => self.types.input[input.arity()],
+                    Some(ResolvedCall::Io(input)) => self.types.input.get(&input).copied(),
                     Some(ResolvedCall::BigIntDivMod) => self.types.divmod,
                     None => None,
                 };
@@ -232,22 +232,23 @@ pub(super) fn build(
     }
     let mut builtins = BTreeMap::new();
     let mut divmod = None;
-    let mut input = [None; 3];
+    let mut input = BTreeMap::new();
     for (_, expression) in expressions(program) {
         for (index, call) in expression.calls.iter().enumerate() {
             let span = expression.syntax.nodes()[index].span;
             match call {
-                Some(ResolvedCall::Input(builtin)) if input[builtin.arity()].is_none() => {
-                    let arity = builtin.arity();
-                    input[arity] = Some(
-                        registry
+                Some(ResolvedCall::Io(builtin)) => {
+                    if let std::collections::btree_map::Entry::Vacant(entry) = input.entry(*builtin)
+                    {
+                        let id = registry
                             .intern(TypeKind::Function {
-                                parameters: vec![ValueType::String.id(); arity].into(),
-                                result: ValueType::String.id(),
+                                parameters: vec![ValueType::String.id(); builtin.arity()].into(),
+                                result: expression.types[index],
                                 effect: FunctionEffect::Impure,
                             })
-                            .map_err(|error| failure(error, span))?,
-                    );
+                            .map_err(|error| failure(error, span))?;
+                        entry.insert(id);
+                    }
                 }
                 Some(ResolvedCall::BigIntDivMod) if divmod.is_none() => {
                     divmod = Some(

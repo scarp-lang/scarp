@@ -54,13 +54,13 @@ print(decimal_format(total, 2, "half_even")); // 235.99
 print(decimal_div_rounded(decimal("1"), decimal("3"), 2, "half_even")); // 0.33
 ~~~
 
-This is executable **only on the reviewed source integration branch** once its CI gates pass. The published compiler remains v0.0.6-alpha.9, which does not support a decimal source type. For the draft syntax, see [the development guide](../decimal.md).
+This is executable **only on the reviewed source integration branch** once its CI gates pass. The published compiler remains v0.0.6-alpha.10, which does not support a decimal source type. For the draft syntax, see [the development guide](../decimal.md).
 
 ## Remaining gates before publishing source-level Decimal
 
 1. **In prototype PR #248:** the parser recognizes the explicit `decimal` type name and constructor call without reinterpreting float literals or introducing a new literal token.
 2. **In prototype PR #248:** resolver and runtime enforce a distinct Decimal type across bindings, functions, arrays, tuples and imported function signatures; no implicit numeric mixing.
-3. **In prototype PR #248:** exact arithmetic and comparisons, typed E0067–E0069 errors and transactional output are exercised by end-to-end tests. The text constructor is not a valid module constant initializer because module constant calls are still forbidden.
+3. **In prototype PR #248:** exact arithmetic and comparisons, typed E0068–E0070 errors and transactional output are exercised by end-to-end tests. The text constructor is not a valid module constant initializer because module constant calls are still forbidden.
 4. Audit fixed-width precision/scale work charges, source span accuracy, format/rounding boundaries and output snapshots under reduced host limits.
 5. Native backends must continue rejecting Decimal with E0049; do not lower to binary64. Implement exact native/WASM lowering in a separate design/review stage.
 6. Require full Linux, macOS, Windows and minimum Rust CI on the final branch head, plus differential numeric tests and compiler compatibility checks.

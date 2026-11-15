@@ -74,7 +74,11 @@ def main():
     binary = Path(sys.argv[1]).resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix="scarp-console-") as directory:
         source = Path(directory) / "greeting.srp"
-        source.write_text('print(ask_or("Name> ", "Guest"));', encoding="utf-8")
+        source.write_text(
+            'bind name = input("नाम> "); '
+            'bind age = input_integer("Age> "); print(name, age);',
+            encoding="utf-8",
+        )
         api = console_api()
         # The test gets a fresh console even if CI launched Python from a
         # console. Child stdout/stderr still use byte-preserving pipes.
@@ -99,11 +103,13 @@ def main():
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0,
                 ) as child:
                     try:
-                        read_prefix(child.stdout, b"Name> ")
+                        read_prefix(child.stdout, "नाम> ".encode("utf-8"))
                         write_line(api, handle, "नमस्ते")
+                        read_prefix(child.stdout, b"Age> ")
+                        write_line(api, handle, "-23")
                         out, err = child.communicate(timeout=10)
                         assert child.returncode == 0 and not err, (child.returncode, err)
-                        assert out == "नमस्ते\n".encode("utf-8"), out
+                        assert out == "नमस्ते -23\n".encode("utf-8"), out
                     finally:
                         if child.poll() is None:
                             child.kill()

@@ -19,7 +19,7 @@ use scarp::{
 const MAX_TESTS: usize = 64;
 const FAILURE_DETAIL_CHARS: usize = 1600;
 const MAX_FILTER_BYTES: usize = 128;
-const MAX_STDIN_FIXTURE_BYTES: usize = 1024 * 1024;
+const MAX_FIXTURE_BYTES: usize = 1024 * 1024;
 
 #[derive(Clone, Copy)]
 pub enum JsonVersion {
@@ -107,61 +107,147 @@ fn discover(root: &Path) -> Result<Vec<(String, PathBuf)>, String> {
 /// A missing fixture preserves the previous no-input execution contract.
 /// Malformed, oversized, or unsafe fixtures fail only their selected test;
 /// listing remains read-only and does not inspect fixture bytes.
-fn input_fixture(label: &str, test_path: &Path, root: &Path) -> Result<Option<Vec<u8>>, String> {
-    let path = test_path.with_extension("stdin");
+fn fixture(
+    label: &str,
+    test_path: &Path,
+    root: &Path,
+    extension: &str,
+) -> Result<Option<Vec<u8>>, String> {
+    let path = test_path.with_extension(extension);
     let meta = match fs::symlink_metadata(&path) {
         Ok(meta) => meta,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(format!("{label}: cannot inspect .stdin fixture: {error}")),
+        Err(error) => {
+            return Err(format!(
+                "{label}: cannot inspect .{extension} fixture: {error}"
+            ))
+        }
     };
     if !meta.file_type().is_file() {
         return Err(format!(
-            "{label}: .stdin fixture must be an ordinary file, not a symlink or directory"
+            "{label}: .{extension} fixture must be an ordinary file, not a symlink or directory"
         ));
     }
     let canonical = fs::canonicalize(&path)
-        .map_err(|error| format!("{label}: cannot resolve .stdin fixture: {error}"))?;
+        .map_err(|error| format!("{label}: cannot resolve .{extension} fixture: {error}"))?;
     if !canonical.starts_with(root) {
         return Err(format!(
-            "{label}: .stdin fixture escapes the trusted project root"
+            "{label}: .{extension} fixture escapes the trusted project root"
         ));
     }
     let file = fs::File::open(&canonical)
-        .map_err(|error| format!("{label}: cannot open .stdin fixture: {error}"))?;
+        .map_err(|error| format!("{label}: cannot open .{extension} fixture: {error}"))?;
     let opened = file
         .metadata()
-        .map_err(|error| format!("{label}: cannot stat .stdin fixture: {error}"))?;
+        .map_err(|error| format!("{label}: cannot stat .{extension} fixture: {error}"))?;
     if !opened.is_file() {
-        return Err(format!("{label}: .stdin fixture is not a regular file"));
-    }
-    if opened.len() > MAX_STDIN_FIXTURE_BYTES as u64 {
         return Err(format!(
-            "{label}: .stdin fixture exceeds the 1 MiB input limit"
+            "{label}: .{extension} fixture is not a regular file"
+        ));
+    }
+    let limit_name = if extension == "stdin" {
+        "input limit"
+    } else {
+        "limit"
+    };
+    if opened.len() > MAX_FIXTURE_BYTES as u64 {
+        return Err(format!(
+            "{label}: .{extension} fixture exceeds the 1 MiB {limit_name}"
         ));
     }
     let mut bytes = Vec::new();
-    file.take(MAX_STDIN_FIXTURE_BYTES as u64 + 1)
+    file.take(MAX_FIXTURE_BYTES as u64 + 1)
         .read_to_end(&mut bytes)
-        .map_err(|error| format!("{label}: cannot read .stdin fixture: {error}"))?;
-    if bytes.len() > MAX_STDIN_FIXTURE_BYTES {
+        .map_err(|error| format!("{label}: cannot read .{extension} fixture: {error}"))?;
+    if bytes.len() > MAX_FIXTURE_BYTES {
         return Err(format!(
-            "{label}: .stdin fixture grew beyond the 1 MiB input limit"
+            "{label}: .{extension} fixture grew beyond the 1 MiB {limit_name}"
         ));
     }
     Ok(Some(bytes))
+}
+
+// Compare while replaying the interpreter's existing bounded output snapshots.
+// Only the fixture and mismatch metadata are retained, never another copy of
+// the program's output. With no fixture this writer discards the stream.
+#[derive(Default)]
+struct ExpectedOutput {
+    bytes: Option<Vec<u8>>,
+    seen: usize,
+    difference: Option<usize>,
+}
+
+impl ExpectedOutput {
+    fn from_fixture(bytes: Option<Vec<u8>>, stream: &str) -> Result<Self, Failure> {
+        if bytes
+            .as_deref()
+            .is_some_and(|bytes| std::str::from_utf8(bytes).is_err())
+        {
+            return Err(Failure::Fixture(format!(
+                ".{stream} fixture must contain valid UTF-8"
+            )));
+        }
+        Ok(Self {
+            bytes,
+            ..Self::default()
+        })
+    }
+
+    fn verify(&self, stream: &str) -> Result<(), Failure> {
+        let Some(expected) = &self.bytes else {
+            return Ok(());
+        };
+        if let Some(offset) = self
+            .difference
+            .or_else(|| (self.seen < expected.len()).then_some(self.seen))
+        {
+            return Err(Failure::OutputMismatch(format!(
+                "{stream} differs from .{stream} at byte {offset} (expected {} bytes, received {})",
+                expected.len(),
+                self.seen,
+            )));
+        }
+        Ok(())
+    }
+}
+
+impl Write for ExpectedOutput {
+    fn write(&mut self, input: &[u8]) -> io::Result<usize> {
+        if let Some(expected) = &self.bytes {
+            if self.difference.is_none() {
+                let available = &expected[self.seen..];
+                self.difference = available
+                    .iter()
+                    .zip(input)
+                    .position(|(a, b)| a != b)
+                    .or_else(|| (input.len() > available.len()).then_some(available.len()))
+                    .map(|offset| self.seen + offset);
+            }
+            self.seen = self
+                .seen
+                .checked_add(input.len())
+                .ok_or_else(|| io::Error::other("output length exceeds host range"))?;
+        }
+        Ok(input.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 enum Failure {
     Compile(ModuleDiagnostic),
     Fixture(String),
     Runtime(ModuleRunError),
+    OutputMismatch(String),
 }
 
 impl fmt::Display for Failure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Compile(error) => error.fmt(f),
-            Self::Fixture(error) => error.fmt(f),
+            Self::Fixture(error) | Self::OutputMismatch(error) => error.fmt(f),
             Self::Runtime(error) => error.fmt(f),
         }
     }
@@ -185,6 +271,16 @@ impl Failure {
             Self::Fixture(_) => {
                 write_json_message(&self.text(), None, &mut diagnostic)?;
                 "fixture"
+            }
+            Self::OutputMismatch(_) => {
+                write_json_message(
+                    &self.text(),
+                    Some(
+                        "compare the expected fixture with program output using exact UTF-8 bytes",
+                    ),
+                    &mut diagnostic,
+                )?;
+                "runtime"
             }
             Self::Runtime(error) => {
                 match error {
@@ -360,34 +456,29 @@ pub fn run(
         }
     };
     for (label, test_path) in files {
-        let mut program_stdout = io::sink();
-        let mut program_stderr = io::sink();
         let result = modules::compile_with_loader(&label, &loader, ModuleLimits::default())
             .map_err(Failure::Compile)
             .and_then(|program| {
-                let fixture =
-                    input_fixture(&label, &test_path, loader.root()).map_err(Failure::Fixture)?;
-                match fixture {
-                    Some(bytes) => {
-                        let mut reader = Cursor::new(bytes);
-                        program
-                            .execute_with_input(
-                                &mut reader,
-                                &mut program_stdout,
-                                &mut program_stderr,
-                                ExecutionOptions::default(),
-                                InputLimits::default(),
-                            )
-                            .map_err(Failure::Runtime)
-                    }
-                    None => program
-                        .execute(
-                            &mut program_stdout,
-                            &mut program_stderr,
-                            ExecutionOptions::default(),
-                        )
-                        .map_err(Failure::Runtime),
+                let read = |extension| {
+                    fixture(&label, &test_path, loader.root(), extension).map_err(Failure::Fixture)
+                };
+                let input = read("stdin")?;
+                let mut stdout = ExpectedOutput::from_fixture(read("stdout")?, "stdout")?;
+                let mut stderr = ExpectedOutput::from_fixture(read("stderr")?, "stderr")?;
+                let options = ExecutionOptions::default();
+                match input {
+                    Some(bytes) => program.execute_with_input(
+                        &mut Cursor::new(bytes),
+                        &mut stdout,
+                        &mut stderr,
+                        options,
+                        InputLimits::default(),
+                    ),
+                    None => program.execute(&mut stdout, &mut stderr, options),
                 }
+                .map_err(Failure::Runtime)?;
+                stdout.verify("stdout")?;
+                stderr.verify("stderr")
             });
         match result {
             Ok(()) => {

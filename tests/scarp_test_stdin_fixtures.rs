@@ -189,3 +189,113 @@ fn symlinked_input_fixture_is_rejected_but_listing_is_safe() {
     assert!(json.contains("fixture must be an ordinary file"), "{json}");
     assert!(!json.contains("secret"), "{json}");
 }
+
+#[test]
+fn stdout_and_stderr_fixtures_are_exact_per_test_and_absent_from_reports() {
+    let ws = Workspace::new();
+    let root = ws.project();
+    fs::write(
+        root.join("tests/complete.srp"),
+        r#"bind line = try_read_line(); assert(line[0]); write(line[1]); print("!"); eprint("résumé"); flush_stderr();"#,
+    ).unwrap();
+    fs::write(root.join("tests/complete.stdin"), "नमस्ते 🌍\r\n").unwrap();
+    fs::write(root.join("tests/complete.stdout"), "नमस्ते 🌍!\n").unwrap();
+    fs::write(root.join("tests/complete.stderr"), "résumé\n").unwrap();
+    fs::write(
+        root.join("tests/no-fixtures.srp"),
+        r#"print("unreported");"#,
+    )
+    .unwrap();
+    for mode in ["--json", "--json=v2"] {
+        let result = cli(&root, &["test", mode, "--require-tests"]);
+        assert!(result.status.success(), "{result:?}");
+        assert!(result.stderr.is_empty());
+        let json = String::from_utf8(result.stdout).unwrap();
+        assert!(
+            json.contains(r#""discovered":2,"passed":2,"failed":0"#),
+            "{json}"
+        );
+        for data in ["नमस्ते", "résumé", "unreported"] {
+            assert!(!json.contains(data), "{json}");
+        }
+    }
+}
+
+#[test]
+fn output_mismatches_distinguish_first_difference_truncation_and_excess() {
+    let ws = Workspace::new();
+    let root = ws.project();
+    let source = root.join("tests/compare.srp");
+    for (stream, program, bytes, expected) in [
+        (
+            "stdout",
+            r#"write("café");"#,
+            "café!\n",
+            "byte 5 (expected 7 bytes, received 5)",
+        ),
+        (
+            "stdout",
+            r#"print("secret");"#,
+            "",
+            "byte 0 (expected 0 bytes, received 7)",
+        ),
+        (
+            "stderr",
+            r#"ewrite("é"); eprint("z");"#,
+            "êz\n",
+            "byte 1 (expected 4 bytes, received 4)",
+        ),
+        (
+            "stderr",
+            r#"ewrite("one"); ewrite("twice");"#,
+            "onet",
+            "byte 4 (expected 4 bytes, received 8)",
+        ),
+    ] {
+        fs::write(&source, program).unwrap();
+        let fixture = source.with_extension(stream);
+        fs::write(&fixture, bytes).unwrap();
+        let result = cli(&root, &["test", "--json=v2"]);
+        assert_eq!(result.status.code(), Some(1), "{result:?}");
+        assert!(result.stderr.is_empty());
+        let json = String::from_utf8(result.stdout).unwrap();
+        assert!(json.contains(r#""phase":"runtime""#), "{json}");
+        assert!(
+            json.contains(&format!("{stream} differs from .{stream} at {expected}")),
+            "{json}"
+        );
+        assert!(!json.contains("secret"), "{json}");
+        fs::remove_file(fixture).unwrap();
+    }
+}
+
+#[test]
+fn output_fixtures_are_bounded_utf8_files_and_listing_skips_them() {
+    let ws = Workspace::new();
+    let root = ws.project();
+    fs::write(root.join("tests/simple.srp"), "assert(true);").unwrap();
+    fs::write(root.join("tests/simple.stdout"), b"\xff").unwrap();
+    fs::write(
+        root.join("tests/simple.stderr"),
+        vec![b'x'; 1024 * 1024 + 1],
+    )
+    .unwrap();
+    let listed = cli(&root, &["test", "--list", "--json=v2"]);
+    assert!(listed.status.success(), "{listed:?}");
+    let first = cli(&root, &["test", "--json=v2"]);
+    let json = String::from_utf8(first.stdout).unwrap();
+    assert_eq!(first.status.code(), Some(1));
+    assert!(json.contains(r#""phase":"fixture""#), "{json}");
+    assert!(
+        json.contains(".stdout fixture must contain valid UTF-8"),
+        "{json}"
+    );
+    fs::remove_file(root.join("tests/simple.stdout")).unwrap();
+    let second = cli(&root, &["test", "--json=v2"]);
+    let json = String::from_utf8(second.stdout).unwrap();
+    assert_eq!(second.status.code(), Some(1));
+    assert!(
+        json.contains(".stderr fixture exceeds the 1 MiB limit"),
+        "{json}"
+    );
+}

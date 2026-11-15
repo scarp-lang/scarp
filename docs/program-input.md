@@ -94,7 +94,7 @@ They obey the same reader capability, exact UTF-8 handling, input limits and
 no-output-on-runtime-error rule. Either intrinsic spelling may be shadowed by
 an explicitly defined function; that user function does not acquire input.
 
-## Prompt fallback (stacked development proposal)
+## Prompt fallback (development main)
 
 `ask_or(prompt: string, fallback: string) -> string` combines immediate
 prompt output with the precise EOF semantics of `read_line_or`. It requires
@@ -115,8 +115,7 @@ calls, `ask_or` is impure, can be shadowed by a declared Scarp function,
 and has a typed `(string, string) -> string` signature. When EOF occurs
 the already flushed prompt remains visible and ordinary buffered output
 still replays, because the fallback permits evaluation to succeed.
-This proposed feature is not in published alpha.9 or the three original
-I/O branches and requires separate validation before integration.
+This feature is available in development builds after alpha.9.
 
 ## Quotas, allocation and work
 
@@ -170,9 +169,8 @@ use E0051–E0053 in alpha.9.
 ## Output and interactive boundary
 
 The interpreter evaluates the program and captures events before replaying
-stdout/stderr. All five output forms retain their original semantics. A source,
-input or runtime failure writes no program output; already consumed input
-cannot be restored. Output replay can partially write before an output I/O
+stdout/stderr. All five output forms retain their original semantics. In noninteractive execution, source and runtime failures prevent replay.
+Already consumed input cannot be restored. Output replay can partially write before an output I/O
 failure, as before. Stream switches retain their existing flush behavior.
 
 **Development feature, not in published v0.0.6-alpha.9:** `ask(prompt: string)
@@ -199,8 +197,8 @@ print("Welcome", name);
 Prompt text is emitted and flushed **during** evaluation, before a potentially
 blocking host read. Therefore visible prompt bytes cannot be rolled back after
 EOF, invalid UTF-8, a later runtime error or a subsequent failed output replay.
-Ordinary `print`/`write`/`eprint`/`ewrite` events remain buffered until
-successful evaluation. For example, an ordinary `print` before `ask` will
+Ordinary output stays buffered until successful evaluation or an explicit
+interactive flush for that stream. For example, an ordinary `print` before `ask` will
 be replayed *after* the immediate prompt. Use `ask` for prompt text.
 Input quotas are preflighted before the prompt, where possible. The runtime
 also checks that at least one work step remains for the first reader-buffer probe
@@ -211,6 +209,36 @@ no arbitrary host error text. Host blocking,
 cancellation and deadlines remain the caller's responsibility. No password
 echo control, formatting or new input data type is introduced.
 
+
+## Typed input and EOF detection (alpha.10 development)
+
+| Call | Returns | Requires interactive mode |
+| --- | --- | --- |
+| `input(prompt)` | `string` | Yes |
+| `input_integer(prompt)` | signed 64-bit `integer` | Yes |
+| `input_float(prompt)` | finite binary64 `float` | Yes |
+| `input_bigint(prompt)` | arbitrary-precision `bigint` within configured limits | Yes |
+| `try_read_line()` | `tuple<boolean, string>` | No, redirected or explicit input also works |
+
+`input` is an alias for `ask`. All four prompt calls take a positional string
+and use the same flush-before-read behavior. Typed calls reuse the existing
+decimal converters and reject whitespace, separators, non-ASCII digits and
+radix prefixes. An ASCII sign is allowed. Floats may use a decimal fraction
+and exponent and must round to a finite value. A malformed or overflowing line
+fails once. Diagnostics identify the call and omit the contents of the line.
+BigInt conversion also uses the existing digit and limb-payload limits.
+
+`try_read_line()` returns `(true, line)` for valid input, including empty or final
+unterminated lines, and `(false, "")` at ordinary EOF. Reader, encoding and
+budget errors still propagate. Each returned pair uses the standard tuple
+allocation budget. The calls are impure and are rejected in pure functions,
+defaults and contracts. Source verification type-checks all calls without
+executing them.
+
+Run the [interactive calculator](../examples/interactive/typed_calculator.srp),
+[exact integer addition](../examples/interactive/exact_integer.srp) and
+[EOF-aware Unicode inventory](../examples/line_inventory.srp) with the shipped
+input fixtures.
 
 ## Verification
 

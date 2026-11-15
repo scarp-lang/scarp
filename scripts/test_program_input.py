@@ -79,7 +79,7 @@ def main():
                 assert result.returncode == 0 and result.stdout == b"ok\n" and not result.stderr, result
                 count += 2
 
-                source.write_text('print(ask_or("Name> ", "Guest"));', encoding="utf-8")
+                source.write_text('write("Ready. "); flush_stdout(); print(input("नाम> "));', encoding="utf-8")
                 # Wait for the prompt while the terminal has no input queued.
                 # Reading line-buffered input first would block the handshake.
                 with subprocess.Popen(
@@ -87,7 +87,7 @@ def main():
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0,
                 ) as child:
                     try:
-                        expected_prompt = b"Name> "
+                        expected_prompt = "Ready. नाम> ".encode("utf-8")
                         prompt = bytearray()
                         while len(prompt) < len(expected_prompt):
                             ready, _, _ = select.select([child.stdout], [], [], 5)
