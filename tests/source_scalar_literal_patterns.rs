@@ -111,7 +111,11 @@ fn alias_spellings_of_one_integer_case_are_duplicates() {
         "match on 0 { case -0 {} case 0 {} case _ {} }",
         "match on 1 { case 1 {} case 0b1 {} case _ {} }",
     ] {
-        rejection(source, DiagnosticKind::MatchCoverage, "duplicate scalar literal");
+        rejection(
+            source,
+            DiagnosticKind::MatchCoverage,
+            "duplicate scalar literal",
+        );
     }
 }
 
