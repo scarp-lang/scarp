@@ -92,6 +92,8 @@ cargo run --locked -- verify examples/typed_maps.srp
 cargo run --locked -- exec examples/typed_maps.srp
 cargo run --locked -- verify examples/persistent_maps.srp
 cargo run --locked -- exec examples/persistent_maps.srp
+cargo run --locked -- verify examples/map_projections.srp
+cargo run --locked -- exec examples/map_projections.srp
 cargo run --locked --example tuple_types
 cargo run --locked --example program_input
 cargo run --locked -- verify examples/program_input.srp
