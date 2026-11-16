@@ -650,6 +650,13 @@ impl Rewriter<'_> {
                 } => {
                     *kind = self.nominal_type(kind, node.span, false)?;
                 }
+                ExpressionKind::Map {
+                    empty_types: Some((key, value)),
+                    ..
+                } => {
+                    *key = self.nominal_type(key, node.span, false)?;
+                    *value = self.nominal_type(value, node.span, false)?;
+                }
                 ExpressionKind::UserCall {
                     name,
                     function_span,
