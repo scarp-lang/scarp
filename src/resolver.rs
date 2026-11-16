@@ -1293,13 +1293,14 @@ fn resolve_expression(
                     let kind = &types[first];
                     require_value(kind, first_span)?;
                     for &element in rest {
-                        require_type(&types[element], kind, syntax.nodes()[element].span)
-                            .map_err(|error| {
+                        require_type(&types[element], kind, syntax.nodes()[element].span).map_err(
+                            |error| {
                                 error.with_related(
                                     first_span,
                                     "the first list element has this type",
                                 )
-                            })?;
+                            },
+                        )?;
                     }
                     kind
                 } else {
