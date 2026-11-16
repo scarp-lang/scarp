@@ -464,22 +464,23 @@ impl Workspace {
                     };
                     let count = entries.len();
                     let start = values.len() - 2 * count;
-                    let (key, value) = empty_types.clone().unwrap_or_else(|| {
-                        (values[start].kind(), values[start + 1].kind())
-                    });
-                    let kind = SourceType::map(&key, &value)
-                        .expect("resolved map key and value types");
+                    let (key, value) = empty_types
+                        .clone()
+                        .unwrap_or_else(|| (values[start].kind(), values[start + 1].kind()));
+                    let kind =
+                        SourceType::map(&key, &value).expect("resolved map key and value types");
                     budget.charge(
                         (2 * count + key.node_count() + value.node_count() + 1) as u64,
                         span,
                     )?;
-                    let bytes = MapValue::allocation_bytes(&key, &value, count).ok_or_else(|| {
-                        Diagnostic::new(
-                            DiagnosticKind::MapAllocation,
-                            span,
-                            "map storage size exceeds its configured limits",
-                        )
-                    })?;
+                    let bytes =
+                        MapValue::allocation_bytes(&key, &value, count).ok_or_else(|| {
+                            Diagnostic::new(
+                                DiagnosticKind::MapAllocation,
+                                span,
+                                "map storage size exceeds its configured limits",
+                            )
+                        })?;
                     budget.charge_map_allocation(bytes, span)?;
                     let mut sorted: Vec<(Value, Value)> = Vec::new();
                     sorted.try_reserve_exact(count).map_err(|_| {
