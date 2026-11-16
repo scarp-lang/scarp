@@ -67,6 +67,7 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                 ExpressionKind::Conditional { .. }
                 | ExpressionKind::Tuple { .. }
                 | ExpressionKind::Array { .. }
+                | ExpressionKind::List { .. }
                 | ExpressionKind::Integers { .. }
                 | ExpressionKind::Vector { .. }
                 | ExpressionKind::Integer(_)
