@@ -46,7 +46,7 @@ fn map_projections_share_the_same_collection_budget_as_map_construction() {
         print(keys, values);
     "#;
     reject_without_output(source, 0, "MapAllocation");
-    assert_eq!(execute(source), "[list: 1, 2, 3] [list: 10, 20, 30]\n");
+    assert_eq!(execute(source), "before\n[list: 1, 2, 3] [list: 10, 20, 30]\n");
 }
 
 #[test]
