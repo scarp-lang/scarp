@@ -603,15 +603,21 @@ impl Workspace {
                             || operation == ListIntrinsic::Remove
                         {
                             let n = values[start + 1].require_integer(span)?;
-                            Some(usize::try_from(n).ok().filter(|&n| n < list.len()).ok_or_else(
-                                || {
-                                    Diagnostic::new(
-                                        DiagnosticKind::ListIndex,
-                                        expression.syntax.nodes()[arguments[1].expression].span,
-                                        format!("index {n} is outside dynamic list length {}", list.len()),
-                                    )
-                                },
-                            )?)
+                            Some(
+                                usize::try_from(n)
+                                    .ok()
+                                    .filter(|&n| n < list.len())
+                                    .ok_or_else(|| {
+                                        Diagnostic::new(
+                                            DiagnosticKind::ListIndex,
+                                            expression.syntax.nodes()[arguments[1].expression].span,
+                                            format!(
+                                                "index {n} is outside dynamic list length {}",
+                                                list.len()
+                                            ),
+                                        )
+                                    })?,
+                            )
                         } else {
                             None
                         };
