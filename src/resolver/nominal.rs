@@ -317,7 +317,7 @@ impl Builder<'_> {
                         cases: type_ids.into_boxed_slice(),
                     },
                 }
-            },
+            }
         };
         let id = self
             .registry
