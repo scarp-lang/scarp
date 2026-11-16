@@ -492,8 +492,15 @@ impl Rewriter<'_> {
         span: Span,
         public: bool,
     ) -> Result<(SourceId, &str, Span), Diagnostic> {
+        // Parameterized builtin names may contain dotted imported type
+        // arguments (option<record lib.Item>). Their dots are *inside* the
+        // specialization, not an alias qualifier for the wrapper itself.
+        let generated = kind == NominalKind::Variant
+            && (name.starts_with("option<") || name.starts_with("result<"));
         let (module, unqualified, require_public) =
-            if let Some((alias, item)) = name.split_once('.') {
+            if generated {
+                (self.id, name, public)
+            } else if let Some((alias, item)) = name.split_once('.') {
                 let module = self.tables[self.id].aliases.get(alias).ok_or_else(|| {
                     Diagnostic::new(
                         Kind::ModuleSymbol,
