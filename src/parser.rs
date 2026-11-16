@@ -896,6 +896,20 @@ impl Parser<'_> {
                 error
             }
         })?;
+        let propagate = if self.at(&TokenKind::Question) {
+            let span = self.current().expect("question mark is present").span;
+            self.advance();
+            if mutable {
+                return Err(ParseError::new(
+                    DiagnosticKind::InvalidReturn,
+                    span,
+                    "propagation binding must use bind, not var",
+                ));
+            }
+            Some(span)
+        } else {
+            None
+        };
         let end = self
             .punctuation(TokenKind::Semicolon, "';'")
             .map_err(|error| error.with_help(format!("end the {keyword} declaration with ';'")))?
@@ -906,6 +920,7 @@ impl Parser<'_> {
             mutable,
             annotation,
             initializer: Expression { nodes, root },
+            propagate,
             span: Span::new(start, end),
         })
     }
