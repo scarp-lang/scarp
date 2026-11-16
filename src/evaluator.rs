@@ -797,18 +797,16 @@ impl Workspace {
                                 map.value_type()
                             };
                             let length = map.len();
-                            budget.charge(
-                                (length + projected.node_count() + 1) as u64,
-                                span,
-                            )?;
-                            let bytes = ListValue::allocation_bytes(projected, length)
-                                .ok_or_else(|| {
+                            budget.charge((length + projected.node_count() + 1) as u64, span)?;
+                            let bytes = ListValue::allocation_bytes(projected, length).ok_or_else(
+                                || {
                                     Diagnostic::new(
                                         DiagnosticKind::ListAllocation,
                                         span,
                                         "map projection storage size exceeds list bounds",
                                     )
-                                })?;
+                                },
+                            )?;
                             budget.charge_list_allocation(bytes, span)?;
                             let mut items = Vec::new();
                             items.try_reserve_exact(length).map_err(|_| {
