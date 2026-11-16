@@ -216,7 +216,7 @@ impl ListIntrinsic {
         match self {
             Self::Push | Self::Remove => 2,
             Self::Set => 3,
-            Self::Len | Self::Keys | Self::Values => 1,
+            Self::Len => 1,
         }
     }
 }
@@ -248,7 +248,7 @@ impl MapIntrinsic {
 
     pub(crate) fn arity(self) -> usize {
         match self {
-            Self::Len => 1,
+            Self::Len | Self::Keys | Self::Values => 1,
             Self::Contains | Self::Remove => 2,
             Self::GetOr | Self::Set => 3,
         }
