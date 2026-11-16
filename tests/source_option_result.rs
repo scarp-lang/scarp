@@ -114,7 +114,11 @@ fn constructor_cases_validate_missing_excess_and_wrong_payloads() {
 #[test]
 fn family_parameters_and_match_coverage_are_checked() {
     let mismatch = "bind value: option<string> = new option<integer>::Some(2);";
-    rejection(mismatch, DiagnosticKind::TypeMismatch, "new option<integer>::Some(2)");
+    rejection(
+        mismatch,
+        DiagnosticKind::TypeMismatch,
+        "new option<integer>::Some(2)",
+    );
     let unmatched = "match on new option<integer>::None() { case None {} }";
     let diagnostic = scarp::compile(unmatched).unwrap_err();
     assert_eq!(diagnostic.kind, DiagnosticKind::MatchCoverage);
