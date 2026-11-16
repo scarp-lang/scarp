@@ -264,7 +264,9 @@ impl Budget {
                     self.array_limit
                 ),
             )
-            .with_help("reuse map snapshots or raise --max-array-bytes / ExecutionOptions.max_array_bytes")
+            .with_help(
+                "reuse map snapshots or raise --max-array-bytes / ExecutionOptions.max_array_bytes",
+            )
         })?;
         Ok(())
     }
