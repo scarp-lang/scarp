@@ -221,10 +221,11 @@ impl Resolver<'_> {
             match tag {
                 Some(index) => {
                     if let Some(first) = covered[index].replace(arm.tag_span) {
-                        return Err(
-                            coverage_error(arm.tag_span, format!("duplicate case {:?}", arm.tag))
-                                .with_related(first, "the first arm is here"),
-                        );
+                        return Err(coverage_error(
+                            arm.tag_span,
+                            format!("duplicate case {:?}", arm.tag),
+                        )
+                        .with_related(first, "the first arm is here"));
                     }
                 }
                 None => {
@@ -248,7 +249,10 @@ impl Resolver<'_> {
             if !missing.is_empty() {
                 return Err(coverage_error(
                     span,
-                    format!("non-exhaustive boolean match, missing {}", missing.join(", ")),
+                    format!(
+                        "non-exhaustive boolean match, missing {}",
+                        missing.join(", ")
+                    ),
                 ));
             }
         }
