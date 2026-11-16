@@ -9,8 +9,8 @@ use crate::{
     resolver::{self, ResolvedCall, ResolvedExpression},
     types::SourceType,
     value::{
-        finite_number, type_mismatch, ArrayValue, RecordValue, TupleValue, Value, ValueType,
-        VariantValue,
+        finite_number, type_mismatch, ArrayValue, ListValue, RecordValue, TupleValue, Value,
+        ValueType, VariantValue,
     },
 };
 
@@ -43,6 +43,7 @@ enum Task {
     Vector(usize, bool, Span),
     Tuple(usize, Span),
     Array(usize, Span),
+    List(usize, Span),
     Record(usize, Span),
     Variant(usize, bool, Span),
     Field(usize, Span),
@@ -146,6 +147,7 @@ impl Workspace {
                 Task::UserCall(_, _, span)
                 | Task::Tuple(_, span)
                 | Task::Array(_, span)
+                | Task::List(_, span)
                 | Task::Record(_, span)
                 | Task::Variant(_, _, span)
                 | Task::Field(_, span)
@@ -210,6 +212,12 @@ impl Workspace {
                         }
                         ExpressionKind::Array { elements, .. } => {
                             tasks.push(Task::Array(index, node.span));
+                            for &element in elements.iter().rev() {
+                                tasks.push(Task::Visit(element));
+                            }
+                        }
+                        ExpressionKind::List { elements, .. } => {
+                            tasks.push(Task::List(index, node.span));
                             for &element in elements.iter().rev() {
                                 tasks.push(Task::Visit(element));
                             }
@@ -398,6 +406,40 @@ impl Workspace {
                     elements.extend(values.drain(start..));
                     values.push(Value::Array(ArrayValue::from_checked(kind, elements)));
                 }
+                Task::List(node, span) => {
+                    let ExpressionKind::List {
+                        elements,
+                        empty_element_type,
+                    } = &expression.syntax.nodes()[node].kind
+                    else {
+                        unreachable!("typed list task");
+                    };
+                    let count = elements.len();
+                    let start = values.len() - count;
+                    let element = empty_element_type
+                        .clone()
+                        .unwrap_or_else(|| values[start].kind());
+                    budget.charge((count + element.node_count() + 1) as u64, span)?;
+                    let bytes = ListValue::allocation_bytes(&element, count).ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::ListAllocation,
+                            span,
+                            "dynamic list allocation size exceeds configured limits",
+                        )
+                    })?;
+                    budget.charge_list_allocation(bytes, span)?;
+                    let kind = SourceType::list(element).expect("resolved list element type");
+                    let mut items = Vec::new();
+                    items.try_reserve_exact(count).map_err(|_| {
+                        Diagnostic::new(
+                            DiagnosticKind::ListAllocation,
+                            span,
+                            "could not reserve dynamic list storage",
+                        )
+                    })?;
+                    items.extend(values.drain(start..));
+                    values.push(Value::List(ListValue::from_checked(kind, items)));
+                }
                 Task::Vector(count, integers, span) => {
                     budget.charge(count as u64, span)?;
                     let start = values.len() - count;
@@ -449,6 +491,23 @@ impl Workspace {
                                     format!(
                                         "index {index} is outside fixed array length {}",
                                         array.len()
+                                    ),
+                                )
+                            })?;
+                        values.push(element.clone());
+                        continue;
+                    }
+                    if let Some(list) = value.as_list() {
+                        let element = usize::try_from(index)
+                            .ok()
+                            .and_then(|index| list.elements().get(index))
+                            .ok_or_else(|| {
+                                Diagnostic::new(
+                                    DiagnosticKind::ListIndex,
+                                    expression.syntax.nodes()[index_node].span,
+                                    format!(
+                                        "index {index} is outside dynamic list length {}",
+                                        list.len()
                                     ),
                                 )
                             })?;
