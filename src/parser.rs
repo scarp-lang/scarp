@@ -1,7 +1,8 @@
 //! Parse declarations, assignments, blocks, and print statements without execution.
 
 use crate::types::{
-    SourceType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY,
+    SourceType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_LIST_LENGTH, MAX_SOURCE_TYPE_NODES,
+    MAX_TUPLE_ARITY,
 };
 use std::collections::{BTreeMap, VecDeque};
 
@@ -1008,12 +1009,24 @@ impl Parser<'_> {
         *remaining = remaining
             .checked_sub(1)
             .ok_or_else(|| ParseError::new(limit, span, "type exceeds 4096 structural nodes"))?;
-        if matches!(name.as_str(), "tuple" | "array") && depth >= MAX_COMPOSITE_DEPTH {
+        if matches!(name.as_str(), "tuple" | "array" | "list") && depth >= MAX_COMPOSITE_DEPTH {
             return Err(ParseError::new(
                 limit,
                 span,
                 "composite type nesting exceeds 32 levels",
             ));
+        }
+        if name == "list" {
+            self.punctuation(TokenKind::Less, "'<' after list")?;
+            let element = self.source_type(false, depth + 1, remaining, inside_array)?;
+            let end = self.type_close()?.end;
+            return SourceType::list(element).ok_or_else(|| {
+                ParseError::new(
+                    DiagnosticKind::ListLimit,
+                    Span::new(span.start, end),
+                    "list element type exceeds the supported shape limits",
+                )
+            });
         }
         if name == "array" {
             self.punctuation(TokenKind::Less, "'<' after array")?;
@@ -1790,6 +1803,11 @@ impl Parser<'_> {
             self.advance();
             return self.array_literal(nodes, depth, opening);
         }
+        if tagged && self.keyword("list") {
+            self.advance();
+            self.advance();
+            return self.list_literal(nodes, depth, opening);
+        }
         let integers = tagged && self.keyword("integer");
         if integers {
             self.advance();
@@ -1867,6 +1885,57 @@ impl Parser<'_> {
         Ok(push(
             nodes,
             ExpressionKind::Array {
+                elements,
+                empty_element_type,
+            },
+            Span::new(opening.start, end),
+        ))
+    }
+
+    fn list_literal(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+        opening: Span,
+    ) -> Result<usize, ParseError> {
+        let mut elements = Vec::new();
+        let empty_element_type = if self.at(&TokenKind::Less) {
+            self.advance();
+            let mut remaining = MAX_SOURCE_TYPE_NODES - 1;
+            let element = self.source_type(false, 1, &mut remaining, false)?;
+            self.type_close()?;
+            Some(element)
+        } else {
+            if self.at(&TokenKind::RightBracket) {
+                return Err(self
+                    .expected("a list element or '<type>'")
+                    .with_help("write an explicitly typed empty list, for example [list: <integer>]"));
+            }
+            loop {
+                if elements.len() == MAX_LIST_LENGTH {
+                    return Err(ParseError::new(
+                        DiagnosticKind::ListLimit,
+                        self.current().map_or(opening, |token| token.span),
+                        "list literal exceeds 4096 elements",
+                    ));
+                }
+                elements.push(self.logical_or(nodes, depth + 1)?);
+                if !self.at(&TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+                if self.at(&TokenKind::RightBracket) {
+                    break;
+                }
+            }
+            None
+        };
+        let end = self
+            .punctuation(TokenKind::RightBracket, "']' after list literal")?
+            .end;
+        Ok(push(
+            nodes,
+            ExpressionKind::List {
                 elements,
                 empty_element_type,
             },
