@@ -252,6 +252,23 @@ impl Budget {
         Ok(())
     }
 
+    /// Maps share the fixed-array/list cumulative payload quota, so
+    /// interchangeable immutable containers cannot bypass resource accounting.
+    pub fn charge_map_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
+        self.array_remaining = self.array_remaining.checked_sub(bytes).ok_or_else(|| {
+            Diagnostic::new(
+                DiagnosticKind::MapAllocation,
+                span,
+                format!(
+                    "cumulative array/list/map allocation limit of {} bytes exceeded",
+                    self.array_limit
+                ),
+            )
+            .with_help("reuse map snapshots or raise --max-array-bytes / ExecutionOptions.max_array_bytes")
+        })?;
+        Ok(())
+    }
+
     pub fn with_text_bytes(mut self, bytes: usize) -> Self {
         self.text_remaining = bytes;
         self.text_limit = bytes;
