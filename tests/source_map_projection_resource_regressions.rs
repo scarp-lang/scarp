@@ -82,3 +82,11 @@ fn zero_collection_budget_rejects_projections_without_partial_output() {
     assert!(result.is_err());
     assert!(output.is_empty(), "failed execution must not commit output");
 }
+
+#[test]
+fn executable_snapshot_example_matches_golden_output() {
+    assert_eq!(
+        execute(include_str!("../examples/map_projection_snapshots.srp")).as_bytes(),
+        include_bytes!("../examples/map_projection_snapshots.stdout")
+    );
+}
