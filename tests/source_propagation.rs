@@ -107,7 +107,10 @@ fn failed_postcondition_on_early_return_uses_normal_completion() {
     "#;
     let mut output = Vec::new();
     let error = scarp::run(source, &mut output).unwrap_err();
-    assert!(format!("{error}").contains("ensures") || format!("{error:?}").contains("ContractViolation"));
+    assert!(
+        format!("{error}").contains("ensures")
+            || format!("{error:?}").contains("ContractViolation")
+    );
     assert!(output.is_empty());
 }
 
