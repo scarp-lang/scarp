@@ -24,7 +24,7 @@ fn task_panel_reexecution_does_not_reuse_mutable_snapshot() {
 fn task_panel_check_validates_without_publishing_output() {
     scarp::check(SOURCE).unwrap();
     let program = scarp::compile(SOURCE).unwrap();
-    assert!(!program.type_registry().is_empty());
+    assert!(program.type_registry().len() > 10);
 }
 
 #[test]
