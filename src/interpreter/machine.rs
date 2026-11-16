@@ -7,8 +7,8 @@ use crate::{
     input::{InputState, IoBuiltin},
     limits::{Budget, ExecutionOptions},
     resolver::{
-        DestructureStep, MatchTarget, PropagationPlan, ResolvedArgument, ResolvedCall, ResolvedExpression,
-        ResolvedOperation, ResolvedProgram, ResolvedStatement,
+        DestructureStep, MatchTarget, PropagationPlan, ResolvedArgument, ResolvedCall,
+        ResolvedExpression, ResolvedOperation, ResolvedProgram, ResolvedStatement,
     },
     value::{Value, VariantValue},
 };
