@@ -38,6 +38,8 @@ try {
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/variant_validation.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/ui_event_patterns.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/ui_event_patterns.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/typed_submission.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/typed_submission.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--example', 'program_input')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/program_input.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/core_input_tuple.srp')
