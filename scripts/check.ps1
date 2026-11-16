@@ -56,6 +56,8 @@ try {
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/typed_maps.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/persistent_maps.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/persistent_maps.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/map_projections.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/map_projections.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--example', 'program_input')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/program_input.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/core_input_tuple.srp')
