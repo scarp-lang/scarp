@@ -92,6 +92,9 @@ pub enum Statement {
         mutable: bool,
         annotation: Option<TypeAnnotation>,
         initializer: Expression,
+        /// Question-mark postfix on the initializer: explicitly propagate
+        /// absence or failure from a binding inside a compatible funcra.
+        propagate: Option<Span>,
         span: Span,
     },
     /// Structural binding from one initializer.
