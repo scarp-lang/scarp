@@ -1,7 +1,6 @@
-# Source-level deterministic maps (unpublished compiler drafts)
+# Source-level deterministic maps
 
-> Design/verification notes for stacked draft PRs #268 and #269. These forms
-> are **not available in the released Scarp v0.0.6-alpha.11 compiler**.
+This feature is available in alpha.12 interpreter builds.
 
 Scarp maps are immutable typed snapshots. A map has exact key and value
 types, independent of the current entry count: `map<K, V>`.

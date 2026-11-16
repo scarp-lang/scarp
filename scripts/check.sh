@@ -17,7 +17,7 @@ export RUSTDOCFLAGS="${RUSTDOCFLAGS-} -D warnings"
 
 cargo fmt --all -- --check
 rustfmt --edition 2021 --check scripts/benchmarks/compare.rs
-cargo clippy --locked --all-targets -- -D warnings
+cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked
 cargo test --locked --release
 cargo build --locked
@@ -108,3 +108,7 @@ cargo run --locked -- verify "$project"
 cargo run --locked -- run "$project"
 cargo run --locked -- test --list --require-tests "$project"
 cargo run --locked -- test --json --require-tests "$project"
+
+task_board=examples/projects/task-board
+cargo run --locked -- verify "$task_board"
+cargo run --locked -- test --json --require-tests "$task_board"

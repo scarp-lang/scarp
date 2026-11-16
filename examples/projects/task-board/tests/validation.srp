@@ -1,0 +1,25 @@
+import "../src/board.srp" as tasks;
+
+bind initial = tasks.empty();
+match on tasks.apply(initial, new tasks.Action::Add(new option<string>::None())) {
+    case Ok(_) { assert(false); }
+    case Err(message) { assert(message == "title missing"); }
+}
+match on tasks.apply(initial, new tasks.Action::Add(new option<string>::Some(""))) {
+    case Ok(_) { assert(false); }
+    case Err(message) { assert(message == "title empty"); }
+}
+match on tasks.apply(initial, new tasks.Action::Complete("Unknown")) {
+    case Ok(_) { assert(false); }
+    case Err(message) { assert(message == "task not found"); }
+}
+var populated = initial;
+match on tasks.apply(initial, new tasks.Action::Add(new option<string>::Some("Draft"))) {
+    case Ok(next) { populated = next; }
+    case Err(_) { assert(false); }
+}
+match on tasks.apply(populated, new tasks.Action::Add(new option<string>::Some("Draft"))) {
+    case Ok(_) { assert(false); }
+    case Err(message) { assert(message == "task already exists"); }
+}
+assert(list_len(populated->tasks) == 1);

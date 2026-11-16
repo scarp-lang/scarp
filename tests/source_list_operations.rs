@@ -125,3 +125,18 @@ fn malformed_list_operations_do_not_create_partial_snapshots() {
     assert!(format!("{error:?}").contains("ListIndex"));
     assert!(output.is_empty());
 }
+
+#[test]
+fn removing_boundary_items_keeps_order_and_shares_nested_values() {
+    let source = r#"
+        bind original = [list: [list: 1], [list: 2], [list: 3]];
+        bind without_first = list_remove(original, 0);
+        bind without_last = list_remove(without_first, 1);
+        bind empty = list_remove(without_last, 0);
+        assert(original[0][0] == 1 and original[2][0] == 3);
+        assert(without_first[0][0] == 2 and without_first[1][0] == 3);
+        assert(without_last[0][0] == 2);
+        assert(list_len(empty) == 0);
+    "#;
+    scarp::run(source, &mut Vec::new()).unwrap();
+}

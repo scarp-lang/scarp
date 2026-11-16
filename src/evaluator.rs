@@ -733,15 +733,21 @@ impl Workspace {
                                 "could not reserve new immutable list storage",
                             )
                         })?;
-                        items.extend_from_slice(list.elements());
+                        let elements = list.elements();
                         match operation {
-                            ListIntrinsic::Push => items.push(values[start + 1].clone()),
+                            ListIntrinsic::Push => {
+                                items.extend_from_slice(elements);
+                                items.push(values[start + 1].clone());
+                            }
                             ListIntrinsic::Set => {
+                                items.extend_from_slice(elements);
                                 items[index.expect("checked list index")] =
                                     values[start + 2].clone();
                             }
                             ListIntrinsic::Remove => {
-                                items.remove(index.expect("checked list index"));
+                                let index = index.expect("checked list index");
+                                items.extend_from_slice(&elements[..index]);
+                                items.extend_from_slice(&elements[index + 1..]);
                             }
                             ListIntrinsic::Len => unreachable!("length needs no allocation"),
                         }
@@ -885,12 +891,15 @@ impl Workspace {
                                     "could not reserve new immutable map storage",
                                 )
                             })?;
-                            entries.extend_from_slice(map.entries());
                             match operation {
                                 MapIntrinsic::Remove => {
-                                    entries.remove(found.expect("validated map removal index"));
+                                    let index = found.expect("validated map removal index");
+                                    let previous = map.entries();
+                                    entries.extend_from_slice(&previous[..index]);
+                                    entries.extend_from_slice(&previous[index + 1..]);
                                 }
                                 MapIntrinsic::Set => {
+                                    entries.extend_from_slice(map.entries());
                                     let new_pair =
                                         (values[start + 1].clone(), values[start + 2].clone());
                                     if let Some(index) = found {

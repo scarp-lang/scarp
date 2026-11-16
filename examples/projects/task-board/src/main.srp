@@ -1,0 +1,21 @@
+import "board.srp" as tasks;
+
+bind initial = tasks.empty();
+var board = initial;
+match on tasks.apply(board, new tasks.Action::Add(new option<string>::Some("Review PR"))) {
+    case Ok(next) { board = next; print("Created Review PR"); }
+    case Err(message) { print(message); }
+}
+match on tasks.apply(board, new tasks.Action::Complete("Review PR")) {
+    case Ok(next) { board = next; }
+    case Err(message) { print(message); }
+}
+match on tasks.find(board, "Review PR") {
+    case Some(task) { print(task->title, task->done); }
+    case None { print("Task missing"); }
+}
+match on tasks.apply(board, new tasks.Action::Complete("Missing")) {
+    case Ok(_) { print("Unexpected success"); }
+    case Err(message) { print("Rejected", message); }
+}
+print("Original size", list_len(initial->tasks));
