@@ -152,6 +152,7 @@ impl Work {
                     | ExpressionKind::Field { .. }
                     | ExpressionKind::Tuple { .. }
                     | ExpressionKind::Array { .. }
+                    | ExpressionKind::List { .. }
                     | ExpressionKind::Vector { .. }
                     | ExpressionKind::Integers { .. }
                     | ExpressionKind::Index { .. } => return Err(Diagnostic::new(
