@@ -365,6 +365,11 @@ pub enum ExpressionKind {
         /// Present for a typed empty literal, absent for inferred elements.
         empty_element_type: Option<SourceType>,
     },
+    /// Homogeneous persistent dynamic-list literal, with typed empty forms.
+    List {
+        elements: Vec<usize>,
+        empty_element_type: Option<SourceType>,
+    },
     Integers {
         elements: Vec<usize>,
     },
