@@ -42,6 +42,12 @@ fn task_panel_respects_small_step_budget_and_transactional_output() {
             ..ExecutionOptions::default()
         },
     );
-    assert!(failure.is_err(), "a four-step limit must interrupt execution");
-    assert!(output.is_empty(), "failed execution must not publish output");
+    assert!(
+        failure.is_err(),
+        "a four-step limit must interrupt execution"
+    );
+    assert!(
+        output.is_empty(),
+        "failed execution must not publish output"
+    );
 }
