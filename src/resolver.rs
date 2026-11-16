@@ -1373,22 +1373,14 @@ fn resolve_expression(
                     require_value(key, key_span)?;
                     require_value(value, value_span)?;
                     for &(next_key, next_value) in rest {
-                        require_type(
-                            &types[next_key],
-                            key,
-                            syntax.nodes()[next_key].span,
-                        )
-                        .map_err(|error| {
-                            error.with_related(key_span, "the first map key has this type")
-                        })?;
-                        require_type(
-                            &types[next_value],
-                            value,
-                            syntax.nodes()[next_value].span,
-                        )
-                        .map_err(|error| {
-                            error.with_related(value_span, "the first map value has this type")
-                        })?;
+                        require_type(&types[next_key], key, syntax.nodes()[next_key].span)
+                            .map_err(|error| {
+                                error.with_related(key_span, "the first map key has this type")
+                            })?;
+                        require_type(&types[next_value], value, syntax.nodes()[next_value].span)
+                            .map_err(|error| {
+                                error.with_related(value_span, "the first map value has this type")
+                            })?;
                     }
                     (key, value)
                 } else {
