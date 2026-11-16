@@ -8,11 +8,13 @@ pub use crate::types::PrimitiveType as ValueType;
 use crate::types::SourceType;
 mod array;
 mod list;
+mod map;
 mod record;
 mod tuple;
 mod variant;
 pub use array::ArrayValue;
 pub use list::ListValue;
+pub use map::MapValue;
 pub use record::RecordValue;
 pub use tuple::TupleValue;
 pub use variant::VariantValue;
@@ -336,6 +338,7 @@ pub enum Value {
     Decimal(crate::decimal::Decimal),
     Array(ArrayValue),
     List(ListValue),
+    Map(MapValue),
     Record(RecordValue),
     Variant(VariantValue),
 }
@@ -349,6 +352,7 @@ impl Value {
             Self::Decimal(_) => ValueType::Decimal.into(),
             Self::Array(value) => value.kind().clone(),
             Self::List(value) => value.kind().clone(),
+            Self::Map(value) => value.kind().clone(),
             Self::Record(value) => value.kind().clone(),
             Self::Variant(value) => value.kind().clone(),
             Self::Unit => ValueType::Unit.into(),
@@ -384,11 +388,19 @@ impl Value {
         }
     }
 
+    pub fn as_map(&self) -> Option<&MapValue> {
+        match self {
+            Self::Map(value) => Some(value),
+            _ => None,
+        }
+    }
+
     pub(crate) fn composite_work(&self) -> Option<u64> {
         match self {
             Self::Tuple(value) => Some(value.work()),
             Self::Array(value) => Some(value.work()),
             Self::List(value) => Some(value.work()),
+            Self::Map(value) => Some(value.work()),
             Self::Record(value) => Some(value.work()),
             Self::Variant(value) => Some(value.work()),
             _ => None,
@@ -507,6 +519,7 @@ impl fmt::Display for Value {
             Self::Decimal(value) => value.fmt(f),
             Self::Array(value) => value.fmt(f),
             Self::List(value) => value.fmt(f),
+            Self::Map(value) => value.fmt(f),
             Self::Record(value) => value.fmt(f),
             Self::Variant(value) => value.fmt(f),
             Self::Unit => f.write_str("unit"),
