@@ -9,6 +9,8 @@ pub const MAX_COMPOSITE_DEPTH: usize = 32;
 pub const MAX_TUPLE_DEPTH: usize = MAX_COMPOSITE_DEPTH;
 pub const MAX_SOURCE_TYPE_NODES: usize = 4096;
 pub const MAX_ARRAY_LENGTH: usize = 4096;
+/// Maximum elements in an immutable source-level typed dynamic list.
+pub const MAX_LIST_LENGTH: usize = 4096;
 pub const MAX_EXPANDED_VALUE_NODES: usize = 65_536;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -16,6 +18,7 @@ pub enum SourceType {
     Primitive(PrimitiveType),
     Tuple(Arc<TupleType>),
     Array(Arc<ArrayType>),
+    List(Arc<ListType>),
     /// A record name in parsed syntax, resolved before semantic interning.
     RecordRef(Arc<str>),
     Record(Arc<RecordType>),
@@ -102,6 +105,19 @@ impl ArrayType {
 
     pub fn is_empty(&self) -> bool {
         self.length == 0
+    }
+}
+
+/// A dynamically sized, immutable list with one exact element type.
+/// The runtime limits visible entries separately from this type descriptor.
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct ListType {
+    element: SourceType,
+    shape: Shape,
+}
+impl ListType {
+    pub fn element(&self) -> &SourceType {
+        &self.element
     }
 }
 
@@ -307,6 +323,10 @@ impl SourceType {
                 array.length,
             )
             .ok_or_else(too_large),
+            Self::List(list) if list.shape.has_nominal_ref => Self::list(
+                list.element.map_nominal_refs_at(depth + 1, mapper, too_large)?,
+            )
+            .ok_or_else(too_large),
             _ => Ok(self.clone()),
         }
     }
@@ -369,6 +389,32 @@ impl SourceType {
             shape,
         })))
     }
+    /// Build a bounded type descriptor; list length is checked at runtime.
+    pub fn list(element: impl Into<Self>) -> Option<Self> {
+        let element = element.into();
+        if element == PrimitiveType::Unit {
+            return None;
+        }
+        let child = element.shape();
+        let shape = Shape {
+            depth: child.depth.checked_add(1)?,
+            nodes: child.nodes.checked_add(1)?,
+            expanded: child.expanded.checked_add(1)?,
+            display_bytes: child.display_bytes.checked_add("list<>".len())?,
+            contains_array: true,
+            has_nominal_ref: child.has_nominal_ref,
+        }
+        .checked()?;
+        Some(Self::List(Arc::new(ListType { element, shape })))
+    }
+
+    pub fn as_list(&self) -> Option<&ListType> {
+        match self {
+            Self::List(value) => Some(value),
+            _ => None,
+        }
+    }
+
     pub fn as_primitive(&self) -> Option<PrimitiveType> {
         match self {
             Self::Primitive(p) => Some(*p),
@@ -424,6 +470,7 @@ impl SourceType {
         match self {
             Self::Tuple(t) => t.shape,
             Self::Array(a) => a.shape,
+            Self::List(l) => l.shape,
             Self::Record(r) => r.shape,
             Self::Variant(v) => v.shape,
             Self::RecordRef(name) | Self::VariantRef(name) => Shape {
@@ -482,6 +529,13 @@ impl SourceType {
                     length: Some(a.length as u64),
                 })
             }
+            Self::List(l) => {
+                let element = l.element.intern(registry)?;
+                registry.intern(TypeKind::Sequence {
+                    element,
+                    length: None,
+                })
+            }
         }
     }
 }
@@ -524,6 +578,7 @@ impl fmt::Display for SourceType {
                 f.write_str(">")
             }
             Self::Array(a) => write!(f, "array<{}, {}>", a.element, a.length),
+            Self::List(l) => write!(f, "list<{}>", l.element),
         }
     }
 }
