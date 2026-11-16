@@ -324,7 +324,8 @@ impl SourceType {
             )
             .ok_or_else(too_large),
             Self::List(list) if list.shape.has_nominal_ref => Self::list(
-                list.element.map_nominal_refs_at(depth + 1, mapper, too_large)?,
+                list.element
+                    .map_nominal_refs_at(depth + 1, mapper, too_large)?,
             )
             .ok_or_else(too_large),
             _ => Ok(self.clone()),
