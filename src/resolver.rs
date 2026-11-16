@@ -1219,6 +1219,18 @@ fn resolve_expression(
                 *kind = nominal::resolve_type(layouts, kind, node.span)?;
             }
         }
+        if let ExpressionKind::Map {
+            empty_types: Some((key, value)),
+            ..
+        } = &mut node.kind
+        {
+            if key.has_nominal_ref() {
+                *key = nominal::resolve_type(layouts, key, node.span)?;
+            }
+            if value.has_nominal_ref() {
+                *value = nominal::resolve_type(layouts, value, node.span)?;
+            }
+        }
         let node = &syntax.nodes[index];
         let mut call = None;
         let (kind, slot) = match &node.kind {
