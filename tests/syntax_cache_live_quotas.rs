@@ -119,3 +119,21 @@ fn syntax_reconfiguration_does_not_cache_stale_semantics() {
     assert_eq!(compile(&changed, &mut cache), b"99\n");
     assert_eq!(compile(&before, &mut cache), b"42\n");
 }
+
+#[test]
+fn executable_snapshot_fixture_matches_cold_and_warm_cache_output() {
+    let source = include_str!("../examples/syntax_cache_snapshot.srp");
+    let expected = include_bytes!("../examples/syntax_cache_snapshot.stdout");
+    let mut cache = SyntaxCache::new(SyntaxCacheLimits::default());
+    let mut loader = MemorySourceLoader::new();
+    loader.insert("main.srp", source).unwrap();
+    for _ in 0..3 {
+        assert_eq!(compile(&loader, &mut cache), expected);
+    }
+    assert!(cache.stats().hits >= 2);
+    cache.set_limits(SyntaxCacheLimits {
+        max_entries: 0,
+        ..SyntaxCacheLimits::default()
+    });
+    assert_eq!(compile(&loader, &mut cache), expected);
+}
