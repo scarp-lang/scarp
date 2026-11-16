@@ -469,11 +469,9 @@ pub(super) fn prepare<'a>(
                                     // before performing the comparison.
                                     let cost = match case {
                                         MatchLiteral::Integer(_) => 1,
-                                        MatchLiteral::Text(text) => {
-                                            1_u64.saturating_add(
-                                                (text.len() as u64).saturating_add(63) / 64,
-                                            )
-                                        }
+                                        MatchLiteral::Text(text) => 1_u64.saturating_add(
+                                            (text.len() as u64).saturating_add(63) / 64,
+                                        ),
                                     };
                                     budget.charge(cost, span)?;
                                     let matched = match (case, &value) {
