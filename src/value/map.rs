@@ -67,7 +67,9 @@ impl MapValue {
     pub(crate) fn from_checked(kind: SourceType, entries: Vec<(Value, Value)>) -> Self {
         debug_assert!(kind.as_map().is_some());
         debug_assert!(entries.len() <= MAX_MAP_ENTRIES);
-        debug_assert!(entries.windows(2).all(|w| key_compare(&w[0].0, &w[1].0).is_lt()));
+        debug_assert!(entries
+            .windows(2)
+            .all(|w| key_compare(&w[0].0, &w[1].0).is_lt()));
         let mut work = kind.node_count() as u64 + 8;
         let mut capture = kind.display_bytes() + 8;
         for (key, value) in &entries {
