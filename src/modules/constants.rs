@@ -153,6 +153,7 @@ impl Work {
                     | ExpressionKind::Tuple { .. }
                     | ExpressionKind::Array { .. }
                     | ExpressionKind::List { .. }
+                    | ExpressionKind::Map { .. }
                     | ExpressionKind::Vector { .. }
                     | ExpressionKind::Integers { .. }
                     | ExpressionKind::Index { .. } => return Err(Diagnostic::new(
