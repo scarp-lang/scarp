@@ -86,6 +86,8 @@ cargo run --locked -- verify examples/task_panel_state.srp
 cargo run --locked -- exec examples/task_panel_state.srp
 cargo run --locked -- verify examples/typed_dynamic_lists.srp
 cargo run --locked -- exec examples/typed_dynamic_lists.srp
+cargo run --locked -- verify examples/persistent_list_updates.srp
+cargo run --locked -- exec examples/persistent_list_updates.srp
 cargo run --locked --example tuple_types
 cargo run --locked --example program_input
 cargo run --locked -- verify examples/program_input.srp
