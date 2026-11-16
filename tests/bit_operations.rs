@@ -167,18 +167,18 @@ fn all_shift_counts_match_rust_fixed_width_operations() {
 #[test]
 fn bit_precedence_nesting_fits_the_existing_small_parser_stack() {
     use scarp::parser::{MAX_BLOCK_DEPTH, MAX_EXPRESSION_DEPTH};
+    // Constructing the test fixture is not part of the parser's stack
+    // contract: only actual parsing runs on the small fixed-size thread.
+    let source = format!(
+        "{}print({}1{});{}",
+        "{".repeat(MAX_BLOCK_DEPTH),
+        "1|(".repeat(MAX_EXPRESSION_DEPTH),
+        ")".repeat(MAX_EXPRESSION_DEPTH),
+        "}".repeat(MAX_BLOCK_DEPTH)
+    );
     let syntax = std::thread::Builder::new()
         .stack_size(512 * 1024)
-        .spawn(|| {
-            let source = format!(
-                "{}print({}1{});{}",
-                "{".repeat(MAX_BLOCK_DEPTH),
-                "1|(".repeat(MAX_EXPRESSION_DEPTH),
-                ")".repeat(MAX_EXPRESSION_DEPTH),
-                "}".repeat(MAX_BLOCK_DEPTH)
-            );
-            scarp::parse(&source).unwrap()
-        })
+        .spawn(move || scarp::parse(&source).unwrap())
         .unwrap()
         .join()
         .unwrap();

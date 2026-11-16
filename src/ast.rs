@@ -29,6 +29,9 @@ pub enum Statement {
         span: Span,
     },
     Function(FunctionDeclaration),
+    Record(Box<RecordDeclaration>),
+    Variant(Box<VariantDeclaration>),
+    Match(Box<MatchStatement>),
     Return {
         value: Option<Expression>,
         span: Span,
@@ -89,6 +92,16 @@ pub enum Statement {
         mutable: bool,
         annotation: Option<TypeAnnotation>,
         initializer: Expression,
+        /// Question-mark postfix on the initializer: explicitly propagate
+        /// absence or failure from a binding inside a compatible funcra.
+        propagate: Option<Span>,
+        span: Span,
+    },
+    /// Structural binding from one initializer.
+    Destructure {
+        pattern: BindingPattern,
+        mutable: bool,
+        initializer: Expression,
         span: Span,
     },
     Assign {
@@ -99,6 +112,47 @@ pub enum Statement {
         value: Expression,
         span: Span,
     },
+}
+
+/// A binding pattern stored in preorder, with each group followed
+/// by its child patterns. The parser validates the shape before construction.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BindingPattern {
+    pub(crate) nodes: Vec<PatternNode>,
+}
+
+impl BindingPattern {
+    pub fn nodes(&self) -> &[PatternNode] {
+        &self.nodes
+    }
+
+    pub(crate) fn bindings(&self) -> impl Iterator<Item = (&str, Span)> {
+        self.nodes.iter().filter_map(|node| match &node.kind {
+            PatternKind::Name(name) => Some((name.as_str(), node.span)),
+            _ => None,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PatternNode {
+    pub kind: PatternKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PatternKind {
+    Tuple(usize),
+    Array(usize),
+    Record(Vec<PatternField>),
+    Name(String),
+    Discard,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PatternField {
+    pub name: String,
+    pub span: Span,
 }
 
 /// Optional explicit binding type, retaining its source token location.
@@ -113,6 +167,9 @@ impl Statement {
         match self {
             Self::Import { span, .. } | Self::Export { span, .. } => *span,
             Self::Function(function) => function.span,
+            Self::Record(record) => record.span,
+            Self::Variant(variant) => variant.span,
+            Self::Match(statement) => statement.span,
             Self::Return { span, .. } | Self::Call { span, .. } | Self::Assert { span, .. } => {
                 *span
             }
@@ -125,9 +182,60 @@ impl Statement {
             | Self::Println { span, .. }
             | Self::Output { span, .. }
             | Self::Declaration { span, .. }
+            | Self::Destructure { span, .. }
             | Self::Assign { span, .. } => *span,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordDeclaration {
+    pub name: String,
+    pub name_span: Span,
+    pub fields: Vec<(String, Span, TypeAnnotation)>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VariantDeclaration {
+    pub name: String,
+    pub name_span: Span,
+    pub cases: Vec<VariantCase>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VariantCase {
+    pub name: String,
+    pub span: Span,
+    pub payload: Option<TypeAnnotation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchStatement {
+    pub subject: Expression,
+    pub arms: Vec<MatchArm>,
+    pub span: Span,
+}
+
+/// An exact scalar case used only by a type-checked match, not a dynamic
+/// expression or an unbounded pattern evaluator.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MatchLiteral {
+    Integer(i64),
+    Text(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchArm {
+    /// The named variant/boolean case or wildcard; empty for scalar literals.
+    pub tag: String,
+    /// Literal case, if any; matches never interpret a string as an identifier.
+    pub literal: Option<MatchLiteral>,
+    pub tag_span: Span,
+    pub payload: Option<BindingPattern>,
+    pub statements: Vec<Statement>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -224,7 +332,27 @@ pub struct ConditionalExpressionBranch {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VariantConstructor {
+    pub name: String,
+    pub name_span: Span,
+    pub tag: String,
+    pub tag_span: Span,
+    pub payload: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExpressionKind {
+    Variant(Box<VariantConstructor>),
+    Record {
+        name: String,
+        name_span: Span,
+        fields: Vec<CallArgument>,
+    },
+    Field {
+        receiver: usize,
+        name: String,
+        name_span: Span,
+    },
     Conditional {
         branches: Vec<ConditionalExpressionBranch>,
         otherwise: usize,
@@ -236,6 +364,17 @@ pub enum ExpressionKind {
         elements: Vec<usize>,
         /// Present for a typed empty literal, absent for inferred elements.
         empty_element_type: Option<SourceType>,
+    },
+    /// Homogeneous persistent dynamic-list literal, with typed empty forms.
+    List {
+        elements: Vec<usize>,
+        empty_element_type: Option<SourceType>,
+    },
+    /// Ordered immutable keyed collection. Each pair is evaluated exactly
+    /// once in source order, and stored in canonical key order at runtime.
+    Map {
+        entries: Vec<(usize, usize)>,
+        empty_types: Option<(SourceType, SourceType)>,
     },
     Integers {
         elements: Vec<usize>,

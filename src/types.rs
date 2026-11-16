@@ -1,9 +1,12 @@
 //! Semantic type identities. Source-language legality is checked separately.
 mod source;
 pub use source::{
-    ArrayType, SourceType, TupleType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH,
-    MAX_EXPANDED_VALUE_NODES, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH,
+    ArrayType, ListType, MapType, RecordType, SourceType, TupleType, VariantType, MAX_ARRAY_LENGTH,
+    MAX_COMPOSITE_DEPTH, MAX_EXPANDED_VALUE_NODES, MAX_LIST_LENGTH, MAX_MAP_ENTRIES,
+    MAX_RECORD_FIELDS, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH, MAX_VARIANT_CASES,
 };
+
+pub(crate) use source::NominalKind;
 
 use std::{
     collections::HashMap,
@@ -149,9 +152,21 @@ pub enum FunctionEffect {
 pub enum TypeKind {
     Primitive(PrimitiveType),
     Tuple(Box<[TypeId]>),
+    Record {
+        definition: DefinitionId,
+        fields: Box<[TypeId]>,
+    },
+    Variant {
+        definition: DefinitionId,
+        cases: Box<[Option<TypeId>]>,
+    },
     Sequence {
         element: TypeId,
         length: Option<u64>,
+    },
+    Mapping {
+        key: TypeId,
+        value: TypeId,
     },
     Applied {
         constructor: DefinitionId,
@@ -174,19 +189,48 @@ pub enum TypeKind {
 impl TypeKind {
     fn children(&self) -> impl Iterator<Item = TypeId> + '_ {
         let (single, others): (Option<TypeId>, &[TypeId]) = match self {
-            Self::Tuple(values) => (None, values),
+            Self::Tuple(values) | Self::Record { fields: values, .. } => (None, values),
             Self::Sequence { element, .. } | Self::Tensor { element, .. } => (Some(*element), &[]),
+            Self::Mapping { key, value } => (Some(*key), std::slice::from_ref(value)),
             Self::Applied { arguments, .. } => (None, arguments),
             Self::Function {
                 parameters, result, ..
             } => (Some(*result), parameters),
             _ => (None, &[]),
         };
-        single.into_iter().chain(others.iter().copied())
+        let cases = match self {
+            Self::Variant { cases, .. } => cases.as_ref(),
+            _ => &[],
+        };
+        single
+            .into_iter()
+            .chain(others.iter().copied())
+            .chain(cases.iter().copied().flatten())
+    }
+    // A concrete Option/Result still has two checked source-level cases,
+    // even though its canonical Applied descriptor retains only the concrete
+    // type arguments. Keep the original variant arity/component accounting.
+    fn builtin_case_width(&self) -> Option<usize> {
+        match self {
+            Self::Applied {
+                constructor,
+                arguments,
+            } if constructor.module == u32::MAX
+                && ((constructor.declaration == 0 && arguments.len() == 1)
+                    || (constructor.declaration == 1 && arguments.len() == 2)) =>
+            {
+                Some(2)
+            }
+            _ => None,
+        }
     }
     fn width(&self) -> usize {
+        if let Some(width) = self.builtin_case_width() {
+            return width;
+        }
         match self {
-            Self::Tuple(v) => v.len(),
+            Self::Tuple(v) | Self::Record { fields: v, .. } => v.len(),
+            Self::Variant { cases, .. } => cases.len(),
             Self::Applied { arguments, .. } => arguments.len(),
             Self::Function { parameters, .. } => parameters.len(),
             Self::Tensor { dimensions, .. } => dimensions.len(),
@@ -194,6 +238,12 @@ impl TypeKind {
         }
     }
     fn components(&self) -> Option<usize> {
+        if let Some(count) = self.builtin_case_width() {
+            return Some(count);
+        }
+        if let Self::Variant { cases, .. } = self {
+            return Some(cases.len());
+        }
         let children = self.children().count();
         children.checked_add(if let Self::Tensor { dimensions, .. } = self {
             dimensions.len()
@@ -233,6 +283,8 @@ pub enum TypeResource {
 pub enum TypeRegistryError {
     InvalidLimits,
     UnknownType(TypeId),
+    UnresolvedRecord,
+    UnresolvedVariant,
     Limit {
         resource: TypeResource,
         limit: usize,
@@ -246,6 +298,8 @@ impl fmt::Display for TypeRegistryError {
             Self::InvalidLimits => f.write_str(
                 "type limits require room for all primitives, positive depth and 32-bit indices",
             ),
+            Self::UnresolvedRecord => f.write_str("record type was not resolved"),
+            Self::UnresolvedVariant => f.write_str("variant type was not resolved"),
             Self::UnknownType(_) => f.write_str("type handle does not belong to this registry"),
             Self::Limit { resource, limit } => {
                 write!(f, "semantic type {resource:?} limit of {limit} exceeded")
@@ -404,7 +458,7 @@ impl TypeRegistryBuilder {
     pub fn component_count(&self) -> usize {
         self.components
     }
-    fn depth(&self, id: TypeId) -> Option<usize> {
+    pub(crate) fn depth(&self, id: TypeId) -> Option<usize> {
         if id.primitive().is_some() {
             return Some(1);
         }

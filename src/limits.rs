@@ -40,7 +40,7 @@ pub struct ExecutionOptions {
     pub max_vector_bytes: usize,
     /// Cumulative newly materialized UTF-8 string payload; sharing does not recharge.
     pub max_text_bytes: usize,
-    /// Cumulative immutable tuple member/structural payload, independent of text/vectors.
+    /// Cumulative immutable tuple, record and variant payload, independent of text/vectors.
     pub max_tuple_bytes: usize,
     /// Largest allowed input/result BigInt decimal magnitude.
     pub max_bigint_digits: usize,
@@ -194,6 +194,26 @@ impl Budget {
         Ok(())
     }
 
+    pub(crate) fn charge_nominal_allocation(
+        &mut self,
+        bytes: usize,
+        span: Span,
+        error_kind: DiagnosticKind,
+    ) -> Result<(), Diagnostic> {
+        self.tuple_remaining = self.tuple_remaining.checked_sub(bytes).ok_or_else(|| {
+            Diagnostic::new(
+                error_kind,
+                span,
+                format!(
+                    "cumulative tuple, record and variant allocation limit of {} bytes exceeded",
+                    self.tuple_limit
+                ),
+            )
+            .with_help("reuse immutable values or raise --max-tuple-bytes")
+        })?;
+        Ok(())
+    }
+
     pub fn with_array_bytes(mut self, bytes: usize) -> Self {
         self.array_remaining = bytes;
         self.array_limit = bytes;
@@ -211,6 +231,42 @@ impl Budget {
                 ),
             )
             .with_help("reuse immutable arrays or raise --max-array-bytes / ExecutionOptions.max_array_bytes")
+        })?;
+        Ok(())
+    }
+
+    /// Lists and fixed arrays intentionally share one cumulative budget:
+    /// switching collection spellings cannot bypass the caller's allocation cap.
+    pub fn charge_list_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
+        self.array_remaining = self.array_remaining.checked_sub(bytes).ok_or_else(|| {
+            Diagnostic::new(
+                DiagnosticKind::ListAllocation,
+                span,
+                format!(
+                    "cumulative array/list allocation limit of {} bytes exceeded",
+                    self.array_limit
+                ),
+            )
+            .with_help("reuse immutable lists, or raise --max-array-bytes / ExecutionOptions.max_array_bytes")
+        })?;
+        Ok(())
+    }
+
+    /// Maps share the fixed-array/list cumulative payload quota, so
+    /// interchangeable immutable containers cannot bypass resource accounting.
+    pub fn charge_map_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
+        self.array_remaining = self.array_remaining.checked_sub(bytes).ok_or_else(|| {
+            Diagnostic::new(
+                DiagnosticKind::MapAllocation,
+                span,
+                format!(
+                    "cumulative array/list/map allocation limit of {} bytes exceeded",
+                    self.array_limit
+                ),
+            )
+            .with_help(
+                "reuse map snapshots or raise --max-array-bytes / ExecutionOptions.max_array_bytes",
+            )
         })?;
         Ok(())
     }

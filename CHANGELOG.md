@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.6-alpha.12 — candidate
+
+- Add nominal records, tagged variants, nested destructuring and exhaustive scalar matching.
+- Add concrete Option and Result types, typed propagation and cross-module type identity.
+- Add bounded, immutable dynamic lists and deterministic maps with persistent updates and ordered projections.
+- Add a multi-file task board and package-level checks for its output and tests.
+
 ## 0.0.6-alpha.11 — published GitHub prerelease, 2026-11-15
 
 - Expose exact base-10 `decimal` in Scarp source, with checked arithmetic,

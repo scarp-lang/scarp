@@ -24,6 +24,9 @@ impl ArrayValue {
     /// Empty arrays retain that type. Invalid types or lengths return `None`.
     pub fn new(element_type: impl Into<SourceType>, elements: Vec<Value>) -> Option<Self> {
         let element_type = element_type.into();
+        if element_type.has_nominal_ref() {
+            return None;
+        }
         let kind = SourceType::array(&element_type, elements.len())?;
         if elements.iter().any(|value| value.kind() != element_type) {
             return None;

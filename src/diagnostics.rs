@@ -172,6 +172,19 @@ diagnostic_catalogue! {
     InvalidDecimal => ("E0068", "Invalid exact decimal text or rounding mode. Use ASCII decimal digits with an optional sign and fractional part, or one of half_even, half_up, toward_zero and away_from_zero for rounding. No implicit float conversion occurs."),
     DecimalLimit => ("E0069", "Exact decimal precision or scale limit exceeded. Coefficients have at most 28 canonical digits and at most 18 fractional places. Use explicit rounding, smaller operands or a different numeric type; no silent f64 fallback occurs."),
     DecimalInexact => ("E0070", "Exact decimal division or conversion would lose precision. Select an explicitly rounded operation, or use a terminating quotient within the 28-digit and 18-place bounds."),
+    RecordDefinition => ("E0071", "Check record declarations, field types and record visibility. Record layouts must be acyclic and bounded."),
+    RecordField => ("E0072", "Check record field spelling and provide each declared field exactly once."),
+    RecordAllocation => ("E0073", "Record construction exceeds the allocation budget or could not reserve storage."),
+    VariantDefinition => ("E0074", "Check variant declarations and visibility. Variants have one to 32 unique cases and acyclic payload types."),
+    VariantCase => ("E0075", "Check the variant case name and whether the case expects zero or one typed payload."),
+    MatchCoverage => ("E0076", "Cover every case once, or place a reachable wildcard last."),
+    VariantAllocation => ("E0077", "Variant payload allocation exceeded the cumulative tuple, record and variant allowance."),
+    ListLimit => ("E0078", "Typed dynamic list length or type complexity exceeded limits. A list holds at most 4096 elements, uses one exact non-unit element type and has bounded nesting."),
+    ListIndex => ("E0079", "Dynamic list index is outside its current length. An empty list has no valid index; use a nonnegative integer less than its length."),
+    ListAllocation => ("E0080", "Typed list payload allocation exceeded the shared fixed-array/list byte quota or bounded storage reservation failed. Reuse immutable snapshots or adjust --max-array-bytes."),
+    MapLimit => ("E0081", "Typed map key, value or length limits were exceeded. Keys must be integer, boolean or string. Maps contain at most 1024 distinct entries."),
+    MapKey => ("E0082", "Duplicate map key in a source map literal, or map key not found where a key is required. Use unique keys; order is canonical rather than insertion based."),
+    MapAllocation => ("E0083", "Map payload exceeded the existing shared array/list/map byte quota, or its storage could not be reserved."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

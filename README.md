@@ -1,5 +1,7 @@
 # Scarp
 
+**Alpha.12 development builds** add structured data and a [task board project](docs/task-board.md) with immutable collections and pure state transitions.
+
 **0.0.6-alpha.11** adds [exact decimal values](docs/decimal.md), explicit rounding,
 and typed console input with `input_decimal()`.
 [Release notes](docs/releases/v0.0.6-alpha.11-publication.md) ·

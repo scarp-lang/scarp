@@ -71,6 +71,7 @@ impl TypedExpression<'_> {
                     }
                     Some(ResolvedCall::Io(input)) => self.types.input.get(&input).copied(),
                     Some(ResolvedCall::BigIntDivMod) => self.types.divmod,
+                    Some(ResolvedCall::List(_)) | Some(ResolvedCall::Map(_)) => None,
                     None => None,
                 };
                 TypedNode {
@@ -93,9 +94,12 @@ fn operation_expressions(
             ResolvedStatement::Call { expression } => (Some(expression), &[]),
             ResolvedStatement::RepeatInit { count, .. } => (Some(count), &[]),
             ResolvedStatement::JumpIfFalse { condition, .. } => (Some(condition), &[]),
-            ResolvedStatement::Store { value, .. } | ResolvedStatement::Update { value, .. } => {
-                (Some(value), &[])
-            }
+            ResolvedStatement::Store { value, .. }
+            | ResolvedStatement::Propagate { value, .. }
+            | ResolvedStatement::Destructure { value, .. }
+            | ResolvedStatement::Match { value, .. }
+            | ResolvedStatement::MatchLiteral { value, .. }
+            | ResolvedStatement::Update { value, .. } => (Some(value), &[]),
             ResolvedStatement::Output { arguments, .. } => (None, arguments),
             _ => (None, &[]),
         };

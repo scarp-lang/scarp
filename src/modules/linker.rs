@@ -2,6 +2,7 @@
 use super::*;
 use crate::{
     ast::{Expression, ExpressionKind, PrintArgument, Statement},
+    types::{NominalKind, SourceType},
     value::{Value, ValueType},
 };
 use std::collections::HashMap;
@@ -18,12 +19,40 @@ struct FunctionTarget {
 }
 struct Table {
     symbols: HashMap<String, Symbol>,
+    nominal: HashMap<String, NominalSymbol>,
     ordered: Vec<SymbolInfo>,
     aliases: HashMap<String, SourceId>,
     alias_order: Vec<String>,
 }
+struct NominalSymbol {
+    kind: NominalKind,
+    public: bool,
+    span: Span,
+}
+
+impl Table {
+    fn insert_nominal(
+        &mut self,
+        name: &str,
+        kind: NominalKind,
+        info: SymbolInfo,
+    ) -> Result<(), Diagnostic> {
+        crate::resolver::check_name(name, info.span)?;
+        let symbol = NominalSymbol {
+            kind,
+            public: info.public,
+            span: info.span,
+        };
+        if let Some(previous) = self.nominal.insert(name.to_owned(), symbol) {
+            return Err(duplicate(name, info.span, previous.span));
+        }
+        self.ordered.push(info);
+        Ok(())
+    }
+}
+
 fn syntax(span: Span, message: impl Into<String>) -> Diagnostic {
-    Diagnostic::new(Kind::ModuleSyntax,span,message).with_help("library files contain imports, functions and immutable scalar constants; put executable statements in the entry file")
+    Diagnostic::new(Kind::ModuleSyntax,span,message).with_help("library files contain imports, functions, nominal types and immutable scalar constants; put executable statements in the entry file")
 }
 fn consume(remaining: &mut usize, count: usize, span: Span) -> Result<(), Diagnostic> {
     if count > *remaining {
@@ -45,6 +74,7 @@ fn collect(
         let module = &graph.modules[id];
         let mut table = Table {
             symbols: HashMap::new(),
+            nominal: HashMap::new(),
             ordered: Vec::new(),
             aliases: HashMap::new(),
             alias_order: Vec::new(),
@@ -61,6 +91,49 @@ fn collect(
             };
             let symbol = match statement {
                 Statement::Import { .. } => continue,
+                Statement::Record(record) => {
+                    table.insert_nominal(
+                        &record.name,
+                        NominalKind::Record,
+                        SymbolInfo {
+                            name: record.name.clone(),
+                            public,
+                            span: record.name_span,
+                            kind: SymbolKind::Record {
+                                fields: record
+                                    .fields
+                                    .iter()
+                                    .map(|(name, _, ty)| (name.clone(), ty.kind.clone()))
+                                    .collect(),
+                            },
+                        },
+                    )?;
+                    continue;
+                }
+                Statement::Variant(variant) => {
+                    table.insert_nominal(
+                        &variant.name,
+                        NominalKind::Variant,
+                        SymbolInfo {
+                            name: variant.name.clone(),
+                            public,
+                            span: variant.name_span,
+                            kind: SymbolKind::Variant {
+                                cases: variant
+                                    .cases
+                                    .iter()
+                                    .map(|case| {
+                                        (
+                                            case.name.clone(),
+                                            case.payload.as_ref().map(|ty| ty.kind.clone()),
+                                        )
+                                    })
+                                    .collect(),
+                            },
+                        },
+                    )?;
+                    continue;
+                }
                 Statement::Function(function) => {
                     crate::resolver::check_name(&function.name, function.name_span)?;
                     if function.name == "repeat" {
@@ -227,6 +300,15 @@ fn collect(
                 {
                     if let Some(symbol) = table.symbols.get(name).filter(|s| s.constant.is_some()) {
                         return Err(duplicate(name, *name_span, symbol.info.span));
+                    }
+                }
+                if let Statement::Destructure { pattern, .. } = statement {
+                    for (name, name_span) in pattern.bindings() {
+                        if let Some(symbol) =
+                            table.symbols.get(name).filter(|s| s.constant.is_some())
+                        {
+                            return Err(duplicate(name, name_span, symbol.info.span));
+                        }
                     }
                 }
             }
@@ -403,10 +485,178 @@ impl Rewriter<'_> {
             span,
         )
     }
+    fn nominal_target(
+        &self,
+        kind: NominalKind,
+        name: &str,
+        span: Span,
+        public: bool,
+    ) -> Result<(SourceId, &str, Span), Diagnostic> {
+        self.nominal_target_at(kind, name, span, public, 0)
+    }
+
+    // Builtin wrappers are transparent to module visibility: a public
+    // result<record Public, E> is legal, but result<record Private, E> is
+    // not. Walk every concrete argument with a bounded checked type visitor,
+    // including nested wrappers, rather than accidentally exporting private
+    // underlying source types.
+    fn nominal_target_at(
+        &self,
+        kind: NominalKind,
+        name: &str,
+        span: Span,
+        public: bool,
+        depth: usize,
+    ) -> Result<(SourceId, &str, Span), Diagnostic> {
+        if depth >= crate::types::MAX_COMPOSITE_DEPTH {
+            return Err(limit(span, "nominal visibility nesting"));
+        }
+        // Parameterized builtin names may contain dotted imported type
+        // arguments (option<record lib.Item>). Their dots are *inside* the
+        // specialization, not an alias qualifier for the wrapper itself.
+        let generated = kind == NominalKind::Variant
+            && (name.starts_with("option<") || name.starts_with("result<"));
+        let (module, unqualified, require_public) = if generated {
+            (self.id, name, public)
+        } else if let Some((alias, item)) = name.split_once('.') {
+            let module = self.tables[self.id].aliases.get(alias).ok_or_else(|| {
+                Diagnostic::new(
+                    Kind::ModuleSymbol,
+                    span,
+                    format!("unknown module alias {alias:?}"),
+                )
+            })?;
+            (*module, item, true)
+        } else {
+            (self.id, name, public)
+        };
+        let (unqualified, target) = self.tables[module]
+            .nominal
+            .get_key_value(unqualified)
+            .filter(|(_, symbol)| symbol.kind == kind)
+            .ok_or_else(|| {
+                let diagnostic = match kind {
+                    NominalKind::Record => Kind::RecordDefinition,
+                    NominalKind::Variant => Kind::VariantDefinition,
+                };
+                Diagnostic::new(
+                    diagnostic,
+                    span,
+                    format!("unknown {} {name:?}", kind.name()),
+                )
+            })?;
+        let declaration = target.span;
+        if require_public && !target.public {
+            if generated {
+                let info = self.tables[module]
+                    .ordered
+                    .iter()
+                    .find(|symbol| symbol.name == unqualified.as_str())
+                    .expect("generated variant appears in the module table");
+                let SymbolKind::Variant { cases } = &info.kind else {
+                    unreachable!("generated wrapper was registered as a variant");
+                };
+                for (_, payload) in cases {
+                    if let Some(payload) = payload {
+                        payload.map_nominal_refs(
+                            &mut |inner_kind, inner_name, within| {
+                                self.nominal_target_at(
+                                    inner_kind,
+                                    inner_name,
+                                    span,
+                                    true,
+                                    depth.saturating_add(within).saturating_add(1),
+                                )?;
+                                Ok(inner_kind.reference(inner_name.into()))
+                            },
+                            &|| limit(span, "nominal visibility shape"),
+                        )?;
+                    }
+                }
+            } else {
+                return Err(Diagnostic::new(
+                    Kind::ModuleVisibility,
+                    span,
+                    format!("{} {name:?} is private", kind.name()),
+                )
+                .with_related(declaration, "the private type is declared here"));
+            }
+        }
+        Ok((module, unqualified, declaration))
+    }
+
+    fn nominal_reference(
+        &mut self,
+        kind: NominalKind,
+        name: &str,
+        span: Span,
+    ) -> Result<String, Diagnostic> {
+        let (module, item, declaration) = self.nominal_target(kind, name, span, false)?;
+        let expanded = format!("$nominal:{module}:{item}");
+        consume(self.remaining, expanded.len(), span)?;
+        let source = self.id;
+        self.navigation(|b| {
+            b.use_symbol(
+                source,
+                name,
+                span,
+                declaration,
+                symbols::ReferenceKind::Read,
+            )
+        });
+        Ok(expanded)
+    }
+
+    fn nominal_type(
+        &mut self,
+        kind: &SourceType,
+        span: Span,
+        public: bool,
+    ) -> Result<SourceType, Diagnostic> {
+        kind.map_nominal_refs(
+            &mut |kind, name, _| {
+                let (module, item, _) = self.nominal_target(kind, name, span, public)?;
+                let expanded = format!("$nominal:{module}:{item}");
+                consume(self.remaining, expanded.len(), span)?;
+                Ok(kind.reference(expanded.into()))
+            },
+            &|| limit(span, "nominal type shape"),
+        )
+    }
+
     fn expression(&mut self, expression: &mut Expression) -> Result<(), Diagnostic> {
         for node in &mut expression.nodes {
             self.index_node(node)?;
             match &mut node.kind {
+                ExpressionKind::Record {
+                    name, name_span, ..
+                } => {
+                    *name = self.nominal_reference(NominalKind::Record, name, *name_span)?;
+                }
+                ExpressionKind::Variant(constructor) => {
+                    constructor.name = self.nominal_reference(
+                        NominalKind::Variant,
+                        &constructor.name,
+                        constructor.name_span,
+                    )?;
+                }
+                ExpressionKind::Array {
+                    empty_element_type: Some(kind),
+                    ..
+                }
+                | ExpressionKind::List {
+                    empty_element_type: Some(kind),
+                    ..
+                } => {
+                    *kind = self.nominal_type(kind, node.span, false)?;
+                }
+                ExpressionKind::Map {
+                    empty_types: Some((key, value)),
+                    ..
+                } => {
+                    *key = self.nominal_type(key, node.span, false)?;
+                    *value = self.nominal_type(value, node.span, false)?;
+                }
                 ExpressionKind::UserCall {
                     name,
                     function_span,
@@ -468,6 +718,9 @@ impl Rewriter<'_> {
         }
         Ok(())
     }
+    // Keep the recursive traversal frame separate from its leaf work so deep
+    // scopes fit the same stack bounds as parsing and semantic resolution.
+    #[inline(never)]
     fn list(&mut self, statements: &mut [Statement], nested: bool) -> Result<(), Diagnostic> {
         if nested {
             self.scopes.push(HashMap::new());
@@ -475,174 +728,322 @@ impl Rewriter<'_> {
         for statement in statements {
             self.navigation(|b| b.step(statement.span()));
             match statement {
-                Statement::Function(function) => {
-                    let old = std::mem::take(&mut self.scopes);
-                    let old_function = self.function.replace(function.name_span);
-                    self.scopes.push(HashMap::new());
-                    for parameter in &mut function.parameters {
-                        self.binding_name(&parameter.name, parameter.span)?;
-                        if let Some(default) = &mut parameter.default {
-                            self.expression(default)?;
-                        }
-                        self.scopes[0].insert(parameter.name.clone(), parameter.span);
-                    }
-                    for contract in &mut function.contracts {
-                        if contract.postcondition && function.result != ValueType::Unit {
-                            self.scopes[0].insert("result".into(), contract.span);
-                        }
-                        self.expression(&mut contract.expression)?;
-                        self.scopes[0].remove("result");
-                    }
-                    self.list(&mut function.statements, true)?;
-                    self.scopes = old;
-                    self.function = old_function;
-                    function.name = self.tables[self.id].symbols[&function.name]
-                        .target
-                        .as_ref()
-                        .unwrap()
-                        .name
-                        .clone();
-                }
-                Statement::Declaration {
-                    name,
-                    name_span,
-                    initializer,
-                    mutable,
-                    ..
-                } => {
-                    self.binding_name(name, *name_span)?;
-                    self.expression(initializer)?;
-                    let (source, owner) = (self.id, self.function);
-                    self.navigation(|b| {
-                        b.binding(
-                            source,
-                            owner,
-                            name,
-                            *name_span,
-                            symbols::SymbolKind::Binding,
-                            *mutable,
-                        )
-                    });
-                    self.scopes
-                        .last_mut()
-                        .unwrap()
-                        .insert(name.clone(), *name_span);
-                }
-                Statement::Assign {
-                    name,
-                    name_span,
-                    value,
-                    operator,
-                    ..
-                } => {
-                    if !self.scopes.iter().any(|scope| scope.contains_key(name))
-                        && self.tables[self.id]
-                            .symbols
-                            .get(name)
-                            .is_some_and(|s| s.constant.is_some())
-                    {
-                        return Err(Diagnostic::new(
-                            Kind::ImmutableAssignment,
-                            *name_span,
-                            format!("module constant {name:?} cannot be assigned"),
-                        ));
-                    }
-                    let source = self.id;
-                    let declaration = self
-                        .scopes
-                        .iter()
-                        .rev()
-                        .find_map(|scope| scope.get(name))
-                        .copied();
-                    let kind = if *operator == crate::ast::AssignmentOperator::Set {
-                        symbols::ReferenceKind::Write
-                    } else {
-                        symbols::ReferenceKind::ReadWrite
-                    };
-                    self.navigation(|b| {
-                        if let Some(declaration) = declaration {
-                            b.use_symbol(source, name, *name_span, declaration, kind)?;
-                        }
-                        Ok(())
-                    });
-                    self.expression(value)?;
-                }
-                Statement::Call { expression, .. }
-                | Statement::Assert {
-                    condition: expression,
-                    ..
-                } => self.expression(expression)?,
-                Statement::Return { value, .. } => {
-                    if let Some(value) = value {
-                        self.expression(value)?;
-                    }
-                }
+                Statement::Match(statement) => self.match_statement(statement),
+                Statement::Function(function) => self.function_body(function),
                 Statement::Repeat {
                     count,
                     index,
                     index_span,
                     statements,
                     ..
-                } => {
-                    self.expression(count)?;
-                    self.binding_name(index, *index_span)?;
-                    let (source, owner) = (self.id, self.function);
-                    self.navigation(|b| {
-                        b.binding(
-                            source,
-                            owner,
-                            index,
-                            *index_span,
-                            symbols::SymbolKind::RepeatIndex,
-                            false,
-                        )
-                    });
-                    self.scopes
-                        .push(HashMap::from([(index.clone(), *index_span)]));
-                    self.list(statements, false)?;
-                    self.scopes.pop();
-                }
+                } => self.repeat_body(count, index, *index_span, statements),
                 Statement::While {
                     condition,
                     statements,
                     ..
-                } => {
-                    self.expression(condition)?;
-                    self.list(statements, true)?;
-                }
-                Statement::Block { statements, .. } => self.list(statements, true)?,
+                } => self.while_body(condition, statements),
                 Statement::If {
                     branches,
                     otherwise,
                     ..
-                } => {
-                    for branch in branches {
-                        self.expression(&mut branch.condition)?;
-                        self.list(&mut branch.statements, true)?;
-                    }
-                    self.list(otherwise, true)?;
-                }
-                Statement::Println { argument, .. } => {
-                    if let PrintArgument::Expression(e) = argument {
-                        self.expression(e)?;
-                    }
-                }
-                Statement::Output { arguments, .. } => {
-                    for argument in arguments {
-                        if let PrintArgument::Expression(e) = argument {
-                            self.expression(e)?;
-                        }
-                    }
-                }
-                Statement::Break { .. } | Statement::Continue { .. } => {}
-                Statement::Import { span, .. } | Statement::Export { span, .. } => {
-                    return Err(syntax(*span, "module declarations cannot be nested"))
-                }
-            }
+                } => self.if_body(branches, otherwise),
+                Statement::Block { statements, .. } => self.list(statements, true),
+                statement => self.leaf(statement),
+            }?;
         }
         if nested {
             self.scopes.pop();
         }
+        Ok(())
+    }
+
+    #[inline(never)]
+    fn leaf(&mut self, statement: &mut Statement) -> Result<(), Diagnostic> {
+        match statement {
+            Statement::Record(record) => {
+                let public = self.tables[self.id].nominal[&record.name].public;
+                for (_, _, field) in &mut record.fields {
+                    field.kind = self.nominal_type(&field.kind, field.span, public)?;
+                }
+                let expanded = format!("$nominal:{}:{}", self.id, record.name);
+                consume(self.remaining, expanded.len(), record.name_span)?;
+                record.name = expanded;
+            }
+            Statement::Variant(variant) => {
+                let public = self.tables[self.id].nominal[&variant.name].public;
+                for case in &mut variant.cases {
+                    if let Some(ty) = &mut case.payload {
+                        ty.kind = self.nominal_type(&ty.kind, ty.span, public)?;
+                    }
+                }
+                let expanded = format!("$nominal:{}:{}", self.id, variant.name);
+                consume(self.remaining, expanded.len(), variant.name_span)?;
+                variant.name = expanded;
+            }
+            Statement::Declaration {
+                name,
+                name_span,
+                initializer,
+                mutable,
+                annotation,
+                ..
+            } => {
+                if let Some(annotation) = annotation {
+                    annotation.kind =
+                        self.nominal_type(&annotation.kind, annotation.span, false)?;
+                }
+                self.binding_name(name, *name_span)?;
+                self.expression(initializer)?;
+                let (source, owner) = (self.id, self.function);
+                self.navigation(|b| {
+                    b.binding(
+                        source,
+                        owner,
+                        name,
+                        *name_span,
+                        symbols::SymbolKind::Binding,
+                        *mutable,
+                    )
+                });
+                self.scopes
+                    .last_mut()
+                    .unwrap()
+                    .insert(name.clone(), *name_span);
+            }
+            Statement::Destructure {
+                pattern,
+                mutable,
+                initializer,
+                ..
+            } => {
+                // Resolve source references before publishing destructured
+                // bindings. Match the compiler's one-time initializer order.
+                self.expression(initializer)?;
+                self.pattern_bindings(pattern, *mutable)?;
+            }
+            Statement::Assign {
+                name,
+                name_span,
+                value,
+                operator,
+                ..
+            } => {
+                if !self.scopes.iter().any(|scope| scope.contains_key(name))
+                    && self.tables[self.id]
+                        .symbols
+                        .get(name)
+                        .is_some_and(|s| s.constant.is_some())
+                {
+                    return Err(Diagnostic::new(
+                        Kind::ImmutableAssignment,
+                        *name_span,
+                        format!("module constant {name:?} cannot be assigned"),
+                    ));
+                }
+                let source = self.id;
+                let declaration = self
+                    .scopes
+                    .iter()
+                    .rev()
+                    .find_map(|scope| scope.get(name))
+                    .copied();
+                let kind = if *operator == crate::ast::AssignmentOperator::Set {
+                    symbols::ReferenceKind::Write
+                } else {
+                    symbols::ReferenceKind::ReadWrite
+                };
+                self.navigation(|b| {
+                    if let Some(declaration) = declaration {
+                        b.use_symbol(source, name, *name_span, declaration, kind)?;
+                    }
+                    Ok(())
+                });
+                self.expression(value)?;
+            }
+            Statement::Call { expression, .. }
+            | Statement::Assert {
+                condition: expression,
+                ..
+            } => self.expression(expression)?,
+            Statement::Return { value, .. } => {
+                if let Some(value) = value {
+                    self.expression(value)?;
+                }
+            }
+            Statement::Println { argument, .. } => {
+                if let PrintArgument::Expression(e) = argument {
+                    self.expression(e)?;
+                }
+            }
+            Statement::Output { arguments, .. } => {
+                for argument in arguments {
+                    if let PrintArgument::Expression(e) = argument {
+                        self.expression(e)?;
+                    }
+                }
+            }
+            Statement::Break { .. } | Statement::Continue { .. } => {}
+            Statement::Import { span, .. } | Statement::Export { span, .. } => {
+                return Err(syntax(*span, "module declarations cannot be nested"))
+            }
+            Statement::Match(_)
+            | Statement::Function(_)
+            | Statement::Repeat { .. }
+            | Statement::While { .. }
+            | Statement::If { .. }
+            | Statement::Block { .. } => unreachable!("container statement"),
+        }
+        Ok(())
+    }
+
+    #[inline(never)]
+    fn match_statement(
+        &mut self,
+        statement: &mut crate::ast::MatchStatement,
+    ) -> Result<(), Diagnostic> {
+        self.expression(&mut statement.subject)?;
+        for arm in &mut statement.arms {
+            self.begin_match_arm(arm)?;
+            self.list(&mut arm.statements, false)?;
+            self.scopes.pop();
+        }
+        Ok(())
+    }
+
+    #[inline(never)]
+    fn begin_match_arm(&mut self, arm: &crate::ast::MatchArm) -> Result<(), Diagnostic> {
+        self.navigation(|b| b.step(arm.tag_span));
+        self.scopes.push(HashMap::new());
+        if let Some(pattern) = &arm.payload {
+            self.pattern_bindings(pattern, false)?;
+        }
+        Ok(())
+    }
+
+    #[inline(never)]
+    fn pattern_bindings(
+        &mut self,
+        pattern: &crate::ast::BindingPattern,
+        mutable: bool,
+    ) -> Result<(), Diagnostic> {
+        use crate::ast::PatternKind;
+        let (source, owner) = (self.id, self.function);
+        for node in pattern.nodes() {
+            self.navigation(|builder| {
+                builder.step(node.span)?;
+                if let PatternKind::Record(fields) = &node.kind {
+                    for field in fields {
+                        builder.step(field.span)?;
+                    }
+                }
+                Ok(())
+            });
+            if let PatternKind::Name(name) = &node.kind {
+                self.binding_name(name, node.span)?;
+                self.navigation(|builder| {
+                    builder.binding(
+                        source,
+                        owner,
+                        name,
+                        node.span,
+                        symbols::SymbolKind::Binding,
+                        mutable,
+                    )
+                });
+                self.scopes
+                    .last_mut()
+                    .unwrap()
+                    .insert(name.clone(), node.span);
+            }
+        }
+        Ok(())
+    }
+
+    #[inline(never)]
+    fn while_body(
+        &mut self,
+        condition: &mut Expression,
+        statements: &mut [Statement],
+    ) -> Result<(), Diagnostic> {
+        self.expression(condition)?;
+        self.list(statements, true)
+    }
+
+    #[inline(never)]
+    fn if_body(
+        &mut self,
+        branches: &mut [crate::ast::ConditionalBranch],
+        otherwise: &mut [Statement],
+    ) -> Result<(), Diagnostic> {
+        for branch in branches {
+            self.expression(&mut branch.condition)?;
+            self.list(&mut branch.statements, true)?;
+        }
+        self.list(otherwise, true)
+    }
+
+    #[inline(never)]
+    fn function_body(
+        &mut self,
+        function: &mut crate::ast::FunctionDeclaration,
+    ) -> Result<(), Diagnostic> {
+        let public = self.tables[self.id].symbols[&function.name].info.public;
+        function.result = self.nominal_type(&function.result, function.name_span, public)?;
+        let old = std::mem::take(&mut self.scopes);
+        let old_function = self.function.replace(function.name_span);
+        self.scopes.push(HashMap::new());
+        for parameter in &mut function.parameters {
+            parameter.kind = self.nominal_type(&parameter.kind, parameter.span, public)?;
+            self.binding_name(&parameter.name, parameter.span)?;
+            if let Some(default) = &mut parameter.default {
+                self.expression(default)?;
+            }
+            self.scopes[0].insert(parameter.name.clone(), parameter.span);
+        }
+        for contract in &mut function.contracts {
+            if contract.postcondition && function.result != ValueType::Unit {
+                self.scopes[0].insert("result".into(), contract.span);
+            }
+            self.expression(&mut contract.expression)?;
+            self.scopes[0].remove("result");
+        }
+        self.list(&mut function.statements, true)?;
+        self.scopes = old;
+        self.function = old_function;
+        function.name = self.tables[self.id].symbols[&function.name]
+            .target
+            .as_ref()
+            .unwrap()
+            .name
+            .clone();
+        Ok(())
+    }
+
+    #[inline(never)]
+    fn repeat_body(
+        &mut self,
+        count: &mut Expression,
+        index: &str,
+        index_span: Span,
+        statements: &mut [Statement],
+    ) -> Result<(), Diagnostic> {
+        self.expression(count)?;
+        self.binding_name(index, index_span)?;
+        let (source, owner) = (self.id, self.function);
+        self.navigation(|b| {
+            b.binding(
+                source,
+                owner,
+                index,
+                index_span,
+                symbols::SymbolKind::RepeatIndex,
+                false,
+            )
+        });
+        self.scopes
+            .push(HashMap::from([(index.to_owned(), index_span)]));
+        self.list(statements, false)?;
+        self.scopes.pop();
         Ok(())
     }
 }

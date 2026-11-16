@@ -1,16 +1,16 @@
 //! Resumable expressions and isolated call frames; no host recursion.
 use super::{OutputEvent, PrintValue};
 use crate::{
-    ast::{BinaryOperator, OutputTarget},
+    ast::{BinaryOperator, MatchLiteral, OutputTarget},
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     evaluator::{self, Evaluation, Workspace},
     input::{InputState, IoBuiltin},
     limits::{Budget, ExecutionOptions},
     resolver::{
-        ResolvedArgument, ResolvedCall, ResolvedExpression, ResolvedOperation, ResolvedProgram,
-        ResolvedStatement,
+        DestructureStep, MatchTarget, PropagationPlan, ResolvedArgument, ResolvedCall,
+        ResolvedExpression, ResolvedOperation, ResolvedProgram, ResolvedStatement,
     },
-    value::Value,
+    value::{Value, VariantValue},
 };
 
 enum Stage {
@@ -22,6 +22,10 @@ enum Stage {
 }
 enum Completion<'a> {
     Store(usize),
+    Propagate(usize, &'a PropagationPlan, Span),
+    Destructure(&'a [DestructureStep], Span),
+    Match(&'a [MatchTarget]),
+    LiteralMatch(&'a [(MatchLiteral, usize)], usize, Span),
     RepeatCount(usize, usize, Span),
     Update(usize, BinaryOperator, Value, Span),
     Guard(usize, Span),
@@ -30,6 +34,91 @@ enum Completion<'a> {
     Return,
     Contract(bool, Span),
     Output,
+}
+
+enum PatternChildren<'a> {
+    Sequence(std::slice::Iter<'a, Value>),
+    Fields(&'a [Value], std::slice::Iter<'a, usize>),
+}
+
+impl<'a> PatternChildren<'a> {
+    fn next(&mut self) -> Option<&'a Value> {
+        match self {
+            Self::Sequence(values) => values.next(),
+            Self::Fields(fields, offsets) => offsets.next().map(|&offset| &fields[offset]),
+        }
+    }
+}
+
+fn destructure(
+    value: &Value,
+    steps: &[DestructureStep],
+    environment: &mut [Value],
+    budget: &mut Budget,
+    span: Span,
+) -> Result<(), Diagnostic> {
+    let (root, members) = steps.split_first().expect("compiled pattern has a root");
+    // Preserve the outer-pattern work charge and charge nested visits before
+    // publishing bindings. Flat patterns need no heap stack.
+    budget.charge(members.len() as u64, span)?;
+    let mut elements = match root {
+        DestructureStep::Bind(slot) => {
+            environment[*slot] = value.clone();
+            return Ok(());
+        }
+        DestructureStep::Discard => return Ok(()),
+        _ => destructure_children(value, root, span)?,
+    };
+    let mut parents = Vec::new();
+    for step in members {
+        let element = loop {
+            if let Some(element) = elements.next() {
+                break element;
+            }
+            elements = parents
+                .pop()
+                .expect("compiled pattern has matching arities");
+        };
+        match step {
+            DestructureStep::Bind(slot) => environment[*slot] = element.clone(),
+            DestructureStep::Discard => {}
+            _ => {
+                parents.push(elements);
+                elements = destructure_children(element, step, span)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn destructure_children<'a>(
+    value: &'a Value,
+    step: &'a DestructureStep,
+    span: Span,
+) -> Result<PatternChildren<'a>, Diagnostic> {
+    let (children, arity) = match step {
+        DestructureStep::Tuple(arity) => (value.as_tuple().map(|tuple| tuple.elements()), *arity),
+        DestructureStep::Array(arity) => (value.as_array().map(|array| array.elements()), *arity),
+        DestructureStep::Record(offsets) => {
+            if let Value::Record(record) = value {
+                let fields = record.fields();
+                debug_assert!(offsets.iter().all(|&offset| offset < fields.len()));
+                return Ok(PatternChildren::Fields(fields, offsets.iter()));
+            }
+            (None, 0)
+        }
+        _ => unreachable!("only groups have children"),
+    };
+    children
+        .filter(|children| children.len() == arity)
+        .map(|children| PatternChildren::Sequence(children.iter()))
+        .ok_or_else(|| {
+            Diagnostic::new(
+                DiagnosticKind::TypeMismatch,
+                span,
+                "destructuring source shape changed after resolution",
+            )
+        })
 }
 
 struct PendingOutput<'a> {
@@ -328,6 +417,88 @@ pub(super) fn prepare<'a>(
                         frame.expression = None;
                         match std::mem::replace(&mut frame.completion, Completion::Discard) {
                             Completion::Store(slot) => frame.environment[slot] = value,
+                            Completion::Propagate(slot, plan, span) => {
+                                let Value::Variant(value) = value else {
+                                    unreachable!("propagation operand has checked variant type");
+                                };
+                                if value.tag() == plan.success_tag {
+                                    frame.environment[slot] = value
+                                        .payload()
+                                        .expect("success case has a payload")
+                                        .clone();
+                                } else {
+                                    debug_assert_eq!(value.tag(), plan.failure_tag);
+                                    budget.charge_nominal_allocation(
+                                        VariantValue::allocation_bytes(),
+                                        span,
+                                        DiagnosticKind::VariantAllocation,
+                                    )?;
+                                    let forwarded = VariantValue::from_checked(
+                                        plan.outer.clone(),
+                                        plan.failure_tag,
+                                        value.payload().cloned(),
+                                    );
+                                    frame.finish(program, Value::Variant(forwarded));
+                                }
+                            }
+                            Completion::Match(dispatch) => {
+                                let (tag, payload) = match &value {
+                                    Value::Variant(variant) => {
+                                        (usize::from(variant.tag()), variant.payload())
+                                    }
+                                    Value::Boolean(boolean) => (usize::from(*boolean), None),
+                                    _ => unreachable!("match subject has a checked match type"),
+                                };
+                                let target = &dispatch[tag];
+                                if let Some(pattern) = &target.payload {
+                                    destructure(
+                                        payload.expect("matched case declares a payload"),
+                                        &pattern.steps,
+                                        &mut frame.environment,
+                                        &mut budget,
+                                        pattern.span,
+                                    )?;
+                                }
+                                frame.pc = target.instruction;
+                            }
+                            Completion::LiteralMatch(cases, otherwise, span) => {
+                                let mut target = otherwise;
+                                for (case, instruction) in cases {
+                                    // The number of cases is statically bounded and
+                                    // text comparisons pay for the full candidate bytes
+                                    // before performing the comparison.
+                                    let cost = match case {
+                                        MatchLiteral::Integer(_) => 1,
+                                        MatchLiteral::Text(text) => 1_u64.saturating_add(
+                                            (text.len() as u64).saturating_add(63) / 64,
+                                        ),
+                                    };
+                                    budget.charge(cost, span)?;
+                                    let matched = match (case, &value) {
+                                        (MatchLiteral::Integer(want), Value::Integer(actual)) => {
+                                            want == actual
+                                        }
+                                        (MatchLiteral::Text(want), Value::String(actual)) => {
+                                            want.as_str() == actual.as_ref()
+                                        }
+                                        _ => unreachable!("scalar literal subject is checked"),
+                                    };
+                                    if matched {
+                                        target = *instruction;
+                                        break;
+                                    }
+                                }
+                                frame.pc = target;
+                            }
+                            Completion::Destructure(steps, span) => {
+                                destructure(
+                                    &value,
+                                    steps,
+                                    &mut frame.environment,
+                                    &mut budget,
+                                    span,
+                                )?;
+                            }
                             Completion::RepeatCount(count_slot, index_slot, span) => {
                                 let count = value.require_integer(span)?;
                                 if count < 0 {
@@ -596,6 +767,25 @@ pub(super) fn prepare<'a>(
                         ResolvedStatement::Store { slot, value } => {
                             frame.start(value, Completion::Store(*slot))
                         }
+                        ResolvedStatement::Propagate { slot, value, plan } => {
+                            frame.start(value, Completion::Propagate(*slot, plan, operation.span))
+                        }
+                        ResolvedStatement::Match { value, dispatch } => {
+                            frame.start(value, Completion::Match(dispatch));
+                        }
+                        ResolvedStatement::MatchLiteral {
+                            value,
+                            cases,
+                            otherwise,
+                        } => {
+                            frame.start(
+                                value,
+                                Completion::LiteralMatch(cases, *otherwise, operation.span),
+                            );
+                        }
+                        ResolvedStatement::Destructure { steps, value } => {
+                            frame.start(value, Completion::Destructure(steps, operation.span))
+                        }
                         ResolvedStatement::Update {
                             slot,
                             operator,
@@ -711,6 +901,8 @@ fn charge_capture(
         PrintValue::String(text) => text.len(),
         PrintValue::Value(Value::Tuple(tuple)) => tuple.capture_bytes(),
         PrintValue::Value(Value::Array(array)) => array.capture_bytes(),
+        PrintValue::Value(Value::Record(record)) => record.capture_bytes(),
+        PrintValue::Value(Value::Variant(variant)) => variant.capture_bytes(),
         PrintValue::Value(Value::BigInt(number)) => number
             .payload_bytes()
             .max(number.decimal_digits() + usize::from(number.is_negative())),

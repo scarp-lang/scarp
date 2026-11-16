@@ -7,7 +7,7 @@ use super::{
 };
 use crate::diagnostics::Span;
 
-/// Relocate every span and return the number of statement/expression nodes.
+/// Relocate every span and return the number of statement, expression and pattern nodes.
 /// Parser depth limits bound the recursive statement walk; expressions are flat.
 pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> usize {
     fn span(value: &mut Span, base: usize, to_local: bool) {
@@ -28,6 +28,22 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
         for node in &mut value.nodes {
             span(&mut node.span, base, to_local);
             match &mut node.kind {
+                ExpressionKind::Variant(constructor) => {
+                    span(&mut constructor.name_span, base, to_local);
+                    span(&mut constructor.tag_span, base, to_local);
+                }
+                ExpressionKind::Record {
+                    name_span, fields, ..
+                } => {
+                    span(name_span, base, to_local);
+                    *nodes = nodes.saturating_add(fields.len());
+                    for field in fields {
+                        if let Some((_, label_span)) = &mut field.label {
+                            span(label_span, base, to_local);
+                        }
+                    }
+                }
+                ExpressionKind::Field { name_span, .. } => span(name_span, base, to_local),
                 ExpressionKind::Index { operator_span, .. }
                 | ExpressionKind::Negate { operator_span, .. }
                 | ExpressionKind::BitNot { operator_span, .. }
@@ -51,6 +67,8 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                 ExpressionKind::Conditional { .. }
                 | ExpressionKind::Tuple { .. }
                 | ExpressionKind::Array { .. }
+                | ExpressionKind::List { .. }
+                | ExpressionKind::Map { .. }
                 | ExpressionKind::Integers { .. }
                 | ExpressionKind::Vector { .. }
                 | ExpressionKind::Integer(_)
@@ -67,6 +85,18 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
             match arg {
                 PrintArgument::String(_) => {}
                 PrintArgument::Expression(value) => expr(value, base, to_local, nodes),
+            }
+        }
+    }
+    fn pattern(value: &mut super::BindingPattern, base: usize, to_local: bool, nodes: &mut usize) {
+        *nodes = nodes.saturating_add(value.nodes.len());
+        for node in &mut value.nodes {
+            span(&mut node.span, base, to_local);
+            if let super::PatternKind::Record(fields) = &mut node.kind {
+                *nodes = nodes.saturating_add(fields.len());
+                for field in fields {
+                    span(&mut field.span, base, to_local);
+                }
             }
         }
     }
@@ -95,6 +125,39 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                         to_local,
                         nodes,
                     );
+                }
+                Statement::Variant(variant) => {
+                    span(&mut variant.name_span, base, to_local);
+                    span(&mut variant.span, base, to_local);
+                    *nodes = nodes.saturating_add(variant.cases.len());
+                    for case in &mut variant.cases {
+                        span(&mut case.span, base, to_local);
+                        if let Some(ty) = &mut case.payload {
+                            span(&mut ty.span, base, to_local);
+                        }
+                    }
+                }
+                Statement::Match(statement) => {
+                    span(&mut statement.span, base, to_local);
+                    expr(&mut statement.subject, base, to_local, nodes);
+                    *nodes = nodes.saturating_add(statement.arms.len());
+                    for arm in &mut statement.arms {
+                        span(&mut arm.span, base, to_local);
+                        span(&mut arm.tag_span, base, to_local);
+                        if let Some(payload) = &mut arm.payload {
+                            pattern(payload, base, to_local, nodes);
+                        }
+                        statements(&mut arm.statements, base, to_local, nodes);
+                    }
+                }
+                Statement::Record(record) => {
+                    span(&mut record.name_span, base, to_local);
+                    span(&mut record.span, base, to_local);
+                    *nodes = nodes.saturating_add(record.fields.len());
+                    for (_, name_span, ty) in &mut record.fields {
+                        span(name_span, base, to_local);
+                        span(&mut ty.span, base, to_local);
+                    }
                 }
                 Statement::Function(FunctionDeclaration {
                     name_span,
@@ -204,14 +267,28 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                     name_span,
                     annotation,
                     initializer,
+                    propagate,
                     span: whole,
                     ..
                 } => {
                     span(name_span, base, to_local);
                     span(whole, base, to_local);
+                    if let Some(marker) = propagate {
+                        span(marker, base, to_local);
+                    }
                     if let Some(annotation) = annotation {
                         span(&mut annotation.span, base, to_local);
                     }
+                    expr(initializer, base, to_local, nodes);
+                }
+                Statement::Destructure {
+                    pattern: binding,
+                    initializer,
+                    span: whole,
+                    ..
+                } => {
+                    span(whole, base, to_local);
+                    pattern(binding, base, to_local, nodes);
                     expr(initializer, base, to_local, nodes);
                 }
                 Statement::Assign {

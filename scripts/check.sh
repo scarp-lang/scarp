@@ -17,7 +17,7 @@ export RUSTDOCFLAGS="${RUSTDOCFLAGS-} -D warnings"
 
 cargo fmt --all -- --check
 rustfmt --edition 2021 --check scripts/benchmarks/compare.rs
-cargo clippy --locked --all-targets -- -D warnings
+cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked
 cargo test --locked --release
 cargo build --locked
@@ -68,6 +68,32 @@ cargo run --locked -- run examples/tuples.srp
 cargo run --locked -- check examples/tuples.srp
 cargo run --locked -- run examples/fixed_arrays.srp
 cargo run --locked -- check examples/fixed_arrays.srp
+cargo run --locked -- verify examples/app_state.srp
+cargo run --locked -- exec examples/app_state.srp
+cargo run --locked -- verify examples/variant_validation.srp
+cargo run --locked -- exec examples/variant_validation.srp
+cargo run --locked -- verify examples/ui_event_patterns.srp
+cargo run --locked -- exec examples/ui_event_patterns.srp
+cargo run --locked -- verify examples/typed_submission.srp
+cargo run --locked -- exec examples/typed_submission.srp
+cargo run --locked -- verify examples/typed_propagation.srp
+cargo run --locked -- exec examples/typed_propagation.srp
+cargo run --locked -- verify examples/boolean_match.srp
+cargo run --locked -- exec examples/boolean_match.srp
+cargo run --locked -- verify examples/scalar_literal_match.srp
+cargo run --locked -- exec examples/scalar_literal_match.srp
+cargo run --locked -- verify examples/task_panel_state.srp
+cargo run --locked -- exec examples/task_panel_state.srp
+cargo run --locked -- verify examples/typed_dynamic_lists.srp
+cargo run --locked -- exec examples/typed_dynamic_lists.srp
+cargo run --locked -- verify examples/persistent_list_updates.srp
+cargo run --locked -- exec examples/persistent_list_updates.srp
+cargo run --locked -- verify examples/typed_maps.srp
+cargo run --locked -- exec examples/typed_maps.srp
+cargo run --locked -- verify examples/persistent_maps.srp
+cargo run --locked -- exec examples/persistent_maps.srp
+cargo run --locked -- verify examples/map_projections.srp
+cargo run --locked -- exec examples/map_projections.srp
 cargo run --locked --example tuple_types
 cargo run --locked --example program_input
 cargo run --locked -- verify examples/program_input.srp
@@ -82,3 +108,7 @@ cargo run --locked -- verify "$project"
 cargo run --locked -- run "$project"
 cargo run --locked -- test --list --require-tests "$project"
 cargo run --locked -- test --json --require-tests "$project"
+
+task_board=examples/projects/task-board
+cargo run --locked -- verify "$task_board"
+cargo run --locked -- test --json --require-tests "$task_board"

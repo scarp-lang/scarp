@@ -1,0 +1,20 @@
+// Maps expose their canonical ordering as immutable typed lists.
+pure funcra ordered_labels(items: map<string, integer>) -> list<string> {
+    return map_keys(items);
+}
+
+bind mixed = [map: "z": 9, "a": 1, "m": 5];
+bind keys: list<string> = ordered_labels(mixed);
+bind values: list<integer> = map_values(mixed);
+print(keys);
+print(values);
+print(keys[0], values[0]);
+print(map_len(mixed));
+
+bind none: map<integer, string> = [map: <integer, string>];
+print(map_keys(none));
+print(map_values(none));
+
+bind boolean_keys = [map: true: "enabled", false: "disabled"];
+print(map_keys(boolean_keys));
+print(map_values(boolean_keys));
