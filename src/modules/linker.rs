@@ -551,7 +551,7 @@ impl Rewriter<'_> {
                 let info = self.tables[module]
                     .ordered
                     .iter()
-                    .find(|symbol| symbol.name == unqualified)
+                    .find(|symbol| symbol.name == unqualified.as_str())
                     .expect("generated variant appears in the module table");
                 let SymbolKind::Variant { cases } = &info.kind else {
                     unreachable!("generated wrapper was registered as a variant");
