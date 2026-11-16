@@ -258,6 +258,11 @@ fn expression_nodes_preserve_spans_and_postorder_invariants() {
             | ExpressionKind::Integers { elements } => {
                 assert!(elements.iter().all(|element| *element < id))
             }
+            ExpressionKind::Map { entries, .. } => {
+                for (key, value) in entries {
+                    assert!(*key < id && *value < id);
+                }
+            }
             ExpressionKind::Variant(constructor) => {
                 if let Some(payload) = constructor.payload {
                     assert!(payload < id);
