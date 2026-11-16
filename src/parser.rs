@@ -166,6 +166,10 @@ impl Parser<'_> {
     ) -> Result<Vec<Statement>, ParseError> {
         let mut statements = Vec::new();
         while let Some(token) = self.current() {
+            if self.record_start("record") {
+                self.record_into(&mut statements, in_block)?;
+                continue;
+            }
             if self.module_start() {
                 self.module_into(&mut statements, in_block)?;
                 continue;
@@ -269,13 +273,15 @@ impl Parser<'_> {
         } else {
             let declaration = if self.keyword("funcra") || self.keyword("pure") {
                 Statement::Function(self.function()?)
+            } else if self.record_start("record") {
+                Statement::Record(Box::new(self.record()?))
             } else if self.keyword("bind") {
                 self.declaration()?
             } else {
                 return Err(ParseError::new(
                     DiagnosticKind::ModuleSyntax,
                     start,
-                    "pub requires a funcra declaration or an immutable scalar bind",
+                    "pub requires a funcra, record or immutable scalar bind declaration",
                 )
                 .with_help("export a function or write pub bind name = scalar_literal;"));
             };
@@ -295,6 +301,137 @@ impl Parser<'_> {
     ) -> Result<(), ParseError> {
         statements.push(self.module_statement(in_block)?);
         Ok(())
+    }
+
+    fn record_start(&self, word: &str) -> bool {
+        self.keyword(word)
+            && self
+                .tokens
+                .get(self.cursor + 1)
+                .is_some_and(|token| matches!(token.kind, TokenKind::Identifier(_)))
+    }
+
+    #[inline(never)]
+    fn record_into(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        in_block: bool,
+    ) -> Result<(), ParseError> {
+        if in_block {
+            return Err(ParseError::new(
+                DiagnosticKind::RecordDefinition,
+                self.current().unwrap().span,
+                "record declarations are allowed only at file scope",
+            ));
+        }
+        statements.push(Statement::Record(Box::new(self.record()?)));
+        Ok(())
+    }
+
+    fn record(&mut self) -> Result<crate::ast::RecordDeclaration, ParseError> {
+        let start = self.current().unwrap().span.start;
+        self.advance();
+        let (name, name_span) = self.identifier()?;
+        self.punctuation(TokenKind::LeftBrace, "'{' after the record name")?;
+        let mut fields = Vec::new();
+        while !self.at(&TokenKind::RightBrace) {
+            let (field, field_span) = self.identifier()?;
+            self.record_width(fields.len(), field_span)?;
+            self.punctuation(TokenKind::Colon, "':' after the field name")?;
+            let start = self
+                .current()
+                .ok_or_else(|| self.expected("a field type"))?
+                .span
+                .start;
+            let kind = self.value_type(false)?;
+            fields.push((
+                field,
+                field_span,
+                crate::ast::TypeAnnotation {
+                    kind,
+                    span: Span::new(start, self.type_end),
+                },
+            ));
+            if !self.at(&TokenKind::Comma) {
+                break;
+            }
+            self.advance();
+        }
+        let end = self.punctuation(TokenKind::RightBrace, "'}'")?.end;
+        Ok(crate::ast::RecordDeclaration {
+            name,
+            name_span,
+            fields,
+            span: Span::new(start, end),
+        })
+    }
+
+    fn record_width(&self, count: usize, span: Span) -> Result<(), ParseError> {
+        if count >= crate::types::MAX_RECORD_FIELDS {
+            return Err(ParseError::new(
+                DiagnosticKind::RecordField,
+                span,
+                "records support at most 32 fields",
+            ));
+        }
+        Ok(())
+    }
+
+    fn record_literal_start(&self) -> bool {
+        if !self.record_start("new") {
+            return false;
+        }
+        let after_name = self.cursor + 2;
+        let after_type = if self
+            .tokens
+            .get(after_name)
+            .is_some_and(|t| t.kind == TokenKind::Dot)
+        {
+            after_name + 2
+        } else {
+            after_name
+        };
+        self.tokens
+            .get(after_type)
+            .is_some_and(|t| t.kind == TokenKind::LeftBrace)
+    }
+
+    #[inline(never)]
+    fn record_literal(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+    ) -> Result<usize, ParseError> {
+        let opening = self.current().unwrap().span;
+        self.expression_depth(depth, opening)?;
+        self.advance();
+        let (name, name_span) = self.qualified_identifier()?;
+        self.punctuation(TokenKind::LeftBrace, "'{' after the record name")?;
+        let mut fields = Vec::new();
+        while !self.at(&TokenKind::RightBrace) {
+            let label = self.identifier()?;
+            self.record_width(fields.len(), label.1)?;
+            self.punctuation(TokenKind::Colon, "':' after the field name")?;
+            let expression = self.logical_or(nodes, depth + 1)?;
+            fields.push(CallArgument {
+                label: Some(label),
+                expression,
+            });
+            if !self.at(&TokenKind::Comma) {
+                break;
+            }
+            self.advance();
+        }
+        let end = self.punctuation(TokenKind::RightBrace, "'}'")?.end;
+        Ok(push(
+            nodes,
+            ExpressionKind::Record {
+                name,
+                name_span,
+                fields,
+            },
+            Span::new(opening.start, end),
+        ))
     }
 
     fn qualified_identifier(&mut self) -> Result<(String, Span), ParseError> {
@@ -590,6 +727,20 @@ impl Parser<'_> {
                     statements.push(self.declaration()?);
                 }
                 TokenKind::Identifier(name) => {
+                    if let Some(arrow) = self
+                        .tokens
+                        .get(self.cursor + 1)
+                        .filter(|t| t.kind == TokenKind::Arrow)
+                    {
+                        return Err(ParseError::new(
+                            DiagnosticKind::ImmutableAssignment,
+                            arrow.span,
+                            "record fields are immutable",
+                        )
+                        .with_help(
+                            "construct a replacement record and assign it to the var binding",
+                        ));
+                    }
                     if self
                         .tokens
                         .get(self.cursor + 1)
@@ -997,6 +1148,11 @@ impl Parser<'_> {
                     "tuple type exceeds shape limits",
                 )
             });
+        }
+        if name == "record" {
+            let (name, span) = self.qualified_identifier()?;
+            self.type_end = span.end;
+            return Ok(SourceType::RecordRef(name.into()));
         }
         if let Some(kind) =
             ValueType::from_name(&name).filter(|kind| result || *kind != ValueType::Unit)
@@ -1558,7 +1714,11 @@ impl Parser<'_> {
         depth: usize,
     ) -> Result<usize, ParseError> {
         let mut vector = self.primary(nodes, depth)?;
-        while self.at(&TokenKind::LeftBracket) {
+        while self.at(&TokenKind::LeftBracket) || self.at(&TokenKind::Arrow) {
+            if self.at(&TokenKind::Arrow) {
+                vector = self.record_field(nodes, vector)?;
+                continue;
+            }
             let opening = self.current().unwrap().span;
             self.expression_depth(depth, opening)?;
             self.advance();
@@ -1583,6 +1743,26 @@ impl Parser<'_> {
             );
         }
         Ok(vector)
+    }
+
+    #[inline(never)]
+    fn record_field(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        receiver: usize,
+    ) -> Result<usize, ParseError> {
+        self.advance();
+        let (name, name_span) = self.identifier()?;
+        let span = Span::new(nodes[receiver].span.start, name_span.end);
+        Ok(push(
+            nodes,
+            ExpressionKind::Field {
+                receiver,
+                name,
+                name_span,
+            },
+            span,
+        ))
     }
 
     // Keep list/call buffers out of every parenthesized primary's debug frame.
@@ -1737,6 +1917,9 @@ impl Parser<'_> {
         depth: usize,
     ) -> Result<usize, ParseError> {
         match self.current().map(|token| &token.kind) {
+            Some(TokenKind::Identifier(_)) if self.record_literal_start() => {
+                self.record_literal(nodes, depth)
+            }
             Some(TokenKind::Identifier(_))
                 if self
                     .tokens

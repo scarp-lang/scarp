@@ -29,6 +29,7 @@ pub enum Statement {
         span: Span,
     },
     Function(FunctionDeclaration),
+    Record(Box<RecordDeclaration>),
     Return {
         value: Option<Expression>,
         span: Span,
@@ -154,6 +155,7 @@ impl Statement {
         match self {
             Self::Import { span, .. } | Self::Export { span, .. } => *span,
             Self::Function(function) => function.span,
+            Self::Record(record) => record.span,
             Self::Return { span, .. } | Self::Call { span, .. } | Self::Assert { span, .. } => {
                 *span
             }
@@ -170,6 +172,14 @@ impl Statement {
             | Self::Assign { span, .. } => *span,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordDeclaration {
+    pub name: String,
+    pub name_span: Span,
+    pub fields: Vec<(String, Span, TypeAnnotation)>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -267,6 +277,16 @@ pub struct ConditionalExpressionBranch {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExpressionKind {
+    Record {
+        name: String,
+        name_span: Span,
+        fields: Vec<CallArgument>,
+    },
+    Field {
+        receiver: usize,
+        name: String,
+        name_span: Span,
+    },
     Conditional {
         branches: Vec<ConditionalExpressionBranch>,
         otherwise: usize,

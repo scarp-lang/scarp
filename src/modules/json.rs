@@ -23,17 +23,26 @@ fn span(out: &mut impl io::Write, file: &SourceFile, value: Span) -> io::Result<
 }
 
 impl ModuleProgram {
-    /// Inventory version: primitives use 1, tuple types use 2, and any array type uses 3.
+    /// Records use version 4; previous primitive, tuple and array schemas are unchanged.
     pub fn inspection_schema_version(&self) -> u32 {
+        if self
+            .modules
+            .iter()
+            .flat_map(|module| &module.symbols)
+            .any(|symbol| matches!(symbol.kind, SymbolKind::Record { .. }))
+        {
+            return 4;
+        }
         let types = self
             .modules
             .iter()
             .flat_map(|m| &m.symbols)
             .flat_map(|s| match &s.kind {
-                SymbolKind::Constant(kind) => std::iter::once(kind).chain([].iter()),
+                SymbolKind::Constant(kind) => Some(kind).into_iter().chain([].iter()),
+                SymbolKind::Record { .. } => None.into_iter().chain([].iter()),
                 SymbolKind::Function {
                     parameters, result, ..
-                } => std::iter::once(result).chain(parameters.iter()),
+                } => Some(result).into_iter().chain(parameters.iter()),
             });
         let mut version = 1;
         for kind in types {
@@ -106,6 +115,20 @@ impl ModuleProgram {
                 write!(out, ",\"public\":{},\"span\":", symbol.public)?;
                 span(out, file, symbol.span)?;
                 match &symbol.kind {
+                    SymbolKind::Record { fields } => {
+                        out.write_all(b",\"kind\":\"record\",\"fields\":[")?;
+                        for (index, (name, kind)) in fields.iter().enumerate() {
+                            if index != 0 {
+                                out.write_all(b",")?;
+                            }
+                            out.write_all(b"{\"name\":")?;
+                            string(out, name)?;
+                            out.write_all(b",\"type\":")?;
+                            string(out, &kind.to_string())?;
+                            out.write_all(b"}")?;
+                        }
+                        out.write_all(b"]")?;
+                    }
                     SymbolKind::Constant(kind) => {
                         write!(out, ",\"kind\":\"constant\",\"type\":\"{kind}\"")?
                     }

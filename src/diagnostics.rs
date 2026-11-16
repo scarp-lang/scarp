@@ -172,6 +172,9 @@ diagnostic_catalogue! {
     InvalidDecimal => ("E0068", "Invalid exact decimal text or rounding mode. Use ASCII decimal digits with an optional sign and fractional part, or one of half_even, half_up, toward_zero and away_from_zero for rounding. No implicit float conversion occurs."),
     DecimalLimit => ("E0069", "Exact decimal precision or scale limit exceeded. Coefficients have at most 28 canonical digits and at most 18 fractional places. Use explicit rounding, smaller operands or a different numeric type; no silent f64 fallback occurs."),
     DecimalInexact => ("E0070", "Exact decimal division or conversion would lose precision. Select an explicitly rounded operation, or use a terminating quotient within the 28-digit and 18-place bounds."),
+    RecordDefinition => ("E0071", "Check record declarations, field types and record visibility. Record layouts must be acyclic and bounded."),
+    RecordField => ("E0072", "Check record field spelling and provide each declared field exactly once."),
+    RecordAllocation => ("E0073", "Record construction exceeds the allocation budget or could not reserve storage."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

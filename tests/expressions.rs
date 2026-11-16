@@ -243,7 +243,10 @@ fn expression_nodes_preserve_spans_and_postorder_invariants() {
                     assert!(branch.condition < id && branch.result < id);
                 }
             }
-            ExpressionKind::UserCall { arguments, .. } => {
+            ExpressionKind::UserCall { arguments, .. }
+            | ExpressionKind::Record {
+                fields: arguments, ..
+            } => {
                 for argument in arguments {
                     assert!(argument.expression < id);
                 }
@@ -254,6 +257,7 @@ fn expression_nodes_preserve_spans_and_postorder_invariants() {
             | ExpressionKind::Integers { elements } => {
                 assert!(elements.iter().all(|element| *element < id))
             }
+            ExpressionKind::Field { receiver, .. } => assert!(*receiver < id),
             ExpressionKind::Index { vector, index, .. } => assert!(*vector < id && *index < id),
             ExpressionKind::Integer(_) => {}
             ExpressionKind::Float(_)

@@ -777,6 +777,7 @@ fn charge_capture(
         PrintValue::String(text) => text.len(),
         PrintValue::Value(Value::Tuple(tuple)) => tuple.capture_bytes(),
         PrintValue::Value(Value::Array(array)) => array.capture_bytes(),
+        PrintValue::Value(Value::Record(record)) => record.capture_bytes(),
         PrintValue::Value(Value::BigInt(number)) => number
             .payload_bytes()
             .max(number.decimal_digits() + usize::from(number.is_negative())),

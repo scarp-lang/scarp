@@ -218,6 +218,9 @@ pub enum SymbolKind {
         pure: bool,
     },
     Constant(crate::types::SourceType),
+    Record {
+        fields: Vec<(String, crate::types::SourceType)>,
+    },
 }
 #[derive(Debug, Clone)]
 pub struct SymbolInfo {
@@ -572,6 +575,7 @@ fn validate_imports(program: &Program, allowance: usize) -> Result<Vec<Import>, 
         };
         let declared = match statement {
             Statement::Function(f) => Some((f.name.as_str(), f.name_span)),
+            Statement::Record(r) => Some((r.name.as_str(), r.name_span)),
             Statement::Declaration {
                 name, name_span, ..
             } => Some((name.as_str(), *name_span)),

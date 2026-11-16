@@ -18,6 +18,7 @@ pub enum SymbolKind {
     Module,
     ImportAlias,
     Function,
+    Record,
     Constant,
     Binding,
     Parameter,
@@ -31,6 +32,7 @@ impl SymbolKind {
             Self::Module => "module",
             Self::ImportAlias => "import_alias",
             Self::Function => "function",
+            Self::Record => "record",
             Self::Constant => "constant",
             Self::Binding => "binding",
             Self::Parameter => "parameter",
@@ -275,6 +277,18 @@ impl Builder {
                 };
                 match statement {
                     Statement::Function(f) => b.function(id, f, public)?,
+                    Statement::Record(record) => {
+                        b.define(
+                            Some(id),
+                            Some(record.name_span),
+                            &record.name,
+                            SymbolKind::Record,
+                            Some(b.modules[id]),
+                            public,
+                            false,
+                            None,
+                        )?;
+                    }
                     Statement::Declaration {
                         name,
                         name_span,

@@ -4,9 +4,10 @@ pub(super) fn resolve_function(
     function: FunctionDeclaration,
     signatures: &[FunctionInfo],
     names: &HashMap<String, usize>,
+    records: &records::Layouts,
     registry: &mut TypeRegistryBuilder,
 ) -> Result<ResolvedFunction, Diagnostic> {
-    let mut resolver = Resolver::new(signatures, names, registry);
+    let mut resolver = Resolver::new(signatures, names, records, registry);
     resolver.result = Some((function.result.clone(), function.name_span));
     resolver.pure = true;
     let mut defaults = Vec::new();

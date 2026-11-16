@@ -3,6 +3,7 @@ use super::{PrimitiveType, TypeId, TypeKind, TypeRegistryBuilder, TypeRegistryEr
 use std::{fmt, sync::Arc};
 
 pub const MAX_TUPLE_ARITY: usize = 32;
+pub const MAX_RECORD_FIELDS: usize = 32;
 pub const MAX_COMPOSITE_DEPTH: usize = 32;
 pub const MAX_TUPLE_DEPTH: usize = MAX_COMPOSITE_DEPTH;
 pub const MAX_SOURCE_TYPE_NODES: usize = 4096;
@@ -14,6 +15,9 @@ pub enum SourceType {
     Primitive(PrimitiveType),
     Tuple(Arc<TupleType>),
     Array(Arc<ArrayType>),
+    /// A record name in parsed syntax, resolved before semantic interning.
+    RecordRef(Arc<str>),
+    Record(Arc<RecordType>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -23,6 +27,7 @@ struct Shape {
     expanded: usize,
     display_bytes: usize,
     contains_array: bool,
+    has_record_ref: bool,
 }
 
 impl Shape {
@@ -75,7 +80,119 @@ impl ArrayType {
     }
 }
 
+/// Immutable layout owned by one resolved program.
+#[derive(Debug)]
+pub struct RecordType {
+    id: TypeId,
+    declaration: crate::diagnostics::Span,
+    name: Arc<str>,
+    fields: Box<[(String, SourceType)]>,
+    shape: Shape,
+}
+impl RecordType {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn fields(&self) -> &[(String, SourceType)] {
+        &self.fields
+    }
+    pub(crate) fn declaration_span(&self) -> crate::diagnostics::Span {
+        self.declaration
+    }
+    pub fn type_id(&self) -> TypeId {
+        self.id
+    }
+}
+impl PartialEq for RecordType {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+impl Eq for RecordType {}
+impl std::hash::Hash for RecordType {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
 impl SourceType {
+    pub(crate) fn record(
+        id: TypeId,
+        declaration: crate::diagnostics::Span,
+        name: Arc<str>,
+        fields: Vec<(String, Self)>,
+    ) -> Option<Self> {
+        if fields.len() > MAX_RECORD_FIELDS {
+            return None;
+        }
+        let mut shape = Shape {
+            depth: 1,
+            nodes: 1,
+            expanded: 1,
+            display_bytes: "record ".len() + name.len(),
+            contains_array: false,
+            has_record_ref: false,
+        };
+        for (_, field) in &fields {
+            let child = field.shape();
+            shape.depth = shape.depth.max(child.depth + 1);
+            shape.nodes = shape.nodes.checked_add(child.nodes)?;
+            shape.expanded = shape.expanded.checked_add(child.expanded)?;
+            shape.contains_array |= child.contains_array;
+        }
+        Some(Self::Record(Arc::new(RecordType {
+            id,
+            declaration,
+            name,
+            fields: fields.into_boxed_slice(),
+            shape: shape.checked()?,
+        })))
+    }
+
+    pub fn as_record(&self) -> Option<&RecordType> {
+        match self {
+            Self::Record(record) => Some(record),
+            _ => None,
+        }
+    }
+
+    // Rebuild through the checked constructors so a nominal field cannot hide
+    // an oversized shape in a tuple or a zero-length array.
+    pub(crate) fn map_record_refs(
+        &self,
+        mapper: &mut impl FnMut(&str, usize) -> Result<Self, crate::diagnostics::Diagnostic>,
+        too_large: &impl Fn() -> crate::diagnostics::Diagnostic,
+    ) -> Result<Self, crate::diagnostics::Diagnostic> {
+        self.map_record_refs_at(0, mapper, too_large)
+    }
+
+    fn map_record_refs_at(
+        &self,
+        depth: usize,
+        mapper: &mut impl FnMut(&str, usize) -> Result<Self, crate::diagnostics::Diagnostic>,
+        too_large: &impl Fn() -> crate::diagnostics::Diagnostic,
+    ) -> Result<Self, crate::diagnostics::Diagnostic> {
+        match self {
+            Self::RecordRef(name) => mapper(name, depth),
+            Self::Tuple(tuple) if tuple.shape.has_record_ref => {
+                let items = tuple
+                    .elements
+                    .iter()
+                    .map(|t| t.map_record_refs_at(depth + 1, mapper, too_large))
+                    .collect::<Result<Vec<_>, _>>()?;
+                Self::tuple(items).ok_or_else(too_large)
+            }
+            Self::Array(array) if array.shape.has_record_ref => Self::array(
+                array
+                    .element
+                    .map_record_refs_at(depth + 1, mapper, too_large)?,
+                array.length,
+            )
+            .ok_or_else(too_large),
+            _ => Ok(self.clone()),
+        }
+    }
+
     pub fn tuple(elements: Vec<Self>) -> Option<Self> {
         if elements.is_empty()
             || elements.len() > MAX_TUPLE_ARITY
@@ -90,6 +207,7 @@ impl SourceType {
             expanded: 1,
             display_bytes: "tuple<>".len() + 2 * (elements.len() - 1),
             contains_array: false,
+            has_record_ref: false,
         };
         for child in elements.iter().map(Self::shape) {
             shape.depth = shape.depth.max(child.depth + 1);
@@ -97,6 +215,7 @@ impl SourceType {
             shape.expanded = shape.expanded.checked_add(child.expanded)?;
             shape.display_bytes = shape.display_bytes.checked_add(child.display_bytes)?;
             shape.contains_array |= child.contains_array;
+            shape.has_record_ref |= child.has_record_ref;
         }
         let shape = shape.checked()?;
         Some(Self::Tuple(Arc::new(TupleType {
@@ -123,6 +242,7 @@ impl SourceType {
                 .display_bytes
                 .checked_add("array<, >".len() + digits)?,
             contains_array: true,
+            has_record_ref: child.has_record_ref,
         }
         .checked()?;
         Some(Self::Array(Arc::new(ArrayType {
@@ -174,6 +294,10 @@ impl SourceType {
         self.shape().contains_array
     }
 
+    pub(crate) fn has_record_ref(&self) -> bool {
+        self.shape().has_record_ref
+    }
+
     pub(crate) fn display_bytes(&self) -> usize {
         self.shape().display_bytes
     }
@@ -182,12 +306,22 @@ impl SourceType {
         match self {
             Self::Tuple(t) => t.shape,
             Self::Array(a) => a.shape,
+            Self::Record(r) => r.shape,
+            Self::RecordRef(name) => Shape {
+                depth: 0,
+                nodes: 1,
+                expanded: 1,
+                display_bytes: "record ".len() + name.len(),
+                contains_array: false,
+                has_record_ref: true,
+            },
             Self::Primitive(p) => Shape {
                 depth: 0,
                 nodes: 1,
                 expanded: 1,
                 display_bytes: p.name().len(),
                 contains_array: false,
+                has_record_ref: false,
             },
         }
     }
@@ -200,6 +334,11 @@ impl SourceType {
     ) -> Result<TypeId, TypeRegistryError> {
         match self {
             Self::Primitive(p) => Ok(p.id()),
+            Self::RecordRef(_) => Err(TypeRegistryError::UnresolvedRecord),
+            Self::Record(record) => registry
+                .depth(record.id)
+                .map(|_| record.id)
+                .ok_or(TypeRegistryError::UnknownType(record.id)),
             Self::Tuple(t) => {
                 let elements = t
                     .elements
@@ -242,6 +381,8 @@ impl fmt::Display for SourceType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Primitive(p) => p.fmt(f),
+            Self::RecordRef(name) => write!(f, "record {name}"),
+            Self::Record(record) => write!(f, "record {}", record.name()),
             Self::Tuple(t) => {
                 f.write_str("tuple<")?;
                 for (index, element) in t.elements.iter().enumerate() {

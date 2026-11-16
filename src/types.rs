@@ -1,8 +1,9 @@
 //! Semantic type identities. Source-language legality is checked separately.
 mod source;
 pub use source::{
-    ArrayType, SourceType, TupleType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH,
-    MAX_EXPANDED_VALUE_NODES, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH,
+    ArrayType, RecordType, SourceType, TupleType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH,
+    MAX_EXPANDED_VALUE_NODES, MAX_RECORD_FIELDS, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY,
+    MAX_TUPLE_DEPTH,
 };
 
 use std::{
@@ -149,6 +150,10 @@ pub enum FunctionEffect {
 pub enum TypeKind {
     Primitive(PrimitiveType),
     Tuple(Box<[TypeId]>),
+    Record {
+        definition: DefinitionId,
+        fields: Box<[TypeId]>,
+    },
     Sequence {
         element: TypeId,
         length: Option<u64>,
@@ -174,7 +179,7 @@ pub enum TypeKind {
 impl TypeKind {
     fn children(&self) -> impl Iterator<Item = TypeId> + '_ {
         let (single, others): (Option<TypeId>, &[TypeId]) = match self {
-            Self::Tuple(values) => (None, values),
+            Self::Tuple(values) | Self::Record { fields: values, .. } => (None, values),
             Self::Sequence { element, .. } | Self::Tensor { element, .. } => (Some(*element), &[]),
             Self::Applied { arguments, .. } => (None, arguments),
             Self::Function {
@@ -186,7 +191,7 @@ impl TypeKind {
     }
     fn width(&self) -> usize {
         match self {
-            Self::Tuple(v) => v.len(),
+            Self::Tuple(v) | Self::Record { fields: v, .. } => v.len(),
             Self::Applied { arguments, .. } => arguments.len(),
             Self::Function { parameters, .. } => parameters.len(),
             Self::Tensor { dimensions, .. } => dimensions.len(),
@@ -233,6 +238,7 @@ pub enum TypeResource {
 pub enum TypeRegistryError {
     InvalidLimits,
     UnknownType(TypeId),
+    UnresolvedRecord,
     Limit {
         resource: TypeResource,
         limit: usize,
@@ -246,6 +252,7 @@ impl fmt::Display for TypeRegistryError {
             Self::InvalidLimits => f.write_str(
                 "type limits require room for all primitives, positive depth and 32-bit indices",
             ),
+            Self::UnresolvedRecord => f.write_str("record type was not resolved"),
             Self::UnknownType(_) => f.write_str("type handle does not belong to this registry"),
             Self::Limit { resource, limit } => {
                 write!(f, "semantic type {resource:?} limit of {limit} exceeded")
@@ -404,7 +411,7 @@ impl TypeRegistryBuilder {
     pub fn component_count(&self) -> usize {
         self.components
     }
-    fn depth(&self, id: TypeId) -> Option<usize> {
+    pub(crate) fn depth(&self, id: TypeId) -> Option<usize> {
         if id.primitive().is_some() {
             return Some(1);
         }

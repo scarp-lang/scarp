@@ -2,6 +2,7 @@
 use super::*;
 use crate::{
     ast::{Expression, ExpressionKind, PrintArgument, Statement},
+    types::SourceType,
     value::{Value, ValueType},
 };
 use std::collections::HashMap;
@@ -18,12 +19,13 @@ struct FunctionTarget {
 }
 struct Table {
     symbols: HashMap<String, Symbol>,
+    records: HashMap<String, (bool, Span)>,
     ordered: Vec<SymbolInfo>,
     aliases: HashMap<String, SourceId>,
     alias_order: Vec<String>,
 }
 fn syntax(span: Span, message: impl Into<String>) -> Diagnostic {
-    Diagnostic::new(Kind::ModuleSyntax,span,message).with_help("library files contain imports, functions and immutable scalar constants; put executable statements in the entry file")
+    Diagnostic::new(Kind::ModuleSyntax,span,message).with_help("library files contain imports, functions, records and immutable scalar constants; put executable statements in the entry file")
 }
 fn consume(remaining: &mut usize, count: usize, span: Span) -> Result<(), Diagnostic> {
     if count > *remaining {
@@ -45,6 +47,7 @@ fn collect(
         let module = &graph.modules[id];
         let mut table = Table {
             symbols: HashMap::new(),
+            records: HashMap::new(),
             ordered: Vec::new(),
             aliases: HashMap::new(),
             alias_order: Vec::new(),
@@ -61,6 +64,28 @@ fn collect(
             };
             let symbol = match statement {
                 Statement::Import { .. } => continue,
+                Statement::Record(record) => {
+                    crate::resolver::check_name(&record.name, record.name_span)?;
+                    if let Some((_, earlier)) = table
+                        .records
+                        .insert(record.name.clone(), (public, record.name_span))
+                    {
+                        return Err(duplicate(&record.name, record.name_span, earlier));
+                    }
+                    table.ordered.push(SymbolInfo {
+                        name: record.name.clone(),
+                        public,
+                        span: record.name_span,
+                        kind: SymbolKind::Record {
+                            fields: record
+                                .fields
+                                .iter()
+                                .map(|(name, _, ty)| (name.clone(), ty.kind.clone()))
+                                .collect(),
+                        },
+                    });
+                    continue;
+                }
                 Statement::Function(function) => {
                     crate::resolver::check_name(&function.name, function.name_span)?;
                     if function.name == "repeat" {
@@ -412,10 +437,100 @@ impl Rewriter<'_> {
             span,
         )
     }
+    fn record_target(
+        &self,
+        name: &str,
+        span: Span,
+        public: bool,
+    ) -> Result<(SourceId, &str, Span), Diagnostic> {
+        let (module, unqualified, require_public) =
+            if let Some((alias, item)) = name.split_once('.') {
+                let module = self.tables[self.id].aliases.get(alias).ok_or_else(|| {
+                    Diagnostic::new(
+                        Kind::ModuleSymbol,
+                        span,
+                        format!("unknown module alias {alias:?}"),
+                    )
+                })?;
+                (*module, item, true)
+            } else {
+                (self.id, name, public)
+            };
+        let (unqualified, &(visible, declaration)) = self.tables[module]
+            .records
+            .get_key_value(unqualified)
+            .ok_or_else(|| {
+                Diagnostic::new(
+                    Kind::RecordDefinition,
+                    span,
+                    format!("unknown record {name:?}"),
+                )
+            })?;
+        if require_public && !visible {
+            return Err(Diagnostic::new(
+                Kind::ModuleVisibility,
+                span,
+                format!("record {name:?} is private"),
+            )
+            .with_related(declaration, "the private record is declared here"));
+        }
+        Ok((module, unqualified, declaration))
+    }
+
+    fn record_reference(
+        &mut self,
+        name: &str,
+        span: Span,
+        public: bool,
+    ) -> Result<String, Diagnostic> {
+        let (module, item, declaration) = self.record_target(name, span, public)?;
+        let expanded = format!("$record:{module}:{item}");
+        consume(self.remaining, expanded.len(), span)?;
+        let source = self.id;
+        self.navigation(|b| {
+            b.use_symbol(
+                source,
+                name,
+                span,
+                declaration,
+                symbols::ReferenceKind::Read,
+            )
+        });
+        Ok(expanded)
+    }
+
+    fn record_type(
+        &mut self,
+        kind: &SourceType,
+        span: Span,
+        public: bool,
+    ) -> Result<SourceType, Diagnostic> {
+        kind.map_record_refs(
+            &mut |name, _| {
+                let (module, item, _) = self.record_target(name, span, public)?;
+                let expanded = format!("$record:{module}:{item}");
+                consume(self.remaining, expanded.len(), span)?;
+                Ok(SourceType::RecordRef(expanded.into()))
+            },
+            &|| limit(span, "record type shape"),
+        )
+    }
+
     fn expression(&mut self, expression: &mut Expression) -> Result<(), Diagnostic> {
         for node in &mut expression.nodes {
             self.index_node(node)?;
             match &mut node.kind {
+                ExpressionKind::Record {
+                    name, name_span, ..
+                } => {
+                    *name = self.record_reference(name, *name_span, false)?;
+                }
+                ExpressionKind::Array {
+                    empty_element_type: Some(kind),
+                    ..
+                } => {
+                    *kind = self.record_type(kind, node.span, false)?;
+                }
                 ExpressionKind::UserCall {
                     name,
                     function_span,
@@ -484,11 +599,25 @@ impl Rewriter<'_> {
         for statement in statements {
             self.navigation(|b| b.step(statement.span()));
             match statement {
+                Statement::Record(record) => {
+                    let public = self.tables[self.id].records[&record.name].0;
+                    for (_, _, field) in &mut record.fields {
+                        field.kind = self.record_type(&field.kind, field.span, public)?;
+                    }
+                    let expanded = format!("$record:{}:{}", self.id, record.name);
+                    consume(self.remaining, expanded.len(), record.name_span)?;
+                    record.name = expanded;
+                }
                 Statement::Function(function) => {
+                    let public = self.tables[self.id].symbols[&function.name].info.public;
+                    function.result =
+                        self.record_type(&function.result, function.name_span, public)?;
                     let old = std::mem::take(&mut self.scopes);
                     let old_function = self.function.replace(function.name_span);
                     self.scopes.push(HashMap::new());
                     for parameter in &mut function.parameters {
+                        parameter.kind =
+                            self.record_type(&parameter.kind, parameter.span, public)?;
                         self.binding_name(&parameter.name, parameter.span)?;
                         if let Some(default) = &mut parameter.default {
                             self.expression(default)?;
@@ -517,8 +646,13 @@ impl Rewriter<'_> {
                     name_span,
                     initializer,
                     mutable,
+                    annotation,
                     ..
                 } => {
+                    if let Some(annotation) = annotation {
+                        annotation.kind =
+                            self.record_type(&annotation.kind, annotation.span, false)?;
+                    }
                     self.binding_name(name, *name_span)?;
                     self.expression(initializer)?;
                     let (source, owner) = (self.id, self.function);

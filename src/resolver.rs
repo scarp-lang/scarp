@@ -3,6 +3,8 @@
 use std::collections::HashMap;
 
 mod functions;
+mod records;
+pub(crate) use records::RecordOperation;
 mod type_info;
 
 use crate::types::{SourceType, TypeId, TypeLimits, TypeRegistryBuilder};
@@ -146,6 +148,7 @@ pub(crate) struct ResolvedExpression {
     pub kind: SourceType,
     pub types: Vec<TypeId>,
     pub calls: Vec<Option<ResolvedCall>>,
+    pub records: std::collections::BTreeMap<usize, RecordOperation>,
 }
 
 #[derive(Debug, Clone)]
@@ -297,6 +300,7 @@ pub fn resolve_with_type_limits(
     let mut statements = Vec::new();
     let mut metadata: Vec<FunctionInfo> = Vec::new();
     let mut names: HashMap<String, usize> = HashMap::new();
+    let records = records::collect(&program.statements, &mut registry)?;
     for statement in program.statements {
         if matches!(
             statement,
@@ -309,7 +313,12 @@ pub fn resolve_with_type_limits(
             )
             .with_help("use modules::compile_with_loader or modules::compile_file"));
         }
-        if let Statement::Function(function) = statement {
+        if let Statement::Function(mut function) = statement {
+            for parameter in &mut function.parameters {
+                parameter.kind = records::resolve_type(&records, &parameter.kind, parameter.span)?;
+            }
+            function.result =
+                records::resolve_type(&records, &function.result, function.name_span)?;
             check_name(&function.name, function.name_span)?;
             if function.name == "repeat" {
                 return Err(Diagnostic::new(
@@ -361,15 +370,15 @@ pub fn resolve_with_type_limits(
                 recursive: false,
             });
             declarations.push(function);
-        } else {
+        } else if !matches!(statement, Statement::Record(_)) {
             statements.push(statement);
         }
     }
     let functions = declarations
         .into_iter()
-        .map(|f| resolve_function(f, &metadata, &names, &mut registry))
+        .map(|f| resolve_function(f, &metadata, &names, &records, &mut registry))
         .collect::<Result<Vec<_>, _>>()?;
-    let mut resolver = Resolver::new(&metadata, &names, &mut registry);
+    let mut resolver = Resolver::new(&metadata, &names, &records, &mut registry);
     resolver.statement_list(statements)?;
     let statement_count = resolver
         .statements
@@ -406,6 +415,7 @@ struct Resolver<'a> {
     loops: Vec<LoopContext>,
     functions: &'a [FunctionInfo],
     names: &'a HashMap<String, usize>,
+    records: &'a records::Layouts,
     result: Option<(SourceType, Span)>,
     pure: bool,
 }
@@ -421,6 +431,7 @@ impl<'a> Resolver<'a> {
     fn new(
         functions: &'a [FunctionInfo],
         names: &'a HashMap<String, usize>,
+        records: &'a records::Layouts,
         registry: &'a mut TypeRegistryBuilder,
     ) -> Self {
         Self {
@@ -431,6 +442,7 @@ impl<'a> Resolver<'a> {
             loops: Vec::new(),
             functions,
             names,
+            records,
             result: None,
             pure: false,
         }
@@ -443,6 +455,7 @@ impl<'a> Resolver<'a> {
             self.functions,
             self.names,
             self.pure,
+            self.records,
             self.registry,
         )
     }
@@ -561,6 +574,12 @@ impl<'a> Resolver<'a> {
                         "module declarations require an explicit source loader",
                     )
                     .with_help("use modules::compile_with_loader or modules::compile_file"));
+                }
+                Statement::Record(record) => {
+                    return Err(records::definition_error(
+                        record.span,
+                        "record declarations are allowed only at file scope",
+                    ));
                 }
                 Statement::Function(function) => {
                     return Err(Diagnostic::new(
@@ -836,6 +855,16 @@ impl<'a> Resolver<'a> {
                     // Resolve before insertion: a shadowing initializer sees the outer name.
                     let value = self.expression(initializer)?;
                     require_value(&value.kind, span)?;
+                    let annotation = annotation
+                        .map(|mut annotation| {
+                            annotation.kind = records::resolve_type(
+                                self.records,
+                                &annotation.kind,
+                                annotation.span,
+                            )?;
+                            Ok(annotation)
+                        })
+                        .transpose()?;
                     require_annotation(
                         annotation,
                         &value.kind,
@@ -1079,19 +1108,68 @@ fn lookup<'a>(scopes: &'a [Scope], name: &str) -> Option<&'a Binding> {
 }
 
 fn resolve_expression(
-    syntax: Expression,
+    mut syntax: Expression,
     scopes: &[Scope],
     functions: &[FunctionInfo],
     names: &HashMap<String, usize>,
     pure: bool,
+    layouts: &records::Layouts,
     registry: &mut TypeRegistryBuilder,
 ) -> Result<ResolvedExpression, Diagnostic> {
     let mut slots = Vec::with_capacity(syntax.nodes().len());
     let mut calls = Vec::with_capacity(syntax.nodes().len());
     let mut types: Vec<SourceType> = Vec::with_capacity(syntax.nodes().len());
-    for node in syntax.nodes() {
+    let mut record_operations = std::collections::BTreeMap::new();
+    for index in 0..syntax.nodes.len() {
+        let node = &mut syntax.nodes[index];
+        if let ExpressionKind::Array {
+            empty_element_type: Some(kind),
+            ..
+        } = &mut node.kind
+        {
+            if kind.has_record_ref() {
+                *kind = records::resolve_type(layouts, kind, node.span)?;
+            }
+        }
+        let node = &syntax.nodes[index];
         let mut call = None;
         let (kind, slot) = match &node.kind {
+            ExpressionKind::Record {
+                name,
+                name_span,
+                fields,
+            } => {
+                let kind = records::lookup(layouts, name, *name_span)?;
+                let operation = records::constructor(&kind, fields, &types, &syntax, node.span)?;
+                record_operations.insert(index, operation);
+                (kind, None)
+            }
+            ExpressionKind::Field {
+                receiver,
+                name,
+                name_span,
+            } => {
+                let kind = &types[*receiver];
+                let record = kind.as_record().ok_or_else(|| {
+                    records::field_error(
+                        *name_span,
+                        format!("field access requires a record, found {kind}"),
+                    )
+                })?;
+                let (index_in_layout, (_, field_type)) = record
+                    .fields()
+                    .iter()
+                    .enumerate()
+                    .find(|(_, (field, _))| field == name)
+                    .ok_or_else(|| {
+                        records::field_error(
+                            *name_span,
+                            format!("{} has no field {name:?}", record.name()),
+                        )
+                    })?;
+                record_operations.insert(index, RecordOperation::Field(index_in_layout));
+                (field_type.clone(), None)
+            }
             ExpressionKind::Tuple { elements } => {
                 let mut members = Vec::new();
                 for &element in elements {
@@ -1581,6 +1659,7 @@ fn resolve_expression(
         kind,
         types,
         calls,
+        records: record_operations,
     })
 }
 
@@ -1600,6 +1679,7 @@ pub(crate) fn resolve_closed_expression(
         &[],
         &HashMap::new(),
         false,
+        &records::Layouts::new(),
         &mut TypeRegistryBuilder::new(TypeLimits::default())
             .map_err(|e| type_info::failure(e, Span::default()))?,
     )
@@ -1615,7 +1695,19 @@ pub(crate) fn require_type(
     if found == expected {
         Ok(())
     } else {
-        Err(type_mismatch(span, expected, found))
+        let error = type_mismatch(span, &expected, &found);
+        if let (Some(expected), Some(found)) = (expected.as_record(), found.as_record()) {
+            return Err(error
+                .with_related(
+                    expected.declaration_span(),
+                    "the expected record is declared here",
+                )
+                .with_related(
+                    found.declaration_span(),
+                    "the actual record is declared here",
+                ));
+        }
+        Err(error)
     }
 }
 

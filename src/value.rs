@@ -7,8 +7,10 @@ use crate::diagnostics::{Diagnostic, DiagnosticKind, Span};
 pub use crate::types::PrimitiveType as ValueType;
 use crate::types::SourceType;
 mod array;
+mod record;
 mod tuple;
 pub use array::ArrayValue;
+pub use record::RecordValue;
 pub use tuple::TupleValue;
 
 pub const MAX_TEXT_BYTES: usize = 1024 * 1024;
@@ -329,6 +331,7 @@ pub enum Value {
     BigInt(crate::bigint::BigInt),
     Decimal(crate::decimal::Decimal),
     Array(ArrayValue),
+    Record(RecordValue),
 }
 
 impl Value {
@@ -339,6 +342,7 @@ impl Value {
             Self::BigInt(_) => ValueType::BigInt.into(),
             Self::Decimal(_) => ValueType::Decimal.into(),
             Self::Array(value) => value.kind().clone(),
+            Self::Record(value) => value.kind().clone(),
             Self::Unit => ValueType::Unit.into(),
             Self::Integer(_) => ValueType::Integer.into(),
             Self::Float(_) => ValueType::Float.into(),
@@ -369,6 +373,7 @@ impl Value {
         match self {
             Self::Tuple(value) => Some(value.work()),
             Self::Array(value) => Some(value.work()),
+            Self::Record(value) => Some(value.work()),
             _ => None,
         }
     }
@@ -484,6 +489,7 @@ impl fmt::Display for Value {
             Self::BigInt(value) => value.fmt(f),
             Self::Decimal(value) => value.fmt(f),
             Self::Array(value) => value.fmt(f),
+            Self::Record(value) => value.fmt(f),
             Self::Unit => f.write_str("unit"),
             Self::Integer(value) => value.fmt(f),
             Self::Float(value) => value.fmt(f),

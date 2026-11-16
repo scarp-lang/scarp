@@ -28,6 +28,18 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
         for node in &mut value.nodes {
             span(&mut node.span, base, to_local);
             match &mut node.kind {
+                ExpressionKind::Record {
+                    name_span, fields, ..
+                } => {
+                    span(name_span, base, to_local);
+                    *nodes = nodes.saturating_add(fields.len());
+                    for field in fields {
+                        if let Some((_, label_span)) = &mut field.label {
+                            span(label_span, base, to_local);
+                        }
+                    }
+                }
+                ExpressionKind::Field { name_span, .. } => span(name_span, base, to_local),
                 ExpressionKind::Index { operator_span, .. }
                 | ExpressionKind::Negate { operator_span, .. }
                 | ExpressionKind::BitNot { operator_span, .. }
@@ -95,6 +107,15 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                         to_local,
                         nodes,
                     );
+                }
+                Statement::Record(record) => {
+                    span(&mut record.name_span, base, to_local);
+                    span(&mut record.span, base, to_local);
+                    *nodes = nodes.saturating_add(record.fields.len());
+                    for (_, name_span, ty) in &mut record.fields {
+                        span(name_span, base, to_local);
+                        span(&mut ty.span, base, to_local);
+                    }
                 }
                 Statement::Function(FunctionDeclaration {
                     name_span,

@@ -8,7 +8,7 @@ use crate::{
     numeric::{self, Builtin},
     resolver::{self, ResolvedCall, ResolvedExpression},
     types::SourceType,
-    value::{finite_number, type_mismatch, ArrayValue, TupleValue, Value, ValueType},
+    value::{finite_number, type_mismatch, ArrayValue, RecordValue, TupleValue, Value, ValueType},
 };
 
 /// Evaluate a standalone integer expression, preserving the v0.0.1 return type.
@@ -40,6 +40,8 @@ enum Task {
     Vector(usize, bool, Span),
     Tuple(usize, Span),
     Array(usize, Span),
+    Record(usize, Span),
+    Field(usize, Span),
     Index(usize, Span),
     Builtin(Builtin, usize, Span),
     BigIntDivMod(usize, Span),
@@ -140,6 +142,8 @@ impl Workspace {
                 Task::UserCall(_, _, span)
                 | Task::Tuple(_, span)
                 | Task::Array(_, span)
+                | Task::Record(_, span)
+                | Task::Field(_, span)
                 | Task::Io(_, span)
                 | Task::Vector(_, _, span)
                 | Task::BitNot(span)
@@ -172,6 +176,16 @@ impl Workspace {
                             for argument in arguments.iter().rev() {
                                 tasks.push(Task::Visit(argument.expression));
                             }
+                        }
+                        ExpressionKind::Record { fields, .. } => {
+                            tasks.push(Task::Record(index, node.span));
+                            for field in fields.iter().rev() {
+                                tasks.push(Task::Visit(field.expression));
+                            }
+                        }
+                        ExpressionKind::Field { receiver, .. } => {
+                            tasks.push(Task::Field(index, node.span));
+                            tasks.push(Task::Visit(*receiver));
                         }
                         ExpressionKind::Tuple { elements } => {
                             tasks.push(Task::Tuple(elements.len(), node.span));
@@ -270,6 +284,44 @@ impl Workspace {
                             tasks.push(Task::Visit(*left));
                         }
                     }
+                }
+                Task::Record(node, span) => {
+                    let resolver::RecordOperation::Construct { kind, order } =
+                        &expression.records[&node]
+                    else {
+                        unreachable!("resolved record constructor");
+                    };
+                    budget.charge(order.len() as u64, span)?;
+                    budget.charge_record_allocation(
+                        RecordValue::allocation_bytes(order.len()),
+                        span,
+                    )?;
+                    let start = values.len() - order.len();
+                    let mut fields = Vec::new();
+                    fields.try_reserve_exact(order.len()).map_err(|_| {
+                        Diagnostic::new(
+                            DiagnosticKind::RecordAllocation,
+                            span,
+                            "could not reserve record storage",
+                        )
+                    })?;
+                    for &input in order.iter() {
+                        fields.push(std::mem::replace(&mut values[start + input], Value::Unit));
+                    }
+                    values.truncate(start);
+                    values.push(Value::Record(RecordValue::from_checked(
+                        kind.clone(),
+                        fields,
+                    )));
+                }
+                Task::Field(node, _) => {
+                    let resolver::RecordOperation::Field(offset) = expression.records[&node] else {
+                        unreachable!("resolved record field");
+                    };
+                    let Some(Value::Record(value)) = values.pop() else {
+                        unreachable!("field receiver was resolved as a record");
+                    };
+                    values.push(value.fields()[offset].clone());
                 }
                 Task::Tuple(count, span) => finish_tuple(values, count, budget, span)?,
                 Task::Array(node, span) => {

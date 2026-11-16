@@ -147,7 +147,9 @@ impl Work {
                             "use scalar operators and earlier constants; call functions at runtime",
                         ))
                     }
-                    ExpressionKind::Tuple { .. }
+                    ExpressionKind::Record { .. }
+                    | ExpressionKind::Field { .. }
+                    | ExpressionKind::Tuple { .. }
                     | ExpressionKind::Array { .. }
                     | ExpressionKind::Vector { .. }
                     | ExpressionKind::Integers { .. }
@@ -158,7 +160,7 @@ impl Work {
                     )
                     .with_related(declaration.span, "constant initialized here")
                     .with_help(
-                        "construct or index tuples, arrays, vectors and tiles inside a function or entry script",
+                        "construct or access composite values inside a function or entry script",
                     )),
                     ExpressionKind::Name(name) => {
                         if let Some(&target) = names.get(name.as_str()) {
