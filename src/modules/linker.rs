@@ -492,6 +492,25 @@ impl Rewriter<'_> {
         span: Span,
         public: bool,
     ) -> Result<(SourceId, &str, Span), Diagnostic> {
+        self.nominal_target_at(kind, name, span, public, 0)
+    }
+
+    // Builtin wrappers are transparent to module visibility: a public
+    // result<record Public, E> is legal, but result<record Private, E> is
+    // not. Walk every concrete argument with a bounded checked type visitor,
+    // including nested wrappers, rather than accidentally exporting private
+    // underlying source types.
+    fn nominal_target_at(
+        &self,
+        kind: NominalKind,
+        name: &str,
+        span: Span,
+        public: bool,
+        depth: usize,
+    ) -> Result<(SourceId, &str, Span), Diagnostic> {
+        if depth >= crate::types::MAX_COMPOSITE_DEPTH {
+            return Err(limit(span, "nominal visibility nesting"));
+        }
         // Parameterized builtin names may contain dotted imported type
         // arguments (option<record lib.Item>). Their dots are *inside* the
         // specialization, not an alias qualifier for the wrapper itself.
@@ -529,12 +548,40 @@ impl Rewriter<'_> {
             })?;
         let declaration = target.span;
         if require_public && !target.public {
-            return Err(Diagnostic::new(
-                Kind::ModuleVisibility,
-                span,
-                format!("{} {name:?} is private", kind.name()),
-            )
-            .with_related(declaration, "the private type is declared here"));
+            if generated {
+                let info = self.tables[module]
+                    .ordered
+                    .iter()
+                    .find(|symbol| symbol.name == unqualified)
+                    .expect("generated variant appears in the module table");
+                let SymbolKind::Variant { cases } = &info.kind else {
+                    unreachable!("generated wrapper was registered as a variant");
+                };
+                for (_, payload) in cases {
+                    if let Some(payload) = payload {
+                        payload.map_nominal_refs(
+                            &mut |inner_kind, inner_name, within| {
+                                self.nominal_target_at(
+                                    inner_kind,
+                                    inner_name,
+                                    span,
+                                    true,
+                                    depth.saturating_add(within).saturating_add(1),
+                                )?;
+                                Ok(inner_kind.reference(inner_name.into()))
+                            },
+                            &|| limit(span, "nominal visibility shape"),
+                        )?;
+                    }
+                }
+            } else {
+                return Err(Diagnostic::new(
+                    Kind::ModuleVisibility,
+                    span,
+                    format!("{} {name:?} is private", kind.name()),
+                )
+                .with_related(declaration, "the private type is declared here"));
+            }
         }
         Ok((module, unqualified, declaration))
     }
