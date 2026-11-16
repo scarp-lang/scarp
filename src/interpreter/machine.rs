@@ -7,10 +7,10 @@ use crate::{
     input::{InputState, IoBuiltin},
     limits::{Budget, ExecutionOptions},
     resolver::{
-        DestructureStep, MatchTarget, ResolvedArgument, ResolvedCall, ResolvedExpression,
+        DestructureStep, MatchTarget, PropagationPlan, ResolvedArgument, ResolvedCall, ResolvedExpression,
         ResolvedOperation, ResolvedProgram, ResolvedStatement,
     },
-    value::Value,
+    value::{Value, VariantValue},
 };
 
 enum Stage {
@@ -22,6 +22,7 @@ enum Stage {
 }
 enum Completion<'a> {
     Store(usize),
+    Propagate(usize, &'a PropagationPlan, Span),
     Destructure(&'a [DestructureStep], Span),
     Match(&'a [MatchTarget]),
     RepeatCount(usize, usize, Span),
@@ -415,6 +416,30 @@ pub(super) fn prepare<'a>(
                         frame.expression = None;
                         match std::mem::replace(&mut frame.completion, Completion::Discard) {
                             Completion::Store(slot) => frame.environment[slot] = value,
+                            Completion::Propagate(slot, plan, span) => {
+                                let Value::Variant(value) = value else {
+                                    unreachable!("propagation operand has checked variant type");
+                                };
+                                if value.tag() == plan.success_tag {
+                                    frame.environment[slot] = value
+                                        .payload()
+                                        .expect("success case has a payload")
+                                        .clone();
+                                } else {
+                                    debug_assert_eq!(value.tag(), plan.failure_tag);
+                                    budget.charge_nominal_allocation(
+                                        VariantValue::allocation_bytes(),
+                                        span,
+                                        DiagnosticKind::VariantAllocation,
+                                    )?;
+                                    let forwarded = VariantValue::from_checked(
+                                        plan.outer.clone(),
+                                        plan.failure_tag,
+                                        value.payload().cloned(),
+                                    );
+                                    frame.finish(program, Value::Variant(forwarded));
+                                }
+                            }
                             Completion::Match(dispatch) => {
                                 let Value::Variant(value) = value else {
                                     unreachable!("match subject has a compiled variant type");
@@ -707,6 +732,9 @@ pub(super) fn prepare<'a>(
                         }
                         ResolvedStatement::Store { slot, value } => {
                             frame.start(value, Completion::Store(*slot))
+                        }
+                        ResolvedStatement::Propagate { slot, value, plan } => {
+                            frame.start(value, Completion::Propagate(*slot, plan, operation.span))
                         }
                         ResolvedStatement::Match { value, dispatch } => {
                             frame.start(value, Completion::Match(dispatch));
