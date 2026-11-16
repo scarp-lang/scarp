@@ -1359,6 +1359,53 @@ fn resolve_expression(
                 })?;
                 (kind, None)
             }
+            ExpressionKind::Map {
+                entries,
+                empty_types,
+            } => {
+                let (key, value) = if let Some((&(first_key, first_value), rest)) =
+                    entries.split_first()
+                {
+                    let key = &types[first_key];
+                    let value = &types[first_value];
+                    let key_span = syntax.nodes()[first_key].span;
+                    let value_span = syntax.nodes()[first_value].span;
+                    require_value(key, key_span)?;
+                    require_value(value, value_span)?;
+                    for &(next_key, next_value) in rest {
+                        require_type(
+                            &types[next_key],
+                            key,
+                            syntax.nodes()[next_key].span,
+                        )
+                        .map_err(|error| {
+                            error.with_related(key_span, "the first map key has this type")
+                        })?;
+                        require_type(
+                            &types[next_value],
+                            value,
+                            syntax.nodes()[next_value].span,
+                        )
+                        .map_err(|error| {
+                            error.with_related(value_span, "the first map value has this type")
+                        })?;
+                    }
+                    (key, value)
+                } else {
+                    let (key, value) = empty_types
+                        .as_ref()
+                        .expect("parser supplied empty map key and value types");
+                    (key, value)
+                };
+                let kind = SourceType::map(key, value).ok_or_else(|| {
+                    Diagnostic::new(
+                        DiagnosticKind::MapLimit,
+                        node.span,
+                        "map requires integer, boolean or string keys and a non-unit value",
+                    )
+                })?;
+                (kind, None)
+            }
             ExpressionKind::Integers { elements } => {
                 for &element in elements {
                     require_type(
