@@ -119,9 +119,9 @@ fn boolean_diagnostics_preserve_utf8_byte_spans() {
 }
 
 #[test]
-fn non_boolean_scalar_subject_still_requires_a_variant() {
+fn unsupported_scalar_subject_still_requires_a_variant() {
     rejects(
-        "match on 5 { case true {} case false {} }",
+        "match on 5.5 { case true {} case false {} }",
         DiagnosticKind::VariantCase,
         "needs a variant",
     );
