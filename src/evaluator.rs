@@ -761,7 +761,10 @@ impl Workspace {
                     let map = values[start]
                         .as_map()
                         .expect("first argument checked as a map");
-                    let key_index = if operation == MapIntrinsic::Len {
+                    let key_index = if matches!(
+                        operation,
+                        MapIntrinsic::Len | MapIntrinsic::Keys | MapIntrinsic::Values
+                    ) {
                         None
                     } else {
                         let query = &values[start + 1];
@@ -785,6 +788,47 @@ impl Workspace {
                     };
                     let result = match operation {
                         MapIntrinsic::Len => Value::Integer(map.len() as i64),
+                        MapIntrinsic::Keys | MapIntrinsic::Values => {
+                            // A map has at most 1024 entries, so its canonical
+                            // ordered projection fits the list length limit.
+                            let projected = if operation == MapIntrinsic::Keys {
+                                map.key_type()
+                            } else {
+                                map.value_type()
+                            };
+                            let length = map.len();
+                            budget.charge(
+                                (length + projected.node_count() + 1) as u64,
+                                span,
+                            )?;
+                            let bytes = ListValue::allocation_bytes(projected, length)
+                                .ok_or_else(|| {
+                                    Diagnostic::new(
+                                        DiagnosticKind::ListAllocation,
+                                        span,
+                                        "map projection storage size exceeds list bounds",
+                                    )
+                                })?;
+                            budget.charge_list_allocation(bytes, span)?;
+                            let mut items = Vec::new();
+                            items.try_reserve_exact(length).map_err(|_| {
+                                Diagnostic::new(
+                                    DiagnosticKind::ListAllocation,
+                                    span,
+                                    "could not reserve ordered map projection",
+                                )
+                            })?;
+                            for (key, value) in map.entries() {
+                                items.push(if operation == MapIntrinsic::Keys {
+                                    key.clone()
+                                } else {
+                                    value.clone()
+                                });
+                            }
+                            let kind = SourceType::list(projected)
+                                .expect("resolver checked projected list type");
+                            Value::List(ListValue::from_checked(kind, items))
+                        }
                         MapIntrinsic::Contains => {
                             Value::Boolean(key_index.expect("lookup").0.is_some())
                         }
