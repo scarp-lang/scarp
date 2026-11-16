@@ -441,17 +441,21 @@ pub(super) fn prepare<'a>(
                                 }
                             }
                             Completion::Match(dispatch) => {
-                                let Value::Variant(value) = value else {
-                                    unreachable!("match subject has a compiled variant type");
+                                let (tag, payload) = match &value {
+                                    Value::Variant(variant) => {
+                                        (usize::from(variant.tag()), variant.payload())
+                                    }
+                                    Value::Boolean(boolean) => (usize::from(*boolean), None),
+                                    _ => unreachable!("match subject has a checked match type"),
                                 };
-                                let target = &dispatch[usize::from(value.tag())];
-                                if let Some(payload) = &target.payload {
+                                let target = &dispatch[tag];
+                                if let Some(pattern) = &target.payload {
                                     destructure(
-                                        value.payload().expect("matched case declares a payload"),
-                                        &payload.steps,
+                                        payload.expect("matched case declares a payload"),
+                                        &pattern.steps,
                                         &mut frame.environment,
                                         &mut budget,
-                                        payload.span,
+                                        pattern.span,
                                     )?;
                                 }
                                 frame.pc = target.instruction;
