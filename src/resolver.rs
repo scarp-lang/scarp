@@ -710,7 +710,10 @@ impl<'a> Resolver<'a> {
                         Diagnostic::new(
                             DiagnosticKind::InvalidReturn,
                             marker,
-                            format!("propagation requires option or result, found {}", value.kind),
+                            format!(
+                                "propagation requires option or result, found {}",
+                                value.kind
+                            ),
                         )
                     })?;
                     let output = outer.as_variant().ok_or_else(|| {
