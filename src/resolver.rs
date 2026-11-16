@@ -193,6 +193,34 @@ pub(crate) enum CompositeOperation {
     },
 }
 
+/// Pure persistent-list operations. All update forms return a fresh typed
+/// snapshot, preserving any aliases to the original immutable list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ListIntrinsic {
+    Push,
+    Set,
+    Remove,
+    Len,
+}
+impl ListIntrinsic {
+    pub(crate) fn from_name(name: &str) -> Option<Self> {
+        Some(match name {
+            "list_push" => Self::Push,
+            "list_set" => Self::Set,
+            "list_remove" => Self::Remove,
+            "list_len" => Self::Len,
+            _ => return None,
+        })
+    }
+    pub(crate) fn arity(self) -> usize {
+        match self {
+            Self::Push | Self::Remove => 2,
+            Self::Set => 3,
+            Self::Len => 1,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum ResolvedCall {
     User {
@@ -202,11 +230,13 @@ pub(crate) enum ResolvedCall {
     },
     Builtin(Builtin),
     BigIntDivMod,
+    List(ListIntrinsic),
     Io(crate::input::IoBuiltin),
 }
 
 pub(crate) fn is_builtin_name(name: &str) -> bool {
     name == "bigint_divmod"
+        || ListIntrinsic::from_name(name).is_some()
         || crate::input::IoBuiltin::from_name(name).is_some()
         || Builtin::from_name(name).is_some()
 }
@@ -1488,6 +1518,72 @@ fn resolve_expression(
                     slots.push(None);
                     calls.push(Some(ResolvedCall::BigIntDivMod));
                     types.push(kind);
+                    continue;
+                }
+                if let Some(operation) =
+                    ListIntrinsic::from_name(name).filter(|_| !names.contains_key(name))
+                {
+                    if arguments.len() != operation.arity()
+                        || arguments.iter().any(|argument| argument.label.is_some())
+                    {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::CallArguments,
+                            *function_span,
+                            format!(
+                                "{name} requires {} positional arguments",
+                                operation.arity()
+                            ),
+                        ));
+                    }
+                    let first = arguments[0].expression;
+                    let list = types[first].as_list().ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::TypeMismatch,
+                            syntax.nodes()[first].span,
+                            format!("{name} requires list<T> as its first argument"),
+                        )
+                    })?;
+                    match operation {
+                        ListIntrinsic::Push => {
+                            let value = arguments[1].expression;
+                            require_type(
+                                &types[value],
+                                list.element(),
+                                syntax.nodes()[value].span,
+                            )?;
+                        }
+                        ListIntrinsic::Set => {
+                            let position = arguments[1].expression;
+                            let value = arguments[2].expression;
+                            require_type(
+                                &types[position],
+                                ValueType::Integer,
+                                syntax.nodes()[position].span,
+                            )?;
+                            require_type(
+                                &types[value],
+                                list.element(),
+                                syntax.nodes()[value].span,
+                            )?;
+                        }
+                        ListIntrinsic::Remove => {
+                            let position = arguments[1].expression;
+                            require_type(
+                                &types[position],
+                                ValueType::Integer,
+                                syntax.nodes()[position].span,
+                            )?;
+                        }
+                        ListIntrinsic::Len => {}
+                    }
+                    let result = if operation == ListIntrinsic::Len {
+                        SourceType::from(ValueType::Integer)
+                    } else {
+                        types[first].clone()
+                    };
+                    slots.push(None);
+                    calls.push(Some(ResolvedCall::List(operation)));
+                    types.push(result);
                     continue;
                 }
                 if let Some(builtin) =
