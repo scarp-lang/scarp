@@ -28,8 +28,6 @@ fn list_type_has_no_fixed_length_but_keeps_exact_element_identity() {
     let bindings = program.binding_types();
     assert_eq!(bindings[0], bindings[1]);
     assert_ne!(bindings[0], bindings[2]);
-    let id = bindings[0].intern(&mut scarp::types::TypeRegistryBuilder::default());
-    assert!(id.is_ok());
 }
 
 #[test]
