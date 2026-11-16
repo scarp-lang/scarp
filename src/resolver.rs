@@ -221,6 +221,36 @@ impl ListIntrinsic {
     }
 }
 
+/// Bounded pure map operations; mutation always produces a new snapshot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MapIntrinsic {
+    Len,
+    Contains,
+    GetOr,
+    Set,
+    Remove,
+}
+impl MapIntrinsic {
+    pub(crate) fn from_name(name: &str) -> Option<Self> {
+        Some(match name {
+            "map_len" => Self::Len,
+            "map_contains" => Self::Contains,
+            "map_get_or" => Self::GetOr,
+            "map_set" => Self::Set,
+            "map_remove" => Self::Remove,
+            _ => return None,
+        })
+    }
+
+    pub(crate) fn arity(self) -> usize {
+        match self {
+            Self::Len => 1,
+            Self::Contains | Self::Remove => 2,
+            Self::GetOr | Self::Set => 3,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum ResolvedCall {
     User {
@@ -231,12 +261,14 @@ pub(crate) enum ResolvedCall {
     Builtin(Builtin),
     BigIntDivMod,
     List(ListIntrinsic),
+    Map(MapIntrinsic),
     Io(crate::input::IoBuiltin),
 }
 
 pub(crate) fn is_builtin_name(name: &str) -> bool {
     name == "bigint_divmod"
         || ListIntrinsic::from_name(name).is_some()
+        || MapIntrinsic::from_name(name).is_some()
         || crate::input::IoBuiltin::from_name(name).is_some()
         || Builtin::from_name(name).is_some()
 }
@@ -1631,6 +1663,53 @@ fn resolve_expression(
                     };
                     slots.push(None);
                     calls.push(Some(ResolvedCall::List(operation)));
+                    types.push(result);
+                    continue;
+                }
+                if let Some(operation) =
+                    MapIntrinsic::from_name(name).filter(|_| !names.contains_key(name))
+                {
+                    if arguments.len() != operation.arity()
+                        || arguments.iter().any(|argument| argument.label.is_some())
+                    {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::CallArguments,
+                            *function_span,
+                            format!("{name} requires {} positional arguments", operation.arity()),
+                        ));
+                    }
+                    let first = arguments[0].expression;
+                    let map = types[first].as_map().ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::TypeMismatch,
+                            syntax.nodes()[first].span,
+                            format!("{name} requires map<K, V> as the first argument"),
+                        )
+                    })?;
+                    if operation != MapIntrinsic::Len {
+                        let key = arguments[1].expression;
+                        require_type(
+                            &types[key],
+                            map.key(),
+                            syntax.nodes()[key].span,
+                        )?;
+                    }
+                    if matches!(operation, MapIntrinsic::GetOr | MapIntrinsic::Set) {
+                        let value = arguments[2].expression;
+                        require_type(
+                            &types[value],
+                            map.value(),
+                            syntax.nodes()[value].span,
+                        )?;
+                    }
+                    let result = match operation {
+                        MapIntrinsic::Len => ValueType::Integer.into(),
+                        MapIntrinsic::Contains => ValueType::Boolean.into(),
+                        MapIntrinsic::GetOr => map.value().clone(),
+                        MapIntrinsic::Set | MapIntrinsic::Remove => types[first].clone(),
+                    };
+                    slots.push(None);
+                    calls.push(Some(ResolvedCall::Map(operation)));
                     types.push(result);
                     continue;
                 }
