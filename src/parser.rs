@@ -1,7 +1,8 @@
 //! Parse declarations, assignments, blocks, and print statements without execution.
 
 use crate::types::{
-    SourceType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_LIST_LENGTH, MAX_SOURCE_TYPE_NODES,
+    SourceType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_LIST_LENGTH, MAX_MAP_ENTRIES,
+    MAX_SOURCE_TYPE_NODES,
     MAX_TUPLE_ARITY,
 };
 use std::collections::{BTreeMap, VecDeque};
@@ -1009,12 +1010,28 @@ impl Parser<'_> {
         *remaining = remaining
             .checked_sub(1)
             .ok_or_else(|| ParseError::new(limit, span, "type exceeds 4096 structural nodes"))?;
-        if matches!(name.as_str(), "tuple" | "array" | "list") && depth >= MAX_COMPOSITE_DEPTH {
+        if matches!(name.as_str(), "tuple" | "array" | "list" | "map")
+            && depth >= MAX_COMPOSITE_DEPTH
+        {
             return Err(ParseError::new(
                 limit,
                 span,
                 "composite type nesting exceeds 32 levels",
             ));
+        }
+        if name == "map" {
+            self.punctuation(TokenKind::Less, "'<' after map")?;
+            let key = self.source_type(false, depth + 1, remaining, inside_array)?;
+            self.punctuation(TokenKind::Comma, "',' separating map key and value types")?;
+            let value = self.source_type(false, depth + 1, remaining, inside_array)?;
+            let end = self.type_close()?.end;
+            return SourceType::map(key, value).ok_or_else(|| {
+                ParseError::new(
+                    DiagnosticKind::MapLimit,
+                    Span::new(span.start, end),
+                    "map keys must be integer, boolean or string; map values must be non-unit",
+                )
+            });
         }
         if name == "list" {
             self.punctuation(TokenKind::Less, "'<' after list")?;
@@ -1808,6 +1825,11 @@ impl Parser<'_> {
             self.advance();
             return self.list_literal(nodes, depth, opening);
         }
+        if tagged && self.keyword("map") {
+            self.advance();
+            self.advance();
+            return self.map_literal(nodes, depth, opening);
+        }
         let integers = tagged && self.keyword("integer");
         if integers {
             self.advance();
@@ -1938,6 +1960,62 @@ impl Parser<'_> {
             ExpressionKind::List {
                 elements,
                 empty_element_type,
+            },
+            Span::new(opening.start, end),
+        ))
+    }
+
+    fn map_literal(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+        opening: Span,
+    ) -> Result<usize, ParseError> {
+        let mut entries = Vec::new();
+        let empty_types = if self.at(&TokenKind::Less) {
+            self.advance();
+            let mut remaining = MAX_SOURCE_TYPE_NODES - 1;
+            let key = self.source_type(false, 1, &mut remaining, false)?;
+            self.punctuation(TokenKind::Comma, "',' between map key and value types")?;
+            let value = self.source_type(false, 1, &mut remaining, false)?;
+            self.type_close()?;
+            Some((key, value))
+        } else {
+            if self.at(&TokenKind::RightBracket) {
+                return Err(self
+                    .expected("a map key/value entry or '<key, value>'")
+                    .with_help("write [map: <integer, string>] for an empty map"));
+            }
+            loop {
+                if entries.len() == MAX_MAP_ENTRIES {
+                    return Err(ParseError::new(
+                        DiagnosticKind::MapLimit,
+                        self.current().map_or(opening, |token| token.span),
+                        "map literal exceeds 1024 entries",
+                    ));
+                }
+                let key = self.logical_or(nodes, depth + 1)?;
+                self.punctuation(TokenKind::Colon, "':' separating map key and value")?;
+                let value = self.logical_or(nodes, depth + 1)?;
+                entries.push((key, value));
+                if !self.at(&TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+                if self.at(&TokenKind::RightBracket) {
+                    break;
+                }
+            }
+            None
+        };
+        let end = self
+            .punctuation(TokenKind::RightBracket, "']' after map literal")?
+            .end;
+        Ok(push(
+            nodes,
+            ExpressionKind::Map {
+                entries,
+                empty_types,
             },
             Span::new(opening.start, end),
         ))
