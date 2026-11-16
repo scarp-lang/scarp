@@ -218,10 +218,20 @@ pub struct MatchStatement {
     pub span: Span,
 }
 
+/// An exact scalar case used only by a type-checked match, not a dynamic
+/// expression or an unbounded pattern evaluator.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MatchLiteral {
+    Integer(i64),
+    Text(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchArm {
-    /// An underscore tag is a wildcard for all remaining cases.
+    /// The named variant/boolean case or wildcard; empty for scalar literals.
     pub tag: String,
+    /// Literal case, if any; matches never interpret a string as an identifier.
+    pub literal: Option<MatchLiteral>,
     pub tag_span: Span,
     pub payload: Option<BindingPattern>,
     pub statements: Vec<Statement>,
