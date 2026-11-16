@@ -1,8 +1,8 @@
 //! Semantic type identities. Source-language legality is checked separately.
 mod source;
 pub use source::{
-    ArrayType, ListType, RecordType, SourceType, TupleType, VariantType, MAX_ARRAY_LENGTH,
-    MAX_COMPOSITE_DEPTH, MAX_EXPANDED_VALUE_NODES, MAX_LIST_LENGTH, MAX_RECORD_FIELDS,
+    ArrayType, ListType, MapType, RecordType, SourceType, TupleType, VariantType, MAX_ARRAY_LENGTH,
+    MAX_COMPOSITE_DEPTH, MAX_EXPANDED_VALUE_NODES, MAX_LIST_LENGTH, MAX_MAP_ENTRIES, MAX_RECORD_FIELDS,
     MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH, MAX_VARIANT_CASES,
 };
 
@@ -164,6 +164,10 @@ pub enum TypeKind {
         element: TypeId,
         length: Option<u64>,
     },
+    Mapping {
+        key: TypeId,
+        value: TypeId,
+    },
     Applied {
         constructor: DefinitionId,
         arguments: Box<[TypeId]>,
@@ -187,6 +191,7 @@ impl TypeKind {
         let (single, others): (Option<TypeId>, &[TypeId]) = match self {
             Self::Tuple(values) | Self::Record { fields: values, .. } => (None, values),
             Self::Sequence { element, .. } | Self::Tensor { element, .. } => (Some(*element), &[]),
+            Self::Mapping { key, value } => (Some(*key), std::slice::from_ref(value)),
             Self::Applied { arguments, .. } => (None, arguments),
             Self::Function {
                 parameters, result, ..
