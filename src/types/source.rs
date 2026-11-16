@@ -11,6 +11,8 @@ pub const MAX_SOURCE_TYPE_NODES: usize = 4096;
 pub const MAX_ARRAY_LENGTH: usize = 4096;
 /// Maximum elements in an immutable source-level typed dynamic list.
 pub const MAX_LIST_LENGTH: usize = 4096;
+/// Maximum entries in one sorted, immutable source-level map.
+pub const MAX_MAP_ENTRIES: usize = 1024;
 pub const MAX_EXPANDED_VALUE_NODES: usize = 65_536;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -19,6 +21,7 @@ pub enum SourceType {
     Tuple(Arc<TupleType>),
     Array(Arc<ArrayType>),
     List(Arc<ListType>),
+    Map(Arc<MapType>),
     /// A record name in parsed syntax, resolved before semantic interning.
     RecordRef(Arc<str>),
     Record(Arc<RecordType>),
@@ -118,6 +121,23 @@ pub struct ListType {
 impl ListType {
     pub fn element(&self) -> &SourceType {
         &self.element
+    }
+}
+
+/// Deterministic typed map. Key types are integer, boolean or string.
+/// Values use the same bounded composite type model as lists and arrays.
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct MapType {
+    key: SourceType,
+    value: SourceType,
+    shape: Shape,
+}
+impl MapType {
+    pub fn key(&self) -> &SourceType {
+        &self.key
+    }
+    pub fn value(&self) -> &SourceType {
+        &self.value
     }
 }
 
@@ -328,6 +348,11 @@ impl SourceType {
                     .map_nominal_refs_at(depth + 1, mapper, too_large)?,
             )
             .ok_or_else(too_large),
+            Self::Map(map) if map.shape.has_nominal_ref => Self::map(
+                map.key.map_nominal_refs_at(depth + 1, mapper, too_large)?,
+                map.value.map_nominal_refs_at(depth + 1, mapper, too_large)?,
+            )
+            .ok_or_else(too_large),
             _ => Ok(self.clone()),
         }
     }
@@ -416,6 +441,43 @@ impl SourceType {
         }
     }
 
+    /// Keys have a canonical total order and cannot be floating-point or
+    /// composite types. Values may be any bounded non-unit source type.
+    pub fn map(key: impl Into<Self>, value: impl Into<Self>) -> Option<Self> {
+        let key = key.into();
+        let value = value.into();
+        if !matches!(
+            key,
+            Self::Primitive(PrimitiveType::Integer)
+                | Self::Primitive(PrimitiveType::Boolean)
+                | Self::Primitive(PrimitiveType::String)
+        ) || value == PrimitiveType::Unit
+        {
+            return None;
+        }
+        let key_shape = key.shape();
+        let value_shape = value.shape();
+        let shape = Shape {
+            depth: key_shape.depth.max(value_shape.depth).checked_add(1)?,
+            nodes: key_shape.nodes.checked_add(value_shape.nodes)?.checked_add(1)?,
+            expanded: value_shape.expanded.checked_add(2)?,
+            display_bytes: key_shape.display_bytes
+                .checked_add(value_shape.display_bytes)?
+                .checked_add("map<, >".len())?,
+            contains_array: true,
+            has_nominal_ref: value_shape.has_nominal_ref,
+        }
+        .checked()?;
+        Some(Self::Map(Arc::new(MapType { key, value, shape })))
+    }
+
+    pub fn as_map(&self) -> Option<&MapType> {
+        match self {
+            Self::Map(map) => Some(map),
+            _ => None,
+        }
+    }
+
     pub fn as_primitive(&self) -> Option<PrimitiveType> {
         match self {
             Self::Primitive(p) => Some(*p),
@@ -472,6 +534,7 @@ impl SourceType {
             Self::Tuple(t) => t.shape,
             Self::Array(a) => a.shape,
             Self::List(l) => l.shape,
+            Self::Map(m) => m.shape,
             Self::Record(r) => r.shape,
             Self::Variant(v) => v.shape,
             Self::RecordRef(name) | Self::VariantRef(name) => Shape {
@@ -537,6 +600,11 @@ impl SourceType {
                     length: None,
                 })
             }
+            Self::Map(map) => {
+                let key = map.key.intern(registry)?;
+                let value = map.value.intern(registry)?;
+                registry.intern(TypeKind::Mapping { key, value })
+            }
         }
     }
 }
@@ -580,6 +648,7 @@ impl fmt::Display for SourceType {
             }
             Self::Array(a) => write!(f, "array<{}, {}>", a.element, a.length),
             Self::List(l) => write!(f, "list<{}>", l.element),
+            Self::Map(map) => write!(f, "map<{}, {}>", map.key, map.value),
         }
     }
 }
