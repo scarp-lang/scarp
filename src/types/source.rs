@@ -350,7 +350,8 @@ impl SourceType {
             .ok_or_else(too_large),
             Self::Map(map) if map.shape.has_nominal_ref => Self::map(
                 map.key.map_nominal_refs_at(depth + 1, mapper, too_large)?,
-                map.value.map_nominal_refs_at(depth + 1, mapper, too_large)?,
+                map.value
+                    .map_nominal_refs_at(depth + 1, mapper, too_large)?,
             )
             .ok_or_else(too_large),
             _ => Ok(self.clone()),
@@ -459,9 +460,13 @@ impl SourceType {
         let value_shape = value.shape();
         let shape = Shape {
             depth: key_shape.depth.max(value_shape.depth).checked_add(1)?,
-            nodes: key_shape.nodes.checked_add(value_shape.nodes)?.checked_add(1)?,
+            nodes: key_shape
+                .nodes
+                .checked_add(value_shape.nodes)?
+                .checked_add(1)?,
             expanded: value_shape.expanded.checked_add(2)?,
-            display_bytes: key_shape.display_bytes
+            display_bytes: key_shape
+                .display_bytes
                 .checked_add(value_shape.display_bytes)?
                 .checked_add("map<, >".len())?,
             contains_array: true,
