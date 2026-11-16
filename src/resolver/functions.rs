@@ -173,6 +173,7 @@ pub(super) fn build_call_graph(program: &mut ResolvedProgram) {
         for operation in &function.statements {
             match &operation.kind {
                 ResolvedStatement::Store { value, .. }
+                | ResolvedStatement::Propagate { value, .. }
                 | ResolvedStatement::Destructure { value, .. }
                 | ResolvedStatement::Match { value, .. }
                 | ResolvedStatement::Update { value, .. }
