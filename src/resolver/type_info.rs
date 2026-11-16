@@ -97,6 +97,7 @@ fn operation_expressions(
             | ResolvedStatement::Propagate { value, .. }
             | ResolvedStatement::Destructure { value, .. }
             | ResolvedStatement::Match { value, .. }
+            | ResolvedStatement::MatchLiteral { value, .. }
             | ResolvedStatement::Update { value, .. } => (Some(value), &[]),
             ResolvedStatement::Output { arguments, .. } => (None, arguments),
             _ => (None, &[]),
