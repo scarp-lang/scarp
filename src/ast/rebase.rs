@@ -265,11 +265,15 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                     name_span,
                     annotation,
                     initializer,
+                    propagate,
                     span: whole,
                     ..
                 } => {
                     span(name_span, base, to_local);
                     span(whole, base, to_local);
+                    if let Some(marker) = propagate {
+                        span(marker, base, to_local);
+                    }
                     if let Some(annotation) = annotation {
                         span(&mut annotation.span, base, to_local);
                     }
