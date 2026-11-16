@@ -48,6 +48,8 @@ try {
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/scalar_literal_match.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/task_panel_state.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/task_panel_state.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/typed_dynamic_lists.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/typed_dynamic_lists.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--example', 'program_input')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/program_input.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/core_input_tuple.srp')
