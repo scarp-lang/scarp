@@ -1,7 +1,7 @@
 //! Resumable expressions and isolated call frames; no host recursion.
 use super::{OutputEvent, PrintValue};
 use crate::{
-    ast::{BinaryOperator, OutputTarget},
+    ast::{BinaryOperator, MatchLiteral, OutputTarget},
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     evaluator::{self, Evaluation, Workspace},
     input::{InputState, IoBuiltin},
@@ -25,6 +25,7 @@ enum Completion<'a> {
     Propagate(usize, &'a PropagationPlan, Span),
     Destructure(&'a [DestructureStep], Span),
     Match(&'a [MatchTarget]),
+    LiteralMatch(&'a [(MatchLiteral, usize)], usize, Span),
     RepeatCount(usize, usize, Span),
     Update(usize, BinaryOperator, Value, Span),
     Guard(usize, Span),
@@ -460,6 +461,37 @@ pub(super) fn prepare<'a>(
                                 }
                                 frame.pc = target.instruction;
                             }
+                            Completion::LiteralMatch(cases, otherwise, span) => {
+                                let mut target = otherwise;
+                                for (case, instruction) in cases {
+                                    // The number of cases is statically bounded and
+                                    // text comparisons pay for the full candidate bytes
+                                    // before performing the comparison.
+                                    let cost = match case {
+                                        MatchLiteral::Integer(_) => 1,
+                                        MatchLiteral::Text(text) => {
+                                            1_u64.saturating_add(
+                                                (text.len() as u64).saturating_add(63) / 64,
+                                            )
+                                        }
+                                    };
+                                    budget.charge(cost, span)?;
+                                    let matched = match (case, &value) {
+                                        (MatchLiteral::Integer(want), Value::Integer(actual)) => {
+                                            want == actual
+                                        }
+                                        (MatchLiteral::Text(want), Value::String(actual)) => {
+                                            want.as_str() == actual.as_ref()
+                                        }
+                                        _ => unreachable!("scalar literal subject is checked"),
+                                    };
+                                    if matched {
+                                        target = *instruction;
+                                        break;
+                                    }
+                                }
+                                frame.pc = target;
+                            }
                             Completion::Destructure(steps, span) => {
                                 destructure(
                                     &value,
@@ -742,6 +774,16 @@ pub(super) fn prepare<'a>(
                         }
                         ResolvedStatement::Match { value, dispatch } => {
                             frame.start(value, Completion::Match(dispatch));
+                        }
+                        ResolvedStatement::MatchLiteral {
+                            value,
+                            cases,
+                            otherwise,
+                        } => {
+                            frame.start(
+                                value,
+                                Completion::LiteralMatch(cases, *otherwise, operation.span),
+                            );
                         }
                         ResolvedStatement::Destructure { steps, value } => {
                             frame.start(value, Completion::Destructure(steps, operation.span))
