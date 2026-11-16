@@ -95,7 +95,7 @@ fn persistent_update_allocation_is_metered_before_publication() {
         source,
         &mut output,
         ExecutionOptions {
-            max_array_bytes: 512,
+            max_array_bytes: 300,
             ..ExecutionOptions::default()
         },
     );
