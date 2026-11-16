@@ -44,6 +44,8 @@ try {
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/typed_propagation.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/boolean_match.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/boolean_match.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/scalar_literal_match.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/scalar_literal_match.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--example', 'program_input')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/program_input.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/core_input_tuple.srp')
