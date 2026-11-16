@@ -69,7 +69,9 @@ fn pure_cross_module_map_operations_do_not_change_prior_snapshots() {
         bind original = [map: 10: "ten"];
         bind added = l.advance(original, -1, "minus");
         bind removed = l.remove(added, 10);
-        print(original, added, removed);
+        print(original);
+        print(added);
+        print(removed);
         print(map_get_or(added, 10, "missing"));
     "#;
     assert_eq!(
