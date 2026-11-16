@@ -28,6 +28,10 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
         for node in &mut value.nodes {
             span(&mut node.span, base, to_local);
             match &mut node.kind {
+                ExpressionKind::Variant(constructor) => {
+                    span(&mut constructor.name_span, base, to_local);
+                    span(&mut constructor.tag_span, base, to_local);
+                }
                 ExpressionKind::Record {
                     name_span, fields, ..
                 } => {
@@ -107,6 +111,30 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                         to_local,
                         nodes,
                     );
+                }
+                Statement::Variant(variant) => {
+                    span(&mut variant.name_span, base, to_local);
+                    span(&mut variant.span, base, to_local);
+                    *nodes = nodes.saturating_add(variant.cases.len());
+                    for case in &mut variant.cases {
+                        span(&mut case.span, base, to_local);
+                        if let Some(ty) = &mut case.payload {
+                            span(&mut ty.span, base, to_local);
+                        }
+                    }
+                }
+                Statement::Match(statement) => {
+                    span(&mut statement.span, base, to_local);
+                    expr(&mut statement.subject, base, to_local, nodes);
+                    *nodes = nodes.saturating_add(statement.arms.len());
+                    for arm in &mut statement.arms {
+                        span(&mut arm.span, base, to_local);
+                        span(&mut arm.tag_span, base, to_local);
+                        if let Some((_, at)) = &mut arm.payload {
+                            span(at, base, to_local);
+                        }
+                        statements(&mut arm.statements, base, to_local, nodes);
+                    }
                 }
                 Statement::Record(record) => {
                     span(&mut record.name_span, base, to_local);

@@ -147,7 +147,8 @@ impl Work {
                             "use scalar operators and earlier constants; call functions at runtime",
                         ))
                     }
-                    ExpressionKind::Record { .. }
+                    ExpressionKind::Variant(_)
+                    | ExpressionKind::Record { .. }
                     | ExpressionKind::Field { .. }
                     | ExpressionKind::Tuple { .. }
                     | ExpressionKind::Array { .. }

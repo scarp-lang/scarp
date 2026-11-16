@@ -4,10 +4,10 @@ pub(super) fn resolve_function(
     function: FunctionDeclaration,
     signatures: &[FunctionInfo],
     names: &HashMap<String, usize>,
-    records: &records::Layouts,
+    layouts: &nominal::Layouts,
     registry: &mut TypeRegistryBuilder,
 ) -> Result<ResolvedFunction, Diagnostic> {
-    let mut resolver = Resolver::new(signatures, names, records, registry);
+    let mut resolver = Resolver::new(signatures, names, layouts, registry);
     resolver.result = Some((function.result.clone(), function.name_span));
     resolver.pure = true;
     let mut defaults = Vec::new();
@@ -147,6 +147,15 @@ fn definitely_returns(statements: &[Statement], depth: usize) -> bool {
             {
                 return true
             }
+            Statement::Match(statement)
+                if !statement.arms.is_empty()
+                    && statement
+                        .arms
+                        .iter()
+                        .all(|arm| definitely_returns(&arm.statements, depth + 1)) =>
+            {
+                return true
+            }
             // A break/continue makes subsequent statements unreachable in this list.
             Statement::Break { .. } | Statement::Continue { .. } => return false,
             _ => {}
@@ -165,6 +174,7 @@ pub(super) fn build_call_graph(program: &mut ResolvedProgram) {
             match &operation.kind {
                 ResolvedStatement::Store { value, .. }
                 | ResolvedStatement::Destructure { value, .. }
+                | ResolvedStatement::Match { value, .. }
                 | ResolvedStatement::Update { value, .. }
                 | ResolvedStatement::Return { value: Some(value) } => expressions.push(value),
                 ResolvedStatement::Call { expression } => expressions.push(expression),

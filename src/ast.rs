@@ -30,6 +30,8 @@ pub enum Statement {
     },
     Function(FunctionDeclaration),
     Record(Box<RecordDeclaration>),
+    Variant(Box<VariantDeclaration>),
+    Match(Box<MatchStatement>),
     Return {
         value: Option<Expression>,
         span: Span,
@@ -156,6 +158,8 @@ impl Statement {
             Self::Import { span, .. } | Self::Export { span, .. } => *span,
             Self::Function(function) => function.span,
             Self::Record(record) => record.span,
+            Self::Variant(variant) => variant.span,
+            Self::Match(statement) => statement.span,
             Self::Return { span, .. } | Self::Call { span, .. } | Self::Assert { span, .. } => {
                 *span
             }
@@ -179,6 +183,38 @@ pub struct RecordDeclaration {
     pub name: String,
     pub name_span: Span,
     pub fields: Vec<(String, Span, TypeAnnotation)>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VariantDeclaration {
+    pub name: String,
+    pub name_span: Span,
+    pub cases: Vec<VariantCase>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VariantCase {
+    pub name: String,
+    pub span: Span,
+    pub payload: Option<TypeAnnotation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchStatement {
+    pub subject: Expression,
+    pub arms: Vec<MatchArm>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchArm {
+    /// An underscore is a wildcard. A payload name of underscore discards that payload.
+    pub tag: String,
+    pub tag_span: Span,
+    pub payload: Option<(String, Span)>,
+    pub statements: Vec<Statement>,
     pub span: Span,
 }
 
@@ -276,7 +312,17 @@ pub struct ConditionalExpressionBranch {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VariantConstructor {
+    pub name: String,
+    pub name_span: Span,
+    pub tag: String,
+    pub tag_span: Span,
+    pub payload: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExpressionKind {
+    Variant(Box<VariantConstructor>),
     Record {
         name: String,
         name_span: Span,

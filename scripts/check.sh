@@ -70,6 +70,8 @@ cargo run --locked -- run examples/fixed_arrays.srp
 cargo run --locked -- check examples/fixed_arrays.srp
 cargo run --locked -- verify examples/app_state.srp
 cargo run --locked -- exec examples/app_state.srp
+cargo run --locked -- verify examples/variant_validation.srp
+cargo run --locked -- exec examples/variant_validation.srp
 cargo run --locked --example tuple_types
 cargo run --locked --example program_input
 cargo run --locked -- verify examples/program_input.srp

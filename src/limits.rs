@@ -40,7 +40,7 @@ pub struct ExecutionOptions {
     pub max_vector_bytes: usize,
     /// Cumulative newly materialized UTF-8 string payload; sharing does not recharge.
     pub max_text_bytes: usize,
-    /// Cumulative immutable tuple and record payload, independent of text/vectors.
+    /// Cumulative immutable tuple, record and variant payload, independent of text/vectors.
     pub max_tuple_bytes: usize,
     /// Largest allowed input/result BigInt decimal magnitude.
     pub max_bigint_digits: usize,
@@ -194,13 +194,18 @@ impl Budget {
         Ok(())
     }
 
-    pub fn charge_record_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
+    pub(crate) fn charge_nominal_allocation(
+        &mut self,
+        bytes: usize,
+        span: Span,
+        error_kind: DiagnosticKind,
+    ) -> Result<(), Diagnostic> {
         self.tuple_remaining = self.tuple_remaining.checked_sub(bytes).ok_or_else(|| {
             Diagnostic::new(
-                DiagnosticKind::RecordAllocation,
+                error_kind,
                 span,
                 format!(
-                    "cumulative tuple and record allocation limit of {} bytes exceeded",
+                    "cumulative tuple, record and variant allocation limit of {} bytes exceeded",
                     self.tuple_limit
                 ),
             )

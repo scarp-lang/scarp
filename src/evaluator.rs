@@ -8,7 +8,10 @@ use crate::{
     numeric::{self, Builtin},
     resolver::{self, ResolvedCall, ResolvedExpression},
     types::SourceType,
-    value::{finite_number, type_mismatch, ArrayValue, RecordValue, TupleValue, Value, ValueType},
+    value::{
+        finite_number, type_mismatch, ArrayValue, RecordValue, TupleValue, Value, ValueType,
+        VariantValue,
+    },
 };
 
 /// Evaluate a standalone integer expression, preserving the v0.0.1 return type.
@@ -41,6 +44,7 @@ enum Task {
     Tuple(usize, Span),
     Array(usize, Span),
     Record(usize, Span),
+    Variant(usize, bool, Span),
     Field(usize, Span),
     Index(usize, Span),
     Builtin(Builtin, usize, Span),
@@ -143,6 +147,7 @@ impl Workspace {
                 | Task::Tuple(_, span)
                 | Task::Array(_, span)
                 | Task::Record(_, span)
+                | Task::Variant(_, _, span)
                 | Task::Field(_, span)
                 | Task::Io(_, span)
                 | Task::Vector(_, _, span)
@@ -175,6 +180,16 @@ impl Workspace {
                             });
                             for argument in arguments.iter().rev() {
                                 tasks.push(Task::Visit(argument.expression));
+                            }
+                        }
+                        ExpressionKind::Variant(constructor) => {
+                            tasks.push(Task::Variant(
+                                index,
+                                constructor.payload.is_some(),
+                                node.span,
+                            ));
+                            if let Some(payload) = constructor.payload {
+                                tasks.push(Task::Visit(payload));
                             }
                         }
                         ExpressionKind::Record { fields, .. } => {
@@ -285,16 +300,39 @@ impl Workspace {
                         }
                     }
                 }
+                Task::Variant(node, has_payload, span) => {
+                    let resolver::CompositeOperation::Variant { kind, tag } =
+                        &expression.composites[&node]
+                    else {
+                        unreachable!("resolved variant constructor");
+                    };
+                    let payload = if has_payload {
+                        budget.charge_nominal_allocation(
+                            VariantValue::allocation_bytes(),
+                            span,
+                            DiagnosticKind::VariantAllocation,
+                        )?;
+                        Some(values.pop().expect("resolved variant payload"))
+                    } else {
+                        None
+                    };
+                    values.push(Value::Variant(VariantValue::from_checked(
+                        kind.clone(),
+                        *tag,
+                        payload,
+                    )));
+                }
                 Task::Record(node, span) => {
-                    let resolver::RecordOperation::Construct { kind, order } =
-                        &expression.records[&node]
+                    let resolver::CompositeOperation::Record { kind, order } =
+                        &expression.composites[&node]
                     else {
                         unreachable!("resolved record constructor");
                     };
                     budget.charge(order.len() as u64, span)?;
-                    budget.charge_record_allocation(
+                    budget.charge_nominal_allocation(
                         RecordValue::allocation_bytes(order.len()),
                         span,
+                        DiagnosticKind::RecordAllocation,
                     )?;
                     let start = values.len() - order.len();
                     let mut fields = Vec::new();
@@ -315,7 +353,8 @@ impl Workspace {
                     )));
                 }
                 Task::Field(node, _) => {
-                    let resolver::RecordOperation::Field(offset) = expression.records[&node] else {
+                    let resolver::CompositeOperation::Field(offset) = expression.composites[&node]
+                    else {
                         unreachable!("resolved record field");
                     };
                     let Some(Value::Record(value)) = values.pop() else {

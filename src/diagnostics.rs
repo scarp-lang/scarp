@@ -175,6 +175,10 @@ diagnostic_catalogue! {
     RecordDefinition => ("E0071", "Check record declarations, field types and record visibility. Record layouts must be acyclic and bounded."),
     RecordField => ("E0072", "Check record field spelling and provide each declared field exactly once."),
     RecordAllocation => ("E0073", "Record construction exceeds the allocation budget or could not reserve storage."),
+    VariantDefinition => ("E0074", "Check variant declarations and visibility. Variants have one to 32 unique cases and acyclic payload types."),
+    VariantCase => ("E0075", "Check the variant case name and whether the case expects zero or one typed payload."),
+    MatchCoverage => ("E0076", "Cover every case once, or place a reachable wildcard last."),
+    VariantAllocation => ("E0077", "Variant payload allocation exceeded the cumulative tuple, record and variant allowance."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

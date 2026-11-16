@@ -23,8 +23,16 @@ fn span(out: &mut impl io::Write, file: &SourceFile, value: Span) -> io::Result<
 }
 
 impl ModuleProgram {
-    /// Records use version 4; previous primitive, tuple and array schemas are unchanged.
+    /// Variants use schema 5 and records use schema 4.
     pub fn inspection_schema_version(&self) -> u32 {
+        if self
+            .modules
+            .iter()
+            .flat_map(|module| &module.symbols)
+            .any(|symbol| matches!(symbol.kind, SymbolKind::Variant { .. }))
+        {
+            return 5;
+        }
         if self
             .modules
             .iter()
@@ -39,7 +47,9 @@ impl ModuleProgram {
             .flat_map(|m| &m.symbols)
             .flat_map(|s| match &s.kind {
                 SymbolKind::Constant(kind) => Some(kind).into_iter().chain([].iter()),
-                SymbolKind::Record { .. } => None.into_iter().chain([].iter()),
+                SymbolKind::Record { .. } | SymbolKind::Variant { .. } => {
+                    None.into_iter().chain([].iter())
+                }
                 SymbolKind::Function {
                     parameters, result, ..
                 } => Some(result).into_iter().chain(parameters.iter()),
@@ -125,6 +135,24 @@ impl ModuleProgram {
                             string(out, name)?;
                             out.write_all(b",\"type\":")?;
                             string(out, &kind.to_string())?;
+                            out.write_all(b"}")?;
+                        }
+                        out.write_all(b"]")?;
+                    }
+                    SymbolKind::Variant { cases } => {
+                        out.write_all(b",\"kind\":\"variant\",\"cases\":[")?;
+                        for (index, (tag, payload)) in cases.iter().enumerate() {
+                            if index != 0 {
+                                out.write_all(b",")?;
+                            }
+                            out.write_all(b"{\"name\":")?;
+                            string(out, tag)?;
+                            out.write_all(b",\"payload\":")?;
+                            if let Some(kind) = payload {
+                                string(out, &kind.to_string())?;
+                            } else {
+                                out.write_all(b"null")?;
+                            }
                             out.write_all(b"}")?;
                         }
                         out.write_all(b"]")?;

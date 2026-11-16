@@ -50,6 +50,7 @@ fn audit_frame(
         let op = &operations[pc].kind;
         let mut state_out = state.clone();
         let mut successors: Vec<usize> = Vec::with_capacity(2);
+        let mut match_targets = &[][..];
 
         match op {
             ResolvedStatement::Return { value } => {
@@ -128,6 +129,10 @@ fn audit_frame(
                     .ok_or_else(|| format!("store targets out-of-range slot {slot}"))? = true;
                 successors.push(pc + 1);
             }
+            ResolvedStatement::Match { value, dispatch } => {
+                read_slots(value, &state)?;
+                match_targets = dispatch;
+            }
             ResolvedStatement::Destructure { steps, value } => {
                 read_slots(value, &state)?;
                 for step in steps {
@@ -156,15 +161,22 @@ fn audit_frame(
             }
         }
 
-        for next in successors {
+        for (next, payload) in successors.into_iter().map(|next| (next, None)).chain(
+            match_targets
+                .iter()
+                .map(|target| (target.instruction, target.payload_slot)),
+        ) {
+            if payload.is_some_and(|slot| slot >= slot_count) {
+                return Err("match initializes an out-of-range slot".into());
+            }
             let previous = at
                 .get_mut(next)
                 .ok_or_else(|| format!("control flow jumps outside operation stream to {next}"))?;
             let changed = match previous {
                 Some(existing) => {
                     let mut changed = false;
-                    for (bit, next_bit) in existing.iter_mut().zip(&state_out) {
-                        if *bit && !*next_bit {
+                    for (slot, (bit, next_bit)) in existing.iter_mut().zip(&state_out).enumerate() {
+                        if *bit && !*next_bit && payload != Some(slot) {
                             *bit = false;
                             changed = true;
                         }
@@ -172,7 +184,11 @@ fn audit_frame(
                     changed
                 }
                 None => {
-                    *previous = Some(state_out.clone());
+                    let mut incoming = state_out.clone();
+                    if let Some(slot) = payload {
+                        incoming[slot] = true;
+                    }
+                    *previous = Some(incoming);
                     true
                 }
             };
@@ -299,6 +315,21 @@ mod tests {
             .contains("outside operation stream"));
         program.statements[0].kind = ResolvedStatement::Retire { slots: vec![99] };
         assert!(audit(&program).unwrap_err().contains("out-of-range"));
+    }
+
+    #[test]
+    fn match_payload_slot_is_initialized_only_on_the_tag_edge() {
+        let mut program = crate::compile(
+            "variant V { Empty, Found(integer) }
+             match on new V::Found(3) { case Empty {} case Found(n) { print(n); } }",
+        )
+        .unwrap();
+        let ResolvedStatement::Match { dispatch, .. } = &mut program.statements[0].kind else {
+            panic!("expected dispatch")
+        };
+        assert!(dispatch[0].payload_slot.is_none());
+        assert!(dispatch[1].payload_slot.take().is_some());
+        assert!(audit(&program).unwrap_err().contains("uninitialized"));
     }
 
     #[test]

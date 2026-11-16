@@ -184,6 +184,19 @@ impl ModuleProgram {
                         }
                         out.write_all(b"}")?;
                     }
+                    SymbolKind::Variant { cases } => {
+                        write!(out, "  {visibility} variant {} {{", symbol.name)?;
+                        for (index, (tag, payload)) in cases.iter().enumerate() {
+                            if index != 0 {
+                                out.write_all(b", ")?;
+                            }
+                            write!(out, "{tag}")?;
+                            if let Some(kind) = payload {
+                                write!(out, "({kind})")?;
+                            }
+                        }
+                        out.write_all(b"}")?;
+                    }
                     SymbolKind::Constant(kind) => {
                         write!(out, "  {visibility} bind {}: {kind}", symbol.name)?
                     }

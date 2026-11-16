@@ -1,10 +1,12 @@
 //! Semantic type identities. Source-language legality is checked separately.
 mod source;
 pub use source::{
-    ArrayType, RecordType, SourceType, TupleType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH,
-    MAX_EXPANDED_VALUE_NODES, MAX_RECORD_FIELDS, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY,
-    MAX_TUPLE_DEPTH,
+    ArrayType, RecordType, SourceType, TupleType, VariantType, MAX_ARRAY_LENGTH,
+    MAX_COMPOSITE_DEPTH, MAX_EXPANDED_VALUE_NODES, MAX_RECORD_FIELDS, MAX_SOURCE_TYPE_NODES,
+    MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH, MAX_VARIANT_CASES,
 };
+
+pub(crate) use source::NominalKind;
 
 use std::{
     collections::HashMap,
@@ -154,6 +156,10 @@ pub enum TypeKind {
         definition: DefinitionId,
         fields: Box<[TypeId]>,
     },
+    Variant {
+        definition: DefinitionId,
+        cases: Box<[Option<TypeId>]>,
+    },
     Sequence {
         element: TypeId,
         length: Option<u64>,
@@ -187,11 +193,19 @@ impl TypeKind {
             } => (Some(*result), parameters),
             _ => (None, &[]),
         };
-        single.into_iter().chain(others.iter().copied())
+        let cases = match self {
+            Self::Variant { cases, .. } => cases.as_ref(),
+            _ => &[],
+        };
+        single
+            .into_iter()
+            .chain(others.iter().copied())
+            .chain(cases.iter().copied().flatten())
     }
     fn width(&self) -> usize {
         match self {
             Self::Tuple(v) | Self::Record { fields: v, .. } => v.len(),
+            Self::Variant { cases, .. } => cases.len(),
             Self::Applied { arguments, .. } => arguments.len(),
             Self::Function { parameters, .. } => parameters.len(),
             Self::Tensor { dimensions, .. } => dimensions.len(),
@@ -199,6 +213,9 @@ impl TypeKind {
         }
     }
     fn components(&self) -> Option<usize> {
+        if let Self::Variant { cases, .. } = self {
+            return Some(cases.len());
+        }
         let children = self.children().count();
         children.checked_add(if let Self::Tensor { dimensions, .. } = self {
             dimensions.len()
@@ -239,6 +256,7 @@ pub enum TypeRegistryError {
     InvalidLimits,
     UnknownType(TypeId),
     UnresolvedRecord,
+    UnresolvedVariant,
     Limit {
         resource: TypeResource,
         limit: usize,
@@ -253,6 +271,7 @@ impl fmt::Display for TypeRegistryError {
                 "type limits require room for all primitives, positive depth and 32-bit indices",
             ),
             Self::UnresolvedRecord => f.write_str("record type was not resolved"),
+            Self::UnresolvedVariant => f.write_str("variant type was not resolved"),
             Self::UnknownType(_) => f.write_str("type handle does not belong to this registry"),
             Self::Limit { resource, limit } => {
                 write!(f, "semantic type {resource:?} limit of {limit} exceeded")

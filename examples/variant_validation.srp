@@ -1,0 +1,23 @@
+// A submission returns exactly one outcome with a typed payload.
+record Task { title: string }
+variant Submission {
+    Accepted(record Task),
+    Rejected(string),
+}
+
+pure funcra submit(title: string) -> variant Submission {
+    if title == "" {
+        return new Submission::Rejected("Enter a task title");
+    }
+    return new Submission::Accepted(new Task { title: title });
+}
+
+funcra present(outcome: variant Submission) -> unit {
+    match on outcome {
+        case Rejected(message) { print(message); }
+        case Accepted(task) { print("Saved", task->title); }
+    }
+}
+
+present(submit(""));
+present(submit("Review settings"));

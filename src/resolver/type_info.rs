@@ -95,6 +95,7 @@ fn operation_expressions(
             ResolvedStatement::JumpIfFalse { condition, .. } => (Some(condition), &[]),
             ResolvedStatement::Store { value, .. }
             | ResolvedStatement::Destructure { value, .. }
+            | ResolvedStatement::Match { value, .. }
             | ResolvedStatement::Update { value, .. } => (Some(value), &[]),
             ResolvedStatement::Output { arguments, .. } => (None, arguments),
             _ => (None, &[]),

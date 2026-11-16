@@ -7,8 +7,8 @@ use crate::{
     input::{InputState, IoBuiltin},
     limits::{Budget, ExecutionOptions},
     resolver::{
-        DestructureStep, ResolvedArgument, ResolvedCall, ResolvedExpression, ResolvedOperation,
-        ResolvedProgram, ResolvedStatement,
+        DestructureStep, MatchTarget, ResolvedArgument, ResolvedCall, ResolvedExpression,
+        ResolvedOperation, ResolvedProgram, ResolvedStatement,
     },
     value::Value,
 };
@@ -23,6 +23,7 @@ enum Stage {
 enum Completion<'a> {
     Store(usize),
     Destructure(&'a [DestructureStep], Span),
+    Match(&'a [MatchTarget]),
     RepeatCount(usize, usize, Span),
     Update(usize, BinaryOperator, Value, Span),
     Guard(usize, Span),
@@ -382,6 +383,19 @@ pub(super) fn prepare<'a>(
                         frame.expression = None;
                         match std::mem::replace(&mut frame.completion, Completion::Discard) {
                             Completion::Store(slot) => frame.environment[slot] = value,
+                            Completion::Match(dispatch) => {
+                                let Value::Variant(value) = value else {
+                                    unreachable!("match subject has a compiled variant type");
+                                };
+                                let target = dispatch[usize::from(value.tag())];
+                                if let Some(slot) = target.payload_slot {
+                                    frame.environment[slot] = value
+                                        .payload()
+                                        .expect("matched case declares a payload")
+                                        .clone();
+                                }
+                                frame.pc = target.instruction;
+                            }
                             Completion::Destructure(steps, span) => {
                                 destructure(
                                     &value,
@@ -659,6 +673,9 @@ pub(super) fn prepare<'a>(
                         ResolvedStatement::Store { slot, value } => {
                             frame.start(value, Completion::Store(*slot))
                         }
+                        ResolvedStatement::Match { value, dispatch } => {
+                            frame.start(value, Completion::Match(dispatch));
+                        }
                         ResolvedStatement::Destructure { steps, value } => {
                             frame.start(value, Completion::Destructure(steps, operation.span))
                         }
@@ -778,6 +795,7 @@ fn charge_capture(
         PrintValue::Value(Value::Tuple(tuple)) => tuple.capture_bytes(),
         PrintValue::Value(Value::Array(array)) => array.capture_bytes(),
         PrintValue::Value(Value::Record(record)) => record.capture_bytes(),
+        PrintValue::Value(Value::Variant(variant)) => variant.capture_bytes(),
         PrintValue::Value(Value::BigInt(number)) => number
             .payload_bytes()
             .max(number.decimal_digits() + usize::from(number.is_negative())),

@@ -19,6 +19,7 @@ pub enum SymbolKind {
     ImportAlias,
     Function,
     Record,
+    Variant,
     Constant,
     Binding,
     Parameter,
@@ -33,6 +34,7 @@ impl SymbolKind {
             Self::ImportAlias => "import_alias",
             Self::Function => "function",
             Self::Record => "record",
+            Self::Variant => "variant",
             Self::Constant => "constant",
             Self::Binding => "binding",
             Self::Parameter => "parameter",
@@ -283,6 +285,18 @@ impl Builder {
                             Some(record.name_span),
                             &record.name,
                             SymbolKind::Record,
+                            Some(b.modules[id]),
+                            public,
+                            false,
+                            None,
+                        )?;
+                    }
+                    Statement::Variant(variant) => {
+                        b.define(
+                            Some(id),
+                            Some(variant.name_span),
+                            &variant.name,
+                            SymbolKind::Variant,
                             Some(b.modules[id]),
                             public,
                             false,

@@ -6,6 +6,8 @@ use crate::types::{
 };
 use std::collections::VecDeque;
 
+mod variants;
+
 use crate::{
     ast::{
         AssignmentOperator, BinaryOperator, BindingPattern, CallArgument, ConditionalBranch,
@@ -166,7 +168,15 @@ impl Parser<'_> {
     ) -> Result<Vec<Statement>, ParseError> {
         let mut statements = Vec::new();
         while let Some(token) = self.current() {
-            if self.record_start("record") {
+            if self.keyword_then_identifier("variant") {
+                self.variant_into(&mut statements, in_block)?;
+                continue;
+            }
+            if self.match_start() {
+                self.match_into(&mut statements, depth)?;
+                continue;
+            }
+            if self.keyword_then_identifier("record") {
                 self.record_into(&mut statements, in_block)?;
                 continue;
             }
@@ -273,7 +283,9 @@ impl Parser<'_> {
         } else {
             let declaration = if self.keyword("funcra") || self.keyword("pure") {
                 Statement::Function(self.function()?)
-            } else if self.record_start("record") {
+            } else if self.keyword_then_identifier("variant") {
+                Statement::Variant(Box::new(self.variant_declaration()?))
+            } else if self.keyword_then_identifier("record") {
                 Statement::Record(Box::new(self.record()?))
             } else if self.keyword("bind") {
                 self.declaration()?
@@ -281,7 +293,7 @@ impl Parser<'_> {
                 return Err(ParseError::new(
                     DiagnosticKind::ModuleSyntax,
                     start,
-                    "pub requires a funcra, record or immutable scalar bind declaration",
+                    "pub requires a funcra, record, variant or immutable scalar bind declaration",
                 )
                 .with_help("export a function or write pub bind name = scalar_literal;"));
             };
@@ -303,7 +315,7 @@ impl Parser<'_> {
         Ok(())
     }
 
-    fn record_start(&self, word: &str) -> bool {
+    fn keyword_then_identifier(&self, word: &str) -> bool {
         self.keyword(word)
             && self
                 .tokens
@@ -378,7 +390,7 @@ impl Parser<'_> {
     }
 
     fn record_literal_start(&self) -> bool {
-        if !self.record_start("new") {
+        if !self.keyword_then_identifier("new") {
             return false;
         }
         let after_name = self.cursor + 2;
@@ -648,7 +660,12 @@ impl Parser<'_> {
         statements: &mut Vec<Statement>,
     ) -> Result<(), ParseError> {
         while let Some(token) = self.current() {
-            if self.container_start() || self.module_start() {
+            if self.container_start()
+                || self.module_start()
+                || self.match_start()
+                || self.keyword_then_identifier("record")
+                || self.keyword_then_identifier("variant")
+            {
                 break;
             }
             match &token.kind {
@@ -1148,6 +1165,11 @@ impl Parser<'_> {
                     "tuple type exceeds shape limits",
                 )
             });
+        }
+        if name == "variant" {
+            let (name, span) = self.qualified_identifier()?;
+            self.type_end = span.end;
+            return Ok(SourceType::VariantRef(name.into()));
         }
         if name == "record" {
             let (name, span) = self.qualified_identifier()?;
@@ -1917,6 +1939,9 @@ impl Parser<'_> {
         depth: usize,
     ) -> Result<usize, ParseError> {
         match self.current().map(|token| &token.kind) {
+            Some(TokenKind::Identifier(_)) if self.variant_literal_start() => {
+                self.variant_literal(nodes, depth)
+            }
             Some(TokenKind::Identifier(_)) if self.record_literal_start() => {
                 self.record_literal(nodes, depth)
             }
