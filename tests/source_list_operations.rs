@@ -99,7 +99,10 @@ fn persistent_update_allocation_is_metered_before_publication() {
             ..ExecutionOptions::default()
         },
     );
-    assert!(error.is_err(), "two list allocations must exceed a tiny quota");
+    assert!(
+        error.is_err(),
+        "two list allocations must exceed a tiny quota"
+    );
     assert!(output.is_empty());
 }
 
