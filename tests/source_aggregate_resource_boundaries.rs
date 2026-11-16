@@ -46,10 +46,7 @@ fn map_projections_share_the_same_collection_budget_as_map_construction() {
         print(keys, values);
     "#;
     reject_without_output(source, 0, "MapAllocation");
-    assert_eq!(
-        execute(source),
-        "[list: 1, 2, 3] [list: 10, 20, 30]\n"
-    );
+    assert_eq!(execute(source), "[list: 1, 2, 3] [list: 10, 20, 30]\n");
 }
 
 #[test]
@@ -80,9 +77,8 @@ fn projection_of_boolean_keys_is_in_canonical_order() {
 
 #[test]
 fn unsupported_native_projection_is_a_diagnostic_not_a_panic() {
-    let program = scarp::compile(
-        "bind original = [map: 1: 2]; print(map_values(original));"
-    ).unwrap();
+    let program =
+        scarp::compile("bind original = [map: 1: 2]; print(map_values(original));").unwrap();
     assert_eq!(
         scarp::c_backend::emit_program(&program).unwrap_err().kind,
         DiagnosticKind::NativeUnsupported
@@ -92,7 +88,10 @@ fn unsupported_native_projection_is_a_diagnostic_not_a_panic() {
 #[test]
 fn executable_resource_example_matches_expected_output() {
     assert_eq!(
-        execute(include_str!("../examples/aggregate_resource_boundaries.srp")).as_bytes(),
+        execute(include_str!(
+            "../examples/aggregate_resource_boundaries.srp"
+        ))
+        .as_bytes(),
         include_bytes!("../examples/aggregate_resource_boundaries.stdout")
     );
 }
