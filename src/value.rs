@@ -15,6 +15,7 @@ mod variant;
 pub use array::ArrayValue;
 pub use list::ListValue;
 pub use map::MapValue;
+pub(crate) use map::{key_compare, key_work};
 pub use record::RecordValue;
 pub use tuple::TupleValue;
 pub use variant::VariantValue;
