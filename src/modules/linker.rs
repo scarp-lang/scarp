@@ -643,6 +643,10 @@ impl Rewriter<'_> {
                 ExpressionKind::Array {
                     empty_element_type: Some(kind),
                     ..
+                }
+                | ExpressionKind::List {
+                    empty_element_type: Some(kind),
+                    ..
                 } => {
                     *kind = self.nominal_type(kind, node.span, false)?;
                 }
