@@ -9,8 +9,8 @@ use crate::{
     resolver::{self, ListIntrinsic, ResolvedCall, ResolvedExpression},
     types::{SourceType, MAX_LIST_LENGTH},
     value::{
-        finite_number, type_mismatch, ArrayValue, ListValue, RecordValue, TupleValue, Value,
-        ValueType, VariantValue,
+        finite_number, key_compare, key_work, type_mismatch, ArrayValue, ListValue, MapValue,
+        RecordValue, TupleValue, Value, ValueType, VariantValue,
     },
 };
 
@@ -44,6 +44,7 @@ enum Task {
     Tuple(usize, Span),
     Array(usize, Span),
     List(usize, Span),
+    Map(usize, Span),
     Record(usize, Span),
     Variant(usize, bool, Span),
     Field(usize, Span),
@@ -149,6 +150,7 @@ impl Workspace {
                 | Task::Tuple(_, span)
                 | Task::Array(_, span)
                 | Task::List(_, span)
+                | Task::Map(_, span)
                 | Task::Record(_, span)
                 | Task::Variant(_, _, span)
                 | Task::Field(_, span)
@@ -225,6 +227,13 @@ impl Workspace {
                             tasks.push(Task::List(index, node.span));
                             for &element in elements.iter().rev() {
                                 tasks.push(Task::Visit(element));
+                            }
+                        }
+                        ExpressionKind::Map { entries, .. } => {
+                            tasks.push(Task::Map(index, node.span));
+                            for &(key, value) in entries.iter().rev() {
+                                tasks.push(Task::Visit(value));
+                                tasks.push(Task::Visit(key));
                             }
                         }
                         ExpressionKind::Vector { elements }
@@ -444,6 +453,70 @@ impl Workspace {
                     })?;
                     items.extend(values.drain(start..));
                     values.push(Value::List(ListValue::from_checked(kind, items)));
+                }
+                Task::Map(node, span) => {
+                    let ExpressionKind::Map {
+                        entries,
+                        empty_types,
+                    } = &expression.syntax.nodes()[node].kind
+                    else {
+                        unreachable!("checked map literal task");
+                    };
+                    let count = entries.len();
+                    let start = values.len() - 2 * count;
+                    let (key, value) = empty_types.clone().unwrap_or_else(|| {
+                        (values[start].kind(), values[start + 1].kind())
+                    });
+                    let kind = SourceType::map(&key, &value)
+                        .expect("resolved map key and value types");
+                    budget.charge(
+                        (2 * count + key.node_count() + value.node_count() + 1) as u64,
+                        span,
+                    )?;
+                    let bytes = MapValue::allocation_bytes(&key, &value, count).ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::MapAllocation,
+                            span,
+                            "map storage size exceeds its configured limits",
+                        )
+                    })?;
+                    budget.charge_map_allocation(bytes, span)?;
+                    let mut sorted: Vec<(Value, Value)> = Vec::new();
+                    sorted.try_reserve_exact(count).map_err(|_| {
+                        Diagnostic::new(
+                            DiagnosticKind::MapAllocation,
+                            span,
+                            "cannot reserve ordered map storage",
+                        )
+                    })?;
+                    let mut incoming = values.drain(start..);
+                    for _ in 0..count {
+                        let entry_key = incoming.next().expect("resolved key");
+                        let entry_value = incoming.next().expect("resolved value");
+                        let mut low = 0;
+                        let mut high = sorted.len();
+                        while low < high {
+                            let mid = low + (high - low) / 2;
+                            budget.charge(key_work(&entry_key, &sorted[mid].0), span)?;
+                            match key_compare(&entry_key, &sorted[mid].0) {
+                                std::cmp::Ordering::Less => high = mid,
+                                std::cmp::Ordering::Equal => {
+                                    return Err(Diagnostic::new(
+                                        DiagnosticKind::MapKey,
+                                        span,
+                                        "duplicate key in map literal",
+                                    ));
+                                }
+                                std::cmp::Ordering::Greater => low = mid + 1,
+                            }
+                        }
+                        // Shifting a contiguous suffix is bounded and charged,
+                        // even when keys arrive in descending order.
+                        budget.charge((sorted.len() - low) as u64, span)?;
+                        sorted.insert(low, (entry_key, entry_value));
+                    }
+                    drop(incoming);
+                    values.push(Value::Map(MapValue::from_checked(kind, sorted)));
                 }
                 Task::Vector(count, integers, span) => {
                     budget.charge(count as u64, span)?;
