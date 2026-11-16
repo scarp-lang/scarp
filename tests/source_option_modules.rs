@@ -8,7 +8,7 @@ fn compile(entry: &str, sources: &[(&str, &str)]) -> modules::ModuleProgram {
     let mut loader = MemorySourceLoader::new();
     loader.insert("main.srp", entry).unwrap();
     for (name, source) in sources {
-        loader.insert(name, source).unwrap();
+        loader.insert(*name, *source).unwrap();
     }
     modules::compile_with_loader("main.srp", &loader, Default::default()).unwrap()
 }
