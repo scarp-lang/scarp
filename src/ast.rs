@@ -370,6 +370,12 @@ pub enum ExpressionKind {
         elements: Vec<usize>,
         empty_element_type: Option<SourceType>,
     },
+    /// Ordered immutable keyed collection. Each pair is evaluated exactly
+    /// once in source order, and stored in canonical key order at runtime.
+    Map {
+        entries: Vec<(usize, usize)>,
+        empty_types: Option<(SourceType, SourceType)>,
+    },
     Integers {
         elements: Vec<usize>,
     },
