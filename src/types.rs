@@ -202,7 +202,27 @@ impl TypeKind {
             .chain(others.iter().copied())
             .chain(cases.iter().copied().flatten())
     }
+    // A concrete Option/Result still has two checked source-level cases,
+    // even though its canonical Applied descriptor retains only the concrete
+    // type arguments. Keep the original variant arity/component accounting.
+    fn builtin_case_width(&self) -> Option<usize> {
+        match self {
+            Self::Applied {
+                constructor,
+                arguments,
+            } if constructor.module == u32::MAX
+                && ((constructor.declaration == 0 && arguments.len() == 1)
+                    || (constructor.declaration == 1 && arguments.len() == 2)) =>
+            {
+                Some(2)
+            }
+            _ => None,
+        }
+    }
     fn width(&self) -> usize {
+        if let Some(width) = self.builtin_case_width() {
+            return width;
+        }
         match self {
             Self::Tuple(v) | Self::Record { fields: v, .. } => v.len(),
             Self::Variant { cases, .. } => cases.len(),
@@ -213,6 +233,9 @@ impl TypeKind {
         }
     }
     fn components(&self) -> Option<usize> {
+        if let Some(count) = self.builtin_case_width() {
+            return Some(count);
+        }
         if let Self::Variant { cases, .. } = self {
             return Some(cases.len());
         }
