@@ -59,10 +59,16 @@ pub(super) fn constructor(
     ))
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) struct MatchTarget {
     pub instruction: usize,
-    pub payload_slot: Option<usize>,
+    pub payload: Option<MatchPayload>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct MatchPayload {
+    pub steps: Box<[DestructureStep]>,
+    pub span: Span,
 }
 
 impl Resolver<'_> {
@@ -176,28 +182,24 @@ impl Resolver<'_> {
     ) -> Result<MatchTarget, Diagnostic> {
         let instruction = self.statements.len();
         self.enter_scope(arm.span)?;
-        let mut payload_slot = None;
-        if let Some((name, span)) = arm.payload.as_ref().filter(|(name, _)| name != "_") {
-            self.binding_name(name, *span)?;
-            let kind = layout.cases()[tag.unwrap()].1.as_ref().unwrap().clone();
-            let slot = self.slot_types.len();
-            self.slot_types.push(kind.clone());
-            self.scopes.last_mut().unwrap().insert(
-                name.clone(),
-                Binding {
-                    slot,
-                    declaration: *span,
-                    mutable: false,
-                    kind,
-                    repeat_index: false,
-                    parameter: false,
-                },
-            );
-            payload_slot = Some(slot);
-        }
+        let payload = arm
+            .payload
+            .as_ref()
+            .map(|pattern| {
+                let kind = layout.cases()[tag.expect("named payload arm")]
+                    .1
+                    .as_ref()
+                    .expect("checked payload case");
+                self.compile_pattern(pattern, kind, false)
+                    .map(|steps| MatchPayload {
+                        steps: steps.into_boxed_slice(),
+                        span: pattern.nodes()[0].span,
+                    })
+            })
+            .transpose()?;
         Ok(MatchTarget {
             instruction,
-            payload_slot,
+            payload,
         })
     }
 
@@ -214,7 +216,7 @@ impl Resolver<'_> {
                 dispatch[tag] = Some(target);
             } else {
                 for entry in &mut dispatch {
-                    entry.get_or_insert(target);
+                    entry.get_or_insert_with(|| target.clone());
                 }
             }
             self.statement_list(arm.statements)?;

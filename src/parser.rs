@@ -1,19 +1,19 @@
 //! Parse declarations, assignments, blocks, and print statements without execution.
 
 use crate::types::{
-    SourceType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_EXPANDED_VALUE_NODES,
-    MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY,
+    SourceType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY,
 };
 use std::collections::VecDeque;
 
+mod patterns;
 mod variants;
 
 use crate::{
     ast::{
-        AssignmentOperator, BinaryOperator, BindingPattern, CallArgument, ConditionalBranch,
+        AssignmentOperator, BinaryOperator, CallArgument, ConditionalBranch,
         ConditionalExpressionBranch, Contract, Expression, ExpressionKind, ExpressionNode,
-        FunctionDeclaration, LogicalOperator, OutputTarget, Parameter, PatternKind, PatternNode,
-        PrintArgument, Program, Statement, MAX_ASSERT_MESSAGE_BYTES,
+        FunctionDeclaration, LogicalOperator, OutputTarget, Parameter, PrintArgument, Program,
+        Statement, MAX_ASSERT_MESSAGE_BYTES,
     },
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     lexer::{Token, TokenKind},
@@ -60,31 +60,6 @@ struct Parser<'a> {
     cursor: usize,
     pending: VecDeque<Token>,
     type_end: usize,
-}
-
-struct PatternGroup {
-    node: usize,
-    array: bool,
-    arity: usize,
-    expect_member: bool,
-}
-
-impl PatternGroup {
-    fn delimiter(&self) -> (TokenKind, &'static str) {
-        if self.array {
-            (TokenKind::RightBracket, "']'")
-        } else {
-            (TokenKind::RightParen, "')'")
-        }
-    }
-
-    fn limit(&self) -> (usize, DiagnosticKind) {
-        if self.array {
-            (MAX_DESTRUCTURE_BINDINGS, DiagnosticKind::ArrayLimit)
-        } else {
-            (MAX_TUPLE_ARITY, DiagnosticKind::TupleLimit)
-        }
-    }
 }
 
 impl Parser<'_> {
@@ -826,111 +801,6 @@ impl Parser<'_> {
         Ok(())
     }
 
-    fn open_pattern_group(&mut self, nodes: &mut Vec<PatternNode>) -> PatternGroup {
-        let array = self.at(&TokenKind::LeftBracket);
-        let span = self.current().expect("pattern opener").span;
-        let node = nodes.len();
-        nodes.push(PatternNode {
-            kind: if array {
-                PatternKind::Array(0)
-            } else {
-                PatternKind::Tuple(0)
-            },
-            span,
-        });
-        self.advance();
-        PatternGroup {
-            node,
-            array,
-            arity: 0,
-            expect_member: true,
-        }
-    }
-
-    fn binding_pattern(&mut self) -> Result<BindingPattern, ParseError> {
-        let mut nodes = Vec::new();
-        let mut groups = vec![self.open_pattern_group(&mut nodes)];
-        while let Some(group) = groups.last_mut() {
-            let (close, close_label) = group.delimiter();
-            if self.at(&close) {
-                let node = &mut nodes[group.node];
-                if group.arity == 0 {
-                    return Err(ParseError::new(
-                        DiagnosticKind::UnexpectedToken,
-                        node.span,
-                        "a destructuring pattern requires at least one member",
-                    ));
-                }
-                if !group.array && group.arity == 1 && !group.expect_member {
-                    return Err(ParseError::new(
-                        DiagnosticKind::UnexpectedToken,
-                        node.span,
-                        "a one-element tuple pattern requires a trailing comma",
-                    )
-                    .with_help("write bind (value,) = tuple;"));
-                }
-                node.span.end = self.punctuation(close, close_label)?.end;
-                node.kind = if group.array {
-                    PatternKind::Array(group.arity)
-                } else {
-                    PatternKind::Tuple(group.arity)
-                };
-                groups.pop();
-                continue;
-            }
-            if !group.expect_member {
-                if !self.at(&TokenKind::Comma) {
-                    return Err(self.expected(close_label));
-                }
-                self.advance();
-                group.expect_member = true;
-                continue;
-            }
-
-            let token = self
-                .current()
-                .ok_or_else(|| self.expected("a pattern member"))?;
-            let (max, limit) = group.limit();
-            if group.arity == max {
-                return Err(ParseError::new(
-                    limit,
-                    token.span,
-                    format!("destructuring pattern exceeds {max} elements"),
-                ));
-            }
-            if nodes.len() == MAX_EXPANDED_VALUE_NODES {
-                return Err(ParseError::new(
-                    DiagnosticKind::TypeComplexity,
-                    token.span,
-                    format!("destructuring pattern exceeds {MAX_EXPANDED_VALUE_NODES} nodes"),
-                ));
-            }
-            group.arity += 1;
-            group.expect_member = false;
-            if matches!(token.kind, TokenKind::LeftParen | TokenKind::LeftBracket) {
-                if groups.len() == MAX_COMPOSITE_DEPTH {
-                    return Err(ParseError::new(
-                        limit,
-                        token.span,
-                        format!("destructuring pattern exceeds {MAX_COMPOSITE_DEPTH} levels"),
-                    ));
-                }
-                groups.push(self.open_pattern_group(&mut nodes));
-            } else {
-                let (name, span) = self.identifier().map_err(|error| {
-                    error.with_help("use a name, '_', or a nested tuple or fixed-array pattern")
-                })?;
-                let kind = if name == "_" {
-                    PatternKind::Discard
-                } else {
-                    PatternKind::Name(name)
-                };
-                nodes.push(PatternNode { kind, span });
-            }
-        }
-        Ok(BindingPattern { nodes })
-    }
-
     #[inline(never)]
     fn destructure(&mut self, start: usize, mutable: bool) -> Result<Statement, ParseError> {
         let pattern = self.binding_pattern()?;
@@ -958,7 +828,7 @@ impl Parser<'_> {
         let mutable = name == "var";
         let keyword = if mutable { "var" } else { "bind" };
         self.advance();
-        if self.at(&TokenKind::LeftParen) || self.at(&TokenKind::LeftBracket) {
+        if self.pattern_group_kind().is_some() {
             return self.destructure(start, mutable);
         }
         if self.keyword("mut")

@@ -1,0 +1,30 @@
+// Describe events from a small panel using the same patterns as declarations.
+record Button {
+    label: string,
+    position: tuple<integer, integer>,
+    active: boolean,
+}
+
+variant Event {
+    Click(record Button),
+    Resize(tuple<integer, integer>),
+    Batch(array<integer, 2>),
+    Idle,
+}
+
+funcra render(event: variant Event) -> unit {
+    match on event {
+        case Click({position: (x, y), label: name}) { print("Click", name, x, y); }
+        case Resize((width, height)) { print("Resize", width, height); }
+        case Batch([first, _]) { print("First item", first); }
+        case Idle { print("Idle"); }
+    }
+}
+
+bind button = new Button { position: (4, 9), active: true, label: "Save" };
+bind {label: title} = button;
+print("Button", title);
+render(new Event::Click(button));
+render(new Event::Resize((80, 24)));
+render(new Event::Batch([array: 5, 8]));
+render(new Event::Idle());

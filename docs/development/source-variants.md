@@ -17,7 +17,7 @@ print(describe(new Lookup::Found("Scarp")));
 ```
 
 The compiler checks the subject once and validates every arm. A tagged arm matches that
-case. `case Found(_)` explicitly discards its payload. `case _ { ... }` handles remaining
+case. `case Found(_)` explicitly discards its payload. [Structured patterns](source-patterns.md) can unpack tuple, fixed-array, and record payloads. `case _ { ... }` handles remaining
 cases and must be last. Duplicate arms, unreachable wildcards, and missing cases produce
 diagnostics. A payload binding is immutable and local to its arm. When every arm returns,
 the match can satisfy a function's return requirement.
@@ -35,5 +35,5 @@ E0049 for these operations. Module inventory JSON uses schema 5 when the graph c
 variant declarations.
 
 This milestone supports tagged statement matches, case-local bindings, and wildcards.
-Generic `Option` and `Result`, expression matches, nested patterns, guards, and native
+Generic `Option` and `Result`, expression matches, nested variant tests, guards, and native
 aggregate lowering are follow-up work.

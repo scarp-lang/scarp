@@ -86,6 +86,18 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
             }
         }
     }
+    fn pattern(value: &mut super::BindingPattern, base: usize, to_local: bool, nodes: &mut usize) {
+        *nodes = nodes.saturating_add(value.nodes.len());
+        for node in &mut value.nodes {
+            span(&mut node.span, base, to_local);
+            if let super::PatternKind::Record(fields) = &mut node.kind {
+                *nodes = nodes.saturating_add(fields.len());
+                for field in fields {
+                    span(&mut field.span, base, to_local);
+                }
+            }
+        }
+    }
     fn statements(items: &mut [Statement], base: usize, to_local: bool, nodes: &mut usize) {
         for item in items {
             *nodes = nodes.saturating_add(1);
@@ -130,8 +142,8 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                     for arm in &mut statement.arms {
                         span(&mut arm.span, base, to_local);
                         span(&mut arm.tag_span, base, to_local);
-                        if let Some((_, at)) = &mut arm.payload {
-                            span(at, base, to_local);
+                        if let Some(payload) = &mut arm.payload {
+                            pattern(payload, base, to_local, nodes);
                         }
                         statements(&mut arm.statements, base, to_local, nodes);
                     }
@@ -264,16 +276,13 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                     expr(initializer, base, to_local, nodes);
                 }
                 Statement::Destructure {
-                    pattern,
+                    pattern: binding,
                     initializer,
                     span: whole,
                     ..
                 } => {
                     span(whole, base, to_local);
-                    *nodes = nodes.saturating_add(pattern.nodes.len());
-                    for node in &mut pattern.nodes {
-                        span(&mut node.span, base, to_local);
-                    }
+                    pattern(binding, base, to_local, nodes);
                     expr(initializer, base, to_local, nodes);
                 }
                 Statement::Assign {

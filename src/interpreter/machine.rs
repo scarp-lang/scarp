@@ -34,6 +34,20 @@ enum Completion<'a> {
     Output,
 }
 
+enum PatternChildren<'a> {
+    Sequence(std::slice::Iter<'a, Value>),
+    Fields(&'a [Value], std::slice::Iter<'a, usize>),
+}
+
+impl<'a> PatternChildren<'a> {
+    fn next(&mut self) -> Option<&'a Value> {
+        match self {
+            Self::Sequence(values) => values.next(),
+            Self::Fields(fields, offsets) => offsets.next().map(|&offset| &fields[offset]),
+        }
+    }
+}
+
 fn destructure(
     value: &Value,
     steps: &[DestructureStep],
@@ -41,43 +55,61 @@ fn destructure(
     budget: &mut Budget,
     span: Span,
 ) -> Result<(), Diagnostic> {
-    let (&root, members) = steps.split_first().expect("compiled pattern has a root");
-    let mut elements = destructure_children(value, root, span)?.iter();
-    // Charge all visited members, including wildcards and nested groups,
-    // before installing any bindings. The outer group has no member cost.
+    let (root, members) = steps.split_first().expect("compiled pattern has a root");
+    // Preserve the outer-pattern work charge and charge nested visits before
+    // publishing bindings. Flat patterns need no heap stack.
     budget.charge(members.len() as u64, span)?;
+    let mut elements = match root {
+        DestructureStep::Bind(slot) => {
+            environment[*slot] = value.clone();
+            return Ok(());
+        }
+        DestructureStep::Discard => return Ok(()),
+        _ => destructure_children(value, root, span)?,
+    };
     let mut parents = Vec::new();
-    for &step in members {
-        while elements.as_slice().is_empty() {
+    for step in members {
+        let element = loop {
+            if let Some(element) = elements.next() {
+                break element;
+            }
             elements = parents
                 .pop()
                 .expect("compiled pattern has matching arities");
-        }
-        let element = elements.next().expect("member of compiled pattern");
+        };
         match step {
-            DestructureStep::Tuple(_) | DestructureStep::Array(_) => {
-                parents.push(elements);
-                elements = destructure_children(element, step, span)?.iter();
-            }
-            DestructureStep::Bind(slot) => environment[slot] = element.clone(),
+            DestructureStep::Bind(slot) => environment[*slot] = element.clone(),
             DestructureStep::Discard => {}
+            _ => {
+                parents.push(elements);
+                elements = destructure_children(element, step, span)?;
+            }
         }
     }
     Ok(())
 }
 
-fn destructure_children(
-    value: &Value,
-    step: DestructureStep,
+fn destructure_children<'a>(
+    value: &'a Value,
+    step: &'a DestructureStep,
     span: Span,
-) -> Result<&[Value], Diagnostic> {
+) -> Result<PatternChildren<'a>, Diagnostic> {
     let (children, arity) = match step {
-        DestructureStep::Tuple(arity) => (value.as_tuple().map(|tuple| tuple.elements()), arity),
-        DestructureStep::Array(arity) => (value.as_array().map(|array| array.elements()), arity),
+        DestructureStep::Tuple(arity) => (value.as_tuple().map(|tuple| tuple.elements()), *arity),
+        DestructureStep::Array(arity) => (value.as_array().map(|array| array.elements()), *arity),
+        DestructureStep::Record(offsets) => {
+            if let Value::Record(record) = value {
+                let fields = record.fields();
+                debug_assert!(offsets.iter().all(|&offset| offset < fields.len()));
+                return Ok(PatternChildren::Fields(fields, offsets.iter()));
+            }
+            (None, 0)
+        }
         _ => unreachable!("only groups have children"),
     };
     children
         .filter(|children| children.len() == arity)
+        .map(|children| PatternChildren::Sequence(children.iter()))
         .ok_or_else(|| {
             Diagnostic::new(
                 DiagnosticKind::TypeMismatch,
@@ -387,12 +419,15 @@ pub(super) fn prepare<'a>(
                                 let Value::Variant(value) = value else {
                                     unreachable!("match subject has a compiled variant type");
                                 };
-                                let target = dispatch[usize::from(value.tag())];
-                                if let Some(slot) = target.payload_slot {
-                                    frame.environment[slot] = value
-                                        .payload()
-                                        .expect("matched case declares a payload")
-                                        .clone();
+                                let target = &dispatch[usize::from(value.tag())];
+                                if let Some(payload) = &target.payload {
+                                    destructure(
+                                        value.payload().expect("matched case declares a payload"),
+                                        &payload.steps,
+                                        &mut frame.environment,
+                                        &mut budget,
+                                        payload.span,
+                                    )?;
                                 }
                                 frame.pc = target.instruction;
                             }

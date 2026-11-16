@@ -111,7 +111,7 @@ pub enum Statement {
     },
 }
 
-/// A tuple or fixed-array pattern stored in preorder, with each group followed
+/// A binding pattern stored in preorder, with each group followed
 /// by its child patterns. The parser validates the shape before construction.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BindingPattern {
@@ -141,8 +141,15 @@ pub struct PatternNode {
 pub enum PatternKind {
     Tuple(usize),
     Array(usize),
+    Record(Vec<PatternField>),
     Name(String),
     Discard,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PatternField {
+    pub name: String,
+    pub span: Span,
 }
 
 /// Optional explicit binding type, retaining its source token location.
@@ -210,10 +217,10 @@ pub struct MatchStatement {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchArm {
-    /// An underscore is a wildcard. A payload name of underscore discards that payload.
+    /// An underscore tag is a wildcard for all remaining cases.
     pub tag: String,
     pub tag_span: Span,
-    pub payload: Option<(String, Span)>,
+    pub payload: Option<BindingPattern>,
     pub statements: Vec<Statement>,
     pub span: Span,
 }

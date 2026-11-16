@@ -755,29 +755,7 @@ impl Rewriter<'_> {
                 // Resolve source references before publishing destructured
                 // bindings. Match the compiler's one-time initializer order.
                 self.expression(initializer)?;
-                let (source, owner) = (self.id, self.function);
-                for node in pattern.nodes() {
-                    self.navigation(|b| b.step(node.span));
-                    let crate::ast::PatternKind::Name(name) = &node.kind else {
-                        continue;
-                    };
-                    let name_span = node.span;
-                    self.binding_name(name, name_span)?;
-                    self.navigation(|b| {
-                        b.binding(
-                            source,
-                            owner,
-                            name,
-                            name_span,
-                            symbols::SymbolKind::Binding,
-                            *mutable,
-                        )
-                    });
-                    self.scopes
-                        .last_mut()
-                        .unwrap()
-                        .insert(name.to_owned(), name_span);
-                }
+                self.pattern_bindings(pattern, *mutable)?;
             }
             Statement::Assign {
                 name,
@@ -872,20 +850,47 @@ impl Rewriter<'_> {
     fn begin_match_arm(&mut self, arm: &crate::ast::MatchArm) -> Result<(), Diagnostic> {
         self.navigation(|b| b.step(arm.tag_span));
         self.scopes.push(HashMap::new());
-        if let Some((name, span)) = arm.payload.as_ref().filter(|(name, _)| name != "_") {
-            self.binding_name(name, *span)?;
-            let (source, owner) = (self.id, self.function);
-            self.navigation(|b| {
-                b.binding(
-                    source,
-                    owner,
-                    name,
-                    *span,
-                    symbols::SymbolKind::Binding,
-                    false,
-                )
+        if let Some(pattern) = &arm.payload {
+            self.pattern_bindings(pattern, false)?;
+        }
+        Ok(())
+    }
+
+    #[inline(never)]
+    fn pattern_bindings(
+        &mut self,
+        pattern: &crate::ast::BindingPattern,
+        mutable: bool,
+    ) -> Result<(), Diagnostic> {
+        use crate::ast::PatternKind;
+        let (source, owner) = (self.id, self.function);
+        for node in pattern.nodes() {
+            self.navigation(|builder| {
+                builder.step(node.span)?;
+                if let PatternKind::Record(fields) = &node.kind {
+                    for field in fields {
+                        builder.step(field.span)?;
+                    }
+                }
+                Ok(())
             });
-            self.scopes.last_mut().unwrap().insert(name.clone(), *span);
+            if let PatternKind::Name(name) = &node.kind {
+                self.binding_name(name, node.span)?;
+                self.navigation(|builder| {
+                    builder.binding(
+                        source,
+                        owner,
+                        name,
+                        node.span,
+                        symbols::SymbolKind::Binding,
+                        mutable,
+                    )
+                });
+                self.scopes
+                    .last_mut()
+                    .unwrap()
+                    .insert(name.clone(), node.span);
+            }
         }
         Ok(())
     }

@@ -161,9 +161,9 @@ impl Parser<'_> {
             }
             let payload = if self.at(&TokenKind::LeftParen) {
                 self.advance();
-                let name = self.identifier()?;
-                self.punctuation(TokenKind::RightParen, "')' after the payload binding")?;
-                Some(name)
+                let pattern = self.binding_pattern()?;
+                self.punctuation(TokenKind::RightParen, "')' after the payload pattern")?;
+                Some(pattern)
             } else {
                 None
             };

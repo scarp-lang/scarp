@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 mod functions;
 mod nominal;
+mod patterns;
 mod records;
 mod variants;
 pub(crate) use variants::MatchTarget;
@@ -133,10 +134,11 @@ pub(crate) enum ResolvedStatement {
     },
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) enum DestructureStep {
     Tuple(usize),
     Array(usize),
+    Record(Box<[usize]>),
     Bind(usize),
     Discard,
 }
@@ -491,97 +493,6 @@ impl<'a> Resolver<'a> {
         }
         Ok(())
     }
-    // Keep pattern compilation out of recursively entered statement-list frames.
-    #[inline(never)]
-    fn resolve_destructure(
-        &mut self,
-        pattern: BindingPattern,
-        mutable: bool,
-        initializer: Expression,
-        span: Span,
-    ) -> Result<(), Diagnostic> {
-        // Resolve all initializer references before publishing any pattern names.
-        let value = self.expression(initializer)?;
-        require_value(&value.kind, span)?;
-        let mut types = vec![&value.kind];
-        let mut seen = HashMap::new();
-        let mut bindings = Vec::new();
-        let mut steps = Vec::with_capacity(pattern.nodes().len());
-        for node in pattern.nodes() {
-            let kind = types.pop().expect("validated pattern arity");
-            let step = match &node.kind {
-                PatternKind::Tuple(arity) => {
-                    let elements = kind.tuple_elements().ok_or_else(|| {
-                        Diagnostic::new(
-                            DiagnosticKind::TypeMismatch,
-                            node.span,
-                            format!("a tuple destructuring pattern needs a tuple, found {kind}"),
-                        )
-                    })?;
-                    check_pattern_arity("tuple", *arity, elements.len(), node.span)?;
-                    types.extend(elements.iter().rev());
-                    DestructureStep::Tuple(*arity)
-                }
-                PatternKind::Array(arity) => {
-                    let array = kind.as_array().ok_or_else(|| {
-                        Diagnostic::new(
-                            DiagnosticKind::TypeMismatch,
-                            node.span,
-                            format!(
-                                "an array destructuring pattern needs a fixed array, found {kind}"
-                            ),
-                        )
-                    })?;
-                    check_pattern_arity("array", *arity, array.len(), node.span)?;
-                    types.resize(types.len() + *arity, array.element());
-                    DestructureStep::Array(*arity)
-                }
-                PatternKind::Name(name) => {
-                    self.binding_name(name, node.span)?;
-                    if let Some(previous) = seen.insert(name, node.span) {
-                        return Err(Diagnostic::new(
-                            DiagnosticKind::DuplicateBinding,
-                            node.span,
-                            format!("binding {name:?} occurs more than once in a pattern"),
-                        )
-                        .with_related(previous, "the first occurrence is here"));
-                    }
-                    if let Some(previous) = self.scopes.last().unwrap().get(name) {
-                        return Err(Diagnostic::new(
-                            DiagnosticKind::DuplicateBinding,
-                            node.span,
-                            format!("binding {name:?} is already declared in this scope"),
-                        )
-                        .with_related(previous.declaration, "the previous declaration is here"));
-                    }
-                    let slot = self.slot_types.len() + bindings.len();
-                    bindings.push((name, node.span, kind));
-                    DestructureStep::Bind(slot)
-                }
-                PatternKind::Discard => DestructureStep::Discard,
-            };
-            steps.push(step);
-        }
-        debug_assert!(types.is_empty());
-        for (name, declaration, kind) in bindings {
-            let slot = self.slot_types.len();
-            self.slot_types.push(kind.clone());
-            self.scopes.last_mut().unwrap().insert(
-                name.clone(),
-                Binding {
-                    slot,
-                    declaration,
-                    mutable,
-                    kind: kind.clone(),
-                    repeat_index: false,
-                    parameter: false,
-                },
-            );
-        }
-        self.emit(ResolvedStatement::Destructure { steps, value }, span);
-        Ok(())
-    }
-
     // Only the dispatch frame survives while recursively lowering a nested
     // block. Per-statement temporaries can be large in debug builds.
     #[inline(never)]
