@@ -71,10 +71,8 @@ fn empty_list_requires_explicit_element_type() {
     let err = scarp::compile("bind empty = [list: ];").unwrap_err();
     assert_eq!(err.kind, DiagnosticKind::UnexpectedToken);
     let err = scarp::compile("bind empty: list<unit> = [list: <unit>];").unwrap_err();
-    assert!(matches!(
-        err.kind,
-        DiagnosticKind::FunctionDefinition | DiagnosticKind::ListLimit
-    ));
+    // Binding-annotation parsing remaps invalid type names to E0004.
+    assert_eq!(err.kind, DiagnosticKind::UnexpectedToken);
 }
 
 #[test]
