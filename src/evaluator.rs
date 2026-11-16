@@ -821,10 +821,7 @@ impl Workspace {
                                     "map update exceeds its 1024-entry limit",
                                 ));
                             }
-                            budget.charge(
-                                (next_len + map.kind().node_count() + 1) as u64,
-                                span,
-                            )?;
+                            budget.charge((next_len + map.kind().node_count() + 1) as u64, span)?;
                             let bytes = MapValue::allocation_bytes(
                                 map.key_type(),
                                 map.value_type(),
