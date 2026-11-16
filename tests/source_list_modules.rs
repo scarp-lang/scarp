@@ -40,10 +40,7 @@ fn typed_list_of_exported_record_can_cross_modules() {
         });
         print(list_len(tasks), list_len(expanded), expanded[1]->title);
     "#;
-    assert_eq!(
-        run(main, &[("lib.srp", lib)]),
-        "Plan\n1 2 Review\n"
-    );
+    assert_eq!(run(main, &[("lib.srp", lib)]), "Plan\n1 2 Review\n");
 }
 
 #[test]
@@ -89,7 +86,9 @@ fn a_private_record_cannot_leak_through_exported_list_signature() {
         }
     "#;
     let mut loader = MemorySourceLoader::new();
-    loader.insert("main.srp", "import \"lib.srp\" as lib;").unwrap();
+    loader
+        .insert("main.srp", "import \"lib.srp\" as lib;")
+        .unwrap();
     loader.insert("lib.srp", lib).unwrap();
     let error = modules::compile_with_loader("main.srp", &loader, Default::default()).unwrap_err();
     assert_eq!(error.diagnostic.kind, DiagnosticKind::ModuleVisibility);
