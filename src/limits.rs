@@ -235,6 +235,23 @@ impl Budget {
         Ok(())
     }
 
+    /// Lists and fixed arrays intentionally share one cumulative budget:
+    /// switching collection spellings cannot bypass the caller's allocation cap.
+    pub fn charge_list_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
+        self.array_remaining = self.array_remaining.checked_sub(bytes).ok_or_else(|| {
+            Diagnostic::new(
+                DiagnosticKind::ListAllocation,
+                span,
+                format!(
+                    "cumulative array/list allocation limit of {} bytes exceeded",
+                    self.array_limit
+                ),
+            )
+            .with_help("reuse immutable lists, or raise --max-array-bytes / ExecutionOptions.max_array_bytes")
+        })?;
+        Ok(())
+    }
+
     pub fn with_text_bytes(mut self, bytes: usize) -> Self {
         self.text_remaining = bytes;
         self.text_limit = bytes;
