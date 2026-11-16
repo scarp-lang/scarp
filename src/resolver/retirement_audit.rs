@@ -129,6 +129,14 @@ fn audit_frame(
                     .ok_or_else(|| format!("store targets out-of-range slot {slot}"))? = true;
                 successors.push(pc + 1);
             }
+            ResolvedStatement::Propagate { slot, value, .. } => {
+                read_slots(value, &state)?;
+                // Only the successful path continues to the next operation.
+                *state_out
+                    .get_mut(*slot)
+                    .ok_or_else(|| format!("propagation targets out-of-range slot {slot}"))? = true;
+                successors.push(pc + 1);
+            }
             ResolvedStatement::Match { value, dispatch } => {
                 read_slots(value, &state)?;
                 match_targets = dispatch;
