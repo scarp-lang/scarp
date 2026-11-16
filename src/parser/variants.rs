@@ -1,6 +1,7 @@
 use super::*;
 use crate::ast::{
-    MatchArm, MatchStatement, TypeAnnotation, VariantCase, VariantConstructor, VariantDeclaration,
+    MatchArm, MatchLiteral, MatchStatement, TypeAnnotation, VariantCase, VariantConstructor,
+    VariantDeclaration,
 };
 use crate::types::MAX_VARIANT_CASES;
 
@@ -198,7 +199,65 @@ impl Parser<'_> {
         while self.keyword("case") {
             let arm_start = self.current().unwrap().span.start;
             self.advance();
-            let (tag, tag_span) = self.identifier()?;
+            let (tag, tag_span, literal) = match self.current().cloned() {
+                Some(Token {
+                    kind: TokenKind::Integer(digits),
+                    span,
+                }) => {
+                    let value = integer_magnitude(&digits)
+                        .and_then(|value| i64::try_from(value).ok())
+                        .ok_or_else(|| {
+                            ParseError::new(
+                                DiagnosticKind::InvalidInteger,
+                                span,
+                                "match literal is outside the signed 64-bit integer range",
+                            )
+                        })?;
+                    self.advance();
+                    (String::new(), span, Some(MatchLiteral::Integer(value)))
+                }
+                Some(Token {
+                    kind: TokenKind::Minus,
+                    span: minus,
+                }) => {
+                    self.advance();
+                    let Some(Token {
+                        kind: TokenKind::Integer(digits),
+                        span,
+                    }) = self.current().cloned()
+                    else {
+                        return Err(self.expected("an integer literal after '-' in a match case"));
+                    };
+                    let value = integer_magnitude(&digits).and_then(|magnitude| {
+                        if magnitude == (1_u64 << 63) {
+                            Some(i64::MIN)
+                        } else {
+                            i64::try_from(magnitude).ok().map(|number| -number)
+                        }
+                    });
+                    let whole = Span::new(minus.start, span.end);
+                    let value = value.ok_or_else(|| {
+                        ParseError::new(
+                            DiagnosticKind::InvalidInteger,
+                            whole,
+                            "match literal is outside the signed 64-bit integer range",
+                        )
+                    })?;
+                    self.advance();
+                    (String::new(), whole, Some(MatchLiteral::Integer(value)))
+                }
+                Some(Token {
+                    kind: TokenKind::String(value),
+                    span,
+                }) => {
+                    self.advance();
+                    (String::new(), span, Some(MatchLiteral::Text(value)))
+                }
+                _ => {
+                    let (name, span) = self.identifier()?;
+                    (name, span, None)
+                }
+            };
             if arms.len() > MAX_VARIANT_CASES {
                 return Err(ParseError::new(
                     DiagnosticKind::MatchCoverage,
@@ -217,6 +276,7 @@ impl Parser<'_> {
             let (body, body_span) = self.block(depth)?;
             arms.push(MatchArm {
                 tag,
+                literal,
                 tag_span,
                 payload,
                 statements: body,
