@@ -216,7 +216,7 @@ impl ListIntrinsic {
         match self {
             Self::Push | Self::Remove => 2,
             Self::Set => 3,
-            Self::Len => 1,
+            Self::Len | Self::Keys | Self::Values => 1,
         }
     }
 }
@@ -225,6 +225,8 @@ impl ListIntrinsic {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MapIntrinsic {
     Len,
+    Keys,
+    Values,
     Contains,
     GetOr,
     Set,
@@ -234,6 +236,8 @@ impl MapIntrinsic {
     pub(crate) fn from_name(name: &str) -> Option<Self> {
         Some(match name {
             "map_len" => Self::Len,
+            "map_keys" => Self::Keys,
+            "map_values" => Self::Values,
             "map_contains" => Self::Contains,
             "map_get_or" => Self::GetOr,
             "map_set" => Self::Set,
@@ -1686,7 +1690,10 @@ fn resolve_expression(
                             format!("{name} requires map<K, V> as the first argument"),
                         )
                     })?;
-                    if operation != MapIntrinsic::Len {
+                    if !matches!(
+                        operation,
+                        MapIntrinsic::Len | MapIntrinsic::Keys | MapIntrinsic::Values
+                    ) {
                         let key = arguments[1].expression;
                         require_type(&types[key], map.key(), syntax.nodes()[key].span)?;
                     }
@@ -1696,6 +1703,20 @@ fn resolve_expression(
                     }
                     let result = match operation {
                         MapIntrinsic::Len => ValueType::Integer.into(),
+                        MapIntrinsic::Keys => SourceType::list(map.key()).ok_or_else(|| {
+                            Diagnostic::new(
+                                DiagnosticKind::ListLimit,
+                                *function_span,
+                                "map key projection exceeds list type shape limits",
+                            )
+                        })?,
+                        MapIntrinsic::Values => SourceType::list(map.value()).ok_or_else(|| {
+                            Diagnostic::new(
+                                DiagnosticKind::ListLimit,
+                                *function_span,
+                                "map value projection exceeds list type shape limits",
+                            )
+                        })?,
                         MapIntrinsic::Contains => ValueType::Boolean.into(),
                         MapIntrinsic::GetOr => map.value().clone(),
                         MapIntrinsic::Set | MapIntrinsic::Remove => types[first].clone(),
