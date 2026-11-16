@@ -1,6 +1,6 @@
 use scarp::{
     diagnostics::{Diagnostic, DiagnosticKind},
-    types::TypeKind,
+    types::{TypeKind, TypeLimits},
 };
 
 fn run(source: &str) -> String {
@@ -149,4 +149,26 @@ fn unrelated_source_variants_remain_ordinary_nominal_types() {
         match on fresh { case None {} case Some(x) { print(x); } }
     "#;
     assert_eq!(run(source), "3\n4\n");
+}
+
+#[test]
+fn concrete_wrappers_preserve_nominal_type_resource_gates() {
+    for source in [
+        "bind x = new option<integer>::Some(1);",
+        "bind x = new result<integer, string>::Ok(1);",
+    ] {
+        let narrow_arity = TypeLimits {
+            max_arity: 1,
+            ..TypeLimits::default()
+        };
+        let diagnostic = scarp::compile_with_type_limits(source, narrow_arity).unwrap_err();
+        assert_eq!(diagnostic.kind, DiagnosticKind::TypeComplexity, "{source}");
+
+        let narrow_components = TypeLimits {
+            max_components: 1,
+            ..TypeLimits::default()
+        };
+        let diagnostic = scarp::compile_with_type_limits(source, narrow_components).unwrap_err();
+        assert_eq!(diagnostic.kind, DiagnosticKind::TypeComplexity, "{source}");
+    }
 }
