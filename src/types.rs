@@ -1,9 +1,9 @@
 //! Semantic type identities. Source-language legality is checked separately.
 mod source;
 pub use source::{
-    ArrayType, RecordType, SourceType, TupleType, VariantType, MAX_ARRAY_LENGTH,
+    ArrayType, ListType, RecordType, SourceType, TupleType, VariantType, MAX_ARRAY_LENGTH,
     MAX_COMPOSITE_DEPTH, MAX_EXPANDED_VALUE_NODES, MAX_RECORD_FIELDS, MAX_SOURCE_TYPE_NODES,
-    MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH, MAX_VARIANT_CASES,
+    MAX_LIST_LENGTH, MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH, MAX_VARIANT_CASES,
 };
 
 pub(crate) use source::NominalKind;
