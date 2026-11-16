@@ -12,9 +12,8 @@ fn loader(main: &str, library: &str) -> MemorySourceLoader {
 }
 
 fn compile(source: &MemorySourceLoader, cache: &mut SyntaxCache) -> Vec<u8> {
-    let graph =
-        modules::load_with_syntax_cache("main.srp", source, ModuleLimits::default(), cache)
-            .unwrap();
+    let graph = modules::load_with_syntax_cache("main.srp", source, ModuleLimits::default(), cache)
+        .unwrap();
     let program = modules::resolve(graph).unwrap();
     let mut stdout = Vec::new();
     program
@@ -112,10 +111,7 @@ fn syntax_reconfiguration_does_not_cache_stale_semantics() {
         ..SyntaxCacheLimits::default()
     });
     cache.set_limits(SyntaxCacheLimits::default());
-    let changed = loader(
-        MAIN,
-        "pub pure funcra answer() -> integer { return 99; }",
-    );
+    let changed = loader(MAIN, "pub pure funcra answer() -> integer { return 99; }");
     assert_eq!(compile(&changed, &mut cache), b"99\n");
     assert_eq!(compile(&before, &mut cache), b"42\n");
 }
