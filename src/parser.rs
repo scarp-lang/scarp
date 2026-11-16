@@ -2,8 +2,7 @@
 
 use crate::types::{
     SourceType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_LIST_LENGTH, MAX_MAP_ENTRIES,
-    MAX_SOURCE_TYPE_NODES,
-    MAX_TUPLE_ARITY,
+    MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY,
 };
 use std::collections::{BTreeMap, VecDeque};
 
