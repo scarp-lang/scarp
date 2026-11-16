@@ -277,8 +277,8 @@ try {
         $json = Invoke-ScarpProcess -Executable $executable -Arguments @('modules', '--json', $source)
         if ($json.ExitCode -ne 0 -or $json.Stderr.Length -ne 0) { throw "Packaged $example JSON inspection failed" }
         $metadata = [System.Text.Encoding]::UTF8.GetString($json.Stdout) | ConvertFrom-Json -AsHashtable
-        $expectedSchema = if ($example -in @('variant_validation', 'ui_event_patterns', 'typed_submission', 'typed_propagation', 'task_panel_state', 'typed_dynamic_lists')) { 5 }
-        elseif ($example -eq 'app_state') { 4 }
+        $expectedSchema = if ($example -in @('variant_validation', 'ui_event_patterns', 'typed_submission', 'typed_propagation', 'task_panel_state')) { 5 }
+        elseif ($example -in @('app_state', 'typed_dynamic_lists')) { 4 }
         elseif ($example -eq 'fixed_arrays') { 3 }
         elseif ($example -in @('tuples', 'core_input_tuple', 'data_destructure')) { 2 }
         else { 1 }
