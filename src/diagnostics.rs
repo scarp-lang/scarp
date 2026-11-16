@@ -179,6 +179,9 @@ diagnostic_catalogue! {
     VariantCase => ("E0075", "Check the variant case name and whether the case expects zero or one typed payload."),
     MatchCoverage => ("E0076", "Cover every case once, or place a reachable wildcard last."),
     VariantAllocation => ("E0077", "Variant payload allocation exceeded the cumulative tuple, record and variant allowance."),
+    ListLimit => ("E0078", "Typed dynamic list length or type complexity exceeded limits. A list holds at most 4096 elements, uses one exact non-unit element type and has bounded nesting."),
+    ListIndex => ("E0079", "Dynamic list index is outside its current length. An empty list has no valid index; use a nonnegative integer less than its length."),
+    ListAllocation => ("E0080", "Typed list payload allocation exceeded the shared fixed-array/list byte quota or bounded storage reservation failed. Reuse immutable snapshots or adjust --max-array-bytes."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
