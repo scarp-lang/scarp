@@ -6,8 +6,8 @@ use crate::{
     input::IoBuiltin,
     limits::Budget,
     numeric::{self, Builtin},
-    resolver::{self, ResolvedCall, ResolvedExpression},
-    types::SourceType,
+    resolver::{self, ListIntrinsic, ResolvedCall, ResolvedExpression},
+    types::{SourceType, MAX_LIST_LENGTH},
     value::{
         finite_number, type_mismatch, ArrayValue, ListValue, RecordValue, TupleValue, Value,
         ValueType, VariantValue,
@@ -50,6 +50,7 @@ enum Task {
     Index(usize, Span),
     Builtin(Builtin, usize, Span),
     BigIntDivMod(usize, Span),
+    ListIntrinsic(ListIntrinsic, usize, Span),
     UserCall(usize, usize, Span),
     Io(IoBuiltin, Span),
     Visit(usize),
@@ -157,6 +158,7 @@ impl Workspace {
                 | Task::Index(_, span)
                 | Task::Builtin(_, _, span)
                 | Task::BigIntDivMod(_, span)
+                | Task::ListIntrinsic(_, _, span)
                 | Task::Negate(span)
                 | Task::Not(span)
                 | Task::Boolean(span)
@@ -177,6 +179,9 @@ impl Workspace {
                                 }
                                 Some(ResolvedCall::BigIntDivMod) => {
                                     Task::BigIntDivMod(index, node.span)
+                                }
+                                Some(ResolvedCall::List(op)) => {
+                                    Task::ListIntrinsic(*op, index, node.span)
                                 }
                                 _ => Task::UserCall(index, arguments.len(), node.span),
                             });
@@ -579,6 +584,86 @@ impl Workspace {
                     values.truncate(start);
                     values.extend([Value::BigInt(quotient), Value::BigInt(remainder)]);
                     finish_tuple(values, 2, budget, span)?;
+                }
+                Task::ListIntrinsic(operation, node, span) => {
+                    let ExpressionKind::UserCall { arguments, .. } =
+                        &expression.syntax.nodes()[node].kind
+                    else {
+                        unreachable!("resolved list operation");
+                    };
+                    let count = arguments.len();
+                    let start = values.len() - count;
+                    let list = values[start]
+                        .as_list()
+                        .expect("list operation has checked first argument");
+                    let result = if operation == ListIntrinsic::Len {
+                        Value::Integer(list.len() as i64)
+                    } else {
+                        let index = if operation == ListIntrinsic::Set
+                            || operation == ListIntrinsic::Remove
+                        {
+                            let n = values[start + 1].require_integer(span)?;
+                            Some(usize::try_from(n).ok().filter(|&n| n < list.len()).ok_or_else(
+                                || {
+                                    Diagnostic::new(
+                                        DiagnosticKind::ListIndex,
+                                        expression.syntax.nodes()[arguments[1].expression].span,
+                                        format!("index {n} is outside dynamic list length {}", list.len()),
+                                    )
+                                },
+                            )?)
+                        } else {
+                            None
+                        };
+                        let length = if operation == ListIntrinsic::Push {
+                            list.len().checked_add(1)
+                        } else if operation == ListIntrinsic::Remove {
+                            list.len().checked_sub(1)
+                        } else {
+                            Some(list.len())
+                        }
+                        .filter(|&length| length <= MAX_LIST_LENGTH)
+                        .ok_or_else(|| {
+                            Diagnostic::new(
+                                DiagnosticKind::ListLimit,
+                                span,
+                                "dynamic list update would exceed its 4096-element limit",
+                            )
+                        })?;
+                        budget.charge((length + list.kind().node_count() + 1) as u64, span)?;
+                        let bytes = ListValue::allocation_bytes(list.element_type(), length)
+                            .ok_or_else(|| {
+                                Diagnostic::new(
+                                    DiagnosticKind::ListAllocation,
+                                    span,
+                                    "list update allocation size overflow",
+                                )
+                            })?;
+                        budget.charge_list_allocation(bytes, span)?;
+                        let mut items = Vec::new();
+                        items.try_reserve_exact(length).map_err(|_| {
+                            Diagnostic::new(
+                                DiagnosticKind::ListAllocation,
+                                span,
+                                "could not reserve new immutable list storage",
+                            )
+                        })?;
+                        items.extend_from_slice(list.elements());
+                        match operation {
+                            ListIntrinsic::Push => items.push(values[start + 1].clone()),
+                            ListIntrinsic::Set => {
+                                items[index.expect("checked list index")] =
+                                    values[start + 2].clone();
+                            }
+                            ListIntrinsic::Remove => {
+                                items.remove(index.expect("checked list index"));
+                            }
+                            ListIntrinsic::Len => unreachable!("length needs no allocation"),
+                        }
+                        Value::List(ListValue::from_checked(list.kind().clone(), items))
+                    };
+                    values.truncate(start);
+                    values.push(result);
                 }
                 Task::Io(input, span) => {
                     let fallback = input
