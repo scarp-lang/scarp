@@ -1688,19 +1688,11 @@ fn resolve_expression(
                     })?;
                     if operation != MapIntrinsic::Len {
                         let key = arguments[1].expression;
-                        require_type(
-                            &types[key],
-                            map.key(),
-                            syntax.nodes()[key].span,
-                        )?;
+                        require_type(&types[key], map.key(), syntax.nodes()[key].span)?;
                     }
                     if matches!(operation, MapIntrinsic::GetOr | MapIntrinsic::Set) {
                         let value = arguments[2].expression;
-                        require_type(
-                            &types[value],
-                            map.value(),
-                            syntax.nodes()[value].span,
-                        )?;
+                        require_type(&types[value], map.value(), syntax.nodes()[value].span)?;
                     }
                     let result = match operation {
                         MapIntrinsic::Len => ValueType::Integer.into(),
