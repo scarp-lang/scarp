@@ -260,9 +260,63 @@ impl Builder<'_> {
                 definition,
                 fields: type_ids.into_iter().map(Option::unwrap).collect(),
             },
-            NominalKind::Variant => TypeKind::Variant {
-                definition,
-                cases: type_ids.into_boxed_slice(),
+            NominalKind::Variant => {
+                // Compiler-generated concrete option/result specializations
+                // are structural applications of reserved type constructors.
+                // Unlike source 'variant' declarations, identical type
+                // arguments across modules must produce the same TypeId.
+                // The reserved module cannot collide with any source module.
+                let short = display_name(declared_name);
+                let signature = if short.starts_with("option<") && short.ends_with('>') {
+                    if members.len() != 2
+                        || members[0].0 != "None"
+                        || members[0].1.is_some()
+                        || members[1].0 != "Some"
+                        || members[1].1.is_none()
+                    {
+                        return Err(definition_error(
+                            kind,
+                            declaration_span,
+                            "invalid compiler-generated option case layout",
+                        ));
+                    }
+                    Some((0, vec![type_ids[1].expect("checked Some payload")]))
+                } else if short.starts_with("result<") && short.ends_with('>') {
+                    if members.len() != 2
+                        || members[0].0 != "Ok"
+                        || members[0].1.is_none()
+                        || members[1].0 != "Err"
+                        || members[1].1.is_none()
+                    {
+                        return Err(definition_error(
+                            kind,
+                            declaration_span,
+                            "invalid compiler-generated result case layout",
+                        ));
+                    }
+                    Some((
+                        1,
+                        vec![
+                            type_ids[0].expect("checked Ok payload"),
+                            type_ids[1].expect("checked Err payload"),
+                        ],
+                    ))
+                } else {
+                    None
+                };
+                match signature {
+                    Some((constructor, arguments)) => TypeKind::Applied {
+                        constructor: DefinitionId {
+                            module: u32::MAX,
+                            declaration: constructor,
+                        },
+                        arguments: arguments.into_boxed_slice(),
+                    },
+                    None => TypeKind::Variant {
+                        definition,
+                        cases: type_ids.into_boxed_slice(),
+                    },
+                }
             },
         };
         let id = self
