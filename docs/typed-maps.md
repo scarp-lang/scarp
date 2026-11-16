@@ -33,6 +33,8 @@ a user-declared function:
 | Name | Signature | Result |
 | --- | --- | --- |
 | `map_len(m)` | `map<K,V> -> integer` | Current size |
+| `map_keys(m)` | `map<K,V> -> list<K>` | Canonically sorted keys |
+| `map_values(m)` | `map<K,V> -> list<V>` | Values in matching canonical key order |
 | `map_contains(m,k)` | `(map<K,V>, K) -> boolean` | Key existence |
 | `map_get_or(m,k,fallback)` | `(map<K,V>,K,V) -> V` | Stored value or typed fallback |
 | `map_set(m,k,v)` | `(map<K,V>,K,V) -> map<K,V>` | New snapshot with inserted/replaced value |
@@ -50,10 +52,15 @@ snapshots consume deterministic work units. Source map allocations share
 fixed-array payloads (E0083). These account logical payload bytes, not
 physical RSS. Snapshot aliases are never mutated.
 
+The `map_keys` and `map_values` projections expose a bounded, predictable
+iteration order through standard list indexing and existing Scarp loops. The
+projected lists are immutable snapshots and their new storage is charged to
+the same cumulative array/list/map quota before allocation.
+
 This is not a general iterator API, persistent tree implementation,
 first-class callback API, typed Option-returning `map_get`, GUI runtime or
 stable host ABI. Native C11 emits a clear unsupported diagnostic until
 aggregate lowering is explicitly implemented and verified.
 
-Proof: `examples/typed_maps.srp`, `examples/persistent_maps.srp`, and
+Proof: `examples/typed_maps.srp`, `examples/persistent_maps.srp`, `examples/map_projections.srp`, and
 `tests/source_typed_maps.rs` / `tests/source_map_operations.rs`.
