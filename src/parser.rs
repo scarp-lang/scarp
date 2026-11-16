@@ -1907,9 +1907,9 @@ impl Parser<'_> {
             Some(element)
         } else {
             if self.at(&TokenKind::RightBracket) {
-                return Err(self
-                    .expected("a list element or '<type>'")
-                    .with_help("write an explicitly typed empty list, for example [list: <integer>]"));
+                return Err(self.expected("a list element or '<type>'").with_help(
+                    "write an explicitly typed empty list, for example [list: <integer>]",
+                ));
             }
             loop {
                 if elements.len() == MAX_LIST_LENGTH {
