@@ -112,6 +112,13 @@ pub(crate) enum ResolvedStatement {
         slot: usize,
         value: ResolvedExpression,
     },
+    /// Evaluate a checked Option/Result once, binding its success payload or
+    /// returning a typed absence/error through the normal function completion.
+    Propagate {
+        slot: usize,
+        value: ResolvedExpression,
+        plan: PropagationPlan,
+    },
     Match {
         value: ResolvedExpression,
         dispatch: Box<[MatchTarget]>,
@@ -157,6 +164,13 @@ pub(crate) struct ResolvedExpression {
     pub types: Vec<TypeId>,
     pub calls: Vec<Option<ResolvedCall>>,
     pub composites: std::collections::BTreeMap<usize, CompositeOperation>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PropagationPlan {
+    pub outer: SourceType,
+    pub success_tag: u8,
+    pub failure_tag: u8,
 }
 
 #[derive(Debug, Clone)]
@@ -661,6 +675,7 @@ impl<'a> Resolver<'a> {
                 initializer,
                 mutable,
                 annotation,
+                propagate,
                 ..
             } => {
                 self.binding_name(&name, name_span)?;
@@ -676,7 +691,67 @@ impl<'a> Resolver<'a> {
                 }
                 // Resolve before insertion: a shadowing initializer sees the outer name.
                 let value = self.expression(initializer)?;
-                require_value(&value.kind, span)?;
+                let (kind, propagation) = if let Some(marker) = propagate {
+                    if mutable {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::InvalidReturn,
+                            marker,
+                            "propagation requires an immutable bind",
+                        ));
+                    }
+                    let (outer, declared) = self.result.as_ref().ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::InvalidReturn,
+                            marker,
+                            "propagation is only valid inside funcra",
+                        )
+                    })?;
+                    let input = value.kind.as_variant().ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::InvalidReturn,
+                            marker,
+                            format!("propagation requires option or result, found {}", value.kind),
+                        )
+                    })?;
+                    let output = outer.as_variant().ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::InvalidReturn,
+                            marker,
+                            format!("enclosing funcra must return option or result, found {outer}"),
+                        )
+                        .with_related(*declared, "the result type is declared here")
+                    })?;
+                    let (success_tag, failure_tag) = if input.name().starts_with("option<")
+                        && output.name().starts_with("option<")
+                    {
+                        (1, 0)
+                    } else if input.name().starts_with("result<")
+                        && output.name().starts_with("result<")
+                        && input.cases()[1].1 == output.cases()[1].1
+                    {
+                        (0, 1)
+                    } else {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::InvalidReturn,
+                            marker,
+                            format!("cannot propagate {} from a funcra returning {outer}", value.kind),
+                        )
+                        .with_related(*declared, "the enclosing result type is declared here")
+                        .with_help("use option-to-option propagation or result-to-result with an identical error type"));
+                    };
+                    let success = input.cases()[success_tag].1.as_ref().expect("payload case");
+                    (
+                        success.clone(),
+                        Some(PropagationPlan {
+                            outer: outer.clone(),
+                            success_tag: success_tag as u8,
+                            failure_tag: failure_tag as u8,
+                        }),
+                    )
+                } else {
+                    (value.kind.clone(), None)
+                };
+                require_value(&kind, span)?;
                 let annotation = annotation
                     .map(|mut annotation| {
                         annotation.kind =
@@ -686,11 +761,10 @@ impl<'a> Resolver<'a> {
                     .transpose()?;
                 require_annotation(
                     annotation,
-                    &value.kind,
+                    &kind,
                     value.syntax.nodes()[value.syntax.root()].span,
                 )?;
                 let slot = self.slot_types.len();
-                let kind = value.kind.clone();
                 self.slot_types.push(kind.clone());
                 self.scopes
                     .last_mut()
@@ -706,7 +780,11 @@ impl<'a> Resolver<'a> {
                             parameter: false,
                         },
                     );
-                self.emit(ResolvedStatement::Store { slot, value }, span);
+                let operation = match propagation {
+                    Some(plan) => ResolvedStatement::Propagate { slot, value, plan },
+                    None => ResolvedStatement::Store { slot, value },
+                };
+                self.emit(operation, span);
             }
             Statement::Destructure {
                 pattern,
