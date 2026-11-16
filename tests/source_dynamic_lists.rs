@@ -42,10 +42,7 @@ fn nested_lists_and_empty_snapshots_have_deterministic_equality_and_display() {
         bind nested = [list: [list: 1], [list: 2]];
         print(nested[1][0]);
     "#;
-    assert_eq!(
-        run(code),
-        "true\ntrue\n[list: \"A\", \"B\"]\n2\n"
-    );
+    assert_eq!(run(code), "true\ntrue\n[list: \"A\", \"B\"]\n2\n");
 }
 
 #[test]
@@ -74,7 +71,10 @@ fn empty_list_requires_explicit_element_type() {
     let err = scarp::compile("bind empty = [list: ];").unwrap_err();
     assert_eq!(err.kind, DiagnosticKind::UnexpectedToken);
     let err = scarp::compile("bind empty: list<unit> = [list: <unit>];").unwrap_err();
-    assert!(matches!(err.kind, DiagnosticKind::FunctionDefinition | DiagnosticKind::ListLimit));
+    assert!(matches!(
+        err.kind,
+        DiagnosticKind::FunctionDefinition | DiagnosticKind::ListLimit
+    ));
 }
 
 #[test]
@@ -120,10 +120,14 @@ fn dynamic_list_type_interns_as_unbounded_sequence() {
     let id = program
         .type_registry()
         .iter()
-        .find(|(_, kind)| {
-            matches!(kind, TypeKind::Sequence { length: None, .. })
-        })
+        .find(|(_, kind)| matches!(kind, TypeKind::Sequence { length: None, .. }))
         .map(|(id, _)| id);
-    assert!(id.is_some(), "list must have unbounded structural sequence type");
-    assert_eq!(ty.as_list().unwrap().element(), &SourceType::from(scarp::value::ValueType::Integer));
+    assert!(
+        id.is_some(),
+        "list must have unbounded structural sequence type"
+    );
+    assert_eq!(
+        ty.as_list().unwrap().element(),
+        &SourceType::from(scarp::value::ValueType::Integer)
+    );
 }
