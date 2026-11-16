@@ -293,7 +293,10 @@ impl Resolver<'_> {
         span: Span,
     ) -> Result<(usize, SourceType, Vec<Option<usize>>), Diagnostic> {
         if arms.is_empty() || arms.len() > MAX_VARIANT_CASES + 1 {
-            return Err(coverage_error(span, "scalar match requires 1 to 33 case arms"));
+            return Err(coverage_error(
+                span,
+                "scalar match requires 1 to 33 case arms",
+            ));
         }
         let expected = subject.kind.clone();
         let mut literals: Vec<(&MatchLiteral, Span)> = Vec::new();
@@ -399,11 +402,14 @@ impl Resolver<'_> {
             self.plan_match(statement.subject, &statement.arms, statement.span)?;
         let layout = kind.as_variant();
         let scalar_literals = kind == ValueType::Integer || kind == ValueType::String;
-        let mut dispatch = vec![None; if scalar_literals {
-            0
-        } else {
-            layout.map_or(2, |variant| variant.cases().len())
-        }];
+        let mut dispatch = vec![
+            None;
+            if scalar_literals {
+                0
+            } else {
+                layout.map_or(2, |variant| variant.cases().len())
+            }
+        ];
         let mut literal_cases = Vec::new();
         let mut fallback = None;
         let mut exits = Vec::new();
