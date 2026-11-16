@@ -83,7 +83,10 @@ fn invalid_map_keys_and_inhomogeneous_entries_are_statically_rejected() {
     ] {
         let error = scarp::compile(source).unwrap_err();
         assert!(
-            matches!(error.kind, DiagnosticKind::MapLimit | DiagnosticKind::UnexpectedToken),
+            matches!(
+                error.kind,
+                DiagnosticKind::MapLimit | DiagnosticKind::UnexpectedToken
+            ),
             "{source}: {error:?}"
         );
     }
