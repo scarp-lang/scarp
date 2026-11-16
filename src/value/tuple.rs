@@ -86,6 +86,7 @@ pub(super) fn value_work(value: &Value) -> u64 {
     match value {
         Value::Tuple(t) => t.work(),
         Value::Array(a) => a.work(),
+        Value::List(l) => l.work(),
         Value::Record(r) => r.work(),
         Value::Variant(v) => v.work(),
         Value::String(s) => (s.len() as u64).saturating_mul(6).saturating_add(2),
@@ -105,6 +106,7 @@ pub(super) fn value_capture(value: &Value) -> usize {
     match value {
         Value::Tuple(t) => t.capture_bytes(),
         Value::Array(a) => a.capture_bytes(),
+        Value::List(l) => l.capture_bytes(),
         Value::Record(r) => r.capture_bytes(),
         Value::Variant(v) => v.capture_bytes(),
         Value::String(s) => s.len().saturating_mul(6).saturating_add(2),
