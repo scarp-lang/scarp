@@ -80,7 +80,12 @@ impl Parser<'_> {
         let builtin = self.tokens.get(self.cursor + 1).is_some_and(|token| {
             matches!(&token.kind, TokenKind::Identifier(name) if name == "option" || name == "result")
         });
-        if builtin && self.tokens.get(after_name).is_some_and(|t| t.kind == TokenKind::Less) {
+        if builtin
+            && self
+                .tokens
+                .get(after_name)
+                .is_some_and(|t| t.kind == TokenKind::Less)
+        {
             // Recognize a fully closed, potentially nested type argument
             // group without confusing the case separator with type syntax.
             let mut nesting = 0usize;
@@ -132,7 +137,11 @@ impl Parser<'_> {
             matches!(&token.kind, TokenKind::Identifier(name) if name == "option" || name == "result")
         }) && self.tokens.get(self.cursor + 1).is_some_and(|token| token.kind == TokenKind::Less);
         let (name, name_span) = if built_in {
-            let start = self.current().expect("specialization starts with a type").span.start;
+            let start = self
+                .current()
+                .expect("specialization starts with a type")
+                .span
+                .start;
             let kind = self.value_type(false)?;
             let SourceType::VariantRef(name) = kind else {
                 unreachable!("parameterized option/result is a variant reference");
