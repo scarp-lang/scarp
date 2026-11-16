@@ -79,10 +79,7 @@ fn maps_of_records_project_values_with_nominal_identity() {
 
 #[test]
 fn map_projection_intrinsics_require_one_positional_map_argument() {
-    for source in [
-        "print(map_keys(12));",
-        "print(map_values([list: 1]));",
-    ] {
+    for source in ["print(map_keys(12));", "print(map_values([list: 1]));"] {
         let error = scarp::compile(source).unwrap_err();
         assert_eq!(error.kind, DiagnosticKind::TypeMismatch, "{source}");
     }
@@ -129,10 +126,7 @@ fn map_projection_budget_failure_does_not_publish_partial_output() {
 
 #[test]
 fn native_backend_still_rejects_map_projections() {
-    let program = scarp::compile(
-        "bind m = [map: 1: 2]; print(map_keys(m));",
-    )
-    .unwrap();
+    let program = scarp::compile("bind m = [map: 1: 2]; print(map_keys(m));").unwrap();
     assert_eq!(
         scarp::c_backend::emit_program(&program).unwrap_err().kind,
         DiagnosticKind::NativeUnsupported
