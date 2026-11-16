@@ -53,7 +53,17 @@ fn concrete_instantiations_are_distinct_and_reuse_the_variant_registry() {
     assert_eq!(d.cases()[1].0, "Err");
     assert!(matches!(
         program.type_registry().get(a.type_id()),
-        Some(TypeKind::Variant { cases, .. }) if cases.len() == 2
+        Some(TypeKind::Applied { constructor, arguments })
+            if constructor.module == u32::MAX
+                && constructor.declaration == 0
+                && arguments.len() == 1
+    ));
+    assert!(matches!(
+        program.type_registry().get(d.type_id()),
+        Some(TypeKind::Applied { constructor, arguments })
+            if constructor.module == u32::MAX
+                && constructor.declaration == 1
+                && arguments.len() == 2
     ));
     assert_eq!(run(source), "4\nnone\ntext\n7\ntrue\n");
 }
