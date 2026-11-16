@@ -6,8 +6,8 @@ use crate::{
     input::IoBuiltin,
     limits::Budget,
     numeric::{self, Builtin},
-    resolver::{self, ListIntrinsic, ResolvedCall, ResolvedExpression},
-    types::{SourceType, MAX_LIST_LENGTH},
+    resolver::{self, ListIntrinsic, MapIntrinsic, ResolvedCall, ResolvedExpression},
+    types::{SourceType, MAX_LIST_LENGTH, MAX_MAP_ENTRIES},
     value::{
         finite_number, key_compare, key_work, type_mismatch, ArrayValue, ListValue, MapValue,
         RecordValue, TupleValue, Value, ValueType, VariantValue,
@@ -52,6 +52,7 @@ enum Task {
     Builtin(Builtin, usize, Span),
     BigIntDivMod(usize, Span),
     ListIntrinsic(ListIntrinsic, usize, Span),
+    MapIntrinsic(MapIntrinsic, usize, Span),
     UserCall(usize, usize, Span),
     Io(IoBuiltin, Span),
     Visit(usize),
@@ -161,6 +162,7 @@ impl Workspace {
                 | Task::Builtin(_, _, span)
                 | Task::BigIntDivMod(_, span)
                 | Task::ListIntrinsic(_, _, span)
+                | Task::MapIntrinsic(_, _, span)
                 | Task::Negate(span)
                 | Task::Not(span)
                 | Task::Boolean(span)
@@ -184,6 +186,9 @@ impl Workspace {
                                 }
                                 Some(ResolvedCall::List(op)) => {
                                     Task::ListIntrinsic(*op, index, node.span)
+                                }
+                                Some(ResolvedCall::Map(op)) => {
+                                    Task::MapIntrinsic(*op, index, node.span)
                                 }
                                 _ => Task::UserCall(index, arguments.len(), node.span),
                             });
@@ -741,6 +746,127 @@ impl Workspace {
                             ListIntrinsic::Len => unreachable!("length needs no allocation"),
                         }
                         Value::List(ListValue::from_checked(list.kind().clone(), items))
+                    };
+                    values.truncate(start);
+                    values.push(result);
+                }
+                Task::MapIntrinsic(operation, node, span) => {
+                    let ExpressionKind::UserCall { arguments, .. } =
+                        &expression.syntax.nodes()[node].kind
+                    else {
+                        unreachable!("typed map intrinsic");
+                    };
+                    let count = arguments.len();
+                    let start = values.len() - count;
+                    let map = values[start]
+                        .as_map()
+                        .expect("first argument checked as a map");
+                    let key_index = if operation == MapIntrinsic::Len {
+                        None
+                    } else {
+                        let query = &values[start + 1];
+                        let mut low = 0;
+                        let mut high = map.len();
+                        let mut found = None;
+                        while low < high {
+                            let middle = low + (high - low) / 2;
+                            let existing = &map.entries()[middle].0;
+                            budget.charge(key_work(query, existing), span)?;
+                            match key_compare(query, existing) {
+                                std::cmp::Ordering::Less => high = middle,
+                                std::cmp::Ordering::Greater => low = middle + 1,
+                                std::cmp::Ordering::Equal => {
+                                    found = Some(middle);
+                                    break;
+                                }
+                            }
+                        }
+                        Some((found, low))
+                    };
+                    let result = match operation {
+                        MapIntrinsic::Len => Value::Integer(map.len() as i64),
+                        MapIntrinsic::Contains => {
+                            Value::Boolean(key_index.expect("lookup").0.is_some())
+                        }
+                        MapIntrinsic::GetOr => {
+                            if let Some(found) = key_index.expect("lookup").0 {
+                                map.entries()[found].1.clone()
+                            } else {
+                                values[start + 2].clone()
+                            }
+                        }
+                        MapIntrinsic::Remove if key_index.expect("lookup").0.is_none() => {
+                            // Removing an absent key is an immutable no-op.
+                            values[start].clone()
+                        }
+                        MapIntrinsic::Remove | MapIntrinsic::Set => {
+                            let (found, insertion) = key_index.expect("checked key lookup");
+                            let next_len = if operation == MapIntrinsic::Remove {
+                                map.len() - 1
+                            } else if found.is_some() {
+                                map.len()
+                            } else {
+                                map.len().checked_add(1).ok_or_else(|| {
+                                    Diagnostic::new(
+                                        DiagnosticKind::MapLimit,
+                                        span,
+                                        "map size arithmetic overflow",
+                                    )
+                                })?
+                            };
+                            if next_len > MAX_MAP_ENTRIES {
+                                return Err(Diagnostic::new(
+                                    DiagnosticKind::MapLimit,
+                                    span,
+                                    "map update exceeds its 1024-entry limit",
+                                ));
+                            }
+                            budget.charge(
+                                (next_len + map.kind().node_count() + 1) as u64,
+                                span,
+                            )?;
+                            let bytes = MapValue::allocation_bytes(
+                                map.key_type(),
+                                map.value_type(),
+                                next_len,
+                            )
+                            .ok_or_else(|| {
+                                Diagnostic::new(
+                                    DiagnosticKind::MapAllocation,
+                                    span,
+                                    "map update allocation size overflow",
+                                )
+                            })?;
+                            budget.charge_map_allocation(bytes, span)?;
+                            let mut entries = Vec::new();
+                            entries.try_reserve_exact(next_len).map_err(|_| {
+                                Diagnostic::new(
+                                    DiagnosticKind::MapAllocation,
+                                    span,
+                                    "could not reserve new immutable map storage",
+                                )
+                            })?;
+                            entries.extend_from_slice(map.entries());
+                            match operation {
+                                MapIntrinsic::Remove => {
+                                    entries.remove(found.expect("validated map removal index"));
+                                }
+                                MapIntrinsic::Set => {
+                                    let new_pair =
+                                        (values[start + 1].clone(), values[start + 2].clone());
+                                    if let Some(index) = found {
+                                        entries[index] = new_pair;
+                                    } else {
+                                        // Count the suffix shift, including the
+                                        // worst-case descending-key insertion.
+                                        budget.charge((entries.len() - insertion) as u64, span)?;
+                                        entries.insert(insertion, new_pair);
+                                    }
+                                }
+                                _ => unreachable!("map update operation"),
+                            }
+                            Value::Map(MapValue::from_checked(map.kind().clone(), entries))
+                        }
                     };
                     values.truncate(start);
                     values.push(result);
