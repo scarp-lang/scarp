@@ -3,7 +3,7 @@
 use crate::types::{
     SourceType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY,
 };
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 
 mod patterns;
 mod variants;
@@ -36,6 +36,7 @@ pub fn parse(tokens: &[Token]) -> Result<Program, Diagnostic> {
         cursor: 0,
         pending: VecDeque::new(),
         type_end: 0,
+        builtin_variants: BTreeMap::new(),
     }
     .program()
     .map_err(|error| *error.0)
@@ -60,6 +61,7 @@ struct Parser<'a> {
     cursor: usize,
     pending: VecDeque<Token>,
     type_end: usize,
+    builtin_variants: BTreeMap<String, crate::ast::VariantDeclaration>,
 }
 
 impl Parser<'_> {
@@ -129,8 +131,18 @@ impl Parser<'_> {
     }
 
     fn program(mut self) -> Result<Program, ParseError> {
+        let mut statements = self.statement_list(0, false)?;
+        // Monomorphized built-in variants share the exact same checked
+        // construction, matching, and value paths as user-defined variants.
+        // Their names contain '<' and cannot collide with source identifiers.
+        let mut generated: Vec<_> = self
+            .builtin_variants
+            .into_values()
+            .map(|declaration| Statement::Variant(Box::new(declaration)))
+            .collect();
+        generated.append(&mut statements);
         Ok(Program {
-            statements: self.statement_list(0, false)?,
+            statements: generated,
         })
     }
 
@@ -1036,6 +1048,9 @@ impl Parser<'_> {
                 )
             });
         }
+        if matches!(name.as_str(), "option" | "result") && self.at(&TokenKind::Less) {
+            return self.builtin_variant_type(&name, span, depth, remaining, inside_array);
+        }
         if name == "variant" {
             let (name, span) = self.qualified_identifier()?;
             self.type_end = span.end;
@@ -1069,6 +1084,89 @@ impl Parser<'_> {
                 "use integer, float, bigint, decimal, vector, integers, tile, boolean, string, or unit for a result",
             )),
         }
+    }
+
+    /// Reify a concrete Option/Result specialization as a private nominal
+    /// variant. This deliberately does not introduce user-defined generics.
+    /// The regular nominal resolver assigns checked TypeIds and case layouts.
+    fn builtin_variant_type(
+        &mut self,
+        family: &str,
+        opening: Span,
+        depth: usize,
+        remaining: &mut usize,
+        inside_array: bool,
+    ) -> Result<SourceType, ParseError> {
+        if depth >= MAX_COMPOSITE_DEPTH {
+            return Err(ParseError::new(
+                DiagnosticKind::TupleLimit,
+                opening,
+                "parameterized type nesting exceeds 32 levels",
+            ));
+        }
+        self.punctuation(TokenKind::Less, "'<' after the type constructor")?;
+        let first_span = self
+            .current()
+            .ok_or_else(|| self.expected("the first type argument"))?
+            .span;
+        let first = self.source_type(false, depth + 1, remaining, inside_array)?;
+        let second = if family == "result" {
+            self.punctuation(TokenKind::Comma, "',' between result type arguments")?;
+            Some(self.source_type(false, depth + 1, remaining, inside_array)?)
+        } else {
+            None
+        };
+        let end = self.type_close()?.end;
+        if first == ValueType::Unit || second.as_ref().is_some_and(|ty| ty == &ValueType::Unit) {
+            return Err(ParseError::new(
+                DiagnosticKind::VariantDefinition,
+                Span::new(opening.start, end),
+                "option and result payload types cannot be unit",
+            ));
+        }
+        let name = match &second {
+            Some(error) => format!("result<{first}, {error}>"),
+            None => format!("option<{first}>"),
+        };
+        if name.len() > 4096 {
+            return Err(ParseError::new(
+                DiagnosticKind::TupleLimit,
+                Span::new(opening.start, end),
+                "parameterized type spelling exceeds 4096 bytes",
+            ));
+        }
+        if !self.builtin_variants.contains_key(&name) {
+            if self.builtin_variants.len() >= 4096 {
+                return Err(ParseError::new(
+                    DiagnosticKind::VariantDefinition,
+                    opening,
+                    "program exceeds 4096 concrete option/result types",
+                ));
+            }
+            let span = Span::new(opening.start, end);
+            let case = |tag: &str, payload: Option<SourceType>| crate::ast::VariantCase {
+                name: tag.to_owned(),
+                span: opening,
+                payload: payload.map(|kind| crate::ast::TypeAnnotation {
+                    kind,
+                    span: first_span,
+                }),
+            };
+            let cases = match second {
+                Some(error) => vec![case("Ok", Some(first)), case("Err", Some(error))],
+                None => vec![case("None", None), case("Some", Some(first))],
+            };
+            self.builtin_variants.insert(
+                name.clone(),
+                crate::ast::VariantDeclaration {
+                    name: name.clone(),
+                    name_span: opening,
+                    cases,
+                    span,
+                },
+            );
+        }
+        Ok(SourceType::VariantRef(name.into()))
     }
 
     fn array_length(&mut self) -> Result<usize, ParseError> {
