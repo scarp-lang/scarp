@@ -80,6 +80,9 @@ impl Resolver<'_> {
         span: Span,
     ) -> Result<(usize, SourceType, Vec<Option<usize>>), Diagnostic> {
         let subject = self.expression(subject)?;
+        if subject.kind == ValueType::Boolean {
+            return self.plan_boolean_match(subject, arms, span);
+        }
         let subject_span = subject.syntax.nodes()[subject.syntax.root()].span;
         let layout = subject.kind.as_variant().ok_or_else(|| {
             case_error(
@@ -173,6 +176,92 @@ impl Resolver<'_> {
         Ok((b, kind, tags))
     }
 
+    // A small refutable-pattern slice: booleans are a finite two-element
+    // domain, so exhaustiveness and redundant-arm checks are exact without
+    // expanding an unbounded decision tree. Variant matches retain their
+    // existing nominal, typed payload and wildcard rules.
+    #[inline(never)]
+    fn plan_boolean_match(
+        &mut self,
+        subject: ResolvedExpression,
+        arms: &[MatchArm],
+        span: Span,
+    ) -> Result<(usize, SourceType, Vec<Option<usize>>), Diagnostic> {
+        if arms.is_empty() || arms.len() > 3 {
+            return Err(coverage_error(span, "boolean match requires 1 to 3 arms"));
+        }
+        let names = ["false", "true"];
+        let mut covered: [Option<Span>; 2] = [None, None];
+        let mut tags = Vec::with_capacity(arms.len());
+        let mut wildcard = None;
+        for arm in arms {
+            if let Some(previous) = wildcard {
+                return Err(
+                    coverage_error(arm.tag_span, "case is unreachable after the wildcard")
+                        .with_related(previous, "the wildcard is here"),
+                );
+            }
+            if arm.payload.is_some() {
+                return Err(case_error(
+                    arm.tag_span,
+                    "boolean literal patterns cannot bind a payload",
+                ));
+            }
+            let tag = match arm.tag.as_str() {
+                "false" => Some(0),
+                "true" => Some(1),
+                "_" => None,
+                _ => {
+                    return Err(case_error(
+                        arm.tag_span,
+                        format!("boolean match has no literal case {:?}", arm.tag),
+                    ))
+                }
+            };
+            match tag {
+                Some(index) => {
+                    if let Some(first) = covered[index].replace(arm.tag_span) {
+                        return Err(
+                            coverage_error(arm.tag_span, format!("duplicate case {:?}", arm.tag))
+                                .with_related(first, "the first arm is here"),
+                        );
+                    }
+                }
+                None => {
+                    if covered.iter().all(Option::is_some) {
+                        return Err(coverage_error(
+                            arm.tag_span,
+                            "wildcard is unreachable after all boolean cases",
+                        ));
+                    }
+                    wildcard = Some(arm.tag_span);
+                }
+            }
+            tags.push(tag);
+        }
+        if wildcard.is_none() {
+            let missing = names
+                .iter()
+                .zip(&covered)
+                .filter_map(|(name, covered)| covered.is_none().then_some(*name))
+                .collect::<Vec<_>>();
+            if !missing.is_empty() {
+                return Err(coverage_error(
+                    span,
+                    format!("non-exhaustive boolean match, missing {}", missing.join(", ")),
+                ));
+            }
+        }
+        let instruction = self.emit(
+            ResolvedStatement::Match {
+                value: subject,
+                dispatch: Box::new([]),
+            },
+            span,
+        );
+        Ok((instruction, ValueType::Boolean.into(), tags))
+    }
+
     #[inline(never)]
     fn begin_match_arm(
         &mut self,
@@ -207,11 +296,21 @@ impl Resolver<'_> {
     pub(super) fn resolve_match(&mut self, statement: MatchStatement) -> Result<(), Diagnostic> {
         let (instruction, kind, tags) =
             self.plan_match(statement.subject, &statement.arms, statement.span)?;
-        let layout = kind.as_variant().unwrap();
-        let mut dispatch = vec![None; layout.cases().len()];
+        let layout = kind.as_variant();
+        let mut dispatch = vec![None; layout.map_or(2, |variant| variant.cases().len())];
         let mut exits = Vec::new();
         for (arm, tag) in statement.arms.into_iter().zip(tags) {
-            let target = self.begin_match_arm(&arm, tag, layout)?;
+            let target = if let Some(layout) = layout {
+                self.begin_match_arm(&arm, tag, layout)?
+            } else {
+                // The boolean planner established an exhaustive literal match
+                // with no payload binding on any arm.
+                self.enter_scope(arm.span)?;
+                MatchTarget {
+                    instruction: self.statements.len(),
+                    payload: None,
+                }
+            };
             if let Some(tag) = tag {
                 dispatch[tag] = Some(target);
             } else {
