@@ -170,10 +170,7 @@ fn lookup_work_is_metered_for_long_utf8_keys() {
 
 #[test]
 fn native_backend_rejects_persistent_map_operations() {
-    let program = scarp::compile(
-        "bind m = [map: 1: true]; print(map_contains(m, 1));",
-    )
-    .unwrap();
+    let program = scarp::compile("bind m = [map: 1: true]; print(map_contains(m, 1));").unwrap();
     assert_eq!(
         scarp::c_backend::emit_program(&program).unwrap_err().kind,
         DiagnosticKind::NativeUnsupported
