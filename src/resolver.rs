@@ -123,6 +123,13 @@ pub(crate) enum ResolvedStatement {
         value: ResolvedExpression,
         dispatch: Box<[MatchTarget]>,
     },
+    /// Bounded exact integer/text cases with a mandatory fallback for an
+    /// open-ended scalar domain. No unchecked payload or pattern evaluation.
+    MatchLiteral {
+        value: ResolvedExpression,
+        cases: Box<[(crate::ast::MatchLiteral, usize)]>,
+        otherwise: usize,
+    },
     /// Compiler-verified tuple/array shape with one initializer evaluation.
     Destructure {
         steps: Vec<DestructureStep>,
