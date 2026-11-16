@@ -94,6 +94,7 @@ fn operation_expressions(
             ResolvedStatement::RepeatInit { count, .. } => (Some(count), &[]),
             ResolvedStatement::JumpIfFalse { condition, .. } => (Some(condition), &[]),
             ResolvedStatement::Store { value, .. }
+            | ResolvedStatement::Propagate { value, .. }
             | ResolvedStatement::Destructure { value, .. }
             | ResolvedStatement::Match { value, .. }
             | ResolvedStatement::Update { value, .. } => (Some(value), &[]),
