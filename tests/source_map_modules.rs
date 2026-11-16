@@ -143,10 +143,7 @@ fn runtime_duplicate_map_keys_abort_cross_module_program_output() {
 
 #[test]
 fn native_code_generation_explicitly_rejects_map_operations() {
-    let compiled = scarp::compile(
-        "bind m = [map: 1: 2]; print(map_set(m, 2, 3));",
-    )
-    .unwrap();
+    let compiled = scarp::compile("bind m = [map: 1: 2]; print(map_set(m, 2, 3));").unwrap();
     assert_eq!(
         scarp::c_backend::emit_program(&compiled).unwrap_err().kind,
         DiagnosticKind::NativeUnsupported
