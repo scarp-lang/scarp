@@ -141,6 +141,17 @@ fn audit_frame(
                 read_slots(value, &state)?;
                 match_targets = dispatch;
             }
+            ResolvedStatement::MatchLiteral {
+                value,
+                cases,
+                otherwise,
+            } => {
+                read_slots(value, &state)?;
+                // The wildcard is required by the resolver, but the audit
+                // conservatively checks every exact-case branch as reachable.
+                successors.extend(cases.iter().map(|(_, target)| *target));
+                successors.push(*otherwise);
+            }
             ResolvedStatement::Destructure { steps, value } => {
                 read_slots(value, &state)?;
                 initialize_pattern(&mut state_out, steps)?;
