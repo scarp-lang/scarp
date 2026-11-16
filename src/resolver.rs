@@ -1179,6 +1179,10 @@ fn resolve_expression(
         if let ExpressionKind::Array {
             empty_element_type: Some(kind),
             ..
+        }
+        | ExpressionKind::List {
+            empty_element_type: Some(kind),
+            ..
         } = &mut node.kind
         {
             if kind.has_nominal_ref() {
@@ -1280,6 +1284,38 @@ fn resolve_expression(
                 })?;
                 (kind, None)
             }
+            ExpressionKind::List {
+                elements,
+                empty_element_type,
+            } => {
+                let element_type = if let Some((&first, rest)) = elements.split_first() {
+                    let first_span = syntax.nodes()[first].span;
+                    let kind = &types[first];
+                    require_value(kind, first_span)?;
+                    for &element in rest {
+                        require_type(&types[element], kind, syntax.nodes()[element].span)
+                            .map_err(|error| {
+                                error.with_related(
+                                    first_span,
+                                    "the first list element has this type",
+                                )
+                            })?;
+                    }
+                    kind
+                } else {
+                    empty_element_type
+                        .as_ref()
+                        .expect("parser supplied empty list element type")
+                };
+                let kind = SourceType::list(element_type).ok_or_else(|| {
+                    Diagnostic::new(
+                        DiagnosticKind::ListLimit,
+                        node.span,
+                        "list element type exceeds structural shape limits",
+                    )
+                })?;
+                (kind, None)
+            }
             ExpressionKind::Integers { elements } => {
                 for &element in elements {
                     require_type(
@@ -1313,6 +1349,18 @@ fn resolve_expression(
                         syntax.nodes()[*index].span,
                     )?;
                     let element = array.element().clone();
+                    slots.push(None);
+                    calls.push(None);
+                    types.push(element);
+                    continue;
+                }
+                if let Some(list) = types[*vector].as_list() {
+                    require_type(
+                        &types[*index],
+                        ValueType::Integer,
+                        syntax.nodes()[*index].span,
+                    )?;
+                    let element = list.element().clone();
                     slots.push(None);
                     calls.push(None);
                     types.push(element);
