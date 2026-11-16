@@ -1529,10 +1529,7 @@ fn resolve_expression(
                         return Err(Diagnostic::new(
                             DiagnosticKind::CallArguments,
                             *function_span,
-                            format!(
-                                "{name} requires {} positional arguments",
-                                operation.arity()
-                            ),
+                            format!("{name} requires {} positional arguments", operation.arity()),
                         ));
                     }
                     let first = arguments[0].expression;
