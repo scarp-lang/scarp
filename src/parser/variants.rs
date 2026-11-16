@@ -77,7 +77,33 @@ impl Parser<'_> {
             return false;
         }
         let mut after_name = self.cursor + 2;
-        if self
+        let builtin = self.tokens.get(self.cursor + 1).is_some_and(|token| {
+            matches!(&token.kind, TokenKind::Identifier(name) if name == "option" || name == "result")
+        });
+        if builtin && self.tokens.get(after_name).is_some_and(|t| t.kind == TokenKind::Less) {
+            // Recognize a fully closed, potentially nested type argument
+            // group without confusing the case separator with type syntax.
+            let mut nesting = 0usize;
+            let mut closed = false;
+            for (index, token) in self.tokens.iter().enumerate().skip(after_name).take(4096) {
+                match token.kind {
+                    TokenKind::Less => nesting += 1,
+                    TokenKind::Greater if nesting > 0 => nesting -= 1,
+                    TokenKind::ShiftRight if nesting >= 2 => nesting -= 2,
+                    TokenKind::UnsignedRight if nesting >= 3 => nesting -= 3,
+                    _ if nesting == 0 => return false,
+                    _ => {}
+                }
+                if nesting == 0 {
+                    after_name = index + 1;
+                    closed = true;
+                    break;
+                }
+            }
+            if !closed {
+                return false;
+            }
+        } else if self
             .tokens
             .get(after_name)
             .is_some_and(|t| t.kind == TokenKind::Dot)
@@ -102,7 +128,19 @@ impl Parser<'_> {
         let opening = self.current().unwrap().span;
         self.expression_depth(depth, opening)?;
         self.advance();
-        let (name, name_span) = self.qualified_identifier()?;
+        let built_in = self.current().is_some_and(|token| {
+            matches!(&token.kind, TokenKind::Identifier(name) if name == "option" || name == "result")
+        }) && self.tokens.get(self.cursor + 1).is_some_and(|token| token.kind == TokenKind::Less);
+        let (name, name_span) = if built_in {
+            let start = self.current().expect("specialization starts with a type").span.start;
+            let kind = self.value_type(false)?;
+            let SourceType::VariantRef(name) = kind else {
+                unreachable!("parameterized option/result is a variant reference");
+            };
+            (name.to_string(), Span::new(start, self.type_end))
+        } else {
+            self.qualified_identifier()?
+        };
         self.punctuation(TokenKind::Colon, "'::' before the variant case")?;
         self.punctuation(TokenKind::Colon, "'::' before the variant case")?;
         let (tag, tag_span) = self.identifier()?;
