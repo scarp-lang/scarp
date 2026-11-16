@@ -229,6 +229,15 @@ fn collect(
                         return Err(duplicate(name, *name_span, symbol.info.span));
                     }
                 }
+                if let Statement::Destructure { pattern, .. } = statement {
+                    for (name, name_span) in pattern.bindings() {
+                        if let Some(symbol) =
+                            table.symbols.get(name).filter(|s| s.constant.is_some())
+                        {
+                            return Err(duplicate(name, name_span, symbol.info.span));
+                        }
+                    }
+                }
             }
         }
         tables[id] = Some(table);
@@ -527,6 +536,39 @@ impl Rewriter<'_> {
                         .last_mut()
                         .unwrap()
                         .insert(name.clone(), *name_span);
+                }
+                Statement::Destructure {
+                    pattern,
+                    mutable,
+                    initializer,
+                    ..
+                } => {
+                    // Resolve source references before publishing destructured
+                    // bindings. Match the compiler's one-time initializer order.
+                    self.expression(initializer)?;
+                    let (source, owner) = (self.id, self.function);
+                    for node in pattern.nodes() {
+                        self.navigation(|b| b.step(node.span));
+                        let crate::ast::PatternKind::Name(name) = &node.kind else {
+                            continue;
+                        };
+                        let name_span = node.span;
+                        self.binding_name(name, name_span)?;
+                        self.navigation(|b| {
+                            b.binding(
+                                source,
+                                owner,
+                                name,
+                                name_span,
+                                symbols::SymbolKind::Binding,
+                                *mutable,
+                            )
+                        });
+                        self.scopes
+                            .last_mut()
+                            .unwrap()
+                            .insert(name.to_owned(), name_span);
+                    }
                 }
                 Statement::Assign {
                     name,

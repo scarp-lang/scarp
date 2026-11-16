@@ -1,16 +1,17 @@
 //! Parse declarations, assignments, blocks, and print statements without execution.
 
 use crate::types::{
-    SourceType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY,
+    SourceType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_EXPANDED_VALUE_NODES,
+    MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY,
 };
 use std::collections::VecDeque;
 
 use crate::{
     ast::{
-        AssignmentOperator, BinaryOperator, CallArgument, ConditionalBranch,
+        AssignmentOperator, BinaryOperator, BindingPattern, CallArgument, ConditionalBranch,
         ConditionalExpressionBranch, Contract, Expression, ExpressionKind, ExpressionNode,
-        FunctionDeclaration, LogicalOperator, OutputTarget, Parameter, PrintArgument, Program,
-        Statement, MAX_ASSERT_MESSAGE_BYTES,
+        FunctionDeclaration, LogicalOperator, OutputTarget, Parameter, PatternKind, PatternNode,
+        PrintArgument, Program, Statement, MAX_ASSERT_MESSAGE_BYTES,
     },
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     lexer::{Token, TokenKind},
@@ -22,6 +23,9 @@ pub const MAX_EXPRESSION_DEPTH: usize = 64;
 
 /// Maximum nested statement blocks, independent of expression parentheses.
 pub const MAX_BLOCK_DEPTH: usize = 64;
+
+/// Maximum immediate members in one fixed-array destructuring group.
+pub const MAX_DESTRUCTURE_BINDINGS: usize = 128;
 
 /// Parse a token stream. An omitted EOF token is treated as the end of input.
 pub fn parse(tokens: &[Token]) -> Result<Program, Diagnostic> {
@@ -54,6 +58,31 @@ struct Parser<'a> {
     cursor: usize,
     pending: VecDeque<Token>,
     type_end: usize,
+}
+
+struct PatternGroup {
+    node: usize,
+    array: bool,
+    arity: usize,
+    expect_member: bool,
+}
+
+impl PatternGroup {
+    fn delimiter(&self) -> (TokenKind, &'static str) {
+        if self.array {
+            (TokenKind::RightBracket, "']'")
+        } else {
+            (TokenKind::RightParen, "')'")
+        }
+    }
+
+    fn limit(&self) -> (usize, DiagnosticKind) {
+        if self.array {
+            (MAX_DESTRUCTURE_BINDINGS, DiagnosticKind::ArrayLimit)
+        } else {
+            (MAX_TUPLE_ARITY, DiagnosticKind::TupleLimit)
+        }
+    }
 }
 
 impl Parser<'_> {
@@ -299,11 +328,99 @@ impl Parser<'_> {
         }
     }
 
+    /// Collapse a consecutive brace-only chain into one physical parse frame.
+    ///
+    /// Every intermediate block contains exactly one child block and no
+    /// sibling statements. Their AST and byte spans remain identical to the
+    /// ordinary recursive parser, but 64 nested braces do not retain 64
+    /// statement-list frames while parsing a deeply nested expression.
+    ///
+    /// A preflight of matching braces is required: if a parent has further
+    /// statements after the child block, fall back to the general parser.
+    #[inline(never)]
+    fn compact_block_chain(&mut self, depth: usize) -> Result<Option<Statement>, ParseError> {
+        if !self.pending.is_empty() {
+            return Ok(None);
+        }
+        let start = self.cursor;
+        let mut count = 0usize;
+        while matches!(
+            self.tokens.get(start + count).map(|t| &t.kind),
+            Some(TokenKind::LeftBrace)
+        ) {
+            count += 1;
+            // Stop before bounds that would violate the normal depth limit.
+            if count > MAX_BLOCK_DEPTH {
+                break;
+            }
+        }
+        if count < 2 {
+            return Ok(None);
+        }
+        let mut balance = 0usize;
+        let mut inner_close = None;
+        for (position, token) in self.tokens.iter().enumerate().skip(start + count - 1) {
+            match token.kind {
+                TokenKind::LeftBrace => balance += 1,
+                TokenKind::RightBrace => {
+                    balance -= 1;
+                    if balance == 0 {
+                        inner_close = Some(position);
+                        break;
+                    }
+                }
+                TokenKind::Eof => return Ok(None),
+                _ => {}
+            }
+        }
+        let Some(inner_close) = inner_close else {
+            return Ok(None);
+        };
+        // A string with an unmatched parent block is still handled by the
+        // standard parser; optimization does not change syntax diagnostics.
+        if (1..count).any(|offset| {
+            !matches!(
+                self.tokens.get(inner_close + offset).map(|t| &t.kind),
+                Some(TokenKind::RightBrace)
+            )
+        }) {
+            return Ok(None);
+        }
+        // Check the same nesting limit as one-by-one block() calls, before
+        // advancing cursor or allocating any AST nodes.
+        for offset in 0..count {
+            if depth + offset >= MAX_BLOCK_DEPTH {
+                let opening = self.tokens[start + offset].span;
+                return Err(ParseError::new(
+                    DiagnosticKind::BlockNesting,
+                    opening,
+                    format!("block nesting exceeds {MAX_BLOCK_DEPTH} levels"),
+                )
+                .with_help("reduce the number of nested statement blocks"));
+            }
+        }
+        self.cursor += count;
+        let mut body = self.statement_list(depth + count, true)?;
+        for offset in (0..count).rev() {
+            let end = self.punctuation(TokenKind::RightBrace, "'}'")?.end;
+            let span = Span::new(self.tokens[start + offset].span.start, end);
+            let node = Statement::Block {
+                statements: body,
+                span,
+            };
+            body = vec![node];
+        }
+        Ok(body.pop())
+    }
+
     fn container_statement(
         &mut self,
         depth: usize,
         in_block: bool,
     ) -> Result<Statement, ParseError> {
+        if let Some(compact) = self.compact_block_chain(depth)? {
+            return Ok(compact);
+        }
         match &self.current().expect("container start").kind {
             TokenKind::LeftBrace => {
                 let (statements, span) = self.block(depth)?;
@@ -541,6 +658,128 @@ impl Parser<'_> {
         Ok(())
     }
 
+    fn open_pattern_group(&mut self, nodes: &mut Vec<PatternNode>) -> PatternGroup {
+        let array = self.at(&TokenKind::LeftBracket);
+        let span = self.current().expect("pattern opener").span;
+        let node = nodes.len();
+        nodes.push(PatternNode {
+            kind: if array {
+                PatternKind::Array(0)
+            } else {
+                PatternKind::Tuple(0)
+            },
+            span,
+        });
+        self.advance();
+        PatternGroup {
+            node,
+            array,
+            arity: 0,
+            expect_member: true,
+        }
+    }
+
+    fn binding_pattern(&mut self) -> Result<BindingPattern, ParseError> {
+        let mut nodes = Vec::new();
+        let mut groups = vec![self.open_pattern_group(&mut nodes)];
+        while let Some(group) = groups.last_mut() {
+            let (close, close_label) = group.delimiter();
+            if self.at(&close) {
+                let node = &mut nodes[group.node];
+                if group.arity == 0 {
+                    return Err(ParseError::new(
+                        DiagnosticKind::UnexpectedToken,
+                        node.span,
+                        "a destructuring pattern requires at least one member",
+                    ));
+                }
+                if !group.array && group.arity == 1 && !group.expect_member {
+                    return Err(ParseError::new(
+                        DiagnosticKind::UnexpectedToken,
+                        node.span,
+                        "a one-element tuple pattern requires a trailing comma",
+                    )
+                    .with_help("write bind (value,) = tuple;"));
+                }
+                node.span.end = self.punctuation(close, close_label)?.end;
+                node.kind = if group.array {
+                    PatternKind::Array(group.arity)
+                } else {
+                    PatternKind::Tuple(group.arity)
+                };
+                groups.pop();
+                continue;
+            }
+            if !group.expect_member {
+                if !self.at(&TokenKind::Comma) {
+                    return Err(self.expected(close_label));
+                }
+                self.advance();
+                group.expect_member = true;
+                continue;
+            }
+
+            let token = self
+                .current()
+                .ok_or_else(|| self.expected("a pattern member"))?;
+            let (max, limit) = group.limit();
+            if group.arity == max {
+                return Err(ParseError::new(
+                    limit,
+                    token.span,
+                    format!("destructuring pattern exceeds {max} elements"),
+                ));
+            }
+            if nodes.len() == MAX_EXPANDED_VALUE_NODES {
+                return Err(ParseError::new(
+                    DiagnosticKind::TypeComplexity,
+                    token.span,
+                    format!("destructuring pattern exceeds {MAX_EXPANDED_VALUE_NODES} nodes"),
+                ));
+            }
+            group.arity += 1;
+            group.expect_member = false;
+            if matches!(token.kind, TokenKind::LeftParen | TokenKind::LeftBracket) {
+                if groups.len() == MAX_COMPOSITE_DEPTH {
+                    return Err(ParseError::new(
+                        limit,
+                        token.span,
+                        format!("destructuring pattern exceeds {MAX_COMPOSITE_DEPTH} levels"),
+                    ));
+                }
+                groups.push(self.open_pattern_group(&mut nodes));
+            } else {
+                let (name, span) = self.identifier().map_err(|error| {
+                    error.with_help("use a name, '_', or a nested tuple or fixed-array pattern")
+                })?;
+                let kind = if name == "_" {
+                    PatternKind::Discard
+                } else {
+                    PatternKind::Name(name)
+                };
+                nodes.push(PatternNode { kind, span });
+            }
+        }
+        Ok(BindingPattern { nodes })
+    }
+
+    #[inline(never)]
+    fn destructure(&mut self, start: usize, mutable: bool) -> Result<Statement, ParseError> {
+        let pattern = self.binding_pattern()?;
+        self.punctuation(TokenKind::Equal, "'=' after the destructuring pattern")?;
+        let initializer = self.expression()?;
+        let end = self
+            .punctuation(TokenKind::Semicolon, "';' after destructuring")
+            .map_err(|error| error.with_help("finish the destructuring declaration with ';'"))?
+            .end;
+        Ok(Statement::Destructure {
+            pattern,
+            mutable,
+            initializer,
+            span: Span::new(start, end),
+        })
+    }
+
     // Keep declaration temporaries out of recursive statement-list frames.
     fn declaration(&mut self) -> Result<Statement, ParseError> {
         let token = self.current().expect("declaration keyword is present");
@@ -551,6 +790,9 @@ impl Parser<'_> {
         let mutable = name == "var";
         let keyword = if mutable { "var" } else { "bind" };
         self.advance();
+        if self.at(&TokenKind::LeftParen) || self.at(&TokenKind::LeftBracket) {
+            return self.destructure(start, mutable);
+        }
         if self.keyword("mut")
             && matches!(
                 self.tokens.get(self.cursor + 1).map(|token| &token.kind),
@@ -1111,6 +1353,8 @@ impl Parser<'_> {
         })
     }
 
+    // Keep the nested expression stack bounded even with 64 nested groups.
+    #[inline(never)]
     fn logical_or(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
@@ -1485,6 +1729,8 @@ impl Parser<'_> {
         ))
     }
 
+    // Keep the nested expression stack bounded even with 64 nested groups.
+    #[inline(never)]
     fn primary(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
@@ -1570,11 +1816,138 @@ impl Parser<'_> {
         Ok((result, end))
     }
 
+    /// Parse deeply nested parenthesized integer infix expressions with a
+    /// bounded *heap* operator stack instead of recursively consuming every
+    /// logical/arithmetic precedence frame for each pair of parentheses.
+    ///
+    /// This is a conservative fast path. It requires a balanced, syntactically
+    /// valid region consisting exclusively of integer literals, known binary
+    /// arithmetic/bitwise operators, and parentheses. All mixed expressions,
+    /// tuples, function calls, conditions, unary signs and invalid syntax
+    /// continue through the existing complete grammar without reinterpretation.
+    ///
+    /// Only four-or-more nested groups use this path; ordinary source remains
+    /// on the original parser. Each Group retains its original byte spans and
+    /// every operator is reduced using the existing precedence table.
+    #[inline(never)]
+    fn grouped_integer_infix(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+    ) -> Result<Option<usize>, ParseError> {
+        if !self.pending.is_empty() {
+            return Ok(None);
+        }
+        let start = self.cursor;
+        let mut openings = 0usize;
+        let mut max_openings = 0usize;
+        let mut expecting_operand = true;
+        let mut final_position = None;
+        for (position, token) in self.tokens.iter().enumerate().skip(start) {
+            match &token.kind {
+                TokenKind::LeftParen if expecting_operand => {
+                    openings += 1;
+                    max_openings = max_openings.max(openings);
+                }
+                TokenKind::Integer(_) if expecting_operand => expecting_operand = false,
+                TokenKind::RightParen if !expecting_operand && openings > 0 => {
+                    openings -= 1;
+                    if openings == 0 {
+                        final_position = Some(position);
+                        break;
+                    }
+                }
+                kind if !expecting_operand && infix_operator(kind).is_some() => {
+                    expecting_operand = true;
+                }
+                _ => return Ok(None),
+            }
+        }
+        let Some(final_position) = final_position else {
+            return Ok(None);
+        };
+        if max_openings < 4 {
+            return Ok(None);
+        }
+        enum Operator {
+            Opening(Span),
+            Binary(BinaryOperator, Span, u8),
+        }
+        let mut operators: Vec<Operator> = Vec::new();
+        let mut operands: Vec<usize> = Vec::new();
+        while self.cursor <= final_position {
+            let token = self.current().expect("preflight validated expression");
+            match &token.kind {
+                TokenKind::LeftParen => {
+                    let span = token.span;
+                    self.expression_depth(
+                        depth
+                            + operators
+                                .iter()
+                                .filter(|op| matches!(op, Operator::Opening(_)))
+                                .count(),
+                        span,
+                    )?;
+                    operators.push(Operator::Opening(span));
+                    self.advance();
+                }
+                TokenKind::Integer(_) => {
+                    operands.push(self.atom(nodes)?);
+                }
+                TokenKind::RightParen => {
+                    let closing = token.span;
+                    self.advance();
+                    loop {
+                        match operators.pop().expect("preflight checked balanced groups") {
+                            Operator::Opening(opening) => {
+                                let expression =
+                                    operands.pop().expect("preflight checked group operand");
+                                operands.push(push(
+                                    nodes,
+                                    ExpressionKind::Group { expression },
+                                    Span::new(opening.start, closing.end),
+                                ));
+                                break;
+                            }
+                            Operator::Binary(operator, span, _) => {
+                                reduce_binary(nodes, &mut operands, operator, span);
+                            }
+                        }
+                    }
+                }
+                kind => {
+                    let (operator, precedence) =
+                        infix_operator(kind).expect("preflight validated infix operator");
+                    let span = token.span;
+                    self.advance();
+                    while matches!(
+                        operators.last(),
+                        Some(Operator::Binary(_, _, old)) if *old >= precedence
+                    ) {
+                        let Some(Operator::Binary(operator, span, _)) = operators.pop() else {
+                            unreachable!("checked binary operator");
+                        };
+                        reduce_binary(nodes, &mut operands, operator, span);
+                    }
+                    operators.push(Operator::Binary(operator, span, precedence));
+                }
+            }
+        }
+        debug_assert!(operators.is_empty());
+        debug_assert_eq!(operands.len(), 1);
+        Ok(operands.pop())
+    }
+
+    // Keep the nested expression stack bounded even with 64 nested groups.
+    #[inline(never)]
     fn group_expression(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
         depth: usize,
     ) -> Result<usize, ParseError> {
+        if let Some(compact) = self.grouped_integer_infix(nodes, depth)? {
+            return Ok(compact);
+        }
         let opening = self.current().unwrap().span;
         self.expression_depth(depth, opening)?;
         self.advance();
