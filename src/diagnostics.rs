@@ -182,6 +182,9 @@ diagnostic_catalogue! {
     ListLimit => ("E0078", "Typed dynamic list length or type complexity exceeded limits. A list holds at most 4096 elements, uses one exact non-unit element type and has bounded nesting."),
     ListIndex => ("E0079", "Dynamic list index is outside its current length. An empty list has no valid index; use a nonnegative integer less than its length."),
     ListAllocation => ("E0080", "Typed list payload allocation exceeded the shared fixed-array/list byte quota or bounded storage reservation failed. Reuse immutable snapshots or adjust --max-array-bytes."),
+    MapLimit => ("E0081", "Typed map key, value or length limits were exceeded. Keys must be integer, boolean or string. Maps contain at most 1024 distinct entries."),
+    MapKey => ("E0082", "Duplicate map key in a source map literal, or map key not found where a key is required. Use unique keys; order is canonical rather than insertion based."),
+    MapAllocation => ("E0083", "Map payload exceeded the existing shared array/list/map byte quota, or its storage could not be reserved."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
