@@ -398,6 +398,50 @@ impl CompilationCache {
         removed
     }
 
+    /// Evict whole-graph semantic snapshots whose revision for the given
+    /// trusted loader identity falls within [start, end). An empty or
+    /// inverted interval is a no-op. The half-open interval avoids overflow
+    /// when callers partition revision histories into disjoint windows.
+    ///
+    /// The source's index is resolved separately in every retained graph.
+    /// Other identities and revisions retain their FIFO order; already
+    /// published Arc snapshots are unaffected. Future requests still load
+    /// and validate the complete source graph.
+    pub fn evict_identity_revisions_in_range(
+        &mut self,
+        identity: &str,
+        start: u64,
+        end: u64,
+    ) -> usize {
+        if start >= end {
+            return 0;
+        }
+        let mut removed = 0usize;
+        let mut freed_bytes = 0usize;
+        self.entries.retain(|entry| {
+            let affected = entry
+                .program
+                .modules()
+                .iter()
+                .enumerate()
+                .any(|(index, module)| {
+                    module.identity == identity
+                        && entry
+                            .revisions
+                            .get(index)
+                            .is_some_and(|revision| *revision >= start && *revision < end)
+                });
+            if affected {
+                removed += 1;
+                freed_bytes += entry.source_bytes;
+            }
+            !affected
+        });
+        self.retained_source_bytes -= freed_bytes;
+        self.evictions = self.evictions.saturating_add(removed as u64);
+        removed
+    }
+
     /// Recompile with safe whole-graph reuse of a prior success.
     ///
     /// Revisions are supplied in the current graph's SourceId discovery order
