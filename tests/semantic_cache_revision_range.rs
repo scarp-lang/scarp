@@ -50,7 +50,7 @@ fn half_open_range_evicts_only_matching_revisions() {
     c.program
         .execute(&mut stdout, &mut stderr, ExecutionOptions::default())
         .unwrap();
-    assert_eq!(stdout, b"3\\n");
+    assert_eq!(stdout, b"3\n");
     assert!(!Arc::ptr_eq(&a.program, &d.program));
 }
 
