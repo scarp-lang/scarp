@@ -1,10 +1,9 @@
-# First compiler-owned ELF64 object writer (development only)
+# Compiler-owned ELF64 object writer
 
-> **Not yet released.** This strictly scoped experimental library API is
-> not in `v0.0.6-alpha.3`. It does not provide native Scarp executables,
-> a public `scarp compile` command, a stable ABI, or whole-program output.
-
-The current development branch adds `native_object::emit_elf64_integer_kernel`.
+The experimental `native_object::emit_elf64_integer_kernel` Rust API first
+shipped in alpha.4 for one integer binding. Alpha.5 added dependent integer
+bindings. The API emits an object for a single kernel with an experimental ABI.
+The Scarp CLI runs programs through the interpreter.
 The compiler parses and resolves the *real* Scarp source, runs the existing
 native scalar preflight, lowers and independently verifies its private scalar
 statement and expression IR, then encodes a **freestanding x86-64 ELF64 ET_REL
@@ -13,7 +12,7 @@ request is performed during production emission.
 
 ## Exact accepted source
 
-**Post-alpha.4 development extension:** a bounded linear sequence of integer
+The alpha.5 and later packages accept a bounded linear sequence of integer
 bindings, where initializers use integer literals, groups, references to
 earlier initialized integer bindings, bitwise NOT (`~`), AND (`&`),
 OR (`|`) or XOR (`^`):
@@ -79,7 +78,7 @@ ELF header sizes, global symbol metadata, source-subset rejection, and an
 **independent Linux x86-64 C host link-and-execute comparisons**, including
 multi-binding alias, mask and bitwise dependency chains.
 The encoding still needs security review and broader arithmetic/error ABI work
-before being promoted beyond this narrow development API.
+before expanding this experimental API.
 
 ```sh
 cargo test --locked --offline --test native_object
