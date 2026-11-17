@@ -61,8 +61,14 @@ fn shrinking_entry_quota_evicts_fifo_but_preserves_published_snapshots() {
     assert_eq!(cache.limits(), limits);
     assert_eq!(cache.stats().entries, 2);
     assert_eq!(cache.stats().evictions, before.evictions + 1);
-    assert_eq!(compile(&mut cache, &source("print(3);"), 3).status, CacheStatus::Hit);
-    assert_eq!(compile(&mut cache, &source("print(2);"), 2).status, CacheStatus::Hit);
+    assert_eq!(
+        compile(&mut cache, &source("print(3);"), 3).status,
+        CacheStatus::Hit
+    );
+    assert_eq!(
+        compile(&mut cache, &source("print(2);"), 2).status,
+        CacheStatus::Hit
+    );
     assert_eq!(output(&first), b"1\n");
     assert_eq!(output(&second), b"2\n");
     assert_eq!(output(&third), b"3\n");
