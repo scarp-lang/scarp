@@ -15,15 +15,16 @@ fn compile(
 ) -> scarp::modules::cache::CachedProgram {
     let mut loader = MemorySourceLoader::new();
     loader.insert("main.srp", source).unwrap();
-    cache.compile_with_loader(
-        "main.srp",
-        &loader,
-        ModuleLimits::default(),
-        ConstantLimits::default(),
-        TypeLimits::default(),
-        &[revision],
-    )
-    .unwrap()
+    cache
+        .compile_with_loader(
+            "main.srp",
+            &loader,
+            ModuleLimits::default(),
+            ConstantLimits::default(),
+            TypeLimits::default(),
+            &[revision],
+        )
+        .unwrap()
 }
 
 #[test]
@@ -62,11 +63,17 @@ fn zero_and_unknown_watermarks_do_not_change_accounting() {
     compile(&mut cache, "print(7);", 0);
     let before = cache.stats();
     assert_eq!(cache.evict_identity_revisions_before("main.srp", 0), 0);
-    assert_eq!(cache.evict_identity_revisions_before("unknown.srp", u64::MAX), 0);
+    assert_eq!(
+        cache.evict_identity_revisions_before("unknown.srp", u64::MAX),
+        0
+    );
     assert_eq!(cache.stats(), before);
     assert_eq!(cache.evict_identity_revisions_before("main.srp", 1), 1);
     assert_eq!(cache.stats().retained_source_bytes, 0);
-    assert_eq!(cache.evict_identity_revisions_before("main.srp", u64::MAX), 0);
+    assert_eq!(
+        cache.evict_identity_revisions_before("main.srp", u64::MAX),
+        0
+    );
 }
 
 #[test]
