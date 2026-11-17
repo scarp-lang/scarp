@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.6-alpha.12 — candidate
+## 0.0.6-alpha.12 — published GitHub prerelease, 2026-11-16
 
 - Add nominal records, tagged variants, nested destructuring and exhaustive scalar matching.
 - Add concrete Option and Result types, typed propagation and cross-module type identity.
