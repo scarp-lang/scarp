@@ -326,6 +326,39 @@ impl CompilationCache {
         removed
     }
 
+    /// Evict cached whole-graph snapshots containing an older revision of a
+    /// trusted resolved loader identity. The minimum revision is inclusive:
+    /// snapshots at or above it are preserved. This supports editor clients
+    /// that discard all revisions below an acknowledged document watermark.
+    ///
+    /// The revision belongs to the matching module's position in each graph,
+    /// not the position in a different compilation. Unrelated identities and
+    /// revisions remain in FIFO order. Existing Arc snapshots stay valid.
+    /// This does not skip loader, parser, or semantic validation on later calls.
+    pub fn evict_identity_revisions_before(&mut self, identity: &str, minimum: u64) -> usize {
+        let mut removed = 0usize;
+        let mut freed_bytes = 0usize;
+        self.entries.retain(|entry| {
+            let affected = entry
+                .program
+                .modules()
+                .iter()
+                .enumerate()
+                .any(|(index, module)| {
+                    module.identity == identity
+                        && entry.revisions.get(index).is_some_and(|revision| *revision < minimum)
+                });
+            if affected {
+                removed += 1;
+                freed_bytes += entry.source_bytes;
+            }
+            !affected
+        });
+        self.retained_source_bytes -= freed_bytes;
+        self.evictions = self.evictions.saturating_add(removed as u64);
+        removed
+    }
+
     /// Recompile with safe whole-graph reuse of a prior success.
     ///
     /// Revisions are supplied in the current graph's SourceId discovery order
