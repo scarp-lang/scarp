@@ -116,7 +116,10 @@ impl Parser<'_> {
                 continue;
             }
             if !group.expect_member {
-                self.punctuation(TokenKind::Comma, "',' between destructuring pattern members")?;
+                self.punctuation(
+                    TokenKind::Comma,
+                    "',' between destructuring pattern members",
+                )?;
                 group.expect_member = true;
                 continue;
             }
