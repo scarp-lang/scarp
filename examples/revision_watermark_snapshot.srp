@@ -1,2 +1,3 @@
-bind numbers = [list: 1, 2, 3];
-print(numbers);
+bind first = 4;
+bind second = 5;
+print(first + second);
