@@ -346,7 +346,10 @@ impl CompilationCache {
                 .enumerate()
                 .any(|(index, module)| {
                     module.identity == identity
-                        && entry.revisions.get(index).is_some_and(|revision| *revision < minimum)
+                        && entry
+                            .revisions
+                            .get(index)
+                            .is_some_and(|revision| *revision < minimum)
                 });
             if affected {
                 removed += 1;
