@@ -15,15 +15,16 @@ fn compile(
 ) -> scarp::modules::cache::CachedProgram {
     let mut loader = MemorySourceLoader::new();
     loader.insert("main.srp", source).unwrap();
-    cache.compile_with_loader(
-        "main.srp",
-        &loader,
-        ModuleLimits::default(),
-        ConstantLimits::default(),
-        TypeLimits::default(),
-        &[revision],
-    )
-    .unwrap()
+    cache
+        .compile_with_loader(
+            "main.srp",
+            &loader,
+            ModuleLimits::default(),
+            ConstantLimits::default(),
+            TypeLimits::default(),
+            &[revision],
+        )
+        .unwrap()
 }
 
 #[test]
@@ -43,11 +44,15 @@ fn ceiling_evicts_inclusive_range_but_preserves_older_snapshot() {
     assert!(Arc::ptr_eq(&old.program, &hit.program));
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    newest.program.execute(&mut stdout, &mut stderr, ExecutionOptions::default())
+    newest
+        .program
+        .execute(&mut stdout, &mut stderr, ExecutionOptions::default())
         .unwrap();
     assert_eq!(stdout, b"3\n");
     stdout.clear();
-    middle.program.execute(&mut stdout, &mut stderr, ExecutionOptions::default())
+    middle
+        .program
+        .execute(&mut stdout, &mut stderr, ExecutionOptions::default())
         .unwrap();
     assert_eq!(stdout, b"2\n");
 }
@@ -82,7 +87,9 @@ fn ceiling_fixture_recompiles_after_speculative_revision_discard() {
     assert!(!Arc::ptr_eq(&original.program, &restored.program));
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    restored.program.execute(&mut stdout, &mut stderr, ExecutionOptions::default())
+    restored
+        .program
+        .execute(&mut stdout, &mut stderr, ExecutionOptions::default())
         .unwrap();
     assert_eq!(
         stdout,
