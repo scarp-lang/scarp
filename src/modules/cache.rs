@@ -229,6 +229,27 @@ impl CompilationCache {
         }
     }
 
+    /// Reconfigure whole-graph semantic retention without changing already
+    /// published Arc snapshots or resetting lifetime counters.
+    /// Oldest entries are removed first until both logical quotas hold.
+    /// A zero quota disables retention for subsequent compilations.
+    pub fn set_limits(&mut self, limits: CacheLimits) {
+        self.limits = limits;
+        while !self.entries.is_empty()
+            && (self.entries.len() > self.limits.max_entries
+                || self.retained_source_bytes > self.limits.max_retained_source_bytes)
+        {
+            let old = self.entries.pop_front().expect("checked nonempty");
+            self.retained_source_bytes -= old.source_bytes;
+            self.evictions = self.evictions.saturating_add(1);
+        }
+    }
+
+    /// Current logical retention quotas.
+    pub fn limits(&self) -> CacheLimits {
+        self.limits
+    }
+
     pub fn stats(&self) -> CacheStats {
         CacheStats {
             entries: self.entries.len(),
