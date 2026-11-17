@@ -41,13 +41,9 @@ fn cached(
     syntax: &mut SyntaxCache,
     editor: &mut EditorCompilationCache,
 ) -> Result<CachedEditorProgram, EditorCompileError> {
-    let graph = modules::load_with_syntax_cache(
-        "main.srp",
-        sources,
-        ModuleLimits::default(),
-        syntax,
-    )
-    .unwrap();
+    let graph =
+        modules::load_with_syntax_cache("main.srp", sources, ModuleLimits::default(), syntax)
+            .unwrap();
     editor.resolve_with_loaded_revisions(graph, EditorCompileLimits::default(), None)
 }
 
@@ -79,9 +75,7 @@ fn assert_equivalent(cached: &CachedEditorProgram, cold: &IndexedProgram, expect
         .symbols()
         .write_symbols_json(&mut warm_symbols)
         .unwrap();
-    cold.index()
-        .write_symbols_json(&mut cold_symbols)
-        .unwrap();
+    cold.index().write_symbols_json(&mut cold_symbols).unwrap();
     assert_eq!(warm_symbols, cold_symbols);
 
     let mut warm_references = Vec::new();
