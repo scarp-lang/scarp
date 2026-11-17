@@ -8,23 +8,32 @@ use scarp::{
 };
 use std::sync::Arc;
 
-fn compile(cache: &mut CompilationCache, source: &str, revision: u64) -> scarp::modules::cache::CachedProgram {
+fn compile(
+    cache: &mut CompilationCache,
+    source: &str,
+    revision: u64,
+) -> scarp::modules::cache::CachedProgram {
     let mut loader = MemorySourceLoader::new();
     loader.insert("main.srp", source).unwrap();
-    cache.compile_with_loader(
-        "main.srp",
-        &loader,
-        ModuleLimits::default(),
-        ConstantLimits::default(),
-        TypeLimits::default(),
-        &[revision],
-    ).unwrap()
+    cache
+        .compile_with_loader(
+            "main.srp",
+            &loader,
+            ModuleLimits::default(),
+            ConstantLimits::default(),
+            TypeLimits::default(),
+            &[revision],
+        )
+        .unwrap()
 }
 
 fn output(snapshot: &scarp::modules::cache::CachedProgram) -> Vec<u8> {
     let mut out = Vec::new();
     let mut err = Vec::new();
-    snapshot.program.execute(&mut out, &mut err, ExecutionOptions::default()).unwrap();
+    snapshot
+        .program
+        .execute(&mut out, &mut err, ExecutionOptions::default())
+        .unwrap();
     assert!(err.is_empty());
     out
 }
@@ -67,10 +76,16 @@ fn repeated_revision_eviction_is_idempotent() {
     let mut cache = CompilationCache::new(CacheLimits::default());
     let source = include_str!("../examples/revision_cache_snapshot.srp");
     let first = compile(&mut cache, source, 3);
-    assert_eq!(output(&first), include_bytes!("../examples/revision_cache_snapshot.stdout"));
+    assert_eq!(
+        output(&first),
+        include_bytes!("../examples/revision_cache_snapshot.stdout")
+    );
     assert_eq!(cache.evict_identity_revision("main.srp", 3), 1);
     assert_eq!(cache.evict_identity_revision("main.srp", 3), 0);
     assert_eq!(cache.stats().entries, 0);
     assert_eq!(cache.stats().retained_source_bytes, 0);
-    assert_eq!(output(&first), include_bytes!("../examples/revision_cache_snapshot.stdout"));
+    assert_eq!(
+        output(&first),
+        include_bytes!("../examples/revision_cache_snapshot.stdout")
+    );
 }
