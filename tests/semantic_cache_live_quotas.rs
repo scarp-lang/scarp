@@ -131,3 +131,17 @@ fn quota_reconfiguration_never_reuses_a_changed_source() {
     assert_eq!(output(&edited), b"8\n");
     assert_eq!(cache.stats().entries, 1);
 }
+
+#[test]
+fn executable_aggregate_fixture_has_identical_cold_and_warm_output() {
+    let loader = source(include_str!("../examples/semantic_cache_snapshot.srp"));
+    let expected = include_bytes!("../examples/semantic_cache_snapshot.stdout");
+    let mut cache = CompilationCache::new(CacheLimits::default());
+    let cold = compile(&mut cache, &loader, 1);
+    assert_eq!(cold.status, CacheStatus::Stored);
+    let warm = compile(&mut cache, &loader, 1);
+    assert_eq!(warm.status, CacheStatus::Hit);
+    assert!(Arc::ptr_eq(&cold.program, &warm.program));
+    assert_eq!(output(&cold), expected);
+    assert_eq!(output(&warm), expected);
+}
