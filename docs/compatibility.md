@@ -1,5 +1,15 @@
 # Version and API compatibility
 
+`0.0.6-alpha.12` is **a published GitHub prerelease**. It adds nominal records,
+tagged variants, nested binding patterns,
+typed Option and Result with propagation, and immutable typed lists and maps.
+Rust hosts with exhaustive matches on `SourceType`, `Value`, AST enums or
+`DiagnosticKind` should handle the added variants. Module inventories use schema
+4 when a record declaration is present and schema 5 when a variant declaration
+is present. These additions run in the interpreter.
+[Public notes](releases/v0.0.6-alpha.12-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.12-validation.md)
+
 `0.0.6-alpha.11` is **a published GitHub prerelease**. It adds exact
 `decimal` values and typed console input. Rust hosts should update exhaustive
 matches on `PrimitiveType`, `Value`, `Builtin`, and `DiagnosticKind` where
@@ -87,7 +97,7 @@ The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.6-alpha.11](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.11).
+[0.0.6-alpha.12](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.12).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a
