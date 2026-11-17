@@ -60,11 +60,23 @@ fn empty_unknown_and_extreme_intervals_are_no_ops() {
     compile(&mut cache, "print(8);", u64::MAX);
     let before = cache.stats();
     assert_eq!(cache.evict_identity_revisions_in_range("main.srp", 9, 9), 0);
-    assert_eq!(cache.evict_identity_revisions_in_range("main.srp", 10, 1), 0);
-    assert_eq!(cache.evict_identity_revisions_in_range("missing.srp", 0, u64::MAX), 0);
-    assert_eq!(cache.evict_identity_revisions_in_range("main.srp", 0, u64::MAX), 0);
+    assert_eq!(
+        cache.evict_identity_revisions_in_range("main.srp", 10, 1),
+        0
+    );
+    assert_eq!(
+        cache.evict_identity_revisions_in_range("missing.srp", 0, u64::MAX),
+        0
+    );
+    assert_eq!(
+        cache.evict_identity_revisions_in_range("main.srp", 0, u64::MAX),
+        0
+    );
     assert_eq!(cache.stats(), before);
-    assert_eq!(cache.evict_identity_revisions_at_or_after("main.srp", u64::MAX), 1);
+    assert_eq!(
+        cache.evict_identity_revisions_at_or_after("main.srp", u64::MAX),
+        1
+    );
     assert_eq!(cache.stats().retained_source_bytes, 0);
 }
 
@@ -73,7 +85,10 @@ fn range_fixture_recompiles_and_preserves_published_snapshot() {
     let source = include_str!("../examples/revision_range_snapshot.srp");
     let mut cache = CompilationCache::new(CacheLimits::default());
     let published = compile(&mut cache, source, 12);
-    assert_eq!(cache.evict_identity_revisions_in_range("main.srp", 10, 13), 1);
+    assert_eq!(
+        cache.evict_identity_revisions_in_range("main.srp", 10, 13),
+        1
+    );
     let next = compile(&mut cache, source, 12);
     assert_eq!(next.status, CacheStatus::Stored);
     assert!(!Arc::ptr_eq(&published.program, &next.program));
