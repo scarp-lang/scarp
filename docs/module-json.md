@@ -1,7 +1,7 @@
 # Module JSON inspection and diagnostic explanations
 
 The module inventory reports imports, dependencies and declarations with
-file-local spans. Build the current checkout to inspect fixed-array signatures.
+file-local byte spans. Alpha.12 adds record, variant, list, and map metadata.
 
 ```sh
 cargo run -- modules --json examples/inspection_json.srp
@@ -24,13 +24,17 @@ Check `schema_version` before interpreting type strings.
 | Version | Types serialized by the inventory |
 | --- | --- |
 | 1 | Primitive types only |
-| 2 | At least one tuple type, with no arrays in any serialized type |
-| 3 | At least one fixed array, including an array nested inside a tuple |
+| 2 | A tuple type in a serialized signature |
+| 3 | A fixed array, typed list or typed map in a serialized signature |
+| 4 | A record declaration in the loaded graph |
+| 5 | A variant declaration in the loaded graph, including a generated Option or Result specialization |
 
-Private symbols participate in version selection. Arrays used inside function
-bodies or local bindings leave the version determined by the declarations.
-Version 3 uses canonical strings such as `array<integer, 2>` and
-`tuple<array<string, 0>, integer>`. The object fields below apply to all versions.
+The highest applicable version wins. Private symbols participate in version
+selection. A local array, list or map binding alone does not change the schema.
+Type strings follow the compiler's canonical display, for example
+`tuple<array<string, 0>, integer>`, `map<string, list<integer>>` and
+`variant option<integer>`. Clients should treat these strings as presentation
+metadata. Symbol/reference and diagnostic JSON have their own schema versions.
 
 | Object | Fields |
 | --- | --- |
@@ -38,6 +42,10 @@ Version 3 uses canonical strings such as `array<integer, 2>` and
 | Module | id, path, imports, dependencies, dependents, symbols |
 | Import | path, alias, target, span, path_span, alias_span |
 | Constant symbol | name, public, span, kind="constant", type |
+| Record symbol (v4–v5) | name, public, span, kind="record", fields |
+| Record field | name, type |
+| Variant symbol (v5) | name, public, span, kind="variant", cases |
+| Variant case | name, payload (type string or null) |
 | Function symbol | name, public, span, kind="function", pure, result, parameters |
 | Parameter | name, type, has_default, span |
 | Constant reference | source, declaration, target, target_declaration, span |
@@ -51,16 +59,18 @@ inspectable metadata and remain inaccessible to importing code.
 
 Every span is `[start,end]`, a half-open **file-local UTF-8 byte range**. Import and
 symbol/parameter spans belong to their containing module. Constant-reference span
-and declaration belong to source; target_declaration belongs to target. Symbol and
-parameter spans identify their original names. IDs belong to this compilation,
-not a persistent cross-run cache. The writer computes offsets from source starts,
+and declaration belong to source; target_declaration belongs to target. Explicit
+symbol and parameter spans identify their original names. A generated Option
+or Result symbol uses the source range of its `option` or `result` token.
+Field and case metadata follow declaration order. IDs belong to this compilation. The writer computes offsets from source starts,
 without repeatedly scanning source prefixes for line/columns. Editors can map
 local offsets to their own coordinate system; Rust hosts can use the existing
 SourceMap API and retained source snapshots.
 
 No source contents, constant values, function bodies, default expressions or
 internal mangled function names are emitted. has_default reports presence only.
-Ordinary entry-script local bindings are not module symbols and remain omitted.
+Ordinary entry-script local bindings are omitted. Generated concrete Option and
+Result type symbols can be present when their first use is in a local binding.
 JSON quoting escapes control characters, quotes and backslashes; Unicode text
 otherwise remains UTF-8. Readers should check schema_version before consuming it.
 
@@ -86,8 +96,8 @@ not a JSON parser/library for Scarp values or an LSP implementation.
 
 `scarp explain E####` prints the code's meaning and actionable repair guidance
 without opening any source file. Codes are exact canonical uppercase identifiers;
-missing/extra arguments and unknown codes return status 2. All current E0001 through
-E0045 codes have explanations. Existing diagnostic rendering/codes are unchanged.
+missing or extra arguments and unknown codes return status 2. Every diagnostic
+code in the compiler's catalogue has an explanation.
 
 Rust hosts use DiagnosticKind::ALL, from_code and explanation. One catalogue owns
 the enum variants, stable codes and descriptions so new diagnostics cannot drift
@@ -103,6 +113,5 @@ Native packages parse every shipped entry's JSON with PowerShell and exercise
 diagnostic explanations. Compiler/JSON benchmarks use correctness oracles and
 three CSV timing samples; see [performance](performance.md).
 
-The separate documentation website needs synchronization after these source PRs
-are accepted. This cycle modifies only in-repository documentation. See
-[Proposal 0034](proposals/0034-developer-inspection.md) for the scoped contract.
+See [Proposal 0034](proposals/0034-developer-inspection.md) for the original
+inspection design.
