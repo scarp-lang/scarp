@@ -11,7 +11,7 @@ import json
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLISHED_VERSION = "0.0.6-alpha.11"
+PUBLISHED_VERSION = "0.0.6-alpha.12"
 ALPHA6_SOURCE = "cdf6a3924ec2a36c7beca5a9aec4f01a0bce515e"
 HISTORICAL_ALPHA3 = "0.0.6-alpha.3"
 HISTORICAL_ALPHA2 = "0.0.6-alpha.2"
@@ -87,9 +87,10 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
             "docs/README.md": (f"**{PUBLISHED_VERSION} prerelease**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/compatibility.md": (f"`{PUBLISHED_VERSION}` is **a published GitHub prerelease**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/reference/cli.md": (f"v{PUBLISHED_VERSION}",),
-            "docs/development/feature-matrix.md": (f"Cargo declares `{version}`",),
+            "docs/development/feature-matrix.md": (f"Published `{PUBLISHED_VERSION}`",),
             "CHANGELOG.md": (
-                f"## {PUBLISHED_VERSION} — published GitHub prerelease, 2026-11-15",
+                f"## {PUBLISHED_VERSION} — published GitHub prerelease, 2026-11-16",
+                "## 0.0.6-alpha.11 — published GitHub prerelease, 2026-11-15",
                 "## 0.0.6-alpha.10 — published GitHub prerelease, 2026-11-14",
                 "## 0.0.6-alpha.9 — published GitHub prerelease, 2026-11-13",
                 "## 0.0.6-alpha.6 — published GitHub prerelease, 2026-11-10",
@@ -98,7 +99,13 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
                 f"# Scarp v{version} — prerelease",
                 "## Compatibility and limits",
             ),
-            f"docs/releases/v{PUBLISHED_VERSION}-validation.md": (
+            "docs/releases/v0.0.6-alpha.12-validation.md": (
+                "Published GitHub experimental prerelease", "draft=false", "prerelease=true",
+                "a1f9c2fc1c6bc8f3e04878d30d658bb38fab441d", "747a4d251c00fe5a1d079c2392312a4fcfd75927",
+                "447160780", "7813b8c9905bf4e2594d8f986e29dda2b377e5b6",
+                "43880433859", "43880433751", "43883628126", "43883629159", "43887498190", "SHA256SUMS",
+            ),
+            "docs/releases/v0.0.6-alpha.11-validation.md": (
                 "Published GitHub experimental prerelease", "draft=false", "prerelease=true",
                 "79b57395957f47e1270ee542a856c844b82386de", "c935f7a6288b8657f1c7bec2eabfcdf5f5bc9480",
                 "446147628", "365aa44c7cf3985c1e7fed593d2a26bbff671652", "43726187182", "43726187071",
@@ -250,10 +257,13 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
     def test_latest_published_anchor_and_immutable_candidate_snapshot(self):
         version = PUBLISHED_VERSION
         self.assertEqual(PACKAGE_VERSION, package_version())
-        for filename in ("README.md", "docs/README.md", "docs/compatibility.md"):
+        for filename in (
+            "README.md", "docs/README.md", "docs/compatibility.md",
+            "docs/reference/cli.md", "docs/releasing.md",
+        ):
             with self.subTest(file=filename):
                 text = (ROOT / filename).read_text(encoding="utf-8")
-                matches = re.findall(r"latest published prerelease is\s*\[([^]]+)\]", text)
+                matches = re.findall(r"latest published prerelease is\s*\[v?([^]]+)\]", text)
                 self.assertEqual(matches, [version])
                 self.assertIn(f"v{version}", text)
         # The tagged candidate file intentionally remains a pre-release

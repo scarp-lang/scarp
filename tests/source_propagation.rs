@@ -1,4 +1,5 @@
-use scarp::diagnostics::DiagnosticKind;
+use scarp::{diagnostics::DiagnosticKind, value::Value, ExecutionOptions, RunError};
+use std::mem::size_of;
 
 fn run(source: &str) -> String {
     let mut output = Vec::new();
@@ -131,5 +132,79 @@ fn nested_scope_retirement_and_unicode_cache_spans_remain_safe() {
     assert_eq!(
         run(source),
         "new option<integer>::Some(8)\nnew option<integer>::None()\n"
+    );
+}
+
+#[test]
+fn forwarding_none_into_a_different_option_does_not_allocate_a_payload() {
+    let source = r#"
+        pure funcra forward(value: option<integer>) -> option<boolean> {
+            bind payload = value?;
+            return new option<boolean>::Some(payload > 0);
+        }
+        print(forward(new option<integer>::None()));
+    "#;
+    let options = ExecutionOptions {
+        max_tuple_bytes: 0,
+        ..ExecutionOptions::default()
+    };
+    let mut stdout = Vec::new();
+    scarp::run_with_options(source, &mut stdout, options).unwrap();
+    assert_eq!(stdout, b"new option<boolean>::None()\n");
+}
+
+#[test]
+fn forwarding_an_error_reuses_its_payload_under_the_exact_allocation_limit() {
+    let source = r#"
+        pure funcra forward(value: result<integer, string>) -> result<boolean, string> {
+            bind payload = value?;
+            return new result<boolean, string>::Ok(payload > 0);
+        }
+        print("buffered");
+        eprint("also buffered");
+        bind original = new result<integer, string>::Err("बंद");
+        print(forward(original));
+        print(original);
+    "#;
+    let exact = size_of::<Value>() + 2 * size_of::<usize>();
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let options = ExecutionOptions {
+        max_tuple_bytes: exact - 1,
+        ..ExecutionOptions::default()
+    };
+    assert!(matches!(
+        scarp::run_with_io_and_options(source, &mut stdout, &mut stderr, options),
+        Err(RunError::Diagnostic(error)) if error.kind == DiagnosticKind::VariantAllocation
+    ));
+    assert!(stdout.is_empty() && stderr.is_empty());
+
+    let options = ExecutionOptions {
+        max_tuple_bytes: exact,
+        ..options
+    };
+    scarp::run_with_io_and_options(source, &mut stdout, &mut stderr, options).unwrap();
+    assert_eq!(
+        String::from_utf8(stdout).unwrap(),
+        "buffered\nnew result<boolean, string>::Err(\"बंद\")\nnew result<integer, string>::Err(\"बंद\")\n"
+    );
+    assert_eq!(stderr, b"also buffered\n");
+}
+
+#[test]
+fn propagation_checks_the_initializer_in_a_pure_context() {
+    invalid(
+        r#"
+            funcra read() -> option<integer> {
+                print("side effect");
+                return new option<integer>::None();
+            }
+            pure funcra forward() -> option<integer> {
+                bind value = read()?;
+                return new option<integer>::Some(value);
+            }
+        "#,
+        DiagnosticKind::ImpureFunction,
+        "read",
     );
 }

@@ -1,5 +1,8 @@
 # Scarp documentation
 
+**0.0.6-alpha.12 prerelease** adds structured data and a multi-module
+[task board](task-board.md). [Verification](releases/v0.0.6-alpha.12-validation.md)
+
 **0.0.6-alpha.11 prerelease** adds [exact decimal values](decimal.md),
 explicit rounding, and interactive `input_decimal()`.
 [Public notes](releases/v0.0.6-alpha.11-publication.md) ·
@@ -87,7 +90,7 @@ updated for the **0.0.6-alpha.6 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
 contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.6-alpha.11](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.11),
+[0.0.6-alpha.12](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.12),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)
@@ -106,7 +109,7 @@ Rust API/schema migration before adopting that source.
 - [Read-only project metadata](project-info.md)
 - [Boolean assertions](assertions.md)
 
-**Development fixed arrays:** [immutable fixed-size arrays](fixed-arrays.md)
+**Published fixed arrays:** [immutable fixed-size arrays](fixed-arrays.md)
 support homogeneous structural types, checked indexing and module interfaces.
 
 ## Guides and what each adds
