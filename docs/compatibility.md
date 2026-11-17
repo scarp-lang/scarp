@@ -1,5 +1,15 @@
 # Version and API compatibility
 
+`0.0.6-alpha.13` is **a published GitHub prerelease**. It reduces payload
+allocations when forwarding Option/Result failures and adds opt-in Rust embedding
+APIs for syntax/semantic cache retention changes, targeted semantic revision
+eviction, and workspace-generation checks for editor analysis. Hosts own source
+identity and generation tracking; stale results are not automatically rejected
+without host participation. Compiler/interpreter source syntax and existing CLI
+commands remain unchanged; no general native executable compiler is introduced.
+[Public notes](releases/v0.0.6-alpha.13-publication.md) ·
+[Published source](https://github.com/scarp-lang/scarp/tree/e755fda37cdaeed29434e848cb5dd41f2f2e7eb2)
+
 `0.0.6-alpha.12` is **a published GitHub prerelease**. It adds nominal records,
 tagged variants, nested binding patterns,
 typed Option and Result with propagation, and immutable typed lists and maps.
@@ -97,7 +107,7 @@ The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.6-alpha.12](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.12).
+[0.0.6-alpha.13](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.13).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a
