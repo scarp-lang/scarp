@@ -295,6 +295,37 @@ impl CompilationCache {
         removed
     }
 
+    /// Evict only successful snapshots whose resolved source identity has the
+    /// specified caller-owned revision. Other revisions of the same identity
+    /// remain eligible for exact byte-checked reuse.
+    ///
+    /// Revisions are indexed by the source's position in each retained graph,
+    /// not by a position in a different compilation. Already returned Arc
+    /// snapshots remain valid. This is retention management only: future
+    /// compilation still reloads and validates the complete source graph.
+    pub fn evict_identity_revision(&mut self, identity: &str, revision: u64) -> usize {
+        let mut removed = 0usize;
+        let mut freed_bytes = 0usize;
+        self.entries.retain(|entry| {
+            let affected = entry
+                .program
+                .modules()
+                .iter()
+                .enumerate()
+                .any(|(index, module)| {
+                    module.identity == identity && entry.revisions.get(index) == Some(&revision)
+                });
+            if affected {
+                removed += 1;
+                freed_bytes += entry.source_bytes;
+            }
+            !affected
+        });
+        self.retained_source_bytes -= freed_bytes;
+        self.evictions = self.evictions.saturating_add(removed as u64);
+        removed
+    }
+
     /// Recompile with safe whole-graph reuse of a prior success.
     ///
     /// Revisions are supplied in the current graph's SourceId discovery order
