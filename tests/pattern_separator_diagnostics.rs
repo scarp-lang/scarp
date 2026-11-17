@@ -20,7 +20,9 @@ fn missing_pattern_commas_report_the_separator_at_utf8_byte_exact_spans() {
         );
         assert_eq!(&source[error.span.start..error.span.end], token);
         assert!(
-            error.message.contains("expected ',' between destructuring pattern members"),
+            error
+                .message
+                .contains("expected ',' between destructuring pattern members"),
             "the diagnostic must identify the missing comma: {error:?}"
         );
     }
