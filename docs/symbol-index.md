@@ -100,7 +100,7 @@ notifications, incremental recompilation or cancellation; consumers must
 discard stale symbol snapshots after edits. Existing schema-v1 JSON remains
 unchanged: it still uses UTF-8 byte spans and one-based scalar columns.
 
-## Reusable, revision-guarded editor snapshots (development API)
+## Reusable, revision-guarded editor snapshots
 
 For repeated editor queries, the optional `EditorSnapshot` indexes line starts
 and content ends once, preserving the original immutable `SymbolIndex` and
@@ -137,13 +137,12 @@ metadata is logical indexing storage, not a process-memory measurement.
 Clones share read-only metadata; ordinary compiler execution and the JSON
 schema-v1 output are unchanged.
 
-These UTF-16 editor adapters are development embedding APIs, **not** features
-of the published v0.0.6-alpha.1 binaries. Both the strict conversion helpers (merged
-after v0.0.6-alpha.1) and this `EditorSnapshot` addition require a development checkout
-until a separately reviewed release. There is still no LSP protocol, change notification,
-cancellation service, incremental module cache or external editor deployment.
-See `tests/editor_snapshot.rs` and `examples/editor_snapshot.rs` for host
-integration and strict Unicode/CRLF regression coverage.
+The alpha.2 source release includes these UTF-16 Rust embedding APIs.
+Current sources also provide exact-graph editor compilation reuse through
+`EditorCompilationCache`. See `tests/editor_snapshot.rs` and
+`examples/editor_snapshot.rs` for host integration and strict Unicode/CRLF
+coverage. The [editor service design](development/editor-service-design.md)
+specifies the proposed request, cancellation and protocol milestones.
 
 ## Limits and measured quantities
 

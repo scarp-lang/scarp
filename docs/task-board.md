@@ -25,4 +25,5 @@ A future UI host can translate an event into an `Action`, apply it to the
 current snapshot and render the returned state. Persistence would need
 a versioned representation of the task list and validation on import, with
 the index rebuilt from the list. The example runs as a CLI project. Host
-event bindings and serialization remain outside its current scope.
+event bindings and serialization remain future work. The [host UI design](development/task-board-host-design.md)
+describes the proposed first event and embedding boundary.

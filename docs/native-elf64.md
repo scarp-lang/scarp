@@ -89,3 +89,5 @@ cargo test --locked --offline --test native_object
 
 See [Proposal 0037](proposals/0037-compiler-owned-native-ir.md) and
 [Issue #128](https://github.com/scarp-lang/scarp/issues/128).
+The [checked-kernel design](development/native-checked-kernel-design.md) proposes
+a separate fallible ABI.

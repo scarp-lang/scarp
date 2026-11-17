@@ -93,6 +93,57 @@ class InspectionJsonTests(unittest.TestCase):
         self.assertEqual(parameter["type"], "array<string, 2>")
         self.assertTrue(parameter["has_default"])
 
+    def test_structured_signatures_and_nominal_symbols_keep_file_local_spans(self):
+        with tempfile.TemporaryDirectory(prefix="scarp-structured-json-") as folder:
+            root = Path(folder)
+            entry = root / "main.srp"
+            library = root / "library.srp"
+            entry.write_bytes(b'import "library.srp" as lib;\r\nprint(1 / 0);\r\n')
+            prefix = '// café 🌍\r\n'.encode("utf-8")
+            signature = (
+                b'pub pure funcra same(values: map<string, list<integer>>)'
+                b' -> map<string, list<integer>> { return values; }\r\n'
+            )
+            library.write_bytes(prefix + signature)
+            inventory = self.parse(entry.name, cwd=root)
+            self.assertEqual(inventory["schema_version"], 3)
+            same, = inventory["modules"][1]["symbols"]
+            self.assertEqual(same["result"], "map<string, list<integer>>")
+            self.assertEqual(same["parameters"][0]["type"], same["result"])
+
+            record = b'pub record Entry { count: integer, title: string }\r\n'
+            library.write_bytes(prefix + record + signature)
+            self.assertEqual(self.parse(entry.name, cwd=root)["schema_version"], 4)
+
+            variant = b'pub variant Update { Idle, Ready(option<record Entry>) }\r\n'
+            library.write_bytes(prefix + record + variant + signature)
+            inventory = self.parse(entry.name, cwd=root)
+            self.assertEqual(inventory["schema_version"], 5)
+            symbols = {s["name"]: s for s in inventory["modules"][1]["symbols"]}
+            self.assertEqual(symbols["Entry"]["fields"], [
+                {"name": "count", "type": "integer"},
+                {"name": "title", "type": "string"},
+            ])
+            self.assertEqual(symbols["Update"]["cases"], [
+                {"name": "Idle", "payload": None},
+                {"name": "Ready", "payload": "variant option<record Entry>"},
+            ])
+            generated = symbols["option<record Entry>"]
+            self.assertFalse(generated["public"])
+            self.assertEqual(generated["cases"], [
+                {"name": "None", "payload": None},
+                {"name": "Some", "payload": "record Entry"},
+            ])
+            source_bytes = library.read_bytes()
+            for symbol, token in (
+                (symbols["Entry"], b"Entry"),
+                (symbols["Update"], b"Update"),
+                (symbols["same"], b"same"),
+                (symbols["same"]["parameters"][0], b"values"),
+                (generated, b"option"),
+            ):
+                self.assertEqual(source_bytes[slice(*symbol["span"])], token)
+
     def test_json_is_repeatable_and_old_text_mode_still_works(self):
         first = invoke("modules", "--json", "examples/inspection_json.srp")
         second = invoke("modules", "--json", "examples/inspection_json.srp")
