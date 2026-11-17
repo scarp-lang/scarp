@@ -1,12 +1,14 @@
 # Preparing a prerelease
 
 The latest published prerelease is
-[v0.0.6-alpha.12](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.12),
-published from exact source `a1f9c2fc1c6bc8f3e04878d30d658bb38fab441d`.
-The [publication record](releases/v0.0.6-alpha.12-validation.md) identifies the
-annotated tag, the source and control CI matrices, and all seven downloaded assets.
-The fulfilled request is retired with this record. Future releases require their
-own authorization, exact source and fresh qualification.
+[v0.0.6-alpha.13](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.13),
+published from exact source `e755fda37cdaeed29434e848cb5dd41f2f2e7eb2`.
+The [alpha.13 public notes](releases/v0.0.6-alpha.13-publication.md) document
+its interpreter and Rust embedding features. The previous
+[alpha.12 publication record](releases/v0.0.6-alpha.12-validation.md)
+preserves its own source, CI matrix and asset verification history.
+Every future publication requires separate owner authorization, exact source,
+and fresh qualification.
 
 The [alpha.11 verification record](releases/v0.0.6-alpha.11-validation.md)
 preserves its separate source and digests.
