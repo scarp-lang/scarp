@@ -229,6 +229,27 @@ impl CompilationCache {
         }
     }
 
+    /// Reconfigure whole-graph semantic retention without changing already
+    /// published Arc snapshots or resetting lifetime counters.
+    /// Oldest entries are removed first until both logical quotas hold.
+    /// A zero quota disables retention for subsequent compilations.
+    pub fn set_limits(&mut self, limits: CacheLimits) {
+        self.limits = limits;
+        while !self.entries.is_empty()
+            && (self.entries.len() > self.limits.max_entries
+                || self.retained_source_bytes > self.limits.max_retained_source_bytes)
+        {
+            let old = self.entries.pop_front().expect("checked nonempty");
+            self.retained_source_bytes -= old.source_bytes;
+            self.evictions = self.evictions.saturating_add(1);
+        }
+    }
+
+    /// Current logical retention quotas.
+    pub fn limits(&self) -> CacheLimits {
+        self.limits
+    }
+
     pub fn stats(&self) -> CacheStats {
         CacheStats {
             entries: self.entries.len(),
@@ -263,6 +284,153 @@ impl CompilationCache {
                 .modules()
                 .iter()
                 .any(|module| module.identity == identity);
+            if affected {
+                removed += 1;
+                freed_bytes += entry.source_bytes;
+            }
+            !affected
+        });
+        self.retained_source_bytes -= freed_bytes;
+        self.evictions = self.evictions.saturating_add(removed as u64);
+        removed
+    }
+
+    /// Evict only successful snapshots whose resolved source identity has the
+    /// specified caller-owned revision. Other revisions of the same identity
+    /// remain eligible for exact byte-checked reuse.
+    ///
+    /// Revisions are indexed by the source's position in each retained graph,
+    /// not by a position in a different compilation. Already returned Arc
+    /// snapshots remain valid. This is retention management only: future
+    /// compilation still reloads and validates the complete source graph.
+    pub fn evict_identity_revision(&mut self, identity: &str, revision: u64) -> usize {
+        let mut removed = 0usize;
+        let mut freed_bytes = 0usize;
+        self.entries.retain(|entry| {
+            let affected = entry
+                .program
+                .modules()
+                .iter()
+                .enumerate()
+                .any(|(index, module)| {
+                    module.identity == identity && entry.revisions.get(index) == Some(&revision)
+                });
+            if affected {
+                removed += 1;
+                freed_bytes += entry.source_bytes;
+            }
+            !affected
+        });
+        self.retained_source_bytes -= freed_bytes;
+        self.evictions = self.evictions.saturating_add(removed as u64);
+        removed
+    }
+
+    /// Evict cached whole-graph snapshots containing an older revision of a
+    /// trusted resolved loader identity. The minimum revision is inclusive:
+    /// snapshots at or above it are preserved. This supports editor clients
+    /// that discard all revisions below an acknowledged document watermark.
+    ///
+    /// The revision belongs to the matching module's position in each graph,
+    /// not the position in a different compilation. Unrelated identities and
+    /// revisions remain in FIFO order. Existing Arc snapshots stay valid.
+    /// This does not skip loader, parser, or semantic validation on later calls.
+    pub fn evict_identity_revisions_before(&mut self, identity: &str, minimum: u64) -> usize {
+        let mut removed = 0usize;
+        let mut freed_bytes = 0usize;
+        self.entries.retain(|entry| {
+            let affected = entry
+                .program
+                .modules()
+                .iter()
+                .enumerate()
+                .any(|(index, module)| {
+                    module.identity == identity
+                        && entry
+                            .revisions
+                            .get(index)
+                            .is_some_and(|revision| *revision < minimum)
+                });
+            if affected {
+                removed += 1;
+                freed_bytes += entry.source_bytes;
+            }
+            !affected
+        });
+        self.retained_source_bytes -= freed_bytes;
+        self.evictions = self.evictions.saturating_add(removed as u64);
+        removed
+    }
+
+    /// Evict cached whole-graph snapshots at or above a revision ceiling
+    /// for one trusted resolved loader identity. This is useful when an
+    /// editor rolls back to an earlier document revision or abandons a
+    /// speculative revision range. The ceiling is inclusive.
+    ///
+    /// Revisions are looked up using each retained graph's own module order.
+    /// Unrelated graphs and older revisions keep their FIFO positions.
+    /// Already returned immutable Arc snapshots remain valid. Future
+    /// compiles still reload and validate all sources.
+    pub fn evict_identity_revisions_at_or_after(&mut self, identity: &str, ceiling: u64) -> usize {
+        let mut removed = 0usize;
+        let mut freed_bytes = 0usize;
+        self.entries.retain(|entry| {
+            let affected = entry
+                .program
+                .modules()
+                .iter()
+                .enumerate()
+                .any(|(index, module)| {
+                    module.identity == identity
+                        && entry
+                            .revisions
+                            .get(index)
+                            .is_some_and(|revision| *revision >= ceiling)
+                });
+            if affected {
+                removed += 1;
+                freed_bytes += entry.source_bytes;
+            }
+            !affected
+        });
+        self.retained_source_bytes -= freed_bytes;
+        self.evictions = self.evictions.saturating_add(removed as u64);
+        removed
+    }
+
+    /// Evict whole-graph semantic snapshots whose revision for the given
+    /// trusted loader identity falls within [start, end). An empty or
+    /// inverted interval is a no-op. The half-open interval avoids overflow
+    /// when callers partition revision histories into disjoint windows.
+    ///
+    /// The source's index is resolved separately in every retained graph.
+    /// Other identities and revisions retain their FIFO order; already
+    /// published Arc snapshots are unaffected. Future requests still load
+    /// and validate the complete source graph.
+    pub fn evict_identity_revisions_in_range(
+        &mut self,
+        identity: &str,
+        start: u64,
+        end: u64,
+    ) -> usize {
+        if start >= end {
+            return 0;
+        }
+        let mut removed = 0usize;
+        let mut freed_bytes = 0usize;
+        self.entries.retain(|entry| {
+            let affected = entry
+                .program
+                .modules()
+                .iter()
+                .enumerate()
+                .any(|(index, module)| {
+                    module.identity == identity
+                        && entry
+                            .revisions
+                            .get(index)
+                            .is_some_and(|revision| *revision >= start && *revision < end)
+                });
             if affected {
                 removed += 1;
                 freed_bytes += entry.source_bytes;
