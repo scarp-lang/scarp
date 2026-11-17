@@ -15,6 +15,14 @@ pub struct SyntaxCacheLimits {
     pub max_identity_bytes: usize,
     pub max_ast_nodes: usize,
 }
+impl SyntaxCacheLimits {
+    fn retention_disabled(self) -> bool {
+        self.max_entries == 0
+            || self.max_source_bytes == 0
+            || self.max_identity_bytes == 0
+            || self.max_ast_nodes == 0
+    }
+}
 impl Default for SyntaxCacheLimits {
     fn default() -> Self {
         Self {
@@ -83,7 +91,11 @@ impl SyntaxCache {
     /// Parsed programs already returned to callers remain unaffected.
     pub fn set_limits(&mut self, limits: SyntaxCacheLimits) {
         self.limits = limits;
-        self.trim_to_limits();
+        if limits.retention_disabled() {
+            self.clear();
+        } else {
+            self.trim_to_limits();
+        }
     }
 
     /// The current retention quotas, including any runtime reconfiguration.
@@ -180,7 +192,7 @@ impl SyntaxCache {
         source_base: usize,
         parsed_absolute: &Program,
     ) {
-        if self.limits.max_entries == 0
+        if self.limits.retention_disabled()
             || source.len() > self.limits.max_source_bytes
             || identity.len() > self.limits.max_identity_bytes
         {

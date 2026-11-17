@@ -133,3 +133,41 @@ fn executable_snapshot_fixture_matches_cold_and_warm_cache_output() {
     });
     assert_eq!(compile(&loader, &mut cache), expected);
 }
+
+#[test]
+fn zero_quota_never_retains_empty_or_comment_only_syntax() {
+    for (quota, text) in [
+        (
+            SyntaxCacheLimits {
+                max_source_bytes: 0,
+                ..Default::default()
+            },
+            "",
+        ),
+        (
+            SyntaxCacheLimits {
+                max_ast_nodes: 0,
+                ..Default::default()
+            },
+            "// no statements\n",
+        ),
+    ] {
+        let source = loader(text, LIB);
+        let mut cache = SyntaxCache::new(SyntaxCacheLimits::default());
+        assert!(compile(&source, &mut cache).is_empty());
+        assert_eq!(cache.stats().entries, 1);
+        cache.set_limits(quota);
+        assert_eq!(cache.stats().entries, 0);
+        assert_eq!(cache.stats().evictions, 1);
+        assert!(compile(&source, &mut cache).is_empty());
+        assert!(compile(&source, &mut cache).is_empty());
+        let stats = cache.stats();
+        assert_eq!(stats.entries, 0);
+        assert_eq!(stats.hits, 0);
+        assert_eq!(stats.bypasses, 2);
+        cache.set_limits(SyntaxCacheLimits::default());
+        assert!(compile(&source, &mut cache).is_empty());
+        assert!(compile(&source, &mut cache).is_empty());
+        assert_eq!(cache.stats().hits, 1);
+    }
+}
