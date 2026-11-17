@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.0.6-alpha.13
+
+- Forward Option and Result failures without a second payload allocation.
+- Add caller-owned syntax and semantic cache quota updates and targeted semantic
+  revision eviction. Preserve returned programs and FIFO order.
+- Add an opt-in workspace generation check for static editor analysis results.
+- Cover persistent map projections, aggregate quotas, and cache snapshot
+  boundaries with exact-output examples and regression tests.
+
 ## 0.0.6-alpha.12 — published GitHub prerelease, 2026-11-16
 
 - Add nominal records, tagged variants, nested destructuring and exhaustive scalar matching.

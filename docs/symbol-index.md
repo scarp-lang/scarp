@@ -145,6 +145,20 @@ cancellation service, incremental module cache or external editor deployment.
 See `tests/editor_snapshot.rs` and `examples/editor_snapshot.rs` for host
 integration and strict Unicode/CRLF regression coverage.
 
+## Publishing editor analysis after an edit
+
+An editor host can capture a workspace generation before loading a revisioned
+graph, then pass the resulting graph or loader diagnostic to
+`EditorCompilationCache::analyze_loaded`. Before publishing navigation or
+diagnostics, call `EditorAnalysis::into_current` with the host's current
+generation. A mismatch discards the result, including a stale failure.
+
+Advance the generation for changes to source bytes, revisions, identity,
+or import resolution. Load each request from a stable workspace view and
+check the generation on the same serialized path that applies edits and
+publishes results. Existing snapshot queries still validate per-document
+revisions, in the source order of that snapshot.
+
 ## Limits and measured quantities
 
 Ordinary compilation does not construct an index or enforce index limits. The
