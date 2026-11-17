@@ -27,6 +27,18 @@ impl VariantValue {
         }
     }
 
+    /// Retype a propagated case whose tag and payload type the resolver checked.
+    /// The existing immutable payload is retained without a new allocation.
+    pub(crate) fn retype_checked(mut self, kind: SourceType) -> Self {
+        debug_assert_eq!(
+            kind.as_variant()
+                .and_then(|variant| variant.cases()[usize::from(self.tag)].1.as_ref()),
+            self.payload().map(Value::kind).as_ref(),
+        );
+        self.kind = kind;
+        self
+    }
+
     pub fn kind(&self) -> &SourceType {
         &self.kind
     }

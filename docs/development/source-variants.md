@@ -34,6 +34,6 @@ The interpreter supports matching and construction. The scalar native backends r
 E0049 for these operations. Module inventory JSON uses schema 5 when the graph contains
 variant declarations.
 
-This milestone supports tagged statement matches, case-local bindings, and wildcards.
-Generic `Option` and `Result`, expression matches, nested variant tests, guards, and native
-aggregate lowering are follow-up work.
+[Concrete Option and Result](../option-result.md) use the same checked case
+tables. Expression matches, nested variant tests, guards, and native aggregate
+lowering remain future work.
