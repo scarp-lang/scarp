@@ -8,18 +8,30 @@ use scarp::{
 };
 use std::sync::Arc;
 
-fn compile(cache: &mut CompilationCache, source: &str, revision: u64) -> scarp::modules::cache::CachedProgram {
+fn compile(
+    cache: &mut CompilationCache,
+    source: &str,
+    revision: u64,
+) -> scarp::modules::cache::CachedProgram {
     let mut loader = MemorySourceLoader::new();
     loader.insert("main.srp", source).unwrap();
     cache.compile_with_loader(
-        "main.srp", &loader, ModuleLimits::default(), ConstantLimits::default(),
-        TypeLimits::default(), &[revision],
-    ).unwrap()
+        "main.srp",
+        &loader,
+        ModuleLimits::default(),
+        ConstantLimits::default(),
+        TypeLimits::default(),
+        &[revision],
+    )
+    .unwrap()
 }
 
 #[test]
 fn watermark_removes_only_older_revisions_and_preserves_snapshots() {
-    let mut cache = CompilationCache::new(CacheLimits { max_entries: 8, ..CacheLimits::default() });
+    let mut cache = CompilationCache::new(CacheLimits {
+        max_entries: 8,
+        ..CacheLimits::default()
+    });
     let old = compile(&mut cache, "print(1);", 1);
     let middle = compile(&mut cache, "print(2);", 2);
     let current = compile(&mut cache, "print(3);", 3);
@@ -32,10 +44,15 @@ fn watermark_removes_only_older_revisions_and_preserves_snapshots() {
     assert!(Arc::ptr_eq(&current.program, &hit.program));
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    old.program.execute(&mut stdout, &mut stderr, ExecutionOptions::default()).unwrap();
+    old.program
+        .execute(&mut stdout, &mut stderr, ExecutionOptions::default())
+        .unwrap();
     assert_eq!(stdout, b"1\n");
     stdout.clear();
-    middle.program.execute(&mut stdout, &mut stderr, ExecutionOptions::default()).unwrap();
+    middle
+        .program
+        .execute(&mut stdout, &mut stderr, ExecutionOptions::default())
+        .unwrap();
     assert_eq!(stdout, b"2\n");
 }
 
@@ -62,7 +79,12 @@ fn watermark_fixture_recompiles_without_changing_source_semantics() {
     assert_eq!(next.status, CacheStatus::Stored);
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    next.program.execute(&mut stdout, &mut stderr, ExecutionOptions::default()).unwrap();
-    assert_eq!(stdout, include_bytes!("../examples/revision_watermark_snapshot.stdout"));
+    next.program
+        .execute(&mut stdout, &mut stderr, ExecutionOptions::default())
+        .unwrap();
+    assert_eq!(
+        stdout,
+        include_bytes!("../examples/revision_watermark_snapshot.stdout")
+    );
     assert!(!Arc::ptr_eq(&first.program, &next.program));
 }
