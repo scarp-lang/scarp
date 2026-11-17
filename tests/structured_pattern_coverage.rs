@@ -48,10 +48,7 @@ fn tuple_pattern_arity_mismatch_reports_the_pattern_not_initializer() {
     let source = "bind (first, second) = (1, 2, 3); print(first);";
     let error = scarp::compile(source).unwrap_err();
     assert_eq!(error.kind, DiagnosticKind::TypeMismatch);
-    assert_eq!(
-        &source[error.span.start..error.span.end],
-        "(first, second)"
-    );
+    assert_eq!(&source[error.span.start..error.span.end], "(first, second)");
     assert!(error.message.contains("requires 2 elements, found 3"));
 }
 
