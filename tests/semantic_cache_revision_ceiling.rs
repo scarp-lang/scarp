@@ -8,13 +8,22 @@ use scarp::{
 };
 use std::sync::Arc;
 
-fn compile(cache: &mut CompilationCache, source: &str, revision: u64) -> scarp::modules::cache::CachedProgram {
+fn compile(
+    cache: &mut CompilationCache,
+    source: &str,
+    revision: u64,
+) -> scarp::modules::cache::CachedProgram {
     let mut loader = MemorySourceLoader::new();
     loader.insert("main.srp", source).unwrap();
     cache.compile_with_loader(
-        "main.srp", &loader, ModuleLimits::default(), ConstantLimits::default(),
-        TypeLimits::default(), &[revision],
-    ).unwrap()
+        "main.srp",
+        &loader,
+        ModuleLimits::default(),
+        ConstantLimits::default(),
+        TypeLimits::default(),
+        &[revision],
+    )
+    .unwrap()
 }
 
 #[test]
@@ -34,10 +43,12 @@ fn ceiling_evicts_inclusive_range_but_preserves_older_snapshot() {
     assert!(Arc::ptr_eq(&old.program, &hit.program));
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    newest.program.execute(&mut stdout, &mut stderr, ExecutionOptions::default()).unwrap();
+    newest.program.execute(&mut stdout, &mut stderr, ExecutionOptions::default())
+        .unwrap();
     assert_eq!(stdout, b"3\n");
     stdout.clear();
-    middle.program.execute(&mut stdout, &mut stderr, ExecutionOptions::default()).unwrap();
+    middle.program.execute(&mut stdout, &mut stderr, ExecutionOptions::default())
+        .unwrap();
     assert_eq!(stdout, b"2\n");
 }
 
@@ -46,8 +57,14 @@ fn unknown_identity_and_max_ceiling_preserve_counters() {
     let mut cache = CompilationCache::new(CacheLimits::default());
     compile(&mut cache, "print(7);", 0);
     let before = cache.stats();
-    assert_eq!(cache.evict_identity_revisions_at_or_after("unknown.srp", 0), 0);
-    assert_eq!(cache.evict_identity_revisions_at_or_after("main.srp", u64::MAX), 0);
+    assert_eq!(
+        cache.evict_identity_revisions_at_or_after("unknown.srp", 0),
+        0
+    );
+    assert_eq!(
+        cache.evict_identity_revisions_at_or_after("main.srp", u64::MAX),
+        0
+    );
     assert_eq!(cache.stats(), before);
     assert_eq!(cache.evict_identity_revisions_at_or_after("main.srp", 0), 1);
     assert_eq!(cache.stats().retained_source_bytes, 0);
@@ -65,6 +82,10 @@ fn ceiling_fixture_recompiles_after_speculative_revision_discard() {
     assert!(!Arc::ptr_eq(&original.program, &restored.program));
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    restored.program.execute(&mut stdout, &mut stderr, ExecutionOptions::default()).unwrap();
-    assert_eq!(stdout, include_bytes!("../examples/revision_ceiling_snapshot.stdout"));
+    restored.program.execute(&mut stdout, &mut stderr, ExecutionOptions::default())
+        .unwrap();
+    assert_eq!(
+        stdout,
+        include_bytes!("../examples/revision_ceiling_snapshot.stdout")
+    );
 }
