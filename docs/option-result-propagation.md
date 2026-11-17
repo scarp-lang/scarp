@@ -1,7 +1,7 @@
-# Explicit `?` propagation — experimental draft
+# Explicit `?` propagation
 
-> **Not published.** This is a stacked development change in draft PR #260,
-> depending on #259. It is not part of the released v0.0.6-alpha.11 compiler.
+Scarp alpha.12 introduced explicit propagation for concrete Option and Result
+in the interpreter.
 
 ## Language rule
 
@@ -54,10 +54,11 @@ pure funcra inspect(value: option<integer>) -> option<boolean> {
 The original expression's existing checked, bounded execution plan runs to
 completion before the propagation decision. On the successful path, its
 payload is stored in the new immutable slot. On the failure path, the
-interpreter constructs a checked outer variant and uses normal function
-completion: failed `ensures` contracts still fail, caller frames receive a
-return value when allowed, and implementation-specific resource limits remain
-in effect. Storage retirement is audited on the success continuation; failure
+interpreter returns a variant of the enclosing function's result type through
+normal completion. An `ensures` contract still runs before control returns to
+the caller. On current development source, forwarding shares an existing
+immutable error payload, and forwarding `None` needs no payload allocation.
+The alpha.12 binary debits the variant quota on both early-return paths. Storage retirement is audited on the success continuation; failure
 exits without executing subsequent statements.
 
 No extra native lowering is provided. C11 and object backends must reject
@@ -69,8 +70,5 @@ functions and aggregates as before; they must never quietly ignore `?`.
 - Regression file: `tests/source_propagation.rs`.
 - Linux and PowerShell compiler checks and all three package smoke suites
   include the golden example.
-- CI and human review are required. This is not yet a stable language feature.
-- **Follow-ups:** safe cross-module canonical identity for concrete generic
-  wrappers; arbitrary expression propagation; error conversion contracts;
-  full module/editor and 512 KiB small-stack audits; language specification
-  review and wider platform qualification.
+- `tests/source_option_modules.rs` checks canonical concrete type identity
+  across imports and propagation with an exact cross-module error type.
