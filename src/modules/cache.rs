@@ -25,8 +25,8 @@ mod syntax;
 mod tokens;
 pub use constants::{ConstantCache, ConstantCacheLimits, ConstantCacheStats};
 pub use editor::{
-    CachedEditorProgram, EditorCacheLimits, EditorCacheStats, EditorCompilationCache,
-    EditorCompileError, EditorCompileLimits,
+    CachedEditorProgram, EditorAnalysis, EditorAnalysisError, EditorCacheLimits, EditorCacheStats,
+    EditorCompilationCache, EditorCompileError, EditorCompileLimits,
 };
 pub use syntax::{SyntaxCache, SyntaxCacheLimits, SyntaxCacheStats};
 pub use tokens::{TokenCache, TokenCacheLimits, TokenCacheStats};
