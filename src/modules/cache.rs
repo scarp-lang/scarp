@@ -362,6 +362,42 @@ impl CompilationCache {
         removed
     }
 
+    /// Evict cached whole-graph snapshots at or above a revision ceiling
+    /// for one trusted resolved loader identity. This is useful when an
+    /// editor rolls back to an earlier document revision or abandons a
+    /// speculative revision range. The ceiling is inclusive.
+    ///
+    /// Revisions are looked up using each retained graph's own module order.
+    /// Unrelated graphs and older revisions keep their FIFO positions.
+    /// Already returned immutable Arc snapshots remain valid. Future
+    /// compiles still reload and validate all sources.
+    pub fn evict_identity_revisions_at_or_after(&mut self, identity: &str, ceiling: u64) -> usize {
+        let mut removed = 0usize;
+        let mut freed_bytes = 0usize;
+        self.entries.retain(|entry| {
+            let affected = entry
+                .program
+                .modules()
+                .iter()
+                .enumerate()
+                .any(|(index, module)| {
+                    module.identity == identity
+                        && entry
+                            .revisions
+                            .get(index)
+                            .is_some_and(|revision| *revision >= ceiling)
+                });
+            if affected {
+                removed += 1;
+                freed_bytes += entry.source_bytes;
+            }
+            !affected
+        });
+        self.retained_source_bytes -= freed_bytes;
+        self.evictions = self.evictions.saturating_add(removed as u64);
+        removed
+    }
+
     /// Recompile with safe whole-graph reuse of a prior success.
     ///
     /// Revisions are supplied in the current graph's SourceId discovery order
