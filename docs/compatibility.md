@@ -1,5 +1,13 @@
 # Version and API compatibility
 
+`0.0.6-alpha.14` is **a published GitHub prerelease**. Nested destructuring
+reports more precise errors under the existing diagnostic code. Rust hosts
+can resize editor cache quotas and opt into checked arithmetic in the
+experimental Linux x86-64 ELF64 kernel API. Existing source syntax, CLI
+schemas and the original integer kernel API are preserved.
+[Public notes](releases/v0.0.6-alpha.14-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.14-validation.md)
+
 `0.0.6-alpha.13` is **a published GitHub prerelease**. It reduces payload
 allocations when forwarding Option/Result failures and adds opt-in Rust embedding
 APIs for syntax/semantic cache retention changes, targeted semantic revision
@@ -107,7 +115,7 @@ The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.6-alpha.13](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.13).
+[0.0.6-alpha.14](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.14).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a

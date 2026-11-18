@@ -1,20 +1,15 @@
 # Preparing a prerelease
 
 The latest published prerelease is
-[v0.0.6-alpha.13](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.13),
-published from exact source `e755fda37cdaeed29434e848cb5dd41f2f2e7eb2`.
-The [alpha.13 public notes](releases/v0.0.6-alpha.13-publication.md) document
-its interpreter and Rust embedding features. The previous
-[alpha.12 publication record](releases/v0.0.6-alpha.12-validation.md)
-preserves its own source, CI matrix and asset verification history.
-Every future publication requires separate owner authorization, exact source,
-and fresh qualification.
+[v0.0.6-alpha.14](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.14),
+published from exact source `43627b74af5fccccc5e233e98207413983ebafc1`.
+The [publication verification record](releases/v0.0.6-alpha.14-validation.md)
+records the annotated tag, passing workflow runs and all seven verified assets.
+The completed request was retired after public verification. A future
+publication requires separate maintainer approval for its full source SHA.
 
-The fulfilled alpha.13 publication request was retired after verifying its
-annotated tag and all seven public assets against the exact source. The
-alpha.14 development branch contains candidate metadata and draft release
-notes. A new publication request requires maintainer approval for the full
-qualified source SHA.
+See the earlier [alpha.13 public notes](releases/v0.0.6-alpha.13-publication.md)
+and [alpha.12 publication record](releases/v0.0.6-alpha.12-validation.md).
 
 The [alpha.11 verification record](releases/v0.0.6-alpha.11-validation.md)
 preserves its separate source and digests.
