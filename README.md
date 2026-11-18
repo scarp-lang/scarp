@@ -1,7 +1,13 @@
 # Scarp
 
 The latest published prerelease is
-[0.0.6-alpha.13](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.13).
+[0.0.6-alpha.14](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.14).
+**0.0.6-alpha.14** improves nested destructuring diagnostics and adds live editor
+cache quotas for Rust hosts. The experimental Linux x86-64 ELF64 integer
+kernel API now supports checked arithmetic, including division and remainder.
+[Release notes](docs/releases/v0.0.6-alpha.14-publication.md) ·
+[Verification record](docs/releases/v0.0.6-alpha.14-validation.md)
+
 **0.0.6-alpha.13** improves Option/Result propagation without duplicate payload
 allocation, adds opt-in syntax/semantic cache retention controls and source-revision
 eviction, and provides workspace-generation checks for editor diagnostics and

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.6-alpha.14 — development candidate
+## 0.0.6-alpha.14 — published GitHub prerelease, 2026-11-18
 
 - Report missing and duplicate separators, mismatched delimiters and end of
   input at the relevant nested destructuring group.

@@ -1,5 +1,10 @@
 # Feature completeness and development roadmap
 
+Published `0.0.6-alpha.14` adds detailed structured-pattern diagnostics, live
+editor cache quotas for Rust hosts and checked integer operations in the
+experimental Linux x86-64 ELF64 kernel API.
+[Exact-source verification](../releases/v0.0.6-alpha.14-validation.md)
+
 Published `0.0.6-alpha.13` adds cache retention and revision eviction APIs,
 workspace-generation checks for editor results, and Option/Result payload reuse.
 These are opt-in Rust host features; they do not constitute complete incremental

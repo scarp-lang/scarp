@@ -11,7 +11,7 @@ import json
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLISHED_VERSION = "0.0.6-alpha.13"
+PUBLISHED_VERSION = "0.0.6-alpha.14"
 ALPHA6_SOURCE = "cdf6a3924ec2a36c7beca5a9aec4f01a0bce515e"
 HISTORICAL_ALPHA3 = "0.0.6-alpha.3"
 HISTORICAL_ALPHA2 = "0.0.6-alpha.2"
@@ -89,7 +89,7 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
             "docs/reference/cli.md": (f"v{PUBLISHED_VERSION}",),
             "docs/development/feature-matrix.md": (f"Published `{PUBLISHED_VERSION}`",),
             "CHANGELOG.md": (
-                f"## {PUBLISHED_VERSION} — published GitHub prerelease, 2026-11-17",
+                f"## {PUBLISHED_VERSION} — published GitHub prerelease, 2026-11-18",
                 "## 0.0.6-alpha.12 — published GitHub prerelease, 2026-11-16",
                 "## 0.0.6-alpha.11 — published GitHub prerelease, 2026-11-15",
                 "## 0.0.6-alpha.10 — published GitHub prerelease, 2026-11-14",

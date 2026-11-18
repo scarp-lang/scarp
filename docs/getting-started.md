@@ -8,7 +8,7 @@ you are running matches the documentation. Start with
 
 | Goal | Choose | What to expect |
 | --- | --- | --- |
-| Use the latest **published** experimental prerelease | [v0.0.6-alpha.13](releases/v0.0.6-alpha.13-publication.md) | Structured data, Option and Result, CLI project tests, and opt-in Rust cache and editor APIs |
+| Use the latest **published** experimental prerelease | [v0.0.6-alpha.14](releases/v0.0.6-alpha.14-publication.md) | Structured data, clearer pattern diagnostics, CLI project tests, and opt-in Rust embedding APIs |
 | Reproduce the Top-P and Pearson correlation milestone | [v0.0.6-alpha.5](releases/v0.0.6-alpha.5-publication.md) | Deterministic Top-P, Pearson correlation and dependent ELF64 integer-kernel Rust API |
 | Reproduce sampled calculus and cosine similarity milestone | [v0.0.6-alpha.4](releases/v0.0.6-alpha.4-publication.md) | Published earlier release with single-binding ELF64 object API |
 | Reproduce Top-K and temperature softmax | v0.0.6-alpha.3 | Deterministic Top-K and private scalar IR |
@@ -20,8 +20,8 @@ you are running matches the documentation. Start with
 | Reproduce the first interpreter | v0.0.1 | Printing and checked integer expressions |
 
 Download the archive for Windows x64, Linux x64 or macOS Apple Silicon from
-the [alpha.13 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.13).
-Its published source is `e755fda37cdaeed29434e848cb5dd41f2f2e7eb2`.
+the [alpha.14 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.14).
+Its published source is `43627b74af5fccccc5e233e98207413983ebafc1`.
 A Cargo version alone does not prove source identity, and language syntax
 and APIs are not stable. Alpha.5 capabilities are unavailable in earlier
 alpha.4 downloads.
@@ -41,10 +41,10 @@ cargo build --locked --offline
 cargo run -- version
 ```
 
-Expected version for the published alpha.13 binary:
+Expected version for the published alpha.14 binary:
 
 ```text
-scarp 0.0.6-alpha.13
+scarp 0.0.6-alpha.14
 ```
 
 Run commands from the repository root so relative example paths resolve:
@@ -92,7 +92,7 @@ development, `cargo run -- ...` selects the current checkout explicitly.
 
 Downloaded release archives already contain an executable and do not require
 Rust for running programs. For the latest **published** prerelease, consult the
-[v0.0.6-alpha.13 release notes](releases/v0.0.6-alpha.13-publication.md).
+[v0.0.6-alpha.14 release notes](releases/v0.0.6-alpha.14-publication.md).
 Select Windows x64 MSVC,
 Linux x64 GNU, or Apple Silicon macOS to match the host. Verify the archive's
 SHA-256 against the sidecar from that **same release** before extracting. CI
