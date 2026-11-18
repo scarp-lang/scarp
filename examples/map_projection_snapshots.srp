@@ -1,16 +1,11 @@
-// Deterministic map projections remain paired after persistent updates.
-bind original = [map: "z": 9, "a": 1, "m": 5];
-bind inserted = map_set(original, "b", 2);
-bind replaced = map_set(inserted, "m", 50);
-bind removed = map_remove(replaced, "z");
-
-print(map_keys(original));
-print(map_values(original));
-print(map_keys(inserted));
-print(map_values(inserted));
-print(map_keys(replaced));
-print(map_values(replaced));
-print(map_keys(removed));
-print(map_values(removed));
-print(map_keys(original));
-print(map_values(original));
+// Canonical order and immutable snapshots after persistent map updates.
+bind original = [map: 3: "three", 1: "one", 2: "two"];
+bind keys = map_keys(original);
+bind values = map_values(original);
+bind updated = map_set(original, 2, "TWO");
+bind reduced = map_remove(updated, 1);
+print(keys);
+print(values);
+print(map_keys(reduced));
+print(map_values(reduced));
+print(map_len(original), map_len(reduced));

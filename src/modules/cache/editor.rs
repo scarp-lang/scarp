@@ -126,6 +126,60 @@ impl From<EditorBuildError> for EditorCompileError {
     }
 }
 
+/// A completed static analysis bound to the host workspace that was loaded.
+#[derive(Debug)]
+pub struct EditorAnalysis {
+    generation: u64,
+    result: Result<CachedEditorProgram, EditorCompileError>,
+}
+
+impl EditorAnalysis {
+    /// Consume the result immediately before publication. Both diagnostics and
+    /// successful snapshots are discarded when the host has moved on.
+    ///
+    /// The generation must be current for the same workspace. Advance it on
+    /// edits, source replacement, and any change to import resolution.
+    pub fn into_current(
+        self,
+        current_generation: u64,
+    ) -> Result<CachedEditorProgram, EditorAnalysisError> {
+        if self.generation != current_generation {
+            return Err(EditorAnalysisError::Stale {
+                analyzed: self.generation,
+                current: current_generation,
+            });
+        }
+        self.result.map_err(EditorAnalysisError::Compile)
+    }
+}
+
+#[derive(Debug)]
+pub enum EditorAnalysisError {
+    Stale { analyzed: u64, current: u64 },
+    Compile(EditorCompileError),
+}
+
+impl fmt::Display for EditorAnalysisError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Stale { analyzed, current } => write!(
+                f,
+                "editor analysis is from workspace generation {analyzed}; current generation is {current}"
+            ),
+            Self::Compile(error) => error.fmt(f),
+        }
+    }
+}
+
+impl Error for EditorAnalysisError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Compile(error) => Some(error),
+            Self::Stale { .. } => None,
+        }
+    }
+}
+
 /// The compiled program and editor snapshot share one source coordinate space.
 #[derive(Debug, Clone)]
 pub struct CachedEditorProgram {
@@ -302,6 +356,25 @@ impl EditorCompilationCache {
     ) -> Result<CachedEditorProgram, EditorCompileError> {
         let revisions = collect_revisions(&graph, |module| module.revision)?;
         self.resolve_revisions(graph, limits, revisions, constants)
+    }
+
+    /// Analyze bindings for a generation captured before loading the graph.
+    ///
+    /// Accepts either the loaded graph or its diagnostic so that both paths
+    /// pass through the same publication check. Every loaded source must
+    /// carry its revision. The host owns the generation and uses a stable
+    /// workspace view for loading. No program execution takes place.
+    pub fn analyze_loaded(
+        &mut self,
+        generation: u64,
+        graph: Result<ModuleGraph, ModuleDiagnostic>,
+        limits: EditorCompileLimits,
+        constants: Option<&mut ConstantCache>,
+    ) -> EditorAnalysis {
+        let result = graph
+            .map_err(EditorCompileError::from)
+            .and_then(|graph| self.resolve_with_loaded_revisions(graph, limits, constants));
+        EditorAnalysis { generation, result }
     }
 
     fn resolve_revisions(

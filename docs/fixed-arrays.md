@@ -1,6 +1,6 @@
 # Immutable fixed-size arrays
 
-Fixed arrays are available in the development interpreter. The source type
+Fixed arrays have been available in the interpreter since alpha.10. The source type
 `array<T, N>` has exactly `N` values of the same structural type `T`.
 Element types include primitives other than `unit`, tuples, and other arrays.
 

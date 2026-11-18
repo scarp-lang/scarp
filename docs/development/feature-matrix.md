@@ -1,7 +1,10 @@
 # Feature completeness and development roadmap
 
-Cargo declares `0.0.6-alpha.11`. The published alpha.11 adds exact Decimal values
-and typed decimal console input. [Alpha.11 verification](../releases/v0.0.6-alpha.11-validation.md)
+Published `0.0.6-alpha.12` adds structured data and the multi-module task board.
+Draft cache quota and revision eviction changes in PRs #276–#281 are development work.
+[Alpha.12 verification](../releases/v0.0.6-alpha.12-validation.md)
+
+Published alpha.11 adds exact Decimal values and typed decimal console input. [Alpha.11 verification](../releases/v0.0.6-alpha.11-validation.md)
 The published alpha.10 adds typed console input,
 EOF detection, stream flushing, exact output fixtures, fixed arrays and expanded
 BigInt arithmetic. [Alpha.10 verification](../releases/v0.0.6-alpha.10-validation.md)
@@ -69,20 +72,20 @@ requires separate architecture and multiple implementation phases.
 | Strings | UTF-8 literals/equality, shared storage, bounded queries and construction | Normalization and richer text policy | Typed pure built-ins and work charging | P0 | M | Combining marks, emoji, empty input, limits | Text indexing contract |
 | Scalar/text foundations (published alpha.6) | Six pure intrinsics for explicit decimal parsing/formatting, Unicode trim and literal replacement; absent from published alpha.5 | Char/byte types, split/join and general collections remain separate | Existing typed built-in registry and text/work budgets | P0 | M | Exact scalar round trips, invalid input, resource bounds, module/CLI parity | [Contract](../text-foundations.md) |
 | Characters and bytes | Missing | Distinct types, decoding and conversion rules | Type representation and allocation limits | P2 | L | Encoding/invalid sequences, host parity | Type proposal |
-| Immutable heterogeneous tuples | Published alpha.6; absent from alpha.5 | Empty tuples, dynamic indices, destructuring and tuple constants deferred | Structural SourceType, tuple values, registry and bounded interpreter integration | P0 | L | Creation, projection, calls/modules, equality/display, quotas, spans and host migration | [Tuple contract](../tuples.md) |
-| Fixed typed arrays | Development interpreter supports homogeneous literals, typed empty arrays, checked indexing and whole-value replacement | Slicing, iteration and native array ABI deferred | Structural source types, immutable payload and schema 3 | P1 | L | Length/index/type errors, quotas, output, module and host parity | [Fixed arrays](../fixed-arrays.md) |
-| Dynamic typed lists | Numeric vectors only | General element types and mutation policy | Composite types, allocation budgets | P2 | XL | Aliasing, shape, limits, retirement | Collection contract |
-| Maps/sets | Missing | Key equality/hash policy, deterministic iteration | Composite types and allocation accounting | P2 | XL | Collisions/order/limits, Unicode keys | Collection contract |
-| Optional/structured errors | Missing | Tagged values and propagation | Variants and match typing | P1 | L | Success/error paths, exhaustive handling | Error model |
-| Records/structures | Missing | Declaration, fields, construction, access | Nominal/structural type decision | P1 | XL | Recursive/nested fields, visibility | Type-system proposal |
-| Enums/tagged variants | Missing | Constructors, pattern typing | Composite types and exhaustiveness | P1 | L | Exhaustive/redundant patterns, recursion | Variant/match design |
+| Immutable heterogeneous tuples | Published alpha.6; absent from alpha.5 | Empty tuples, dynamic indices and tuple constants deferred. Alpha.12 supports destructuring. | Structural SourceType, tuple values, registry and bounded interpreter integration | P0 | L | Creation, projection, calls/modules, equality/display, quotas, spans and host migration | [Tuple contract](../tuples.md) |
+| Fixed typed arrays | Published alpha.10 supports homogeneous literals, typed empty arrays, checked indexing and whole-value replacement | Slicing, iteration and native array ABI deferred | Structural source types, immutable payload and schema 3 | P1 | L | Length/index/type errors, quotas, output, module and host parity | [Fixed arrays](../fixed-arrays.md) |
+| Dynamic typed lists | Published alpha.12 supports immutable typed lists and persistent updates | General collection iteration and mutable lists | Composite types, allocation budgets | P2 | XL | Aliasing, shape, limits, retirement | [Lists](../typed-dynamic-lists.md) |
+| Maps/sets | Published alpha.12 supports immutable typed maps with canonically ordered projections | Sets and general map iteration | Composite types and allocation accounting | P2 | XL | Key order, exact quotas, Unicode keys | [Maps](../typed-maps.md) |
+| Optional/structured errors | Published alpha.12 supports concrete Option and Result and `?` in immutable function bindings | Generalized error model | Variants and match typing | P1 | L | Success/error paths, exhaustiveness | [Option and Result](../option-result.md) |
+| Records/structures | Published alpha.12 supports nominal records, field access, and nested binding patterns | Recursive layouts and field mutation | Nominal types and bounded layouts | P1 | XL | Nested fields, allocation, visibility | [Records](source-records.md) |
+| Enums/tagged variants | Published alpha.12 supports nominal variants and checked payload matching | Nested tag tests and recursive layouts | Composite types and exhaustiveness | P1 | L | Exhaustive/redundant patterns, nominal identity | [Variants](source-variants.md) |
 | Generics/type aliases | Missing | Type parameters, constraints, monomorphization policy | Composite types and stable IR | P2 | XL | Substitution, recursion bounds, diagnostics | Type-system design |
 | Arithmetic/comparison/logic | Strict primitive kinds and typed conditional expressions | Conditional expressions in constants or native emission | Typed expression nodes | P1 | M | Precedence, short circuit, dead-branch typing | Expressions |
 | BigInt | Published alpha.9 adds exact signed runtime arithmetic. Alpha.10 adds power, number theory, radix conversion, signed bitwise operations and divmod | Constant folding, large multiplication/division optimization and native lowering | Independent safe-Rust magnitude engine and shared Budget | P1 | L | Seeded Rust/Python oracles, budgets, CLI/module parity, opt-in large fixtures | [BigInt](../bigint.md) |
 | Indexing/slicing | Numeric vectors/windows, tile cells/lanes, tuple projection and fixed-array indexing | General strings/collections and multidimensional syntax | Composite types and text scalar policy | P1 | L | Bounds, visible windows, backing lifetime | Collection guides |
 | If/while/repeat | Implemented and bounded | General collection iteration/ranges | Iterator/range type design | P1 | L | Empty/range bounds, controls, budgets | Iteration grammar |
 | Break/continue/early return | Implemented with retirement | Labeled control only if justified | CFG and scope cleanup | P2 | M | Nested exits, contracts, retirement | Control flow |
-| Pattern matching | Missing | Patterns, exhaustiveness, binding analysis | Variants/composite types | P1 | L | Missing/redundant arms, scope joins | Match design |
+| Pattern matching | Published alpha.12 supports exhaustive tagged and scalar matching, and nested payload bindings | Guards and refutable nested patterns | Variants/composite types | P1 | L | Missing/redundant arms, scope joins | [Structured patterns](source-patterns.md) |
 | Typed functions | Implemented | First-class callables and coherent overload design | Callable types and captures | P1 | XL | Resolution, nested calls, captured lifetime | Functions/effects |
 | Named/default arguments | Implemented | Variadics only after collection/type design | Call signature representation | P2 | L | Ordering, duplicates, defaults, source sites | Argument rules |
 | Closures/higher-order functions | Missing | Capture policy and escape/lifetime semantics | Callable values, effect rules | P2 | XL | Recursive capture, frame cleanup, quotas | Closure design |

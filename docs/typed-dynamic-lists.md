@@ -1,7 +1,6 @@
-# Typed dynamic lists (development-only)
+# Typed dynamic lists
 
-> This is an unpublished compiler feature stacked on draft #265/#266. It is
-> not supported by the published Scarp v0.0.6-alpha.11 compiler.
+This feature is available in alpha.12 interpreter builds.
 
 Dynamic lists are **typed, immutable snapshots**, not mutable heap containers.
 Unlike fixed `array<T, N>`, a `list<T>` has no length in its type identity.
@@ -33,7 +32,7 @@ shadowed by a user-declared function of the same name:
 Arguments are positional and type-checked exactly. Runtime indexing uses a
 zero-based `integer` and E0079 on negative/out-of-range indices. Push rejects
 length > 4096 (E0078). Update operations charge proportional work and full
-fresh snapshot allocation **before** publishing a new value. All lists and
+fresh snapshot allocation **before** publishing a new value. Lists, maps and
 fixed arrays share the configured `ExecutionOptions.max_array_bytes`
 allocation budget; immutable aliases retain their original value. Full
 execution output is committed only on success. The byte allowance is logical

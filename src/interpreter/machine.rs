@@ -10,7 +10,7 @@ use crate::{
         DestructureStep, MatchTarget, PropagationPlan, ResolvedArgument, ResolvedCall,
         ResolvedExpression, ResolvedOperation, ResolvedProgram, ResolvedStatement,
     },
-    value::{Value, VariantValue},
+    value::Value,
 };
 
 enum Stage {
@@ -22,7 +22,7 @@ enum Stage {
 }
 enum Completion<'a> {
     Store(usize),
-    Propagate(usize, &'a PropagationPlan, Span),
+    Propagate(usize, &'a PropagationPlan),
     Destructure(&'a [DestructureStep], Span),
     Match(&'a [MatchTarget]),
     LiteralMatch(&'a [(MatchLiteral, usize)], usize, Span),
@@ -417,7 +417,7 @@ pub(super) fn prepare<'a>(
                         frame.expression = None;
                         match std::mem::replace(&mut frame.completion, Completion::Discard) {
                             Completion::Store(slot) => frame.environment[slot] = value,
-                            Completion::Propagate(slot, plan, span) => {
+                            Completion::Propagate(slot, plan) => {
                                 let Value::Variant(value) = value else {
                                     unreachable!("propagation operand has checked variant type");
                                 };
@@ -428,16 +428,7 @@ pub(super) fn prepare<'a>(
                                         .clone();
                                 } else {
                                     debug_assert_eq!(value.tag(), plan.failure_tag);
-                                    budget.charge_nominal_allocation(
-                                        VariantValue::allocation_bytes(),
-                                        span,
-                                        DiagnosticKind::VariantAllocation,
-                                    )?;
-                                    let forwarded = VariantValue::from_checked(
-                                        plan.outer.clone(),
-                                        plan.failure_tag,
-                                        value.payload().cloned(),
-                                    );
+                                    let forwarded = value.retype_checked(plan.outer.clone());
                                     frame.finish(program, Value::Variant(forwarded));
                                 }
                             }
@@ -768,7 +759,7 @@ pub(super) fn prepare<'a>(
                             frame.start(value, Completion::Store(*slot))
                         }
                         ResolvedStatement::Propagate { slot, value, plan } => {
-                            frame.start(value, Completion::Propagate(*slot, plan, operation.span))
+                            frame.start(value, Completion::Propagate(*slot, plan))
                         }
                         ResolvedStatement::Match { value, dispatch } => {
                             frame.start(value, Completion::Match(dispatch));

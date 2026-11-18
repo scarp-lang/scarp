@@ -176,3 +176,18 @@ fn native_backend_rejects_persistent_map_operations() {
         DiagnosticKind::NativeUnsupported
     );
 }
+
+#[test]
+fn removing_boundary_keys_keeps_canonical_order_and_prior_snapshot() {
+    let source = r#"
+        bind original = [map: "z": [list: 3], "a": [list: 1], "m": [list: 2]];
+        bind without_first = map_remove(original, "a");
+        bind without_last = map_remove(without_first, "z");
+        bind empty = map_remove(without_last, "m");
+        assert(map_keys(original) == [list: "a", "m", "z"]);
+        assert(map_keys(without_first) == [list: "m", "z"]);
+        assert(map_values(without_last) == [list: [list: 2]]);
+        assert(map_len(empty) == 0);
+    "#;
+    scarp::run(source, &mut Vec::new()).unwrap();
+}

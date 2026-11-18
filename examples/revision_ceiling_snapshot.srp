@@ -1,0 +1,3 @@
+bind stable = 12;
+bind rollback = 3;
+print(stable - rollback);

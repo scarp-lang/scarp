@@ -1,12 +1,8 @@
-# Concrete `option<T>` and `result<T, E>` — draft compiler slice
+# Concrete `option<T>` and `result<T, E>`
 
-> **Development branch only.** This feature is not included in published
-> Scarp v0.0.6-alpha.11. Its implementation, CI, and integration are still under
-> review in the stacked draft PR. Do not describe it as a stable language API.
-
-This slice introduces explicit, checked concrete specializations by lowering
-them into Scarp's existing immutable nominal variant implementation. It does
-**not** add user-defined type parameters or unchecked payload extraction.
+Scarp alpha.12 supports explicitly typed Option and Result as immutable
+nominal variants. Use a checked match or [explicit propagation](option-result-propagation.md)
+to extract a payload.
 
 ## Types and construction
 
@@ -50,21 +46,15 @@ bindings, and payload shape. A wrong payload or missing arm is diagnosed before
 execution. Matching evaluates the subject once and retires scoped bindings
 through the existing compiler plan.
 
-## Limitations and next development steps
+## Module interfaces and limits
 
-- **No explicit propagation yet.** Early returns must be spelled as ordinary
-  `return` statements inside matching branches. A future slice must define
-  and verify once-only expression evaluation, compatible enclosing function
-  return types, postconditions, purity, retirement, and transactional output.
-- This draft uses private synthetic nominal declarations for each concrete
-  specialization. Cross-file/module equivalence is **not yet guaranteed**;
-  canonical global specialization identity and linking require separate
-  validation. Do not rely on exporting these types across independent modules.
-- Constructor parameter inference, general generics, refutable nested tag
-  patterns, and native aggregate lowering are not included. Native backends
-  must retain their existing explicit composite-operation rejection.
-- The compiler resource, syntax-cache, editor, platform CI, and minimum-Rust
-  checks remain release gates. A green test on one runner alone is insufficient.
+The linker gives identical concrete specializations shared identity across
+imports. Nominal payload types retain their declaring module's identity and
+visibility. A public interface must expose only public nominal payload types.
+
+Constructor type arguments remain explicit. Refutable nested tag patterns and
+general generics are future work. The experimental native backends diagnose
+unsupported aggregate programs before emission.
 
 See `examples/typed_submission.srp` and
 `tests/source_option_result.rs` for the executable contract and diagnostics.

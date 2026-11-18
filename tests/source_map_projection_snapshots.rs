@@ -1,4 +1,4 @@
-use scarp::{diagnostics::DiagnosticKind, ExecutionOptions};
+use scarp::{diagnostics::DiagnosticKind, ExecutionOptions, RunError};
 
 fn execute(source: &str) -> String {
     let mut output = Vec::new();
@@ -9,8 +9,11 @@ fn execute(source: &str) -> String {
 #[test]
 fn persistent_projection_example_matches_golden_output() {
     assert_eq!(
-        execute(include_str!("../examples/map_projection_snapshots.srp")).as_bytes(),
-        include_bytes!("../examples/map_projection_snapshots.stdout")
+        execute(include_str!(
+            "../examples/map_string_projection_snapshots.srp"
+        ))
+        .as_bytes(),
+        include_bytes!("../examples/map_string_projection_snapshots.stdout")
     );
 }
 
@@ -30,20 +33,26 @@ fn boolean_keys_preserve_canonical_order_after_replacement() {
 
 #[test]
 fn projection_failure_rolls_back_prior_prints() {
-    let source = "print(\"before\"); bind values = map_values([map: 1: 2]); print(values);";
+    let source =
+        "print(\"before\"); bind m = [map: 1: 2]; bind values = map_values(m); print(values);";
     let mut bytes = Vec::new();
     let result = scarp::run_with_options(
         source,
         &mut bytes,
         ExecutionOptions {
             limits: scarp::ExecutionLimits {
-                max_steps: 1,
+                max_steps: 14,
                 max_prints: 100,
             },
             ..ExecutionOptions::default()
         },
-    );
-    assert!(result.is_err());
+    )
+    .unwrap_err();
+    let RunError::Diagnostic(error) = result else {
+        panic!("expected a runtime diagnostic");
+    };
+    assert_eq!(error.kind, DiagnosticKind::ExecutionLimit);
+    assert_eq!(&source[error.span.start..error.span.end], "map_values(m)");
     assert!(bytes.is_empty(), "failed execution must not commit output");
 }
 

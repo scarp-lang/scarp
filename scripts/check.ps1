@@ -22,7 +22,7 @@ try {
     Invoke-Cargo -CargoArguments @('fmt', '--all', '--', '--check')
     & rustfmt --edition 2021 --check scripts/benchmarks/compare.rs
     if ($LASTEXITCODE -ne 0) { throw 'Comparison harness formatting check failed' }
-    Invoke-Cargo -CargoArguments @('clippy', '--locked', '--all-targets', '--', '-D', 'warnings')
+    Invoke-Cargo -CargoArguments @('clippy', '--locked', '--all-targets', '--all-features', '--', '-D', 'warnings')
     Invoke-Cargo -CargoArguments @('test', '--locked')
     Invoke-Cargo -CargoArguments @('test', '--locked', '--release')
     Invoke-Cargo -CargoArguments @('build', '--locked')
@@ -99,6 +99,8 @@ try {
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', 'examples/inspection_json.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'modules', '--json', 'examples/inspection_json.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'explain', 'E0044')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/projects/task-board')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'test', '--json', '--require-tests', 'examples/projects/task-board')
 }
 finally {
     $env:CARGO_INCREMENTAL = $previousIncremental
