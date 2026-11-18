@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.6-alpha.13
+## 0.0.6-alpha.13 — published GitHub prerelease, 2026-11-17
 
 - Forward Option and Result failures without a second payload allocation.
 - Add caller-owned syntax and semantic cache quota updates and targeted semantic

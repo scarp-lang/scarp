@@ -476,10 +476,23 @@ impl ScalarExpressionIr {
 /// x86-64 ELF64 relocatable kernel. The ABI is experimental and is not the
 /// observable Scarp stdout/program-execution contract.
 pub(crate) fn emit_integer_kernel(source: &str) -> Result<Vec<u8>, Diagnostic> {
+    let ir = lower_integer_kernel(source)?;
+    elf64::emit(&ir)
+}
+
+pub(crate) fn emit_checked_integer_kernel(
+    source: &str,
+) -> Result<crate::native_object::CheckedElf64Kernel, Diagnostic> {
+    let ir = lower_integer_kernel(source)?;
+    elf64::emit_checked(&ir)
+}
+
+fn lower_integer_kernel(source: &str) -> Result<program::ScalarProgramIr, Diagnostic> {
     let program = crate::compile(source)?;
     crate::native_preflight::inspect(&program)?;
     let ir = program::ScalarProgramIr::lower(&program)?;
-    elf64::emit(ir.integer_kernel()?)
+    ir.integer_kernel()?;
+    Ok(ir)
 }
 
 /// Verify a private whole-program scalar IR, including all lowered expression

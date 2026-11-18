@@ -1,7 +1,12 @@
 # Feature completeness and development roadmap
 
+Published `0.0.6-alpha.13` adds cache retention and revision eviction APIs,
+workspace-generation checks for editor results, and Option/Result payload reuse.
+These are opt-in Rust host features; they do not constitute complete incremental
+compilation or a native executable backend.
+[Alpha.13 public notes](../releases/v0.0.6-alpha.13-publication.md)
+
 Published `0.0.6-alpha.12` adds structured data and the multi-module task board.
-Draft cache quota and revision eviction changes in PRs #276–#281 are development work.
 [Alpha.12 verification](../releases/v0.0.6-alpha.12-validation.md)
 
 Published alpha.11 adds exact Decimal values and typed decimal console input. [Alpha.11 verification](../releases/v0.0.6-alpha.11-validation.md)
