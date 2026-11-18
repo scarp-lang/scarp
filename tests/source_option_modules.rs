@@ -72,9 +72,9 @@ fn result_propagation_crosses_module_boundaries_with_exact_error_type() {
 #[test]
 fn imported_record_in_option_payload_canonicalizes_aliases() {
     let lib = r#"
-        pub record Item { count: integer }
+        pub record Item { counts: tuple<integer, array<integer, 2>> }
         pub pure funcra wrap(n: integer) -> option<record Item> {
-            return new option<record Item>::Some(new Item { count: n });
+            return new option<record Item>::Some(new Item { counts: (n, [array: 8, 9]) });
         }
     "#;
     let main = r#"
@@ -82,10 +82,10 @@ fn imported_record_in_option_payload_canonicalizes_aliases() {
         bind wrapped: option<record lib.Item> = lib.wrap(33);
         match on wrapped {
             case None {}
-            case Some(item) { print(item->count); }
+            case Some({counts: (count, [_, final_count])}) { print(count, final_count); }
         }
     "#;
-    assert_eq!(run(main, &[("lib.srp", lib)]), "33\n");
+    assert_eq!(run(main, &[("lib.srp", lib)]), "33 9\n");
 }
 
 #[test]

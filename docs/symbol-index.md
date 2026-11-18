@@ -137,11 +137,10 @@ metadata is logical indexing storage, not a process-memory measurement.
 Clones share read-only metadata; ordinary compiler execution and the JSON
 schema-v1 output are unchanged.
 
-These UTF-16 editor adapters are development embedding APIs, **not** features
-of the published v0.0.6-alpha.1 binaries. Both the strict conversion helpers (merged
-after v0.0.6-alpha.1) and this `EditorSnapshot` addition require a development checkout
-until a separately reviewed release. There is still no LSP protocol, change notification,
-cancellation service, incremental module cache or external editor deployment.
+These UTF-16 editor adapters are Rust embedding APIs available by alpha.13.
+Editor compilation caches whole validated graphs, and the constant cache can
+reuse individual folds after an edit. LSP integration, cancellation and
+module-level semantic reuse are outside the current editor API.
 See `tests/editor_snapshot.rs` and `examples/editor_snapshot.rs` for host
 integration and strict Unicode/CRLF regression coverage.
 
@@ -158,6 +157,12 @@ or import resolution. Load each request from a stable workspace view and
 check the generation on the same serialized path that applies edits and
 publishes results. Existing snapshot queries still validate per-document
 revisions, in the source order of that snapshot.
+
+`EditorCompilationCache::set_limits` adjusts retention for an existing cache.
+The cache evicts its oldest entries until the entry, source-byte, index-item,
+name-byte and line quotas all hold. Setting the entry quota to zero makes new
+compilations bypass storage. Issued snapshots keep their data and revisions,
+and the cache retains cumulative hit, miss, bypass and eviction counters.
 
 ## Limits and measured quantities
 

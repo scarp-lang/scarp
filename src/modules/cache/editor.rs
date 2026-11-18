@@ -204,11 +204,14 @@ impl Retained {
             name_bytes: self.name_bytes.checked_add(extra.name_bytes)?,
             lines: self.lines.checked_add(extra.lines)?,
         };
-        (total.source_bytes <= limits.graphs.max_retained_source_bytes
-            && total.index_items <= limits.max_retained_index_items
-            && total.name_bytes <= limits.max_retained_name_bytes
-            && total.lines <= limits.max_retained_lines)
-            .then_some(total)
+        total.fits(limits).then_some(total)
+    }
+
+    fn fits(self, limits: EditorCacheLimits) -> bool {
+        self.source_bytes <= limits.graphs.max_retained_source_bytes
+            && self.index_items <= limits.max_retained_index_items
+            && self.name_bytes <= limits.max_retained_name_bytes
+            && self.lines <= limits.max_retained_lines
     }
 
     fn remove(&mut self, entry: Self) {
@@ -283,6 +286,20 @@ impl EditorCompilationCache {
             bypasses: 0,
             evictions: 0,
         }
+    }
+
+    /// Change the cache's logical retention quotas and evict oldest entries
+    /// until all quotas hold. Existing results and counters retain their state.
+    pub fn set_limits(&mut self, limits: EditorCacheLimits) {
+        self.limits = limits;
+        while self.entries.len() > limits.graphs.max_entries || !self.retained.fits(limits) {
+            self.evict_oldest();
+        }
+    }
+
+    /// Return the current logical retention quotas.
+    pub fn limits(&self) -> EditorCacheLimits {
+        self.limits
     }
 
     pub fn stats(&self) -> EditorCacheStats {
@@ -453,12 +470,16 @@ impl EditorCompilationCache {
                 self.entries.push_back(entry);
                 return CacheStatus::Stored;
             }
-            let old = self
-                .entries
-                .pop_front()
-                .expect("the entry fits an empty cache");
-            self.retained.remove(old.retained);
-            self.evictions = self.evictions.saturating_add(1);
+            self.evict_oldest();
         }
+    }
+
+    fn evict_oldest(&mut self) {
+        let old = self
+            .entries
+            .pop_front()
+            .expect("an empty cache fits any quota");
+        self.retained.remove(old.retained);
+        self.evictions = self.evictions.saturating_add(1);
     }
 }

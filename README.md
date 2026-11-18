@@ -1,7 +1,17 @@
 # Scarp
 
 The latest published prerelease is
-[0.0.6-alpha.12](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.12).
+[0.0.6-alpha.13](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.13).
+**0.0.6-alpha.13** improves Option/Result propagation without duplicate payload
+allocation, adds opt-in syntax/semantic cache retention controls and source-revision
+eviction, and provides workspace-generation checks for editor diagnostics and
+navigation. It also adds regression fixtures for map projections and cache
+boundaries. These are interpreter and Rust embedding improvements, **not** general
+native executable compilation.
+[Release notes](docs/releases/v0.0.6-alpha.13-publication.md) ·
+[Published source](https://github.com/scarp-lang/scarp/tree/e755fda37cdaeed29434e848cb5dd41f2f2e7eb2)
+
+**Earlier published 0.0.6-alpha.12:**
 **0.0.6-alpha.12** adds records, variants, nested patterns, typed Option and Result, immutable
 lists and ordered maps. The [task board project](docs/task-board.md) exercises
 these features across modules. Packages cover Windows x64, Linux x64 and
