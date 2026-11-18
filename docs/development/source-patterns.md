@@ -32,6 +32,10 @@ one-element tuple pattern. Every group needs at least one entry. Use `_` to
 ignore an entire value. Duplicate fields and duplicate binding names are
 errors. Match bindings are immutable and visible only in their arm.
 
+The alpha.14 parser reports missing and duplicate commas at the offending
+token. A mismatched delimiter or end of input identifies the delimiter needed
+by the innermost open group. These diagnostics use `E0004` and UTF-8 byte spans.
+
 The compiler checks each shape statically, including shapes in unselected
 arms. Matching still dispatches by tag. A well-typed payload pattern succeeds
 for every value of the declared payload type. Nested tag tests, literal

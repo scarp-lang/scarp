@@ -39,3 +39,43 @@ fn valid_comma_delimited_and_trailing_comma_patterns_remain_accepted() {
         scarp::parse(source).expect("valid destructuring punctuation");
     }
 }
+
+#[test]
+fn malformed_group_diagnostics_identify_the_innermost_missing_delimiter() {
+    for (source, found, expected) in [
+        ("bind (first, [second, third)) = item;", ")", "']'"),
+        ("bind {x: left, y: right] = item;", "]", "'}'"),
+        ("bind [left, right = item;", "=", "']'"),
+        ("// 🌍\r\nbind (outer, {x: value,", "", "'}'"),
+        ("bind (value,", "", "')'"),
+    ] {
+        let error = scarp::parse(source).unwrap_err();
+        assert_eq!(error.kind, DiagnosticKind::UnexpectedToken);
+        assert_eq!(&source[error.span.start..error.span.end], found);
+        if found.is_empty() {
+            assert_eq!(error.span.start, source.len());
+        }
+        assert!(error.message.starts_with(&format!("expected {expected},")));
+    }
+}
+
+#[test]
+fn duplicate_commas_and_empty_groups_have_distinct_diagnostics() {
+    for source in ["bind (left,, right) = item;", "bind {x: left,,} = item;"] {
+        let error = scarp::parse(source).unwrap_err();
+        let duplicate = source.find(",,").unwrap() + 1;
+        assert_eq!(error.kind, DiagnosticKind::UnexpectedToken);
+        assert_eq!(
+            (error.span.start, error.span.end),
+            (duplicate, duplicate + 1)
+        );
+        assert!(error
+            .message
+            .contains("where a destructuring pattern member is required"));
+    }
+    for source in ["bind () = item;", "bind [] = item;", "bind {} = item;"] {
+        let error = scarp::parse(source).unwrap_err();
+        assert_eq!(error.kind, DiagnosticKind::UnexpectedToken);
+        assert!(error.message.contains("requires at least one member"));
+    }
+}

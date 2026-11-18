@@ -115,18 +115,43 @@ impl Parser<'_> {
                 groups.pop();
                 continue;
             }
+            let token = match self.current() {
+                None
+                | Some(Token {
+                    kind:
+                        TokenKind::Eof
+                        | TokenKind::RightParen
+                        | TokenKind::RightBracket
+                        | TokenKind::RightBrace
+                        | TokenKind::Equal,
+                    ..
+                }) => {
+                    return Err(self.expected(close_label).with_help(format!(
+                        "close the destructuring pattern with {close_label}"
+                    )));
+                }
+                Some(token) => token,
+            };
             if !group.expect_member {
-                self.punctuation(
-                    TokenKind::Comma,
-                    "',' between destructuring pattern members",
-                )?;
+                if token.kind != TokenKind::Comma {
+                    return Err(self
+                        .expected("',' between destructuring pattern members")
+                        .with_help(
+                            "separate consecutive destructuring pattern members with a comma",
+                        ));
+                }
+                self.advance();
                 group.expect_member = true;
                 continue;
             }
 
-            let token = self
-                .current()
-                .ok_or_else(|| self.expected("a pattern member"))?;
+            if token.kind == TokenKind::Comma {
+                return Err(ParseError::new(
+                    DiagnosticKind::UnexpectedToken,
+                    token.span,
+                    "unexpected ',' where a destructuring pattern member is required",
+                ));
+            }
             let (max, limit) = group.kind.limit();
             if group.arity == max {
                 return Err(ParseError::new(
