@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.6-alpha.14 — development candidate
+
+- Report missing and duplicate separators, mismatched delimiters and end of
+  input at the relevant nested destructuring group.
+- Allow Rust hosts to adjust editor-cache retention quotas on a live cache.
+  FIFO eviction preserves previously returned programs and editor snapshots.
+- Verify cold and warm editor analysis across shared dependency edits and
+  cover persistent map projection output and rollback.
+- Add an experimental Linux x86-64 ELF64 kernel API for checked integer
+  arithmetic, with a status and source span for the first failure.
+- Reject native repeat operations that alias the count and index slots.
+
 ## 0.0.6-alpha.13 — published GitHub prerelease, 2026-11-17
 
 - Forward Option and Result failures without a second payload allocation.

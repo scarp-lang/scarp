@@ -8,7 +8,8 @@ you are running matches the documentation. Start with
 
 | Goal | Choose | What to expect |
 | --- | --- | --- |
-| Use the latest **published** experimental prerelease | [v0.0.6-alpha.5](releases/v0.0.6-alpha.5-publication.md) | Deterministic Top-P, Pearson correlation and dependent ELF64 integer-kernel Rust API |
+| Use the latest **published** experimental prerelease | [v0.0.6-alpha.13](releases/v0.0.6-alpha.13-publication.md) | Structured data, Option and Result, CLI project tests, and opt-in Rust cache and editor APIs |
+| Reproduce the Top-P and Pearson correlation milestone | [v0.0.6-alpha.5](releases/v0.0.6-alpha.5-publication.md) | Deterministic Top-P, Pearson correlation and dependent ELF64 integer-kernel Rust API |
 | Reproduce sampled calculus and cosine similarity milestone | [v0.0.6-alpha.4](releases/v0.0.6-alpha.4-publication.md) | Published earlier release with single-binding ELF64 object API |
 | Reproduce Top-K and temperature softmax | v0.0.6-alpha.3 | Deterministic Top-K and private scalar IR |
 | Follow the historical module milestone | v0.0.5-alpha.1 | Explicit imports, public/private functions and scalar constants |
@@ -18,11 +19,9 @@ you are running matches the documentation. Start with
 | Reproduce the variables milestone | v0.0.2 | Variables, scopes, strings, booleans and decisions |
 | Reproduce the first interpreter | v0.0.1 | Printing and checked integer expressions |
 
-As of 9 November 2026, `Cargo.toml` on `main` declares
-`0.0.6-alpha.5`, which has been published as a GitHub experimental
-prerelease from [the exact reviewed source](releases/v0.0.6-alpha.5-validation.md).
-The [public tag and seven verified uploaded assets](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5)
-are separate from later maintenance commits on `main`.
+Download the archive for Windows x64, Linux x64 or macOS Apple Silicon from
+the [alpha.13 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.13).
+Its published source is `e755fda37cdaeed29434e848cb5dd41f2f2e7eb2`.
 A Cargo version alone does not prove source identity, and language syntax
 and APIs are not stable. Alpha.5 capabilities are unavailable in earlier
 alpha.4 downloads.
@@ -42,10 +41,10 @@ cargo build --locked --offline
 cargo run -- version
 ```
 
-Expected version for the current alpha.5 checkout or published binary:
+Expected version for the published alpha.13 binary:
 
 ```text
-scarp 0.0.6-alpha.5
+scarp 0.0.6-alpha.13
 ```
 
 Run commands from the repository root so relative example paths resolve:
@@ -93,7 +92,7 @@ development, `cargo run -- ...` selects the current checkout explicitly.
 
 Downloaded release archives already contain an executable and do not require
 Rust for running programs. For the latest **published** prerelease, consult the
-[v0.0.6-alpha.5 verification record](releases/v0.0.6-alpha.5-validation.md).
+[v0.0.6-alpha.13 release notes](releases/v0.0.6-alpha.13-publication.md).
 Select Windows x64 MSVC,
 Linux x64 GNU, or Apple Silicon macOS to match the host. Verify the archive's
 SHA-256 against the sidecar from that **same release** before extracting. CI

@@ -10,6 +10,12 @@ preserves its own source, CI matrix and asset verification history.
 Every future publication requires separate owner authorization, exact source,
 and fresh qualification.
 
+The fulfilled alpha.13 publication request was retired after verifying its
+annotated tag and all seven public assets against the exact source. The
+alpha.14 development branch contains candidate metadata and draft release
+notes. A new publication request requires maintainer approval for the full
+qualified source SHA.
+
 The [alpha.11 verification record](releases/v0.0.6-alpha.11-validation.md)
 preserves its separate source and digests.
 
