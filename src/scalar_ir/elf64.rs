@@ -5,6 +5,7 @@ use super::{invalid, program::ScalarProgramIr, Operation, Unary};
 use crate::{
     ast::BinaryOperator,
     diagnostics::{Diagnostic, Span},
+    native_object::{CheckedElf64Kernel, CHECKED_KERNEL_INTEGER_OVERFLOW},
 };
 
 const MAX_TEXT_BYTES: usize = 200_000;
@@ -16,6 +17,12 @@ fn failure() -> Diagnostic {
 
 struct Code {
     data: Vec<u8>,
+    overflow_sites: Vec<OverflowSite>,
+}
+
+struct OverflowSite {
+    displacement: usize,
+    span: Span,
 }
 
 impl Code {
@@ -27,7 +34,10 @@ impl Code {
             .ok_or_else(failure)?;
         let mut data = Vec::new();
         data.try_reserve_exact(maximum).map_err(|_| failure())?;
-        Ok(Self { data })
+        Ok(Self {
+            data,
+            overflow_sites: Vec::new(),
+        })
     }
 
     fn push(&mut self, bytes: &[u8]) -> Result<(), Diagnostic> {
@@ -68,6 +78,47 @@ impl Code {
         self.push(&[0x48, 0x89, 0x84, 0x24])?;
         self.push(&Self::slot(dst)?)
     }
+
+    fn guard_overflow(&mut self, span: Span) -> Result<(), Diagnostic> {
+        let span_id = u32::try_from(self.overflow_sites.len()).map_err(|_| failure())?;
+        self.overflow_sites.try_reserve(1).map_err(|_| failure())?;
+        // The second SysV return eightbyte contains status and span ID. MOV
+        // preserves the overflow flag from the immediately preceding operation.
+        self.push(&[0x48, 0xba])?; // movabs rdx, imm64
+        self.push(&CHECKED_KERNEL_INTEGER_OVERFLOW.to_le_bytes())?;
+        self.push(&span_id.to_le_bytes())?;
+        self.push(&[0x0f, 0x80])?; // jo rel32
+        let displacement = self.data.len();
+        self.push(&[0; 4])?;
+        self.overflow_sites
+            .push(OverflowSite { displacement, span });
+        Ok(())
+    }
+
+    fn finish_checked_return(&mut self) -> Result<(), Diagnostic> {
+        self.push(&[0x31, 0xd2])?; // success: xor edx, edx
+        if self.overflow_sites.is_empty() {
+            return Ok(());
+        }
+        let clear_failed_value = [0x31, 0xc0]; // failure: xor eax, eax
+        self.push(&[0xeb, clear_failed_value.len() as u8])?; // success skips failure
+        let failure_target = self.data.len();
+        self.push(&clear_failed_value)?;
+        for site in &self.overflow_sites {
+            let displacement = site
+                .displacement
+                .checked_add(4)
+                .and_then(|end| failure_target.checked_sub(end))
+                .and_then(|offset| i32::try_from(offset).ok())
+                .ok_or_else(failure)?;
+            put(
+                &mut self.data,
+                site.displacement,
+                &displacement.to_le_bytes(),
+            )?;
+        }
+        Ok(())
+    }
 }
 
 fn temporary(base: usize, register: usize) -> Result<usize, Diagnostic> {
@@ -77,7 +128,7 @@ fn temporary(base: usize, register: usize) -> Result<usize, Diagnostic> {
 /// Keep final user bindings in a separate stack region from the ephemeral
 /// registers reused for each initializer. The verified IR guarantees
 /// definite initialization before any Load; no native input pointer exists.
-fn text(program: &ScalarProgramIr) -> Result<Vec<u8>, Diagnostic> {
+fn text(program: &ScalarProgramIr, checked_arithmetic: bool) -> Result<Code, Diagnostic> {
     let slot_count = program.integer_slot_count();
     let mut max_registers = 0usize;
     let mut total_steps = 0usize;
@@ -124,6 +175,16 @@ fn text(program: &ScalarProgramIr) -> Result<Vec<u8>, Diagnostic> {
                     code.push(&[0x48, 0xf7, 0xd0])?; // not rax
                     code.store_rax(temporary(slot_count, *dst)?)?;
                 }
+                Operation::Unary {
+                    dst,
+                    src,
+                    op: Unary::Negate,
+                } if checked_arithmetic => {
+                    code.load_rax(temporary(slot_count, *src)?)?;
+                    code.push(&[0x48, 0xf7, 0xd8])?; // neg rax
+                    code.guard_overflow(step.span)?;
+                    code.store_rax(temporary(slot_count, *dst)?)?;
+                }
                 Operation::Binary {
                     dst,
                     left,
@@ -132,13 +193,23 @@ fn text(program: &ScalarProgramIr) -> Result<Vec<u8>, Diagnostic> {
                 } => {
                     code.load_rax(temporary(slot_count, *left)?)?;
                     code.load_rcx(temporary(slot_count, *right)?)?;
-                    let instruction = match op {
-                        BinaryOperator::BitAnd => [0x48, 0x21, 0xc8],
-                        BinaryOperator::BitOr => [0x48, 0x09, 0xc8],
-                        BinaryOperator::BitXor => [0x48, 0x31, 0xc8],
+                    let (instruction, can_overflow): (&[u8], bool) = match op {
+                        BinaryOperator::BitAnd => (&[0x48, 0x21, 0xc8], false),
+                        BinaryOperator::BitOr => (&[0x48, 0x09, 0xc8], false),
+                        BinaryOperator::BitXor => (&[0x48, 0x31, 0xc8], false),
+                        BinaryOperator::Add if checked_arithmetic => (&[0x48, 0x01, 0xc8], true),
+                        BinaryOperator::Subtract if checked_arithmetic => {
+                            (&[0x48, 0x29, 0xc8], true)
+                        }
+                        BinaryOperator::Multiply if checked_arithmetic => {
+                            (&[0x48, 0x0f, 0xaf, 0xc1], true)
+                        }
                         _ => return Err(invalid(step.span)),
                     };
-                    code.push(&instruction)?;
+                    code.push(instruction)?;
+                    if can_overflow {
+                        code.guard_overflow(step.span)?;
+                    }
                     code.store_rax(temporary(slot_count, *dst)?)?;
                 }
                 _ => return Err(invalid(step.span)),
@@ -148,12 +219,15 @@ fn text(program: &ScalarProgramIr) -> Result<Vec<u8>, Diagnostic> {
         code.store_rax(slot)?;
     }
 
-    // RAX still contains the LAST store value, which is the experimental
-    // kernel result. Restore our stack and preserve all callee-save registers.
+    if checked_arithmetic {
+        code.finish_checked_return()?;
+    }
+    // Both return paths restore the same stack frame and leave callee-saved
+    // registers untouched. On success RAX still holds the final store value.
     code.push(&[0x48, 0x81, 0xc4])?;
     code.push(&stack_size.to_le_bytes())?;
     code.push(&[0xc3])?;
-    Ok(code.data)
+    Ok(code)
 }
 
 fn aligned(value: usize, alignment: usize) -> Result<usize, Diagnostic> {
@@ -216,17 +290,34 @@ fn section(
 }
 
 pub(super) fn emit(program: &ScalarProgramIr) -> Result<Vec<u8>, Diagnostic> {
-    let machine = text(program)?;
+    let code = text(program, false)?;
+    object(&code.data, b"\0scarp_scalar_kernel\0")
+}
+
+pub(super) fn emit_checked(program: &ScalarProgramIr) -> Result<CheckedElf64Kernel, Diagnostic> {
+    let code = text(program, true)?;
+    let object = object(&code.data, b"\0scarp_checked_scalar_kernel\0")?;
+    let mut failure_spans = Vec::new();
+    failure_spans
+        .try_reserve_exact(code.overflow_sites.len())
+        .map_err(|_| failure())?;
+    failure_spans.extend(code.overflow_sites.into_iter().map(|site| site.span));
+    Ok(CheckedElf64Kernel {
+        object,
+        failure_spans,
+    })
+}
+
+fn object(machine: &[u8], strings: &[u8]) -> Result<Vec<u8>, Diagnostic> {
     // Offsets are into shstrtab, starting with the required NUL name.
     const SHSTR: &[u8] = b"\0.text\0.symtab\0.strtab\0.shstrtab\0.note.GNU-stack\0";
-    const STR: &[u8] = b"\0scarp_scalar_kernel\0";
     let text_offset = aligned(64, 16)?;
     let sym_offset = aligned(
         text_offset.checked_add(machine.len()).ok_or_else(failure)?,
         8,
     )?;
     let str_offset = sym_offset.checked_add(48).ok_or_else(failure)?;
-    let shstr_offset = str_offset.checked_add(STR.len()).ok_or_else(failure)?;
+    let shstr_offset = str_offset.checked_add(strings.len()).ok_or_else(failure)?;
     let header_offset = aligned(
         shstr_offset.checked_add(SHSTR.len()).ok_or_else(failure)?,
         8,
@@ -250,14 +341,14 @@ pub(super) fn emit(program: &ScalarProgramIr) -> Result<Vec<u8>, Diagnostic> {
     u16at(&mut object, 60, 6)?;
     u16at(&mut object, 62, 4)?; // .shstrtab index
 
-    put(&mut object, text_offset, &machine)?;
+    put(&mut object, text_offset, machine)?;
     let mut symbols = [0u8; 48]; // null symbol and one global function
     u32at(&mut symbols, 24, 1)?; // name offset in .strtab
     symbols[28] = 0x12; // STB_GLOBAL | STT_FUNC
     u16at(&mut symbols, 30, 1)?; // .text section
     u64at(&mut symbols, 40, machine.len() as u64)?;
     put(&mut object, sym_offset, &symbols)?;
-    put(&mut object, str_offset, STR)?;
+    put(&mut object, str_offset, strings)?;
     put(&mut object, shstr_offset, SHSTR)?;
 
     // Null, executable .text, symtab, strtab, shstrtab, GNU noexec-stack.
@@ -297,7 +388,7 @@ pub(super) fn emit(program: &ScalarProgramIr) -> Result<Vec<u8>, Diagnostic> {
         3,
         0,
         str_offset,
-        STR.len(),
+        strings.len(),
         0,
         0,
         1,
