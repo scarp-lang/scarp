@@ -91,6 +91,30 @@ fn assert_equivalent(cached: &CachedEditorProgram, cold: &IndexedProgram, expect
         .write_references_json(&mut cold_references)
         .unwrap();
     assert_eq!(warm_references, cold_references);
+
+    let mut warm_inventory = Vec::new();
+    let mut cold_inventory = Vec::new();
+    cached
+        .program
+        .write_inspection_json(&mut warm_inventory)
+        .unwrap();
+    cold.program()
+        .write_inspection_json(&mut cold_inventory)
+        .unwrap();
+    assert_eq!(warm_inventory, cold_inventory);
+}
+
+fn assert_same_diagnostic(
+    actual: &modules::ModuleDiagnostic,
+    expected: &modules::ModuleDiagnostic,
+) {
+    assert_eq!(actual.diagnostic, expected.diagnostic);
+    assert_eq!(actual.render(), expected.render());
+    let mut warm_json = Vec::new();
+    let mut cold_json = Vec::new();
+    actual.write_json(&mut warm_json).unwrap();
+    expected.write_json(&mut cold_json).unwrap();
+    assert_eq!(warm_json, cold_json);
 }
 
 #[test]
@@ -115,27 +139,30 @@ fn shared_module_edits_have_cold_warm_symbol_and_runtime_parity() {
     assert_eq!(output(&original.program), b"6 7\n");
     assert_eq!(changed.program.modules().len(), 4);
 
-    sources
-        .set_document("shared.srp", "// नया 🌍\r\npub bind other = 10;", 3)
-        .unwrap();
-    let failure = cached(&sources, &mut syntax, &mut editor).unwrap_err();
-    let EditorCompileError::Module(failure) = failure else {
-        panic!("expected a missing imported declaration")
-    };
-    let expected = cold(&sources).unwrap_err();
-    assert_eq!(failure.diagnostic, expected.diagnostic);
-    assert_eq!(failure.render(), expected.render());
+    for (revision, source) in [
+        (3, "// नया 🌍\r\npub bind other = 10;"),
+        (4, "// नया 🌍\r\npub bind value = \"ten\";"),
+    ] {
+        sources
+            .set_document("shared.srp", source, revision)
+            .unwrap();
+        let failure = cached(&sources, &mut syntax, &mut editor).unwrap_err();
+        let EditorCompileError::Module(failure) = failure else {
+            panic!("expected a compiler diagnostic after changing the shared export")
+        };
+        assert_same_diagnostic(&failure, &cold(&sources).unwrap_err());
+    }
     assert_eq!(output(&changed.program), b"11 12\n");
 
     // Returning to the same content can reuse an immutable compiled program,
     // but the editor snapshot must reflect the newly supplied document revision.
     sources
-        .set_document("shared.srp", "// नया 🌍\r\npub bind value = 10;", 4)
+        .set_document("shared.srp", "// नया 🌍\r\npub bind value = 10;", 5)
         .unwrap();
     let restored = cached(&sources, &mut syntax, &mut editor).unwrap();
     assert_eq!(restored.status, CacheStatus::Hit);
     assert_equivalent(&restored, &cold(&sources).unwrap(), b"11 12\n");
-    assert_eq!(restored.snapshot.ensure_current(&[1, 1, 4, 1]), Ok(()));
+    assert_eq!(restored.snapshot.ensure_current(&[1, 1, 5, 1]), Ok(()));
 }
 
 #[test]
@@ -171,8 +198,7 @@ fn diamond_load_failures_and_reopening_preserve_cold_warm_parity() {
             panic!("expected a current load diagnostic");
         };
         assert_eq!(actual.diagnostic.kind, expected_kind);
-        assert_eq!(actual.diagnostic, expected.diagnostic);
-        assert_eq!(actual.render(), expected.render());
+        assert_same_diagnostic(&actual, &expected);
 
         let warm = modules::load_with_syntax_cache("main.srp", &sources, limits, &mut syntax);
         stale_analyses.push((
@@ -200,8 +226,7 @@ fn diamond_load_failures_and_reopening_preserve_cold_warm_parity() {
         modules::load_with_syntax_cache("main.srp", &sources, too_few_files, &mut syntax)
             .unwrap_err();
     assert_eq!(warm_error.diagnostic.kind, DiagnosticKind::ModuleLimit);
-    assert_eq!(warm_error.diagnostic, cold_error.diagnostic);
-    assert_eq!(warm_error.render(), cold_error.render());
+    assert_same_diagnostic(&warm_error, &cold_error);
 
     let restored = cached(&sources, &mut syntax, &mut editor).unwrap();
     assert_eq!(restored.status, CacheStatus::Hit);
