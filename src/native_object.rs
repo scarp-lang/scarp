@@ -31,17 +31,20 @@ pub struct CheckedElf64Kernel {
 /// Runtime ABI status for signed integer arithmetic overflow.
 pub const CHECKED_KERNEL_INTEGER_OVERFLOW: u32 = 1;
 
+/// Runtime ABI status for a zero divisor in signed division or remainder.
+pub const CHECKED_KERNEL_DIVISION_BY_ZERO: u32 = 2;
+
 /// Emit a deterministic, freestanding x86-64 ELF64 checked integer kernel.
 ///
 /// The distinct SysV AMD64 symbol `scarp_checked_scalar_kernel` takes no
 /// arguments and returns a C struct `{ int64_t value; uint32_t status;
 /// uint32_t span_id; }`. Success returns the last binding value, status zero
-/// and span ID zero. Overflow returns zero as the value and identifies the
-/// operator in `failure_spans`.
+/// and span ID zero. Failure returns zero as the value, a nonzero status and
+/// the index of the operator in `failure_spans`.
 ///
-/// The linear binding subset adds signed addition, subtraction, multiplication
-/// and negation to the bitwise kernel's expressions. Other operations and
-/// configurable interpreter execution budgets are outside this experimental ABI.
+/// The linear binding subset adds signed addition, subtraction, multiplication,
+/// negation, division and remainder to the bitwise kernel's expressions.
+/// Configurable interpreter execution budgets are outside this experimental ABI.
 pub fn emit_elf64_checked_integer_kernel(source: &str) -> Result<CheckedElf64Kernel, Diagnostic> {
     crate::scalar_ir::emit_checked_integer_kernel(source)
 }

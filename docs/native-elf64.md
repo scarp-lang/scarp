@@ -76,9 +76,10 @@ is embedded in output. Unsupported input yields no object or partial file.
 ## Experimental checked integer kernel
 
 `native_object::emit_elf64_checked_integer_kernel` emits a separate kernel
-for the same linear binding subset and adds checked signed `+`, `-`, `*`
-and unary `-`. Its distinct symbol is `scarp_checked_scalar_kernel`. The
-existing bitwise-only API and symbol retain their original signatures.
+for the same linear binding subset and adds checked signed `+`, `-`, `*`,
+unary `-`, division `/`, and remainder `%`. Its distinct symbol is
+`scarp_checked_scalar_kernel`. The existing bitwise-only API and symbol retain
+their original signatures.
 
 The checked symbol uses the SysV AMD64 calling convention and takes no
 arguments. Its return value has this C layout:
@@ -94,16 +95,21 @@ extern struct scarp_checked_result scarp_checked_scalar_kernel(void);
 ```
 
 Status zero returns the last binding value and a zero span ID. Status one
-(`CHECKED_KERNEL_INTEGER_OVERFLOW`) returns a zero value and the index of the
-first failing operator in the Rust result's `failure_spans` table. The
-table uses half-open UTF-8 byte offsets in the original source. A host
-consults it only when status is nonzero. The checked emitter preserves
-interpreter operand order, so an earlier overflow terminates before a later
-operator can run. Both return paths restore the same stack frame.
+(`CHECKED_KERNEL_INTEGER_OVERFLOW`) indicates signed overflow, including
+`i64::MIN / -1` and `i64::MIN % -1`. Status two
+(`CHECKED_KERNEL_DIVISION_BY_ZERO`) indicates a zero divisor. Division truncates
+toward zero and nonzero remainder takes the sign of the dividend.
+
+Failure returns a zero value and the index of the first failing operator in
+the Rust result's `failure_spans` table. The table uses half-open UTF-8 byte
+offsets in the original source. A host consults it only when status is nonzero.
+The checked emitter preserves interpreter operand order, so an earlier failure
+terminates before a later operator can run. Both return paths restore the same
+stack frame.
 
 The checked emitter applies the same preflight and object-size limits. Its
-bounded linear programs use no callbacks or external references. Division,
-remainder, shifts, comparisons, branches, and configurable interpreter work
+bounded linear programs use no callbacks or external references. Shifts,
+comparisons, branches, and configurable interpreter work
 limits are outside this initial checked ABI. It is available through the Rust
 API, and generated objects still target Linux x86-64 ELF64.
 

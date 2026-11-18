@@ -5,7 +5,7 @@ use scarp::{
 };
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-use scarp::native_object::CHECKED_KERNEL_INTEGER_OVERFLOW;
+use scarp::native_object::{CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_INTEGER_OVERFLOW};
 
 // The expected statuses and byte spans below come from interpreter execution.
 const CASES: &[&str] = &[
@@ -22,9 +22,27 @@ const CASES: &[&str] = &[
     "bind left = -9223372036854775808; bind result = -left;",
     "bind left = -9223372036854775808; bind result = left * -1;",
     "bind max = 9223372036854775807; bind result = (1 + 1) + (max + 1) + (max * 2);",
+    "bind result = 7 / 3;",
+    "bind result = -7 / 3;",
+    "bind result = 7 / -3;",
+    "bind result = -7 / -3;",
+    "bind result = 7 % 3;",
+    "bind result = -7 % 3;",
+    "bind result = 7 % -3;",
+    "bind result = -7 % -3;",
+    "bind minimum = -9223372036854775808; bind result = minimum / 1;",
+    "bind result = -9223372036854775807 / -1;",
+    "bind minimum = -9223372036854775808; bind result = minimum % minimum;",
+    "bind dividend = -7; bind divisor = 3; bind result = (dividend / divisor) + (dividend % divisor);",
+    "bind minimum = -9223372036854775808; bind result = minimum / -1;",
+    "bind minimum = -9223372036854775808; bind result = minimum % -1;",
+    "// भिन्न 🌍\r\nbind divisor = 0; bind result = 11 / divisor;",
+    "bind result = -9223372036854775808 % 0;",
+    "bind max = 9223372036854775807; bind result = (max + 1) + (7 / 0);",
+    "bind max = 9223372036854775807; bind result = (7 % 0) + (max + 1);",
 ];
 
-fn interpreter_result(source: &str) -> Result<i64, Span> {
+fn interpreter_result(source: &str) -> Result<i64, (DiagnosticKind, Span)> {
     let mut output = Vec::new();
     match scarp::run(&format!("{source} print(result);"), &mut output) {
         Ok(()) => Ok(std::str::from_utf8(&output)
@@ -33,9 +51,15 @@ fn interpreter_result(source: &str) -> Result<i64, Span> {
             .parse()
             .unwrap()),
         Err(RunError::Diagnostic(error)) => {
-            assert_eq!(error.kind, DiagnosticKind::ArithmeticOverflow, "{source}");
+            assert!(
+                matches!(
+                    error.kind,
+                    DiagnosticKind::ArithmeticOverflow | DiagnosticKind::DivisionByZero
+                ),
+                "{source}"
+            );
             assert!(output.is_empty(), "{source}");
-            Err(error.span)
+            Err((error.kind, error.span))
         }
         Err(error) => panic!("interpreter failed to write captured output: {error}"),
     }
@@ -56,10 +80,10 @@ fn object_and_operator_span_table_are_deterministic() {
         for span in &kernel.failure_spans {
             assert!(matches!(
                 source.get(span.start..span.end),
-                Some("+" | "-" | "*")
+                Some("+" | "-" | "*" | "/" | "%")
             ));
         }
-        if let Err(span) = interpreter_result(source) {
+        if let Err((_, span)) = interpreter_result(source) {
             assert!(kernel.failure_spans.contains(&span), "{source}");
         }
     }
@@ -69,11 +93,21 @@ fn object_and_operator_span_table_are_deterministic() {
 }
 
 #[test]
+fn each_division_or_remainder_records_one_operator_span_for_both_failures() {
+    let source = "bind result = 7 / 3 % 2;";
+    let kernel = emit_elf64_checked_integer_kernel(source).unwrap();
+    let operators = kernel
+        .failure_spans
+        .iter()
+        .map(|span| &source[span.start..span.end])
+        .collect::<Vec<_>>();
+    assert_eq!(operators, ["/", "%"]);
+}
+
+#[test]
 fn checked_subset_rejects_other_operations_and_keeps_the_legacy_abi() {
     for source in [
         "",
-        "bind result = 4 / 2;",
-        "bind result = 4 % 2;",
         "bind result = 4 << 2;",
         "bind result = 4 < 2;",
         "var result = 1; result += 2;",
@@ -83,12 +117,17 @@ fn checked_subset_rejects_other_operations_and_keeps_the_legacy_abi() {
         let error = emit_elf64_checked_integer_kernel(source).unwrap_err();
         assert_eq!(error.kind, DiagnosticKind::NativeUnsupported, "{source}");
     }
-    let source = "bind result = 4 + 2;";
-    assert!(emit_elf64_checked_integer_kernel(source).is_ok());
-    assert_eq!(
-        emit_elf64_integer_kernel(source).unwrap_err().kind,
-        DiagnosticKind::NativeUnsupported
-    );
+    for source in [
+        "bind result = 4 + 2;",
+        "bind result = 4 / 2;",
+        "bind result = 4 % 2;",
+    ] {
+        assert!(emit_elf64_checked_integer_kernel(source).is_ok());
+        assert_eq!(
+            emit_elf64_integer_kernel(source).unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
+    }
 }
 
 #[test]
@@ -167,13 +206,18 @@ int main(void) {
         assert!(output.status.success(), "{source}");
         let expected = match interpreter_result(source) {
             Ok(value) => format!("{value} 0 0\n"),
-            Err(span) => {
+            Err((kind, span)) => {
                 let span_id = kernel
                     .failure_spans
                     .iter()
                     .position(|&site| site == span)
                     .unwrap();
-                format!("0 {CHECKED_KERNEL_INTEGER_OVERFLOW} {span_id}\n")
+                let status = match kind {
+                    DiagnosticKind::ArithmeticOverflow => CHECKED_KERNEL_INTEGER_OVERFLOW,
+                    DiagnosticKind::DivisionByZero => CHECKED_KERNEL_DIVISION_BY_ZERO,
+                    _ => unreachable!("interpreter_result checks the diagnostic kind"),
+                };
+                format!("0 {status} {span_id}\n")
             }
         };
         assert_eq!(

@@ -5,7 +5,9 @@ use super::{invalid, program::ScalarProgramIr, Operation, Unary};
 use crate::{
     ast::BinaryOperator,
     diagnostics::{Diagnostic, Span},
-    native_object::{CheckedElf64Kernel, CHECKED_KERNEL_INTEGER_OVERFLOW},
+    native_object::{
+        CheckedElf64Kernel, CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_INTEGER_OVERFLOW,
+    },
 };
 
 const MAX_TEXT_BYTES: usize = 200_000;
@@ -17,12 +19,16 @@ fn failure() -> Diagnostic {
 
 struct Code {
     data: Vec<u8>,
-    overflow_sites: Vec<OverflowSite>,
+    branches_to_failure: Vec<usize>,
+    failure_spans: Vec<Span>,
 }
 
-struct OverflowSite {
-    displacement: usize,
-    span: Span,
+// Second opcode byte of a near conditional branch (0F 8x rel32).
+#[repr(u8)]
+enum Condition {
+    Overflow = 0x80,
+    Equal = 0x84,
+    NotEqual = 0x85,
 }
 
 impl Code {
@@ -36,7 +42,8 @@ impl Code {
         data.try_reserve_exact(maximum).map_err(|_| failure())?;
         Ok(Self {
             data,
-            overflow_sites: Vec::new(),
+            branches_to_failure: Vec::new(),
+            failure_spans: Vec::new(),
         })
     }
 
@@ -80,45 +87,120 @@ impl Code {
     }
 
     fn guard_overflow(&mut self, span: Span) -> Result<(), Diagnostic> {
-        let span_id = u32::try_from(self.overflow_sites.len()).map_err(|_| failure())?;
-        self.overflow_sites.try_reserve(1).map_err(|_| failure())?;
+        let span_id = self.record_failure_span(span)?;
+        self.branch_to_failure(
+            Condition::Overflow,
+            CHECKED_KERNEL_INTEGER_OVERFLOW,
+            span_id,
+        )
+    }
+
+    fn record_failure_span(&mut self, span: Span) -> Result<u32, Diagnostic> {
+        let span_id = u32::try_from(self.failure_spans.len()).map_err(|_| failure())?;
+        self.failure_spans.try_reserve(1).map_err(|_| failure())?;
+        self.failure_spans.push(span);
+        Ok(span_id)
+    }
+
+    fn branch_to_failure(
+        &mut self,
+        condition: Condition,
+        status: u32,
+        span_id: u32,
+    ) -> Result<(), Diagnostic> {
+        self.branches_to_failure
+            .try_reserve(1)
+            .map_err(|_| failure())?;
         // The second SysV return eightbyte contains status and span ID. MOV
-        // preserves the overflow flag from the immediately preceding operation.
+        // preserves the flags from the preceding operation or comparison.
         self.push(&[0x48, 0xba])?; // movabs rdx, imm64
-        self.push(&CHECKED_KERNEL_INTEGER_OVERFLOW.to_le_bytes())?;
+        self.push(&status.to_le_bytes())?;
         self.push(&span_id.to_le_bytes())?;
-        self.push(&[0x0f, 0x80])?; // jo rel32
+        let displacement = self.near_branch(condition)?;
+        self.branches_to_failure.push(displacement);
+        Ok(())
+    }
+
+    fn near_branch(&mut self, condition: Condition) -> Result<usize, Diagnostic> {
+        self.push(&[0x0f, condition as u8])?;
         let displacement = self.data.len();
         self.push(&[0; 4])?;
-        self.overflow_sites
-            .push(OverflowSite { displacement, span });
+        Ok(displacement)
+    }
+
+    fn signed_division(&mut self, remainder: bool, span: Span) -> Result<(), Diagnostic> {
+        let span_id = self.record_failure_span(span)?;
+        self.push(&[0x48, 0x85, 0xc9])?; // test rcx, rcx
+        self.branch_to_failure(Condition::Equal, CHECKED_KERNEL_DIVISION_BY_ZERO, span_id)?;
+
+        // A 64-bit signed quotient can overflow only for i64::MIN / -1.
+        // IDIV also requires the quotient to fit when only RDX is wanted.
+        self.push(&[0x48, 0x83, 0xf9, 0xff])?; // cmp rcx, -1
+        let ordinary_divisor = self.near_branch(Condition::NotEqual)?;
+        self.push(&[0x48, 0xba])?; // movabs rdx, i64::MIN
+        self.push(&i64::MIN.to_le_bytes())?;
+        self.push(&[0x48, 0x39, 0xd0])?; // cmp rax, rdx
+        self.branch_to_failure(Condition::Equal, CHECKED_KERNEL_INTEGER_OVERFLOW, span_id)?;
+        let division = self.data.len();
+        patch_forward_branch(&mut self.data, ordinary_divisor, division)?;
+        self.push(&[0x48, 0x99])?; // cqo (sign-extend RAX into RDX:RAX)
+        self.push(&[0x48, 0xf7, 0xf9])?; // idiv rcx
+        if remainder {
+            self.push(&[0x48, 0x89, 0xd0])?; // mov rax, rdx
+        }
+        Ok(())
+    }
+
+    fn binary(&mut self, op: BinaryOperator, checked: bool, span: Span) -> Result<(), Diagnostic> {
+        let (instruction, can_overflow): (&[u8], bool) = match op {
+            BinaryOperator::BitAnd => (&[0x48, 0x21, 0xc8], false),
+            BinaryOperator::BitOr => (&[0x48, 0x09, 0xc8], false),
+            BinaryOperator::BitXor => (&[0x48, 0x31, 0xc8], false),
+            BinaryOperator::Add if checked => (&[0x48, 0x01, 0xc8], true),
+            BinaryOperator::Subtract if checked => (&[0x48, 0x29, 0xc8], true),
+            BinaryOperator::Multiply if checked => (&[0x48, 0x0f, 0xaf, 0xc1], true),
+            BinaryOperator::Divide | BinaryOperator::Remainder if checked => {
+                return self.signed_division(op == BinaryOperator::Remainder, span);
+            }
+            _ => return Err(invalid(span)),
+        };
+        self.push(instruction)?;
+        if can_overflow {
+            self.guard_overflow(span)?;
+        }
         Ok(())
     }
 
     fn finish_checked_return(&mut self) -> Result<(), Diagnostic> {
         self.push(&[0x31, 0xd2])?; // success: xor edx, edx
-        if self.overflow_sites.is_empty() {
+        if self.branches_to_failure.is_empty() {
             return Ok(());
         }
         let clear_failed_value = [0x31, 0xc0]; // failure: xor eax, eax
         self.push(&[0xeb, clear_failed_value.len() as u8])?; // success skips failure
         let failure_target = self.data.len();
         self.push(&clear_failed_value)?;
-        for site in &self.overflow_sites {
-            let displacement = site
-                .displacement
-                .checked_add(4)
-                .and_then(|end| failure_target.checked_sub(end))
-                .and_then(|offset| i32::try_from(offset).ok())
-                .ok_or_else(failure)?;
-            put(
-                &mut self.data,
-                site.displacement,
-                &displacement.to_le_bytes(),
-            )?;
+        for &displacement in &self.branches_to_failure {
+            patch_forward_branch(&mut self.data, displacement, failure_target)?;
         }
         Ok(())
     }
+}
+
+fn patch_forward_branch(
+    code: &mut [u8],
+    displacement: usize,
+    target: usize,
+) -> Result<(), Diagnostic> {
+    if target > code.len() {
+        return Err(failure());
+    }
+    let offset = displacement
+        .checked_add(4)
+        .and_then(|end| target.checked_sub(end))
+        .and_then(|offset| i32::try_from(offset).ok())
+        .ok_or_else(failure)?;
+    put(code, displacement, &offset.to_le_bytes())
 }
 
 fn temporary(base: usize, register: usize) -> Result<usize, Diagnostic> {
@@ -193,23 +275,7 @@ fn text(program: &ScalarProgramIr, checked_arithmetic: bool) -> Result<Code, Dia
                 } => {
                     code.load_rax(temporary(slot_count, *left)?)?;
                     code.load_rcx(temporary(slot_count, *right)?)?;
-                    let (instruction, can_overflow): (&[u8], bool) = match op {
-                        BinaryOperator::BitAnd => (&[0x48, 0x21, 0xc8], false),
-                        BinaryOperator::BitOr => (&[0x48, 0x09, 0xc8], false),
-                        BinaryOperator::BitXor => (&[0x48, 0x31, 0xc8], false),
-                        BinaryOperator::Add if checked_arithmetic => (&[0x48, 0x01, 0xc8], true),
-                        BinaryOperator::Subtract if checked_arithmetic => {
-                            (&[0x48, 0x29, 0xc8], true)
-                        }
-                        BinaryOperator::Multiply if checked_arithmetic => {
-                            (&[0x48, 0x0f, 0xaf, 0xc1], true)
-                        }
-                        _ => return Err(invalid(step.span)),
-                    };
-                    code.push(instruction)?;
-                    if can_overflow {
-                        code.guard_overflow(step.span)?;
-                    }
+                    code.binary(*op, checked_arithmetic, step.span)?;
                     code.store_rax(temporary(slot_count, *dst)?)?;
                 }
                 _ => return Err(invalid(step.span)),
@@ -297,14 +363,9 @@ pub(super) fn emit(program: &ScalarProgramIr) -> Result<Vec<u8>, Diagnostic> {
 pub(super) fn emit_checked(program: &ScalarProgramIr) -> Result<CheckedElf64Kernel, Diagnostic> {
     let code = text(program, true)?;
     let object = object(&code.data, b"\0scarp_checked_scalar_kernel\0")?;
-    let mut failure_spans = Vec::new();
-    failure_spans
-        .try_reserve_exact(code.overflow_sites.len())
-        .map_err(|_| failure())?;
-    failure_spans.extend(code.overflow_sites.into_iter().map(|site| site.span));
     Ok(CheckedElf64Kernel {
         object,
-        failure_spans,
+        failure_spans: code.failure_spans,
     })
 }
 
