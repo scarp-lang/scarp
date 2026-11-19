@@ -180,15 +180,10 @@ scarp inspect ast examples/hello.srp
 scarp inspect ast --diagnostic-format=json examples/hello.srp
 ```
 
-`inspect ast` uses the actual Scarp lexer and parser. It **does not**
-resolve imported files, check types, or execute statements and therefore does
-not replace `verify`. Successful output is a human-readable **development
-debug representation**, not a frozen AST serialization, parser API contract,
-or schema-versioned JSON. `--json` is deliberately unavailable for successful
-AST output. The existing `--diagnostic-format=json|text` option applies only
-to parser/lexing diagnostics on stderr. The source path supports the normal
-`--` separator, Unicode and filenames containing spaces. There is no new
-top-level `scarp ast` alias.
+`inspect ast` stops after lexing and parsing the entry file. It prints a
+human-readable development debug representation. Use
+`--diagnostic-format=json|text` to format errors on stderr. The source path
+supports the `--` separator, Unicode and filenames containing spaces.
 
 The token and AST inspection commands read regular UTF-8 files up to 1 MiB,
 the same per-file limit used by CLI compilation. A larger source file returns
