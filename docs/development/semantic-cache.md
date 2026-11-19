@@ -43,6 +43,13 @@ fields:
    advance on every document edit. **Full byte comparison still takes place
    even if revisions are accidentally reused**.
 
+If `load_with_revision` supplies a revision with the source text, the caller's
+revision for that SourceId must agree. A mismatch returns
+`CachedCompileError::RevisionMismatch` before semantic lookup or retention.
+Loaders that supply only text continue to rely on the caller's revisions.
+Rust hosts that exhaustively match `CachedCompileError` should handle the
+new variant.
+
 No hash-only identity, mtime, weak validation of import aliases, process-global
 state, network or runtime dependency is used. Since the loaded graph and
 compiler code both live in the same process, compilation state is scoped to
