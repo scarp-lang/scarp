@@ -7,6 +7,7 @@ use crate::{
     diagnostics::{Diagnostic, Span},
     native_object::{
         CheckedElf64Kernel, CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_INTEGER_OVERFLOW,
+        CHECKED_KERNEL_INVALID_SHIFT,
     },
 };
 
@@ -29,17 +30,19 @@ enum Condition {
     Overflow = 0x80,
     Equal = 0x84,
     NotEqual = 0x85,
+    Above = 0x87,
 }
 
 impl Code {
     fn new(steps: usize) -> Result<Self, Diagnostic> {
-        let maximum = steps
-            .checked_mul(24)
-            .and_then(|n| n.checked_add(64))
-            .filter(|n| *n <= MAX_TEXT_BYTES)
-            .ok_or_else(failure)?;
+        // IR work events may emit no bytes. Use the estimate for reservation
+        // only and enforce the actual text limit in push.
+        let capacity = steps
+            .saturating_mul(24)
+            .saturating_add(64)
+            .min(MAX_TEXT_BYTES);
         let mut data = Vec::new();
-        data.try_reserve_exact(maximum).map_err(|_| failure())?;
+        data.try_reserve_exact(capacity).map_err(|_| failure())?;
         Ok(Self {
             data,
             branches_to_failure: Vec::new(),
@@ -162,6 +165,9 @@ impl Code {
             BinaryOperator::Divide | BinaryOperator::Remainder if checked => {
                 return self.signed_division(op == BinaryOperator::Remainder, span);
             }
+            BinaryOperator::ShiftLeft if checked => return self.shift(0xe0, span), // shl rax, cl
+            BinaryOperator::ShiftRight if checked => return self.shift(0xf8, span), // sar rax, cl
+            BinaryOperator::UnsignedRight if checked => return self.shift(0xe8, span), // shr rax, cl
             _ => return Err(invalid(span)),
         };
         self.push(instruction)?;
@@ -169,6 +175,15 @@ impl Code {
             self.guard_overflow(span)?;
         }
         Ok(())
+    }
+
+    fn shift(&mut self, mod_rm: u8, span: Span) -> Result<(), Diagnostic> {
+        let span_id = self.record_failure_span(span)?;
+        // Compare the full count as unsigned. Negative counts also exceed
+        // 63, and the guard runs before x86 can mask the count to six bits.
+        self.push(&[0x48, 0x83, 0xf9, 63])?; // cmp rcx, 63
+        self.branch_to_failure(Condition::Above, CHECKED_KERNEL_INVALID_SHIFT, span_id)?;
+        self.push(&[0x48, 0xd3, mod_rm])
     }
 
     fn finish_checked_return(&mut self) -> Result<(), Diagnostic> {

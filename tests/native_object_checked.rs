@@ -5,7 +5,9 @@ use scarp::{
 };
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-use scarp::native_object::{CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_INTEGER_OVERFLOW};
+use scarp::native_object::{
+    CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_INTEGER_OVERFLOW, CHECKED_KERNEL_INVALID_SHIFT,
+};
 
 // The expected statuses and byte spans below come from interpreter execution.
 const CASES: &[&str] = &[
@@ -40,6 +42,25 @@ const CASES: &[&str] = &[
     "bind result = -9223372036854775808 % 0;",
     "bind max = 9223372036854775807; bind result = (max + 1) + (7 / 0);",
     "bind max = 9223372036854775807; bind result = (7 % 0) + (max + 1);",
+    "bind result = 1 << 0;",
+    "bind result = -7 >> 0;",
+    "bind result = -7 >>> 0;",
+    "bind result = 1 << 63;",
+    "bind result = -7 << 63;",
+    "bind result = -7 >> 63;",
+    "bind result = -7 >>> 63;",
+    "bind result = -1 >>> 1;",
+    "bind result = 9223372036854775807 << 1;",
+    "bind value = -24; bind count = 3; bind result = (value >> count) ^ (value << count);",
+    "bind result = 1 << -1;",
+    "bind result = 0 >> 64;",
+    "// पारी 🌍\r\nbind count = 9223372036854775807; bind result = -1 >>> count;",
+    "bind result = 1 << -9223372036854775808;",
+    "bind result = 1 >>> 256;",
+    "bind result = (7 % 0) + (1 >> 64);",
+    "bind result = (1 << 64) + (7 / 0);",
+    "bind result = 7 >>> (1 / 0);",
+    "bind result = (1 >> 1) << (1 >>> 64);",
 ];
 
 fn interpreter_result(source: &str) -> Result<i64, (DiagnosticKind, Span)> {
@@ -54,7 +75,9 @@ fn interpreter_result(source: &str) -> Result<i64, (DiagnosticKind, Span)> {
             assert!(
                 matches!(
                     error.kind,
-                    DiagnosticKind::ArithmeticOverflow | DiagnosticKind::DivisionByZero
+                    DiagnosticKind::ArithmeticOverflow
+                        | DiagnosticKind::DivisionByZero
+                        | DiagnosticKind::InvalidShift
                 ),
                 "{source}"
             );
@@ -80,7 +103,7 @@ fn object_and_operator_span_table_are_deterministic() {
         for span in &kernel.failure_spans {
             assert!(matches!(
                 source.get(span.start..span.end),
-                Some("+" | "-" | "*" | "/" | "%")
+                Some("+" | "-" | "*" | "/" | "%" | "<<" | ">>" | ">>>")
             ));
         }
         if let Err((_, span)) = interpreter_result(source) {
@@ -108,7 +131,6 @@ fn each_division_or_remainder_records_one_operator_span_for_both_failures() {
 fn checked_subset_rejects_other_operations_and_keeps_the_legacy_abi() {
     for source in [
         "",
-        "bind result = 4 << 2;",
         "bind result = 4 < 2;",
         "var result = 1; result += 2;",
         "bind result = 1; print(result);",
@@ -121,6 +143,9 @@ fn checked_subset_rejects_other_operations_and_keeps_the_legacy_abi() {
         "bind result = 4 + 2;",
         "bind result = 4 / 2;",
         "bind result = 4 % 2;",
+        "bind result = 4 << 2;",
+        "bind result = -4 >> 2;",
+        "bind result = -4 >>> 2;",
     ] {
         assert!(emit_elf64_checked_integer_kernel(source).is_ok());
         assert_eq!(
@@ -144,6 +169,22 @@ fn checked_kernel_applies_the_native_slot_limit() {
         emit_elf64_checked_integer_kernel(&source).unwrap_err().kind,
         DiagnosticKind::NativeUnsupported
     );
+}
+
+#[test]
+fn integer_kernels_require_immutable_binding_statements() {
+    for source in [
+        "var result = 1;",
+        "bind first = 3; var result = first; result = 4;",
+        "bind result = 1; {}",
+    ] {
+        let legacy = emit_elf64_integer_kernel(source).unwrap_err();
+        let checked = emit_elf64_checked_integer_kernel(source).unwrap_err();
+        assert_eq!(checked, legacy, "{source}");
+        assert_eq!(checked.kind, DiagnosticKind::NativeUnsupported, "{source}");
+        let start = source.find("var").or_else(|| source.find('{')).unwrap();
+        assert_eq!(checked.span.start, start, "{source}");
+    }
 }
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
@@ -215,6 +256,7 @@ int main(void) {
                 let status = match kind {
                     DiagnosticKind::ArithmeticOverflow => CHECKED_KERNEL_INTEGER_OVERFLOW,
                     DiagnosticKind::DivisionByZero => CHECKED_KERNEL_DIVISION_BY_ZERO,
+                    DiagnosticKind::InvalidShift => CHECKED_KERNEL_INVALID_SHIFT,
                     _ => unreachable!("interpreter_result checks the diagnostic kind"),
                 };
                 format!("0 {status} {span_id}\n")
