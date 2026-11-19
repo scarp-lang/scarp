@@ -14,7 +14,7 @@ use super::invalidation::{EditImpact, InvalidationError, InvalidationSnapshot};
 use super::{
     load, load_with_frontend_caches, load_with_syntax_cache, load_with_token_cache,
     resolve_with_compiler_limits, ConstantLimits, ModuleDiagnostic, ModuleGraph, ModuleLimits,
-    ModuleProgram, SourceLoader,
+    ModuleProgram, SourceId, SourceLoader,
 };
 use crate::types::TypeLimits;
 use std::{collections::VecDeque, error::Error, fmt, sync::Arc};
@@ -36,7 +36,8 @@ pub struct CachedCompileOptions<'a> {
     pub module_limits: ModuleLimits,
     pub constant_limits: ConstantLimits,
     pub type_limits: TypeLimits,
-    /// Revisions in freshly discovered SourceId order.
+    /// Revisions in freshly discovered SourceId order. Must agree with any
+    /// revisions supplied atomically by the loader.
     pub revisions: &'a [u64],
 }
 impl<'a> CachedCompileOptions<'a> {
@@ -95,8 +96,15 @@ pub enum CachedCompileError {
     /// Loader, syntax, linker, type, constant or resource diagnostic.
     Module(ModuleDiagnostic),
     /// Exactly one caller-owned document revision is required per discovered
-    /// SourceId. A stale version value remains the caller's responsibility.
+    /// SourceId.
     RevisionCount { expected: usize, actual: usize },
+    /// The caller's revision differs from the revision read with the source.
+    RevisionMismatch {
+        source: SourceId,
+        identity: String,
+        loaded: u64,
+        supplied: u64,
+    },
 }
 impl fmt::Display for CachedCompileError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -105,6 +113,15 @@ impl fmt::Display for CachedCompileError {
             Self::RevisionCount { expected, actual } => {
                 write!(f, "expected {expected} source revisions; received {actual}")
             }
+            Self::RevisionMismatch {
+                source,
+                identity,
+                loaded,
+                supplied,
+            } => write!(
+                f,
+                "source {source} ({identity:?}) was read at revision {loaded}, but the host supplied {supplied}"
+            ),
         }
     }
 }
@@ -112,7 +129,7 @@ impl Error for CachedCompileError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Module(error) => Some(error),
-            Self::RevisionCount { .. } => None,
+            Self::RevisionCount { .. } | Self::RevisionMismatch { .. } => None,
         }
     }
 }
@@ -446,6 +463,7 @@ impl CompilationCache {
     ///
     /// Revisions are supplied in the current graph's SourceId discovery order
     /// and must advance whenever the corresponding editor document changes.
+    /// A revision read alongside the source text must match the supplied one.
     /// They are part of the exact cache key, not an alternative to byte-level
     /// comparison. The loader and parser run on EVERY call (including hits).
     ///
@@ -543,6 +561,16 @@ impl CompilationCache {
                 expected: graph.file_count(),
                 actual: revisions.len(),
             });
+        }
+        for (source, (module, &supplied)) in graph.modules.iter().zip(revisions).enumerate() {
+            if let Some(loaded) = module.revision.filter(|&loaded| loaded != supplied) {
+                return Err(CachedCompileError::RevisionMismatch {
+                    source,
+                    identity: module.identity.clone(),
+                    loaded,
+                    supplied,
+                });
+            }
         }
 
         for previous in &self.entries {

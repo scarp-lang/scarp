@@ -8,7 +8,7 @@ mod elf64;
 mod program;
 
 use crate::{
-    ast::{BinaryOperator, ExpressionKind, LogicalOperator},
+    ast::{BinaryOperator, ExpressionKind, LogicalOperator, Statement},
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     resolver::{ResolvedExpression, ResolvedProgram},
     value::ValueType,
@@ -488,8 +488,19 @@ pub(crate) fn emit_checked_integer_kernel(
 }
 
 fn lower_integer_kernel(source: &str) -> Result<program::ScalarProgramIr, Diagnostic> {
-    let program = crate::compile(source)?;
+    let syntax = crate::parse(source)?;
+    // The resolved plan uses the same Store for declarations and plain
+    // assignments. Check the source shape before resolving erases it.
+    let unsupported = syntax
+        .statements
+        .iter()
+        .find(|statement| !matches!(statement, Statement::Declaration { mutable: false, .. }))
+        .map(Statement::span);
+    let program = crate::resolver::resolve(syntax)?;
     crate::native_preflight::inspect(&program)?;
+    if let Some(span) = unsupported {
+        return Err(invalid(span).with_help("use only immutable integer bind declarations"));
+    }
     let ir = program::ScalarProgramIr::lower(&program)?;
     ir.integer_kernel()?;
     Ok(ir)

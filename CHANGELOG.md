@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.6-alpha.15 — candidate
+
+- Apply the 1 MiB per-file source limit to token and AST inspection.
+- Charge string equality and inequality by UTF-8 bytes when the operands have
+  equal byte lengths. Constant evaluation and cache replay use the same charge.
+- Reject caller-supplied semantic cache revisions that disagree with revisions
+  returned alongside source text. Rust hosts should handle the new
+  `CachedCompileError::RevisionMismatch` variant.
+- Add checked left, arithmetic-right and logical-right shifts to the
+  experimental x86-64 ELF64 checked-kernel API. Invalid counts return status 3
+  and the operator's byte span.
+- Enforce the immutable binding subset for both ELF64 kernel APIs. Apply the
+  200,000-byte machine-code ceiling to the emitted bytes.
+
 ## 0.0.6-alpha.14 — published GitHub prerelease, 2026-11-18
 
 - Report missing and duplicate separators, mismatched delimiters and end of

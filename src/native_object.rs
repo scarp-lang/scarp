@@ -34,6 +34,9 @@ pub const CHECKED_KERNEL_INTEGER_OVERFLOW: u32 = 1;
 /// Runtime ABI status for a zero divisor in signed division or remainder.
 pub const CHECKED_KERNEL_DIVISION_BY_ZERO: u32 = 2;
 
+/// Runtime ABI status for an integer shift count outside 0 through 63.
+pub const CHECKED_KERNEL_INVALID_SHIFT: u32 = 3;
+
 /// Emit a deterministic, freestanding x86-64 ELF64 checked integer kernel.
 ///
 /// The distinct SysV AMD64 symbol `scarp_checked_scalar_kernel` takes no
@@ -43,7 +46,7 @@ pub const CHECKED_KERNEL_DIVISION_BY_ZERO: u32 = 2;
 /// the index of the operator in `failure_spans`.
 ///
 /// The linear binding subset adds signed addition, subtraction, multiplication,
-/// negation, division and remainder to the bitwise kernel's expressions.
+/// negation, division, remainder and fixed-width shifts to the bitwise kernel.
 /// Configurable interpreter execution budgets are outside this experimental ABI.
 pub fn emit_elf64_checked_integer_kernel(source: &str) -> Result<CheckedElf64Kernel, Diagnostic> {
     crate::scalar_ir::emit_checked_integer_kernel(source)

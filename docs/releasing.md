@@ -8,6 +8,11 @@ records the annotated tag, passing workflow runs and all seven verified assets.
 The completed request was retired after public verification. A future
 publication requires separate maintainer approval for its full source SHA.
 
+The `v0.0.6-alpha.15` candidate carries forward the alpha.14 archive checks.
+Its package smoke tests also exercise the frontend file limit and string
+comparison budget on the extracted executable.
+[Candidate notes](releases/v0.0.6-alpha.15-publication.md)
+
 See the earlier [alpha.13 public notes](releases/v0.0.6-alpha.13-publication.md)
 and [alpha.12 publication record](releases/v0.0.6-alpha.12-validation.md).
 

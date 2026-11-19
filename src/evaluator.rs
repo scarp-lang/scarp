@@ -1036,6 +1036,13 @@ pub(crate) fn apply_binary_with_budget(
     if let (Some(left), Some(right)) = (left.as_bigint(), right.as_bigint()) {
         return crate::bigint::binary(operator, left, right, budget, span);
     }
+    if let (Some(left), Some(right)) = (left.as_str(), right.as_str()) {
+        // String equality can reject different lengths without scanning. For
+        // equal lengths, prepay for all bytes regardless of where they differ.
+        if left.len() == right.len() {
+            budget.charge(left.len().div_ceil(64) as u64, span)?;
+        }
+    }
     if left.as_decimal().is_some() && right.as_decimal().is_some() {
         // All decimal arithmetic is fixed-width, with at most 18 digit steps.
         // Charge a conservative work fee before invoking the exact kernel.

@@ -12,8 +12,8 @@ request is performed during production emission.
 
 ## Exact accepted source
 
-The alpha.5 and later packages accept a bounded linear sequence of integer
-bindings, where initializers use integer literals, groups, references to
+The bitwise kernel accepts a bounded linear sequence of immutable integer
+`bind` declarations, where initializers use integer literals, groups, references to
 earlier initialized integer bindings, bitwise NOT (`~`), AND (`&`),
 OR (`|`) or XOR (`^`):
 
@@ -68,8 +68,9 @@ current API has no cross-platform executable linking or target-selector flag.
 The input must pass the existing preflight: at most 256 scalar slots, 4096
 resolved statements, 1024 nodes per expression and 16,384 total nodes.
 The accepted binding-only sequence is stricter than general programs.
-Native code has at most 200,000 bytes, the complete ELF object at most 262,144 bytes; all sections are
-checked before allocation, with fallible reserves and deterministic offsets.
+The encoder checks actual machine-code growth against 200,000 bytes and caps
+the complete ELF object at 262,144 bytes. It uses fallible reserves and
+deterministic section offsets.
 No source path, timestamp, username, environment variable, or build identity
 is embedded in output. Unsupported input yields no object or partial file.
 
@@ -94,11 +95,24 @@ struct scarp_checked_result {
 extern struct scarp_checked_result scarp_checked_scalar_kernel(void);
 ```
 
-Status zero returns the last binding value and a zero span ID. Status one
-(`CHECKED_KERNEL_INTEGER_OVERFLOW`) indicates signed overflow, including
-`i64::MIN / -1` and `i64::MIN % -1`. Status two
-(`CHECKED_KERNEL_DIVISION_BY_ZERO`) indicates a zero divisor. Division truncates
-toward zero and nonzero remainder takes the sign of the dividend.
+Status zero returns the last binding value and a zero span ID.
+
+| Status | Rust constant | Meaning |
+| --- | --- | --- |
+| 1 | `CHECKED_KERNEL_INTEGER_OVERFLOW` | Signed overflow, including `i64::MIN / -1` and `i64::MIN % -1` |
+| 2 | `CHECKED_KERNEL_DIVISION_BY_ZERO` | Zero divisor in division or remainder |
+| 3 | `CHECKED_KERNEL_INVALID_SHIFT` | Shift count outside 0 through 63, available in alpha.15 |
+
+Division truncates toward zero and nonzero remainder takes the sign of the
+dividend. Alpha.15 checks the full shift count before executing `<<`, `>>` or
+`>>>`. Left shift discards bits past the 64-bit width, arithmetic right shift
+extends the sign bit, and logical right shift fills with zeros.
+
+```scarp
+bind bits = -8;
+bind count = 2;
+bind result = (bits >> count) ^ (bits >>> count);
+```
 
 Failure returns a zero value and the index of the first failing operator in
 the Rust result's `failure_spans` table. The table uses half-open UTF-8 byte
@@ -107,21 +121,18 @@ The checked emitter preserves interpreter operand order, so an earlier failure
 terminates before a later operator can run. Both return paths restore the same
 stack frame.
 
-The checked emitter applies the same preflight and object-size limits. Its
-bounded linear programs use no callbacks or external references. Shifts,
-comparisons, branches, and configurable interpreter work
-limits are outside this initial checked ABI. It is available through the Rust
-API, and generated objects still target Linux x86-64 ELF64.
+The checked emitter applies the same immutable-binding, preflight and object
+size limits. It is an experimental Rust API for self-contained Linux x86-64
+ELF64 kernels with a fixed integer expression subset.
 
 Regression coverage validates stable identical bytes, section-table offsets,
 ELF header sizes, global symbol metadata, source-subset rejection, and an
 **independent Linux x86-64 C host link-and-execute comparisons**, including
-multi-binding alias, mask and bitwise dependency chains.
-The encoding still needs security review and broader arithmetic/error ABI work
-before expanding this experimental API.
+multi-binding dependencies, arithmetic failures and invalid shift counts.
 
 ```sh
 cargo test --locked --offline --test native_object
+cargo test --locked --offline --test native_object_checked
 # The Linux x86-64 suite uses a C compiler only as an independent test oracle.
 # Production object emission never invokes one.
 ```

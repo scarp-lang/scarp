@@ -1,5 +1,12 @@
 # Version and API compatibility
 
+`0.0.6-alpha.15` is the current candidate. Programs using small work limits
+may need an adjustment for equal-length string comparisons. Token and AST
+inspection apply the CLI's 1 MiB source file cap. Rust hosts should handle
+`CachedCompileError::RevisionMismatch` and the checked kernel's new invalid-shift
+status. Both ELF64 kernel APIs enforce their documented immutable `bind` subset.
+[Candidate notes](releases/v0.0.6-alpha.15-publication.md)
+
 `0.0.6-alpha.14` is **a published GitHub prerelease**. Nested destructuring
 reports more precise errors under the existing diagnostic code. Rust hosts
 can resize editor cache quotas and opt into checked arithmetic in the

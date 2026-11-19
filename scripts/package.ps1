@@ -47,6 +47,8 @@ try {
     if ($version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
         throw 'Expected a three-part package version'
     }
+    # Alpha.15 retains the extracted-package checks from alpha.14.
+    $contractVersion = if ($version -ceq '0.0.6-alpha.15') { '0.0.6-alpha.14' } else { $version }
     $compiler = & rustc --version
     if ($LASTEXITCODE -ne 0) { throw 'Could not read compiler version' }
     $compilerDetails = & rustc --version --verbose
@@ -84,7 +86,7 @@ try {
     foreach ($directory in @('examples', 'docs')) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $directory) -Destination $packageRoot -Recurse
     }
-    if ($version -in @('0.0.5-alpha.2', '0.0.5-alpha.3', '0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7', '0.0.6-alpha.8', '0.0.6-alpha.9', '0.0.6-alpha.10', '0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) {
+    if ($contractVersion -in @('0.0.5-alpha.2', '0.0.5-alpha.3', '0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7', '0.0.6-alpha.8', '0.0.6-alpha.9', '0.0.6-alpha.10', '0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) {
         $releaseMetadataPath = Join-Path $projectRoot '.github/release-metadata.json'
         $releaseMetadata = Get-Content -LiteralPath $releaseMetadataPath -Raw | ConvertFrom-Json
         if ($releaseMetadata.schema_version -cne 1 -or $releaseMetadata.version -cne $version -or $releaseMetadata.documentation_repository -cne 'https://github.com/scarp-lang/scarp-docs') {
@@ -138,6 +140,37 @@ try {
     [System.IO.File]::WriteAllText($staticSource, 'print(1/0);')
     $staticCheck = Invoke-ScarpProcess -Executable $executable -Arguments @('verify', '--diagnostic-format=json', $staticSource)
     if ($staticCheck.ExitCode -ne 0 -or $staticCheck.Stdout.Length -ne 0 -or $staticCheck.Stderr.Length -ne 0) { throw 'Packaged verify must remain static and silent' }
+    if ($version -ceq '0.0.6-alpha.15') {
+        $oversized = Join-Path $stagingRoot 'oversized-frontend.srp'
+        [IO.File]::WriteAllText($oversized, (' ' * (1MB + 1)))
+        foreach ($mode in @('tokens', 'ast')) {
+            $result = Invoke-ScarpProcess -Executable $executable -Arguments @(
+                'inspect', $mode, '--diagnostic-format=json', $oversized
+            )
+            $failure = [Text.Encoding]::UTF8.GetString($result.Stderr) | ConvertFrom-Json -ErrorAction Stop
+            if ($result.ExitCode -ne 1 -or $result.Stdout.Length -ne 0 -or
+                $failure.schema_version -ne 1 -or $null -ne $failure.primary -or
+                -not $failure.message.Contains('source file exceeds 1048576 bytes')) {
+                throw "Packaged $mode source limit failed"
+            }
+        }
+        $comparison = Join-Path $stagingRoot 'comparison-budget.srp'
+        $text = 'a' * 129
+        [IO.File]::WriteAllText($comparison, ('bind a = "{0}"; bind b = "{0}"; eprint("pending"); print(a == b);' -f $text))
+        $under = Invoke-ScarpProcess -Executable $executable -Arguments @(
+            'exec', '--max-steps', '12', '--diagnostic-format=json', $comparison
+        )
+        $failure = [Text.Encoding]::UTF8.GetString($under.Stderr) | ConvertFrom-Json -ErrorAction Stop
+        if ($under.ExitCode -ne 1 -or $under.Stdout.Length -ne 0 -or $failure.code -cne 'E0017') {
+            throw 'Packaged text comparison budget failed'
+        }
+        $exact = Invoke-ScarpProcess -Executable $executable -Arguments @('exec', '--max-steps', '13', $comparison)
+        if ($exact.ExitCode -ne 0 -or
+            [Text.Encoding]::UTF8.GetString($exact.Stdout) -cne "true$([char]10)" -or
+            [Text.Encoding]::UTF8.GetString($exact.Stderr) -cne "pending$([char]10)") {
+            throw 'Packaged text comparison output differs at the exact budget'
+        }
+    }
     foreach ($navigationMode in @('symbols', 'references')) {
         $navigationResult = Invoke-ScarpProcess -Executable $executable -Arguments @('inspect', $navigationMode, '--json', (Join-Path $extractedPackage 'examples/symbol_navigation.srp'))
         $symbolInventory = [System.Text.Encoding]::UTF8.GetString($navigationResult.Stdout) | ConvertFrom-Json -ErrorAction Stop
@@ -147,7 +180,7 @@ try {
         if ($staticNavigation.ExitCode -ne 0 -or $staticNavigation.Stderr.Length -ne 0) { throw 'Packaged navigation must not evaluate runtime arithmetic' }
     }
 
-    if ($version -in @('0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7', '0.0.6-alpha.8', '0.0.6-alpha.9', '0.0.6-alpha.10', '0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) {
+    if ($contractVersion -in @('0.0.5-alpha.4', '0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7', '0.0.6-alpha.8', '0.0.6-alpha.9', '0.0.6-alpha.10', '0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) {
         # Exercise the actual extracted distributable, not a development binary.
         $projectPath = Join-Path $stagingRoot 'alpha4-project-smoke'
         $created = Invoke-ScarpProcess -Executable $executable -Arguments @('create', $projectPath)
@@ -158,7 +191,7 @@ try {
         if ($projectVerify.ExitCode -ne 0 -or $projectVerify.Stdout.Length -ne 0 -or $projectVerify.Stderr.Length -ne 0) {
             throw 'Packaged Scarp project static verification failed'
         }
-        if ($version -in @('0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7', '0.0.6-alpha.8', '0.0.6-alpha.9', '0.0.6-alpha.10', '0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) {
+        if ($contractVersion -in @('0.0.5-alpha.5', '0.0.6-alpha.1', '0.0.6-alpha.2', '0.0.6-alpha.3', '0.0.6-alpha.4', '0.0.6-alpha.5', '0.0.6-alpha.6', '0.0.6-alpha.7', '0.0.6-alpha.8', '0.0.6-alpha.9', '0.0.6-alpha.10', '0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) {
             $projectModules = Invoke-ScarpProcess -Executable $executable -Arguments @('inspect', 'modules', '--json', $projectPath)
             if ($projectModules.ExitCode -ne 0 -or $projectModules.Stderr.Length -ne 0) {
                 throw 'Packaged project directory module inspection failed'
@@ -185,7 +218,7 @@ try {
         $failure = [Text.Encoding]::UTF8.GetString($invalid.Stderr) | ConvertFrom-Json -ErrorAction Stop
         if ($failure.schema_version -ne 1) { throw 'Packaged project traversal JSON schema differs' }
     }
-    if ($version -in @('0.0.6-alpha.8', '0.0.6-alpha.9', '0.0.6-alpha.10', '0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) {
+    if ($contractVersion -in @('0.0.6-alpha.8', '0.0.6-alpha.9', '0.0.6-alpha.10', '0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) {
         $modernProject = Join-Path $stagingRoot 'Scarp calculator smoke'
         $initialized = Invoke-ScarpProcess -Executable $executable -Arguments @('init', $modernProject)
         if ($initialized.ExitCode -ne 0 -or $initialized.Stderr.Length -ne 0) {
@@ -227,7 +260,7 @@ try {
         if ($failed.ExitCode -ne 1 -or $failed.Stderr.Length -ne 0 -or $failure.failed -ne 1 -or $failure.tests[0].error -notmatch 'E0065') {
             throw 'Packaged assertion failure did not report E0065'
         }
-        if ($version -in @('0.0.6-alpha.9', '0.0.6-alpha.10', '0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) {
+        if ($contractVersion -in @('0.0.6-alpha.9', '0.0.6-alpha.10', '0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) {
             $structured = Invoke-ScarpProcess -Executable $executable -Arguments @('test', '--json=v2', '--require-tests', '--filter', 'input', $modernProject)
             $report = [Text.Encoding]::UTF8.GetString($structured.Stdout) | ConvertFrom-Json -ErrorAction Stop
             $case = $report.tests[0]
@@ -236,7 +269,7 @@ try {
             }
         }
     }
-    if ($version -in @('0.0.6-alpha.10', '0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) {
+    if ($contractVersion -in @('0.0.6-alpha.10', '0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) {
         $interactive = Join-Path $extractedPackage 'examples/interactive/greeting'
         $prompted = Invoke-ScarpProcess -Executable $executable -Arguments @(
             'exec', '--interactive', '--input-file', ($interactive + '.stdin'), ($interactive + '.srp')
@@ -252,7 +285,7 @@ try {
             throw 'Packaged interactive EOF fallback failed'
         }
     }
-    if ($version -in @('0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) {
+    if ($contractVersion -in @('0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) {
         $taskBoard = Join-Path $extractedPackage 'examples/projects/task-board'
         $verifiedBoard = Invoke-ScarpProcess -Executable $executable -Arguments @('verify', $taskBoard)
         if ($verifiedBoard.ExitCode -ne 0 -or $verifiedBoard.Stdout.Length -ne 0 -or $verifiedBoard.Stderr.Length -ne 0) {
@@ -305,7 +338,7 @@ try {
         }
     }
     $interactiveExamples = @('typed_calculator', 'exact_integer')
-    if ($version -in @('0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) { $interactiveExamples += 'exact_decimal' }
+    if ($contractVersion -in @('0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) { $interactiveExamples += 'exact_decimal' }
     foreach ($example in $interactiveExamples) {
         $source = Join-Path $extractedPackage "examples/interactive/$example.srp"
         $inputPath = Join-Path $extractedPackage "examples/interactive/$example.stdin"
