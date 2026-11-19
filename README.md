@@ -8,6 +8,11 @@ kernel API now supports checked arithmetic, including division and remainder.
 [Release notes](docs/releases/v0.0.6-alpha.14-publication.md) ·
 [Verification record](docs/releases/v0.0.6-alpha.14-validation.md)
 
+The **0.0.6-alpha.15 candidate** adds bounded frontend file reads, metered
+string comparisons, revision checks for the semantic cache, and checked shifts
+in the experimental ELF64 kernel API.
+[Candidate release notes](docs/releases/v0.0.6-alpha.15-publication.md)
+
 **0.0.6-alpha.13** improves Option/Result propagation without duplicate payload
 allocation, adds opt-in syntax/semantic cache retention controls and source-revision
 eviction, and provides workspace-generation checks for editor diagnostics and
