@@ -1,0 +1,10 @@
+// Canonical key order and persistent map snapshots are deterministic.
+bind original = [map: 9: "nine", 1: "one", 3: "three"];
+bind old_keys: list<integer> = map_keys(original);
+bind old_values: list<string> = map_values(original);
+bind changed = map_set(original, 10, "ten");
+print(old_keys);
+print(old_values);
+print(map_keys(original));
+print(map_keys(changed));
+print(map_len(original), map_len(changed));
