@@ -80,9 +80,10 @@ Published v0.0.6-alpha.1 adds static `inspect symbols` and `inspect references`
 commands, which are absent from older alpha.5 packages.
 
 The latest published prerelease is
-[v0.0.6-alpha.14](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.14).
-The editor cache and checked ELF64 kernel additions are opt-in Rust embedding APIs.
-It retains project-directory module inspection. The experimental C11 scalar
+[v0.0.6-alpha.15](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.15).
+Token and AST inspection apply the 1 MiB source file cap. The editor cache
+and checked ELF64 kernel are opt-in Rust embedding APIs.
+The CLI retains project-directory module inspection. The experimental C11 scalar
 source emitter is a Rust embedding API, **not** a Scarp CLI command;
 `scarp compile` still does not exist.
 

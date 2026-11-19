@@ -1,8 +1,10 @@
 # Feature completeness and development roadmap
 
-The alpha.15 candidate adds checked shifts to integer ELF64 kernels, checks
-loader revisions before semantic cache reuse, and meters string comparisons.
-[Candidate notes](../releases/v0.0.6-alpha.15-publication.md)
+Published `0.0.6-alpha.15` adds checked shifts to integer ELF64 kernels,
+validates loader revisions before semantic cache reuse, and meters
+string comparisons.
+[Public notes](../releases/v0.0.6-alpha.15-publication.md) ·
+[Exact-source verification](../releases/v0.0.6-alpha.15-validation.md)
 
 Published `0.0.6-alpha.14` adds detailed structured-pattern diagnostics, live
 editor cache quotas for Rust hosts and checked integer operations in the

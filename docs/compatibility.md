@@ -1,11 +1,12 @@
 # Version and API compatibility
 
-`0.0.6-alpha.15` is the current candidate. Programs using small work limits
-may need an adjustment for equal-length string comparisons. Token and AST
+`0.0.6-alpha.15` is **a published GitHub prerelease**. Programs with small work
+limits may need an adjustment for equal-length string comparisons. Token and AST
 inspection apply the CLI's 1 MiB source file cap. Rust hosts should handle
 `CachedCompileError::RevisionMismatch` and the checked kernel's new invalid-shift
 status. Both ELF64 kernel APIs enforce their documented immutable `bind` subset.
-[Candidate notes](releases/v0.0.6-alpha.15-publication.md)
+[Public notes](releases/v0.0.6-alpha.15-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.15-validation.md)
 
 `0.0.6-alpha.14` is **a published GitHub prerelease**. Nested destructuring
 reports more precise errors under the existing diagnostic code. Rust hosts
@@ -122,7 +123,7 @@ The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.6-alpha.14](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.14).
+[0.0.6-alpha.15](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.15).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a
