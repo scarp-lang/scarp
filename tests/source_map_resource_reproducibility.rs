@@ -54,7 +54,10 @@ fn resource_exhaustion_never_commits_partial_stdout() {
                 ..ExecutionOptions::default()
             },
         );
-        assert!(result.is_err(), "step budget {steps} unexpectedly succeeded");
+        assert!(
+            result.is_err(),
+            "step budget {steps} unexpectedly succeeded"
+        );
         assert!(output.is_empty(), "step budget {steps} leaked output");
     }
 }
