@@ -27,10 +27,7 @@ fn persistent_map_projections_do_not_change_prior_snapshots() {
         print(new_keys);
         print(map_len(original), map_len(changed));
     "#;
-    assert_eq!(
-        run_bytes(source),
-        b"[list: 1, 9]\n[list: 1, 3, 9]\n2 3\n"
-    );
+    assert_eq!(run_bytes(source), b"[list: 1, 9]\n[list: 1, 3, 9]\n2 3\n");
 }
 
 #[test]
