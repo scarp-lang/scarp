@@ -1,5 +1,11 @@
 # Scarp documentation
 
+**0.0.6-alpha.15 prerelease** bounds frontend inspection, meters UTF-8
+string comparisons, validates semantic-cache revisions, and adds checked
+ELF64 integer-kernel shifts.
+[Public notes](releases/v0.0.6-alpha.15-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.15-validation.md)
+
 **0.0.6-alpha.14 prerelease** improves nested pattern diagnostics and adds
 live editor cache quotas and checked arithmetic for experimental ELF64 integer kernels.
 [Public notes](releases/v0.0.6-alpha.14-publication.md) ·
@@ -100,7 +106,7 @@ updated for the **0.0.6-alpha.6 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
 contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.6-alpha.14](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.14),
+[0.0.6-alpha.15](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.15),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)

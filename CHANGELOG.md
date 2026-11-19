@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.6-alpha.15 — candidate
+## 0.0.6-alpha.15 — published GitHub prerelease, 2026-11-19
 
 - Apply the 1 MiB per-file source limit to token and AST inspection.
 - Charge string equality and inequality by UTF-8 bytes when the operands have

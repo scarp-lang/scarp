@@ -1,17 +1,20 @@
 # Scarp
 
 The latest published prerelease is
-[0.0.6-alpha.14](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.14).
+[0.0.6-alpha.15](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.15).
+
+**0.0.6-alpha.15** applies the 1 MiB limit to token and AST inspection,
+meters equal-length UTF-8 string comparisons, and validates loader revisions
+before semantic cache reuse. The experimental Linux x86-64 ELF64 integer
+kernel adds checked shifts.
+[Release notes](docs/releases/v0.0.6-alpha.15-publication.md) ·
+[Verification record](docs/releases/v0.0.6-alpha.15-validation.md)
+
 **0.0.6-alpha.14** improves nested destructuring diagnostics and adds live editor
 cache quotas for Rust hosts. The experimental Linux x86-64 ELF64 integer
 kernel API now supports checked arithmetic, including division and remainder.
 [Release notes](docs/releases/v0.0.6-alpha.14-publication.md) ·
 [Verification record](docs/releases/v0.0.6-alpha.14-validation.md)
-
-The **0.0.6-alpha.15 candidate** adds bounded frontend file reads, metered
-string comparisons, revision checks for the semantic cache, and checked shifts
-in the experimental ELF64 kernel API.
-[Candidate release notes](docs/releases/v0.0.6-alpha.15-publication.md)
 
 **0.0.6-alpha.13** improves Option/Result propagation without duplicate payload
 allocation, adds opt-in syntax/semantic cache retention controls and source-revision
