@@ -7,7 +7,7 @@ use std::{
     env,
     ffi::{OsStr, OsString},
     fs,
-    io::{self, BufReader, BufWriter, IsTerminal, Write},
+    io::{self, BufReader, BufWriter, IsTerminal, Read, Write},
     path::Path,
     process::ExitCode,
 };
@@ -965,7 +965,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             }
         };
     }
-    let source = match fs::read_to_string(path) {
+    let source = match read_frontend_source(path) {
         Ok(source) => source,
         Err(error) => {
             let message = format!("could not read '{}': {error}", path.display());
@@ -1014,6 +1014,35 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
     } else {
         unreachable!("run/check handled by the module compiler")
     }
+}
+
+fn read_frontend_source(path: &Path) -> io::Result<String> {
+    let limit = ModuleLimits::default().max_file_bytes;
+    let too_large = || {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("source file exceeds {limit} bytes"),
+        )
+    };
+    let metadata = fs::metadata(path)?;
+    if !metadata.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "not a regular file",
+        ));
+    }
+    if metadata.len() > limit as u64 {
+        return Err(too_large());
+    }
+    let mut source = String::new();
+    // Enforce the cap during the read as well, in case the file grows.
+    fs::File::open(path)?
+        .take(limit as u64 + 1)
+        .read_to_string(&mut source)?;
+    if source.len() > limit {
+        return Err(too_large());
+    }
+    Ok(source)
 }
 
 fn file_command(command: &OsStr) -> bool {

@@ -19,9 +19,16 @@ visible cells, cumulative new payload and process RSS remain separate quantities
 
 Every run and check starts with 1,000,000 logical work steps and 100,000 selected
 output statements across both streams, including empty writes. The limits include both while and repeat, nested control
-flow, and expressions. They do not measure wall time, parse memory, or the byte
-length of a single string. These are deterministic execution limits rather than
-a general resource sandbox.
+flow, and expressions. These are deterministic execution limits. They do not
+measure wall time or parse memory.
+
+In alpha.15, `==` and `!=` on strings of equal byte length prepay one step per
+started 64 UTF-8 bytes, in addition to the ordinary expression tasks. Empty
+strings and different-length strings require only the ordinary tasks.
+The interpreter charges at the operator before comparing bytes. If the budget
+runs out, it reports E0017 and discards pending program output. Module constant
+comparison uses the same rule under the separate compile-time step budget,
+including on cache hits.
 
 ```sh
 scarp run --max-steps 2000000 --max-prints 10 examples/repeat.srp

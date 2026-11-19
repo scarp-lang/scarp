@@ -190,6 +190,11 @@ to parser/lexing diagnostics on stderr. The source path supports the normal
 `--` separator, Unicode and filenames containing spaces. There is no new
 top-level `scarp ast` alias.
 
+The token and AST inspection commands read regular UTF-8 files up to 1 MiB,
+the same per-file limit used by CLI compilation. A larger source file returns
+status 1 with a read error. In JSON diagnostic mode, its error uses schema 1
+with a null primary location.
+
 ## Historical and existing CLI contracts
 
 Since alpha.2, `scarp modules --json [--] <path>` emits metadata with file-local
