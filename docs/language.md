@@ -1,8 +1,13 @@
 # Scarp prototype language reference
 
-**Unreleased tuple development:** the feature branch adds `(1, "text")`,
-`(1,)`, `tuple<integer, string>` and literal-only projections. Published alpha.5
-does not support them. See the [complete tuple contract and exclusions](tuples.md).
+For the published `0.0.6-alpha.13` language, see the current contracts for
+[tuples](tuples.md), [structured binding patterns](development/source-patterns.md),
+[Option and Result](option-result.md), [fixed arrays](fixed-arrays.md),
+[typed lists](typed-dynamic-lists.md), and [typed maps](typed-maps.md).
+The [feature matrix](development/feature-matrix.md) records their availability.
+
+The grammar below covers the historical `0.0.5-alpha.1` baseline. The linked
+feature contracts describe syntax and behavior introduced in later releases.
 
 Published alpha.4 adds the `tile` parameter/result type and immutable
 two-axis values. `height`, `width`, `cell`, `lane`, `unroll`, `turn`, `matvec`,

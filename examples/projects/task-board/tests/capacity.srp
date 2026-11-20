@@ -1,0 +1,20 @@
+import "../src/board.srp" as tasks;
+
+var board = tasks.empty();
+repeat 128 as index {
+    bind title = integer_to_text(index);
+    match on tasks.apply(board, new tasks.Action::Add(new option<string>::Some(title))) {
+        case Ok(next) { board = next; }
+        case Err(_) { assert(false); }
+    }
+}
+assert(list_len(board->tasks) == 128);
+assert(map_len(board->positions) == 128);
+match on tasks.apply(board, new tasks.Action::Add(new option<string>::Some("overflow"))) {
+    case Ok(_) { assert(false); }
+    case Err(message) { assert(message == "board is full"); }
+}
+match on tasks.find(board, "overflow") {
+    case None { assert(true); }
+    case Some(_) { assert(false); }
+}

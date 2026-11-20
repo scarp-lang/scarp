@@ -1,0 +1,78 @@
+// A bounded task store with an exact-title index and pure transitions.
+pub record Task {
+    title: string,
+    done: boolean,
+}
+
+pub record Board {
+    tasks: list<record Task>,
+    positions: map<string, integer>,
+}
+
+pub variant Action {
+    Add(option<string>),
+    Complete(string),
+}
+
+pub pure funcra empty() -> record Board {
+    return new Board {
+        tasks: [list: <record Task>],
+        positions: [map: <string, integer>],
+    };
+}
+
+pub pure funcra find(board: record Board, title: string) -> option<record Task> {
+    if not map_contains(board->positions, title) {
+        return new option<record Task>::None();
+    }
+    bind index = map_get_or(board->positions, title, 0);
+    return new option<record Task>::Some(board->tasks[index]);
+}
+
+pure funcra accept_title(input: option<string>) -> result<string, string> {
+    match on input {
+        case None { return new result<string, string>::Err("title missing"); }
+        case Some(title) {
+            if title == "" {
+                return new result<string, string>::Err("title empty");
+            }
+            return new result<string, string>::Ok(title);
+        }
+    }
+}
+
+pub pure funcra apply(board: record Board, action: variant Action) -> result<record Board, string> {
+    match on action {
+        case Add(input) {
+            bind title = accept_title(input)?;
+            if map_contains(board->positions, title) {
+                return new result<record Board, string>::Err("task already exists");
+            }
+            bind index = list_len(board->tasks);
+            if index >= 128 {
+                return new result<record Board, string>::Err("board is full");
+            }
+            return new result<record Board, string>::Ok(new Board {
+                tasks: list_push(board->tasks, new Task { title: title, done: false }),
+                positions: map_set(board->positions, title, index),
+            });
+        }
+        case Complete(title) {
+            match on find(board, title) {
+                case None {
+                    return new result<record Board, string>::Err("task not found");
+                }
+                case Some(task) {
+                    if task->done {
+                        return new result<record Board, string>::Ok(board);
+                    }
+                    bind index = map_get_or(board->positions, title, 0);
+                    return new result<record Board, string>::Ok(new Board {
+                        tasks: list_set(board->tasks, index, new Task { title: title, done: true }),
+                        positions: board->positions,
+                    });
+                }
+            }
+        }
+    }
+}

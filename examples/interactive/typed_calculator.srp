@@ -1,0 +1,15 @@
+// Run with scarp exec --interactive examples/interactive/typed_calculator.srp.
+write("Scarp calculator\n");
+flush_stdout();
+bind left: float = input_float("First number: ");
+bind right: float = input_float("Second number: ");
+bind operation: string = input("Operation (+, -, *): ");
+if operation == "+" {
+    print("Result:", left + right);
+} elif operation == "-" {
+    print("Result:", left - right);
+} elif operation == "*" {
+    print("Result:", left * right);
+} else {
+    eprint("Unknown operation");
+}

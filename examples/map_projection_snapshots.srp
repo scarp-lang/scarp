@@ -1,0 +1,11 @@
+// Canonical order and immutable snapshots after persistent map updates.
+bind original = [map: 3: "three", 1: "one", 2: "two"];
+bind keys = map_keys(original);
+bind values = map_values(original);
+bind updated = map_set(original, 2, "TWO");
+bind reduced = map_remove(updated, 1);
+print(keys);
+print(values);
+print(map_keys(reduced));
+print(map_values(reduced));
+print(map_len(original), map_len(reduced));

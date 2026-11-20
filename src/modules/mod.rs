@@ -34,7 +34,8 @@ mod linker;
 mod loader;
 pub use inspection::{ImportInfo, SourceLocation};
 pub use loader::{
-    FileSourceLoader, MemorySourceLoader, SourceLoadError, SourceLoadKind, SourceLoader,
+    FileSourceLoader, LoadedSource, MemorySourceLoader, SourceLoadError, SourceLoadKind,
+    SourceLoader,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -217,6 +218,12 @@ pub enum SymbolKind {
         pure: bool,
     },
     Constant(crate::types::SourceType),
+    Record {
+        fields: Vec<(String, crate::types::SourceType)>,
+    },
+    Variant {
+        cases: Vec<(String, Option<crate::types::SourceType>)>,
+    },
 }
 #[derive(Debug, Clone)]
 pub struct SymbolInfo {
@@ -238,6 +245,7 @@ pub struct ModuleProgram {
     program: ResolvedProgram,
     sources: Arc<SourceMap>,
     modules: Vec<ModuleInfo>,
+    diagnostic_qualifiers: Vec<Option<String>>,
     inspection: inspection::Inspection,
     constant_dependencies: Vec<ConstantDependency>,
 }
@@ -305,6 +313,33 @@ impl ModuleProgram {
             RunError::Output(error) => ModuleRunError::Output(error),
         })
     }
+
+    /// Explicit opt-in interactive prompts with source-mapped diagnostics.
+    /// Visible prompts cannot be rolled back after subsequent runtime failures.
+    pub fn execute_with_interactive_input(
+        &self,
+        input: &mut impl io::BufRead,
+        stdout: &mut impl io::Write,
+        stderr: &mut impl io::Write,
+        options: ExecutionOptions,
+        input_limits: crate::InputLimits,
+    ) -> Result<(), ModuleRunError> {
+        interpreter::execute_with_interactive_input_and_options(
+            &self.program,
+            input,
+            stdout,
+            stderr,
+            options,
+            input_limits,
+        )
+        .map_err(|error| match error {
+            RunError::Diagnostic(diagnostic) => ModuleRunError::Diagnostic(ModuleDiagnostic {
+                diagnostic,
+                sources: self.sources.clone(),
+            }),
+            RunError::Output(error) => ModuleRunError::Output(error),
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -318,6 +353,8 @@ struct Import {
 #[derive(Debug, Clone)]
 struct ParsedModule {
     identity: String,
+    diagnostic_qualifier: Option<String>,
+    revision: Option<u64>,
     program: Program,
     imports: Vec<Import>,
     dependencies: Vec<(Import, SourceId)>,
@@ -340,6 +377,10 @@ impl ModuleGraph {
     pub fn file_count(&self) -> usize {
         self.modules.len()
     }
+    /// The editor revision supplied in the same read as this source's text.
+    pub fn source_revision(&self, source: SourceId) -> Option<u64> {
+        self.modules.get(source)?.revision
+    }
     fn load_one(
         &mut self,
         loader: &dyn SourceLoader,
@@ -357,8 +398,11 @@ impl ModuleGraph {
             .max_total_bytes
             .saturating_sub(self.source_bytes)
             .min(self.limits.max_file_bytes);
-        let source = loader
-            .load(&identity, allowance)
+        let LoadedSource {
+            text: source,
+            revision,
+        } = loader
+            .load_with_revision(&identity, allowance)
             .map_err(|error| load_error(error, span))?;
         if source.len() > allowance {
             return Err(limit(span, "module source bytes"));
@@ -396,7 +440,9 @@ impl ModuleGraph {
         self.imports += imports.len();
         let id = self.modules.len();
         self.modules.push(ParsedModule {
+            diagnostic_qualifier: loader.diagnostic_qualifier(&identity),
             identity,
+            revision,
             program,
             imports,
             dependencies: Vec::new(),
@@ -532,6 +578,8 @@ fn validate_imports(program: &Program, allowance: usize) -> Result<Vec<Import>, 
         };
         let declared = match statement {
             Statement::Function(f) => Some((f.name.as_str(), f.name_span)),
+            Statement::Record(r) => Some((r.name.as_str(), r.name_span)),
+            Statement::Variant(v) => Some((v.name.as_str(), v.name_span)),
             Statement::Declaration {
                 name, name_span, ..
             } => Some((name.as_str(), *name_span)),
@@ -662,7 +710,17 @@ pub fn resolve_with_compiler_limits(
     constants: ConstantLimits,
     types: crate::types::TypeLimits,
 ) -> Result<ModuleProgram, ModuleDiagnostic> {
-    linker::resolve(graph, constants, types)
+    linker::resolve(graph, constants, types, None)
+}
+/// Compile a freshly loaded graph with caller-owned reuse of scalar constant
+/// evaluations. Imports, references and all compile limits still apply.
+pub fn resolve_with_constant_cache(
+    graph: ModuleGraph,
+    constants: ConstantLimits,
+    types: crate::types::TypeLimits,
+    cache: &mut cache::ConstantCache,
+) -> Result<ModuleProgram, ModuleDiagnostic> {
+    linker::resolve(graph, constants, types, Some(cache))
 }
 /// Compile and build an opt-in navigation snapshot without executing statements.
 pub fn resolve_indexed(
@@ -683,7 +741,19 @@ pub fn resolve_indexed_with_compiler_limits(
     types: crate::types::TypeLimits,
     index: symbols::IndexLimits,
 ) -> Result<symbols::IndexedProgram, ModuleDiagnostic> {
-    linker::resolve_indexed(graph, constants, types, index)
+    linker::resolve_indexed(graph, constants, types, index, None)
+}
+/// Compile with scalar constant reuse and build a fresh navigation index in
+/// the current graph's source coordinates. Callers can combine this with
+/// [load_with_frontend_caches] for independent token and AST reuse.
+pub fn resolve_indexed_with_constant_cache(
+    graph: ModuleGraph,
+    constants: ConstantLimits,
+    types: crate::types::TypeLimits,
+    index: symbols::IndexLimits,
+    cache: &mut cache::ConstantCache,
+) -> Result<symbols::IndexedProgram, ModuleDiagnostic> {
+    linker::resolve_indexed(graph, constants, types, index, Some(cache))
 }
 pub fn compile_indexed_with_loader(
     entry: &str,

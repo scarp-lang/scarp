@@ -229,6 +229,42 @@ class ReleaseAssets(unittest.TestCase):
         files[verifier.METADATA_MEMBER] = json.dumps(metadata).encode()
         return files
 
+    def test_alpha15_requires_current_notes_and_inherited_package_content(self):
+        version = "0.0.6-alpha.15"
+        files = self.core_release_files(version)
+        self.build(version=version, extra_files=files)
+        self.assertEqual(len(verifier.verify(self.directory, version, COMMIT).splitlines()), 3)
+        for member in (
+            verifier.METADATA_MEMBER,
+            "docs/releases/v0.0.6-alpha.15-publication.md",
+            "examples/structured_pattern_coverage.stdout",
+            "examples/projects/task-board/tests/lifecycle.srp",
+            "examples/repeat.stdout",
+        ):
+            with self.subTest(member=member):
+                damaged = {name: data for name, data in files.items() if name != member}
+                self.build(version=version, omit=member, extra_files=damaged)
+                with self.assertRaisesRegex(ValueError, "missing " + re.escape(member)):
+                    verifier.verify(self.directory, version, COMMIT)
+
+    def test_alpha16_carries_forward_asset_contract_and_adds_statistics(self):
+        version = "0.0.6-alpha.16"
+        files = self.core_release_files(version)
+        self.build(version=version, extra_files=files)
+        self.assertEqual(len(verifier.verify(self.directory, version, COMMIT).splitlines()), 3)
+        for member in (
+            verifier.METADATA_MEMBER,
+            "docs/releases/v0.0.6-alpha.15-publication.md",
+            "docs/releases/v0.0.6-alpha.16-publication.md",
+            "examples/repeat.stdout",
+            "examples/order_statistics.stdout",
+        ):
+            with self.subTest(member=member):
+                damaged = {name: data for name, data in files.items() if name != member}
+                self.build(version=version, omit=member, extra_files=damaged)
+                with self.assertRaisesRegex(ValueError, "missing " + re.escape(member)):
+                    verifier.verify(self.directory, version, COMMIT)
+
     def test_alpha6_core_requires_input_tuple_and_prior_assets(self):
         version = "0.0.6-alpha.6"
         files = self.core_release_files(version)
@@ -263,6 +299,78 @@ class ReleaseAssets(unittest.TestCase):
             "examples/conditional_unicode.srp",
             "examples/conditional_unicode.stdout",
             "examples/core_input_tuple.stdin",
+        ):
+            with self.subTest(member=member):
+                damaged = {name: data for name, data in files.items() if name != member}
+                self.build(version=version, omit=member, extra_files=damaged)
+                with self.assertRaisesRegex(ValueError, "missing " + re.escape(member)):
+                    verifier.verify(self.directory, version, COMMIT)
+
+    def test_alpha8_requires_project_example_fixture_and_inherited_assets(self):
+        version = "0.0.6-alpha.8"
+        files = self.core_release_files(version)
+        self.build(version=version, extra_files=files)
+        self.assertEqual(len(verifier.verify(self.directory, version, COMMIT).splitlines()), 3)
+        for member in (
+            "docs/releases/v0.0.6-alpha.8-publication.md",
+            "examples/projects/calculator/scarp.project",
+            "examples/projects/calculator/tests/input.stdin",
+            "examples/conditional_unicode.srp",
+        ):
+            with self.subTest(member=member):
+                damaged = {name: data for name, data in files.items() if name != member}
+                self.build(version=version, omit=member, extra_files=damaged)
+                with self.assertRaisesRegex(ValueError, "missing " + re.escape(member)):
+                    verifier.verify(self.directory, version, COMMIT)
+
+    def test_alpha9_requires_bigint_assets_and_inherits_project_fixtures(self):
+        version = "0.0.6-alpha.9"
+        files = self.core_release_files(version)
+        self.build(version=version, extra_files=files)
+        self.assertEqual(len(verifier.verify(self.directory, version, COMMIT).splitlines()), 3)
+        for member in (
+            "docs/releases/v0.0.6-alpha.9-publication.md",
+            "examples/modules/bigint_math.srp",
+            "examples/bigint_arithmetic.stdout",
+            "examples/projects/calculator/tests/input.stdin",
+        ):
+            with self.subTest(member=member):
+                damaged = {name: data for name, data in files.items() if name != member}
+                self.build(version=version, omit=member, extra_files=damaged)
+                with self.assertRaisesRegex(ValueError, "missing " + re.escape(member)):
+                    verifier.verify(self.directory, version, COMMIT)
+
+    def test_alpha10_requires_new_examples_and_alpha9_compatibility_assets(self):
+        version = "0.0.6-alpha.10"
+        files = self.core_release_files(version)
+        self.build(version=version, extra_files=files)
+        self.assertEqual(len(verifier.verify(self.directory, version, COMMIT).splitlines()), 3)
+        for member in (
+            "docs/releases/v0.0.6-alpha.10-publication.md",
+            "examples/interactive/greeting.stdin",
+            "examples/fixed_arrays.stdout",
+            "examples/bigint_exact.srp",
+            "examples/modules/bigint_math.srp",
+            "examples/projects/calculator/tests/input.stdin",
+        ):
+            with self.subTest(member=member):
+                damaged = {name: data for name, data in files.items() if name != member}
+                self.build(version=version, omit=member, extra_files=damaged)
+                with self.assertRaisesRegex(ValueError, "missing " + re.escape(member)):
+                    verifier.verify(self.directory, version, COMMIT)
+
+    def test_alpha11_requires_decimal_sources_fixtures_and_prior_compatibility_assets(self):
+        version = "0.0.6-alpha.11"
+        files = self.core_release_files(version)
+        self.build(version=version, extra_files=files)
+        self.assertEqual(len(verifier.verify(self.directory, version, COMMIT).splitlines()), 3)
+        for member in (
+            "docs/releases/v0.0.6-alpha.11-publication.md",
+            "examples/decimal_exact.stdout",
+            "examples/interactive/exact_decimal.stdin",
+            "examples/interactive/exact_decimal.stdout",
+            "examples/fixed_arrays.stdout",
+            "examples/projects/calculator/tests/input.stdin",
         ):
             with self.subTest(member=member):
                 damaged = {name: data for name, data in files.items() if name != member}

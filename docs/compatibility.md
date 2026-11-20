@@ -1,5 +1,67 @@
 # Version and API compatibility
 
+`0.0.6-alpha.15` is **a published GitHub prerelease**. Programs with small work
+limits may need an adjustment for equal-length string comparisons. Token and AST
+inspection apply the CLI's 1 MiB source file cap. Rust hosts should handle
+`CachedCompileError::RevisionMismatch` and the checked kernel's new invalid-shift
+status. Both ELF64 kernel APIs enforce their documented immutable `bind` subset.
+[Public notes](releases/v0.0.6-alpha.15-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.15-validation.md)
+
+`0.0.6-alpha.14` is **a published GitHub prerelease**. Nested destructuring
+reports more precise errors under the existing diagnostic code. Rust hosts
+can resize editor cache quotas and opt into checked arithmetic in the
+experimental Linux x86-64 ELF64 kernel API. Existing source syntax, CLI
+schemas and the original integer kernel API are preserved.
+[Public notes](releases/v0.0.6-alpha.14-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.14-validation.md)
+
+`0.0.6-alpha.13` is **a published GitHub prerelease**. It reduces payload
+allocations when forwarding Option/Result failures and adds opt-in Rust embedding
+APIs for syntax/semantic cache retention changes, targeted semantic revision
+eviction, and workspace-generation checks for editor analysis. Hosts own source
+identity and generation tracking; stale results are not automatically rejected
+without host participation. Compiler/interpreter source syntax and existing CLI
+commands remain unchanged; no general native executable compiler is introduced.
+[Public notes](releases/v0.0.6-alpha.13-publication.md) ·
+[Published source](https://github.com/scarp-lang/scarp/tree/e755fda37cdaeed29434e848cb5dd41f2f2e7eb2)
+
+`0.0.6-alpha.12` is **a published GitHub prerelease**. It adds nominal records,
+tagged variants, nested binding patterns,
+typed Option and Result with propagation, and immutable typed lists and maps.
+Rust hosts with exhaustive matches on `SourceType`, `Value`, AST enums or
+`DiagnosticKind` should handle the added variants. Module inventories use schema
+4 when a record declaration is present and schema 5 when a variant declaration
+is present. These additions run in the interpreter.
+[Public notes](releases/v0.0.6-alpha.12-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.12-validation.md)
+
+`0.0.6-alpha.11` is **a published GitHub prerelease**. It adds exact
+`decimal` values and typed console input. Rust hosts should update exhaustive
+matches on `PrimitiveType`, `Value`, `Builtin`, and `DiagnosticKind` where
+applicable. Module inventory schemas 1–3 also support the `decimal` type string.
+[Public notes](releases/v0.0.6-alpha.11-publication.md)
+
+`0.0.6-alpha.10` is **a published GitHub prerelease**. It adds typed
+console I/O, fixed arrays and expanded exact BigInt arithmetic. Rust hosts
+using exhaustive execution options need `max_array_bytes` or struct update
+syntax. Array-bearing module inventories use JSON schema 3. Project test reports
+retain their existing schema versions.
+[Public notes](releases/v0.0.6-alpha.10-publication.md)
+
+`0.0.6-alpha.9` is **a published GitHub prerelease**. It adds bounded BigInt
+and opt-in `scarp test --json=v2` reports. Rust hosts with exhaustive
+`ExecutionOptions` literals need the two BigInt limit fields or struct update
+syntax. Exhaustive `Value`, `PrimitiveType`, `numeric::Builtin`, and
+`DiagnosticKind` matches need the added variants.
+[Public notes](releases/v0.0.6-alpha.9-publication.md)
+
+`0.0.6-alpha.8` is **a published GitHub prerelease** (12 November 2026).
+It introduces declarative projects and the project test runner. Rename existing
+identifiers named `assert`. Rust hosts with exhaustive matches on `Statement`
+or `DiagnosticKind` need the new assertion variants.
+[Public notes](releases/v0.0.6-alpha.8-publication.md)
+
 `0.0.6-alpha.7` is **a published GitHub prerelease** (11 November 2026).
 Rust embedders with exhaustive matches on `ExpressionKind` must handle
 `Conditional`. Conditional expressions are available in interpreter code.
@@ -61,7 +123,7 @@ The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.6-alpha.7](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.7).
+[0.0.6-alpha.15](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.15).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a

@@ -1,0 +1,3 @@
+bind before = 20;
+bind after = 7;
+print(before + after);

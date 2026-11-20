@@ -15,6 +15,14 @@ pub struct SyntaxCacheLimits {
     pub max_identity_bytes: usize,
     pub max_ast_nodes: usize,
 }
+impl SyntaxCacheLimits {
+    fn retention_disabled(self) -> bool {
+        self.max_entries == 0
+            || self.max_source_bytes == 0
+            || self.max_identity_bytes == 0
+            || self.max_ast_nodes == 0
+    }
+}
 impl Default for SyntaxCacheLimits {
     fn default() -> Self {
         Self {
@@ -75,6 +83,41 @@ impl SyntaxCache {
             evictions: 0,
         }
     }
+    /// Reconfigure retained-syntax quotas without resetting lifetime counters.
+    ///
+    /// Existing entries are evicted oldest-first until every new quota is
+    /// satisfied. Lowering any quota to zero drops all retained entries and
+    /// prevents subsequent stores until that quota is raised again.
+    /// Parsed programs already returned to callers remain unaffected.
+    pub fn set_limits(&mut self, limits: SyntaxCacheLimits) {
+        self.limits = limits;
+        if limits.retention_disabled() {
+            self.clear();
+        } else {
+            self.trim_to_limits();
+        }
+    }
+
+    /// The current retention quotas, including any runtime reconfiguration.
+    pub fn limits(&self) -> SyntaxCacheLimits {
+        self.limits
+    }
+
+    fn trim_to_limits(&mut self) {
+        while !self.entries.is_empty()
+            && (self.entries.len() > self.limits.max_entries
+                || self.bytes > self.limits.max_source_bytes
+                || self.identities > self.limits.max_identity_bytes
+                || self.nodes > self.limits.max_ast_nodes)
+        {
+            let old = self.entries.pop_front().expect("checked nonempty");
+            self.bytes -= old.source.len();
+            self.identities -= old.identity.len();
+            self.nodes -= old.nodes;
+            self.evictions = self.evictions.saturating_add(1);
+        }
+    }
+
     pub fn stats(&self) -> SyntaxCacheStats {
         SyntaxCacheStats {
             entries: self.entries.len(),
@@ -149,7 +192,7 @@ impl SyntaxCache {
         source_base: usize,
         parsed_absolute: &Program,
     ) {
-        if self.limits.max_entries == 0
+        if self.limits.retention_disabled()
             || source.len() > self.limits.max_source_bytes
             || identity.len() > self.limits.max_identity_bytes
         {

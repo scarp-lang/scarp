@@ -55,55 +55,133 @@ fn diagnostic<'a>(
     value: &Diagnostic,
     out: &mut impl Write,
     locate: impl Fn(Span) -> Option<SourceLocation<'a>>,
+    limits: ReportLimits,
 ) -> io::Result<()> {
-    header(out, Some(value.kind.code()), &value.message)?;
+    header(
+        out,
+        Some(value.kind.code()),
+        prefix(&value.message, limits.message),
+    )?;
     source_location(out, locate(value.span))?;
     out.write_all(b",\"related\":[")?;
-    for (index, note) in value.related.iter().enumerate() {
+    for (index, note) in value.related.iter().take(limits.related).enumerate() {
         if index != 0 {
             out.write_all(b",")?;
         }
         out.write_all(b"{\"message\":")?;
-        string(out, &note.message)?;
+        string(out, prefix(&note.message, limits.detail))?;
         out.write_all(b",\"location\":")?;
         source_location(out, locate(note.span))?;
         out.write_all(b"}")?;
     }
     out.write_all(b"]")?;
-    finish(out, value.help.as_deref())
+    finish(
+        out,
+        value
+            .help
+            .as_deref()
+            .map(|text| prefix(text, limits.detail)),
+    )
+}
+
+#[derive(Clone, Copy)]
+struct ReportLimits {
+    message: usize,
+    detail: usize,
+    related: usize,
+}
+
+const UNRESTRICTED: ReportLimits = ReportLimits {
+    message: usize::MAX,
+    detail: usize::MAX,
+    related: usize::MAX,
+};
+const PROJECT: ReportLimits = ReportLimits {
+    message: 1600,
+    detail: 512,
+    related: 8,
+};
+const MAX_PROJECT_PATH_BYTES: usize = 4096;
+
+fn prefix(value: &str, limit: usize) -> &str {
+    if value.len() <= limit {
+        return value;
+    }
+    value
+        .char_indices()
+        .nth(limit)
+        .map_or(value, |(end, _)| &value[..end])
 }
 impl Diagnostic {
     // Schema 1: half-open local UTF-8 byte spans, one-based scalar positions.
     // Invalid source spans are null. Source excerpts are not serialized.
     pub fn write_json(&self, filename: &str, source: &str, out: &mut impl Write) -> io::Result<()> {
-        diagnostic(self, out, |span| {
-            if span.start > span.end
-                || !source.is_char_boundary(span.start)
-                || !source.is_char_boundary(span.end)
-            {
-                return None;
-            }
-            Some(SourceLocation {
-                path: filename,
-                span,
-                start: location(source, span.start),
-                end: location(source, span.end),
-            })
-        })
+        diagnostic(
+            self,
+            out,
+            |span| {
+                if span.start > span.end
+                    || !source.is_char_boundary(span.start)
+                    || !source.is_char_boundary(span.end)
+                {
+                    return None;
+                }
+                Some(SourceLocation {
+                    path: filename,
+                    span,
+                    start: location(source, span.start),
+                    end: location(source, span.end),
+                })
+            },
+            UNRESTRICTED,
+        )
     }
 }
 impl ModuleDiagnostic {
     pub fn write_json(&self, out: &mut impl Write) -> io::Result<()> {
-        diagnostic(&self.diagnostic, out, |span| {
-            let value = self.sources.locate_span(span)?;
-            Some(SourceLocation {
-                path: &self.sources.files().get(value.source)?.name,
-                span: value.span,
-                start: value.start,
-                end: value.end,
-            })
-        })
+        self.write_json_with_paths(out, UNRESTRICTED, Some)
     }
+
+    /// Write the compiler diagnostic envelope for a bounded project test report.
+    /// Use a source loader configured to supply project-relative paths.
+    /// Locations without a portable relative path are omitted.
+    pub fn write_project_json(&self, out: &mut impl Write) -> io::Result<()> {
+        self.write_json_with_paths(out, PROJECT, project_path)
+    }
+
+    fn write_json_with_paths<'a>(
+        &'a self,
+        out: &mut impl Write,
+        limits: ReportLimits,
+        path: impl Fn(&'a str) -> Option<&'a str>,
+    ) -> io::Result<()> {
+        diagnostic(
+            &self.diagnostic,
+            out,
+            |span| {
+                let value = self.sources.locate_span(span)?;
+                Some(SourceLocation {
+                    path: path(&self.sources.files().get(value.source)?.name)?,
+                    span: value.span,
+                    start: value.start,
+                    end: value.end,
+                })
+            },
+            limits,
+        )
+    }
+}
+
+fn project_path(value: &str) -> Option<&str> {
+    if value.len() > MAX_PROJECT_PATH_BYTES
+        || value.split('/').any(|part| matches!(part, "" | "." | ".."))
+        || value
+            .chars()
+            .any(|ch| ch.is_control() || matches!(ch, ':' | '\\'))
+    {
+        return None;
+    }
+    Some(value)
 }
 // Non-source errors share the envelope, with null code and primary location.
 pub fn write_json_message(

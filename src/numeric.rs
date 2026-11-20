@@ -6,11 +6,15 @@ use crate::{
     value::{finite_number, FiniteFloat, NumericVector, Value, ValueType, MAX_VECTOR_LENGTH},
 };
 
+mod bigints;
+mod bits;
 mod correlation;
+pub(crate) mod decimals;
 mod integer_scalar;
 mod integers;
 mod kernels;
 mod nucleus;
+mod order_statistics;
 mod parse_format;
 mod samples;
 mod scalar_text;
@@ -46,13 +50,23 @@ pub enum Builtin {
     IntegerSign,
     IntegerGcd,
     IntegerLcm,
+    BitsCountOnes,
+    BitsLeadingZeros,
+    BitsTrailingZeros,
+    BitsReverse,
+    BitsSwapBytes,
+    BitsRotateLeft,
+    BitsRotateRight,
     TextConcat,
     TextSlice,
     TextRepeat,
     TextLength,
     TextBytes,
     TextCodepoint,
+    TextFromCodepoint,
     TextFind,
+    TextRFind,
+    TextCount,
     TextContains,
     TextStartsWith,
     TextEndsWith,
@@ -104,6 +118,38 @@ pub enum Builtin {
     TextToFloat,
     TextTrim,
     TextReplace,
+    TextLower,
+    TextUpper,
+    TextReverse,
+    BigInt,
+    BigIntFromInteger,
+    BigIntToInteger,
+    BigIntAbs,
+    BigIntPow,
+    BigIntBitLength,
+    BigIntToText,
+    BigIntGcd,
+    BigIntLcm,
+    BigIntSqrt,
+    BigIntPowMod,
+    BigIntFromRadix,
+    BigIntToRadix,
+    BigIntAnd,
+    BigIntOr,
+    BigIntXor,
+    BigIntNot,
+    BigIntShl,
+    BigIntShr,
+    Decimal,
+    DecimalFromInteger,
+    DecimalToInteger,
+    DecimalToText,
+    DecimalAbs,
+    DecimalRound,
+    DecimalFormat,
+    DecimalDivRounded,
+    Median,
+    Quantile,
 }
 
 impl Builtin {
@@ -123,16 +169,48 @@ impl Builtin {
     }
     pub fn from_name(name: &str) -> Option<Self> {
         Some(match name {
+            "decimal" => Self::Decimal,
+            "decimal_from_integer" => Self::DecimalFromInteger,
+            "decimal_to_integer" => Self::DecimalToInteger,
+            "decimal_to_text" => Self::DecimalToText,
+            "decimal_abs" => Self::DecimalAbs,
+            "decimal_round" => Self::DecimalRound,
+            "decimal_format" => Self::DecimalFormat,
+            "decimal_div_rounded" => Self::DecimalDivRounded,
+            "bigint" => Self::BigInt,
+            "bigint_from_integer" => Self::BigIntFromInteger,
+            "bigint_to_integer" => Self::BigIntToInteger,
+            "bigint_abs" => Self::BigIntAbs,
+            "bigint_pow" => Self::BigIntPow,
+            "bigint_bit_length" => Self::BigIntBitLength,
+            "bigint_to_text" => Self::BigIntToText,
+            "bigint_gcd" => Self::BigIntGcd,
+            "bigint_lcm" => Self::BigIntLcm,
+            "bigint_sqrt" => Self::BigIntSqrt,
+            "bigint_pow_mod" => Self::BigIntPowMod,
+            "bigint_from_radix" => Self::BigIntFromRadix,
+            "bigint_to_radix" => Self::BigIntToRadix,
+            "bigint_and" => Self::BigIntAnd,
+            "bigint_or" => Self::BigIntOr,
+            "bigint_xor" => Self::BigIntXor,
+            "bigint_not" => Self::BigIntNot,
+            "bigint_shl" => Self::BigIntShl,
+            "bigint_shr" => Self::BigIntShr,
             "integer_to_text" => Self::IntegerToText,
             "float_to_text" => Self::FloatToText,
             "text_to_integer" => Self::TextToInteger,
             "text_to_float" => Self::TextToFloat,
             "text_trim" => Self::TextTrim,
             "text_replace" => Self::TextReplace,
+            "text_lower" => Self::TextLower,
+            "text_upper" => Self::TextUpper,
+            "text_reverse" => Self::TextReverse,
             "variance" => Self::Variance,
             "stddev" => Self::StdDev,
             "cosine_similarity" => Self::CosineSimilarity,
             "pearson_correlation" => Self::PearsonCorrelation,
+            "median" => Self::Median,
+            "quantile" => Self::Quantile,
             "sample_area" => Self::SampleArea,
             "sample_slopes" => Self::SampleSlopes,
             "sample_cumulative_area" => Self::SampleCumulativeArea,
@@ -153,13 +231,23 @@ impl Builtin {
             "integer_sign" => Self::IntegerSign,
             "integer_gcd" => Self::IntegerGcd,
             "integer_lcm" => Self::IntegerLcm,
+            "bits_count_ones" => Self::BitsCountOnes,
+            "bits_leading_zeros" => Self::BitsLeadingZeros,
+            "bits_trailing_zeros" => Self::BitsTrailingZeros,
+            "bits_reverse" => Self::BitsReverse,
+            "bits_swap_bytes" => Self::BitsSwapBytes,
+            "bits_rotate_left" => Self::BitsRotateLeft,
+            "bits_rotate_right" => Self::BitsRotateRight,
             "text_concat" => Self::TextConcat,
             "text_slice" => Self::TextSlice,
             "text_repeat" => Self::TextRepeat,
             "text_len" => Self::TextLength,
             "text_bytes" => Self::TextBytes,
             "text_codepoint" => Self::TextCodepoint,
+            "text_from_codepoint" => Self::TextFromCodepoint,
             "text_find" => Self::TextFind,
+            "text_rfind" => Self::TextRFind,
+            "text_count" => Self::TextCount,
             "text_contains" => Self::TextContains,
             "text_starts_with" => Self::TextStartsWith,
             "text_ends_with" => Self::TextEndsWith,
@@ -212,11 +300,42 @@ impl Builtin {
     pub fn parameter_types(self) -> &'static [ValueType] {
         use ValueType::{Float, Integer, Integers, String, Tile, Vector};
         match self {
+            Self::Decimal => &[String],
+            Self::DecimalFromInteger => &[Integer],
+            Self::DecimalToInteger | Self::DecimalToText | Self::DecimalAbs => {
+                &[ValueType::Decimal]
+            }
+            Self::DecimalRound | Self::DecimalFormat => &[ValueType::Decimal, Integer, String],
+            Self::DecimalDivRounded => &[ValueType::Decimal, ValueType::Decimal, Integer, String],
+            Self::BigInt => &[String],
+            Self::BigIntFromInteger => &[Integer],
+            Self::BigIntToInteger
+            | Self::BigIntAbs
+            | Self::BigIntBitLength
+            | Self::BigIntToText => &[ValueType::BigInt],
+            Self::BigIntPow => &[ValueType::BigInt, Integer],
+            Self::BigIntPowMod => &[ValueType::BigInt, Integer, ValueType::BigInt],
+            Self::BigIntFromRadix => &[String, Integer],
+            Self::BigIntToRadix => &[ValueType::BigInt, Integer],
+            Self::BigIntAnd | Self::BigIntOr | Self::BigIntXor => {
+                &[ValueType::BigInt, ValueType::BigInt]
+            }
+            Self::BigIntNot => &[ValueType::BigInt],
+            Self::BigIntShl | Self::BigIntShr => &[ValueType::BigInt, Integer],
+            Self::BigIntGcd | Self::BigIntLcm => &[ValueType::BigInt, ValueType::BigInt],
+            Self::BigIntSqrt => &[ValueType::BigInt],
             Self::IntegerToText => &[Integer],
             Self::FloatToText => &[Float],
-            Self::TextToInteger | Self::TextToFloat | Self::TextTrim => &[String],
+            Self::TextToInteger
+            | Self::TextToFloat
+            | Self::TextTrim
+            | Self::TextLower
+            | Self::TextUpper
+            | Self::TextReverse => &[String],
             Self::TextReplace => &[String, String, String],
             Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
+            Self::Median => &[Vector],
+            Self::Quantile => &[Vector, Float],
             Self::SampleArea | Self::SampleSlopes | Self::SampleCumulativeArea => &[Vector, Vector],
             Self::IntsLength | Self::IntsSum | Self::IntsToVector => &[Integers],
             Self::IntsWindow | Self::IntsSet => &[Integers, Integer, Integer],
@@ -227,13 +346,23 @@ impl Builtin {
             Self::ToInteger => &[Float],
             Self::IntegerAbs | Self::IntegerSign => &[Integer],
             Self::IntegerGcd | Self::IntegerLcm => &[Integer, Integer],
+            Self::BitsCountOnes
+            | Self::BitsLeadingZeros
+            | Self::BitsTrailingZeros
+            | Self::BitsReverse
+            | Self::BitsSwapBytes => &[Integer],
+            Self::BitsRotateLeft | Self::BitsRotateRight => &[Integer, Integer],
             Self::TextLength | Self::TextBytes => &[String],
+            Self::TextFromCodepoint => &[Integer],
             Self::TextCodepoint | Self::TextRepeat => &[String, Integer],
             Self::TextSlice => &[String, Integer, Integer],
             Self::TextConcat => &[String, String],
-            Self::TextFind | Self::TextContains | Self::TextStartsWith | Self::TextEndsWith => {
-                &[String, String]
-            }
+            Self::TextFind
+            | Self::TextRFind
+            | Self::TextCount
+            | Self::TextContains
+            | Self::TextStartsWith
+            | Self::TextEndsWith => &[String, String],
             Self::Length
             | Self::Sum
             | Self::Mean
@@ -276,16 +405,48 @@ impl Builtin {
 
     pub fn result_type(self) -> ValueType {
         match self {
-            Self::IntegerToText | Self::FloatToText | Self::TextTrim | Self::TextReplace => {
-                ValueType::String
-            }
+            Self::Decimal
+            | Self::DecimalFromInteger
+            | Self::DecimalAbs
+            | Self::DecimalRound
+            | Self::DecimalDivRounded => ValueType::Decimal,
+            Self::DecimalToInteger => ValueType::Integer,
+            Self::DecimalToText | Self::DecimalFormat => ValueType::String,
+            Self::BigInt
+            | Self::BigIntFromInteger
+            | Self::BigIntAbs
+            | Self::BigIntPow
+            | Self::BigIntGcd
+            | Self::BigIntLcm
+            | Self::BigIntSqrt
+            | Self::BigIntPowMod
+            | Self::BigIntFromRadix
+            | Self::BigIntAnd
+            | Self::BigIntOr
+            | Self::BigIntXor
+            | Self::BigIntNot
+            | Self::BigIntShl
+            | Self::BigIntShr => ValueType::BigInt,
+            Self::BigIntBitLength => ValueType::Integer,
+            Self::BigIntToText | Self::BigIntToRadix => ValueType::String,
+            Self::BigIntToInteger => ValueType::Integer,
+            Self::IntegerToText
+            | Self::FloatToText
+            | Self::TextTrim
+            | Self::TextReplace
+            | Self::TextLower
+            | Self::TextUpper
+            | Self::TextReverse
+            | Self::TextFromCodepoint => ValueType::String,
             Self::TextToInteger => ValueType::Integer,
             Self::TextToFloat => ValueType::Float,
             Self::Variance
             | Self::StdDev
             | Self::SampleArea
             | Self::CosineSimilarity
-            | Self::PearsonCorrelation => ValueType::Float,
+            | Self::PearsonCorrelation
+            | Self::Median
+            | Self::Quantile => ValueType::Float,
             Self::IntsLength | Self::IntsSum => ValueType::Integer,
             Self::IntsWindow
             | Self::IntsJoin
@@ -295,14 +456,23 @@ impl Builtin {
             | Self::TopK
             | Self::TopP => ValueType::Integers,
             Self::ToInteger
-            | Self::IntegerAbs
-            | Self::IntegerSign
-            | Self::IntegerGcd
-            | Self::IntegerLcm
             | Self::TextLength
             | Self::TextBytes
             | Self::TextCodepoint
-            | Self::TextFind => ValueType::Integer,
+            | Self::TextFind
+            | Self::TextRFind
+            | Self::TextCount
+            | Self::BitsCountOnes
+            | Self::BitsLeadingZeros
+            | Self::BitsTrailingZeros
+            | Self::BitsReverse
+            | Self::BitsSwapBytes
+            | Self::BitsRotateLeft
+            | Self::BitsRotateRight
+            | Self::IntegerAbs
+            | Self::IntegerSign
+            | Self::IntegerGcd
+            | Self::IntegerLcm => ValueType::Integer,
             Self::ToFloat => ValueType::Float,
             Self::TextConcat | Self::TextSlice | Self::TextRepeat => ValueType::String,
             Self::TextContains | Self::TextStartsWith | Self::TextEndsWith => ValueType::Boolean,
@@ -345,6 +515,45 @@ impl Builtin {
         )
     }
 
+    fn is_decimal(self) -> bool {
+        matches!(
+            self,
+            Self::Decimal
+                | Self::DecimalFromInteger
+                | Self::DecimalToInteger
+                | Self::DecimalToText
+                | Self::DecimalAbs
+                | Self::DecimalRound
+                | Self::DecimalFormat
+                | Self::DecimalDivRounded
+        )
+    }
+
+    fn is_bigint(self) -> bool {
+        matches!(
+            self,
+            Self::BigInt
+                | Self::BigIntFromInteger
+                | Self::BigIntToInteger
+                | Self::BigIntAbs
+                | Self::BigIntPow
+                | Self::BigIntBitLength
+                | Self::BigIntToText
+                | Self::BigIntGcd
+                | Self::BigIntLcm
+                | Self::BigIntSqrt
+                | Self::BigIntPowMod
+                | Self::BigIntFromRadix
+                | Self::BigIntToRadix
+                | Self::BigIntAnd
+                | Self::BigIntOr
+                | Self::BigIntXor
+                | Self::BigIntNot
+                | Self::BigIntShl
+                | Self::BigIntShr
+        )
+    }
+
     fn is_scalar_text(self) -> bool {
         matches!(
             self,
@@ -354,6 +563,8 @@ impl Builtin {
                 | Self::TextBytes
                 | Self::TextCodepoint
                 | Self::TextFind
+                | Self::TextRFind
+                | Self::TextCount
                 | Self::TextContains
                 | Self::TextStartsWith
                 | Self::TextEndsWith
@@ -373,6 +584,24 @@ pub fn evaluate(
         function,
         arguments,
         &mut Budget::new(max_steps),
+        Span::default(),
+    )
+}
+
+/// Standalone built-in with all configured work and logical allocation budgets.
+pub fn evaluate_with_options(
+    function: Builtin,
+    arguments: &[Value],
+    options: crate::ExecutionOptions,
+) -> Result<Value, Diagnostic> {
+    evaluate_with_budget(
+        function,
+        arguments,
+        &mut Budget::new(options.limits.max_steps)
+            .with_vector_bytes(options.max_vector_bytes)
+            .with_text_bytes(options.max_text_bytes)
+            .with_tuple_bytes(options.max_tuple_bytes)
+            .with_bigint_limits(options.max_bigint_digits, options.max_bigint_bytes),
         Span::default(),
     )
 }
@@ -621,6 +850,24 @@ pub(crate) fn evaluate_with_spans(
     }
     if matches!(
         function,
+        Builtin::BitsCountOnes
+            | Builtin::BitsLeadingZeros
+            | Builtin::BitsTrailingZeros
+            | Builtin::BitsReverse
+            | Builtin::BitsSwapBytes
+            | Builtin::BitsRotateLeft
+            | Builtin::BitsRotateRight
+    ) {
+        return bits::evaluate(function, args, budget, span, argument_span);
+    }
+    if function.is_bigint() {
+        return bigints::evaluate(function, args, budget, span, argument_span);
+    }
+    if function.is_decimal() {
+        return decimals::evaluate(function, args, budget, span, argument_span);
+    }
+    if matches!(
+        function,
         Builtin::IntsLength
             | Builtin::IntsSum
             | Builtin::IntsWindow
@@ -639,6 +886,10 @@ pub(crate) fn evaluate_with_spans(
             | Builtin::TextRepeat
             | Builtin::TextTrim
             | Builtin::TextReplace
+            | Builtin::TextLower
+            | Builtin::TextUpper
+            | Builtin::TextReverse
+            | Builtin::TextFromCodepoint
     ) {
         return text::evaluate(function, args, budget, span, argument_span);
     }
@@ -671,6 +922,9 @@ pub(crate) fn evaluate_with_spans(
     }
     if function == Builtin::PearsonCorrelation {
         return correlation::evaluate(args, budget, span, argument_span);
+    }
+    if matches!(function, Builtin::Median | Builtin::Quantile) {
+        return order_statistics::evaluate(function, args, budget, span, argument_span);
     }
     if matches!(
         function,
@@ -991,6 +1245,33 @@ pub(crate) fn evaluate_with_spans(
             vector(values, span)
         }
         Builtin::Length
+        | Builtin::Decimal
+        | Builtin::DecimalFromInteger
+        | Builtin::DecimalToInteger
+        | Builtin::DecimalToText
+        | Builtin::DecimalAbs
+        | Builtin::DecimalRound
+        | Builtin::DecimalFormat
+        | Builtin::DecimalDivRounded
+        | Builtin::BigInt
+        | Builtin::BigIntFromInteger
+        | Builtin::BigIntToInteger
+        | Builtin::BigIntAbs
+        | Builtin::BigIntPow
+        | Builtin::BigIntBitLength
+        | Builtin::BigIntToText
+        | Builtin::BigIntGcd
+        | Builtin::BigIntLcm
+        | Builtin::BigIntSqrt
+        | Builtin::BigIntPowMod
+        | Builtin::BigIntFromRadix
+        | Builtin::BigIntToRadix
+        | Builtin::BigIntAnd
+        | Builtin::BigIntOr
+        | Builtin::BigIntXor
+        | Builtin::BigIntNot
+        | Builtin::BigIntShl
+        | Builtin::BigIntShr
         | Builtin::IntegerToText
         | Builtin::FloatToText
         | Builtin::TextToInteger
@@ -1001,6 +1282,8 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::StdDev
         | Builtin::CosineSimilarity
         | Builtin::PearsonCorrelation
+        | Builtin::Median
+        | Builtin::Quantile
         | Builtin::SampleArea
         | Builtin::SampleSlopes
         | Builtin::SampleCumulativeArea
@@ -1021,6 +1304,19 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::IntegerSign
         | Builtin::IntegerGcd
         | Builtin::IntegerLcm
+        | Builtin::BitsCountOnes
+        | Builtin::BitsLeadingZeros
+        | Builtin::BitsTrailingZeros
+        | Builtin::BitsReverse
+        | Builtin::BitsSwapBytes
+        | Builtin::BitsRotateLeft
+        | Builtin::BitsRotateRight
+        | Builtin::TextFromCodepoint
+        | Builtin::TextRFind
+        | Builtin::TextCount
+        | Builtin::TextLower
+        | Builtin::TextUpper
+        | Builtin::TextReverse
         | Builtin::TextConcat
         | Builtin::TextSlice
         | Builtin::TextRepeat

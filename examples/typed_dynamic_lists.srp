@@ -1,0 +1,30 @@
+// Source-level typed dynamic lists: immutable values with a length-independent type.
+// Every binding retains a snapshot and list indexing is checked at runtime.
+record Task {
+    title: string,
+    done: boolean,
+}
+
+pure funcra first_title(tasks: list<record Task>) -> string {
+    return tasks[0]->title;
+}
+
+bind one: list<record Task> = [list:
+    new Task { title: "Draft", done: false },
+    new Task { title: "Review", done: true },
+];
+bind unchanged = one;
+
+var tasks: list<record Task> = one;
+print("First", first_title(tasks));
+tasks = [list:
+    new Task { title: "Ready", done: true },
+    new Task { title: "Review", done: true },
+    new Task { title: "Publish", done: false },
+];
+assert(unchanged[0]->title == "Draft");
+print("Updated", first_title(tasks), tasks[2]->title);
+bind empty: list<integer> = [list: <integer>];
+print("Empty", empty);
+bind nested: list<list<integer>> = [list: [list: 1, 2], [list: 3]];
+print("Nested", nested[0][1], nested[1][0]);

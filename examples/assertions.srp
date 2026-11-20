@@ -1,0 +1,15 @@
+// Native Scarp assertions: checked booleans, bounded literal messages.
+// This example is intended for the unreleased assertion development branch.
+
+pure funcra nonnegative(value: integer) -> integer {
+    assert(value >= 0, "value must be nonnegative");
+    return value;
+}
+
+var sum = 0;
+repeat 3 as index {
+    assert(index < 3);
+    sum += nonnegative(index);
+}
+assert(sum == 3, "sum of 0, 1, 2 is 3");
+print(sum);

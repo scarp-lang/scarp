@@ -1,10 +1,9 @@
-# First compiler-owned ELF64 object writer (development only)
+# Compiler-owned ELF64 object writer
 
-> **Not yet released.** This strictly scoped experimental library API is
-> not in `v0.0.6-alpha.3`. It does not provide native Scarp executables,
-> a public `scarp compile` command, a stable ABI, or whole-program output.
-
-The current development branch adds `native_object::emit_elf64_integer_kernel`.
+The experimental `native_object::emit_elf64_integer_kernel` Rust API first
+shipped in alpha.4 for one integer binding. Alpha.5 added dependent integer
+bindings. The API emits an object for a single kernel with an experimental ABI.
+The Scarp CLI runs programs through the interpreter.
 The compiler parses and resolves the *real* Scarp source, runs the existing
 native scalar preflight, lowers and independently verifies its private scalar
 statement and expression IR, then encodes a **freestanding x86-64 ELF64 ET_REL
@@ -13,8 +12,8 @@ request is performed during production emission.
 
 ## Exact accepted source
 
-**Post-alpha.4 development extension:** a bounded linear sequence of integer
-bindings, where initializers use integer literals, groups, references to
+The bitwise kernel accepts a bounded linear sequence of immutable integer
+`bind` declarations, where initializers use integer literals, groups, references to
 earlier initialized integer bindings, bitwise NOT (`~`), AND (`&`),
 OR (`|`) or XOR (`^`):
 
@@ -69,20 +68,73 @@ current API has no cross-platform executable linking or target-selector flag.
 The input must pass the existing preflight: at most 256 scalar slots, 4096
 resolved statements, 1024 nodes per expression and 16,384 total nodes.
 The accepted binding-only sequence is stricter than general programs.
-Native code has at most 200,000 bytes, the complete ELF object at most 262,144 bytes; all sections are
-checked before allocation, with fallible reserves and deterministic offsets.
+The encoder checks actual machine-code growth against 200,000 bytes and caps
+the complete ELF object at 262,144 bytes. It uses fallible reserves and
+deterministic section offsets.
+The alpha.16 candidate probes every full 4 KiB stack page crossed while
+allocating a large frame. Both return paths restore the complete frame.
 No source path, timestamp, username, environment variable, or build identity
 is embedded in output. Unsupported input yields no object or partial file.
+
+## Experimental checked integer kernel
+
+`native_object::emit_elf64_checked_integer_kernel` emits a separate kernel
+for the same linear binding subset and adds checked signed `+`, `-`, `*`,
+unary `-`, division `/`, and remainder `%`. Its distinct symbol is
+`scarp_checked_scalar_kernel`. The existing bitwise-only API and symbol retain
+their original signatures.
+
+The checked symbol uses the SysV AMD64 calling convention and takes no
+arguments. Its return value has this C layout:
+
+```c
+#include <stdint.h>
+struct scarp_checked_result {
+    int64_t value;
+    uint32_t status;
+    uint32_t span_id;
+};
+extern struct scarp_checked_result scarp_checked_scalar_kernel(void);
+```
+
+Status zero returns the last binding value and a zero span ID.
+
+| Status | Rust constant | Meaning |
+| --- | --- | --- |
+| 1 | `CHECKED_KERNEL_INTEGER_OVERFLOW` | Signed overflow, including `i64::MIN / -1` and `i64::MIN % -1` |
+| 2 | `CHECKED_KERNEL_DIVISION_BY_ZERO` | Zero divisor in division or remainder |
+| 3 | `CHECKED_KERNEL_INVALID_SHIFT` | Shift count outside 0 through 63, available in alpha.15 |
+
+Division truncates toward zero and nonzero remainder takes the sign of the
+dividend. Alpha.15 checks the full shift count before executing `<<`, `>>` or
+`>>>`. Left shift discards bits past the 64-bit width, arithmetic right shift
+extends the sign bit, and logical right shift fills with zeros.
+
+```scarp
+bind bits = -8;
+bind count = 2;
+bind result = (bits >> count) ^ (bits >>> count);
+```
+
+Failure returns a zero value and the index of the first failing operator in
+the Rust result's `failure_spans` table. The table uses half-open UTF-8 byte
+offsets in the original source. A host consults it only when status is nonzero.
+The checked emitter preserves interpreter operand order, so an earlier failure
+terminates before a later operator can run. Both return paths restore the same
+stack frame.
+
+The checked emitter applies the same immutable-binding, preflight and object
+size limits. It is an experimental Rust API for self-contained Linux x86-64
+ELF64 kernels with a fixed integer expression subset.
 
 Regression coverage validates stable identical bytes, section-table offsets,
 ELF header sizes, global symbol metadata, source-subset rejection, and an
 **independent Linux x86-64 C host link-and-execute comparisons**, including
-multi-binding alias, mask and bitwise dependency chains.
-The encoding still needs security review and broader arithmetic/error ABI work
-before being promoted beyond this narrow development API.
+multi-binding dependencies, arithmetic failures and invalid shift counts.
 
 ```sh
 cargo test --locked --offline --test native_object
+cargo test --locked --offline --test native_object_checked
 # The Linux x86-64 suite uses a C compiler only as an independent test oracle.
 # Production object emission never invokes one.
 ```

@@ -52,12 +52,17 @@ fn verify_plan_shape(program: &ResolvedProgram) -> Result<(), Diagnostic> {
                 count_slot,
                 index_slot,
                 ..
-            } => *count_slot < slot_count && *index_slot < slot_count,
+            } => count_slot != index_slot && *count_slot < slot_count && *index_slot < slot_count,
             ResolvedStatement::RepeatGuard {
                 count_slot,
                 index_slot,
                 target,
-            } => *count_slot < slot_count && *index_slot < slot_count && *target <= operation_count,
+            } => {
+                count_slot != index_slot
+                    && *count_slot < slot_count
+                    && *index_slot < slot_count
+                    && *target <= operation_count
+            }
             ResolvedStatement::RepeatNext { index_slot } => *index_slot < slot_count,
             ResolvedStatement::JumpIfFalse { target, .. } | ResolvedStatement::Jump { target } => {
                 *target <= operation_count
@@ -424,6 +429,45 @@ mod tests {
             inspect(&program).unwrap_err().kind,
             DiagnosticKind::NativeUnsupported
         );
+    }
+
+    #[test]
+    fn corrupted_repeat_slot_aliases_fail_before_c_emission() {
+        use crate::resolver::ResolvedStatement;
+
+        let source = "repeat 2 as i { print(i); }";
+        for corrupt_guard in [false, true] {
+            let mut program = compile(source).unwrap();
+            let span = program
+                .statements
+                .iter_mut()
+                .find_map(|operation| {
+                    let (count_slot, index_slot) = match &mut operation.kind {
+                        ResolvedStatement::RepeatInit {
+                            count_slot,
+                            index_slot,
+                            ..
+                        } if !corrupt_guard => (count_slot, index_slot),
+                        ResolvedStatement::RepeatGuard {
+                            count_slot,
+                            index_slot,
+                            ..
+                        } if corrupt_guard => (count_slot, index_slot),
+                        _ => return None,
+                    };
+                    *count_slot = *index_slot;
+                    Some(operation.span)
+                })
+                .unwrap();
+
+            let diagnostic = inspect(&program).unwrap_err();
+            assert_eq!(diagnostic.kind, DiagnosticKind::NativeUnsupported);
+            assert_eq!(diagnostic.span, span);
+            assert_eq!(
+                crate::c_backend::emit_program(&program).unwrap_err(),
+                diagnostic
+            );
+        }
     }
 
     #[test]

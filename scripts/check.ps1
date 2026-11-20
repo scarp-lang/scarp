@@ -22,7 +22,7 @@ try {
     Invoke-Cargo -CargoArguments @('fmt', '--all', '--', '--check')
     & rustfmt --edition 2021 --check scripts/benchmarks/compare.rs
     if ($LASTEXITCODE -ne 0) { throw 'Comparison harness formatting check failed' }
-    Invoke-Cargo -CargoArguments @('clippy', '--locked', '--all-targets', '--', '-D', 'warnings')
+    Invoke-Cargo -CargoArguments @('clippy', '--locked', '--all-targets', '--all-features', '--', '-D', 'warnings')
     Invoke-Cargo -CargoArguments @('test', '--locked')
     Invoke-Cargo -CargoArguments @('test', '--locked', '--release')
     Invoke-Cargo -CargoArguments @('build', '--locked')
@@ -32,6 +32,32 @@ try {
     Invoke-Cargo -CargoArguments @('run', '--locked', '--example', 'tuple_types')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', 'examples/tuples.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'check', 'examples/tuples.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', 'examples/fixed_arrays.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'check', 'examples/fixed_arrays.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/variant_validation.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/variant_validation.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/ui_event_patterns.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/ui_event_patterns.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/typed_submission.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/typed_submission.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/typed_propagation.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/typed_propagation.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/boolean_match.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/boolean_match.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/scalar_literal_match.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/scalar_literal_match.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/task_panel_state.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/task_panel_state.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/typed_dynamic_lists.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/typed_dynamic_lists.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/persistent_list_updates.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/persistent_list_updates.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/typed_maps.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/typed_maps.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/persistent_maps.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/persistent_maps.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/map_projections.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/map_projections.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--example', 'program_input')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/program_input.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/core_input_tuple.srp')
@@ -62,9 +88,11 @@ try {
     }
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'modules', 'examples/module_inspection.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'modules', 'examples/constant_expressions.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/order_statistics.srp')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'exec', 'examples/order_statistics.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', 'examples/typed_declarations.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'check', 'examples/typed_declarations.srp')
-    foreach ($example in @('scalar_conversions', 'unicode_text', 'text_construction', 'symbol_navigation', 'integer_collections', 'bit_fields', 'numerical_kernels', 'root_mean_square', 'collection_module', 'topk_scores', 'temperature_softmax', 'sampled_calculus', 'sample_cumulative_area', 'cosine_similarity', 'nucleus_selection', 'pearson_correlation', 'text_foundations')) {
+    foreach ($example in @('scalar_conversions', 'unicode_text', 'text_construction', 'symbol_navigation', 'integer_collections', 'bit_fields', 'numerical_kernels', 'root_mean_square', 'collection_module', 'topk_scores', 'temperature_softmax', 'sampled_calculus', 'sample_cumulative_area', 'cosine_similarity', 'nucleus_selection', 'pearson_correlation', 'text_foundations', 'bigint_arithmetic', 'bigint_sequences', 'bigint_module')) {
         Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', "examples/$example.srp")
         Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'check', "examples/$example.srp")
     }
@@ -73,6 +101,8 @@ try {
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'run', 'examples/inspection_json.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'modules', '--json', 'examples/inspection_json.srp')
     Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'explain', 'E0044')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'verify', 'examples/projects/task-board')
+    Invoke-Cargo -CargoArguments @('run', '--locked', '--', 'test', '--json', '--require-tests', 'examples/projects/task-board')
 }
 finally {
     $env:CARGO_INCREMENTAL = $previousIncremental

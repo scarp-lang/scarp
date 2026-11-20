@@ -293,6 +293,9 @@ impl ScalarProgramIr {
                     count_slot,
                     index_slot,
                 } => {
+                    if count_slot == index_slot {
+                        return Err(invalid(span));
+                    }
                     self.check_slot(*count_slot, ValueType::Integer, span)?;
                     self.check_slot(*index_slot, ValueType::Integer, span)?;
                     self.check_expression(count, Some(ValueType::Integer), span)?;
@@ -303,11 +306,11 @@ impl ScalarProgramIr {
                     index_slot,
                     target,
                 } => {
-                    self.check_slot(*count_slot, ValueType::Integer, span)?;
-                    self.check_slot(*index_slot, ValueType::Integer, span)?;
-                    if *target > len {
+                    if count_slot == index_slot || *target > len {
                         return Err(invalid(span));
                     }
+                    self.check_slot(*count_slot, ValueType::Integer, span)?;
+                    self.check_slot(*index_slot, ValueType::Integer, span)?;
                     None
                 }
                 ProgramOp::RepeatNext { index_slot } => {
@@ -456,6 +459,39 @@ mod tests {
             ir.verify().unwrap_err().kind,
             DiagnosticKind::NativeUnsupported
         );
+    }
+
+    #[test]
+    fn repeat_count_and_index_cannot_share_a_slot() {
+        let intact = program("repeat 2 as i { print(i); }");
+        for corrupt_guard in [false, true] {
+            let mut ir = intact.clone();
+            let span = ir
+                .steps
+                .iter_mut()
+                .find_map(|step| {
+                    let (count_slot, index_slot) = match &mut step.kind {
+                        ProgramOp::RepeatInit {
+                            count_slot,
+                            index_slot,
+                            ..
+                        } if !corrupt_guard => (count_slot, index_slot),
+                        ProgramOp::RepeatGuard {
+                            count_slot,
+                            index_slot,
+                            ..
+                        } if corrupt_guard => (count_slot, index_slot),
+                        _ => return None,
+                    };
+                    *count_slot = *index_slot;
+                    Some(step.span)
+                })
+                .unwrap();
+
+            let diagnostic = ir.verify().unwrap_err();
+            assert_eq!(diagnostic.kind, DiagnosticKind::NativeUnsupported);
+            assert_eq!(diagnostic.span, span);
+        }
     }
 
     #[test]
