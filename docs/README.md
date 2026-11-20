@@ -1,5 +1,11 @@
 # Scarp documentation
 
+Public guides are maintained on [Scarp Docs in English](https://scarp-lang.github.io/scarp-docs/)
+and [Scarp Docs in हिन्दी](https://scarp-lang.github.io/scarp-docs/hi/).
+Start with the [release-aware learning path](https://scarp-lang.github.io/scarp-docs/guide/learning-path).
+The links below index compiler-specific references, implementation history and
+release evidence in this checkout.
+
 **0.0.6-alpha.15 prerelease** bounds frontend inspection, meters UTF-8
 string comparisons, validates semantic-cache revisions, and adds checked
 ELF64 integer-kernel shifts.
