@@ -1,0 +1,15 @@
+// Ordered map projections retain the values of their original immutable snapshot.
+bind original = [map: "zeta": 6, "alpha": 1, "mu": 3];
+bind keys_before: list<string> = map_keys(original);
+bind values_before: list<integer> = map_values(original);
+bind updated = map_set(original, "alpha", 10);
+bind removed = map_remove(updated, "mu");
+print(keys_before);
+print(values_before);
+print(map_keys(updated));
+print(map_values(updated));
+print(map_keys(removed));
+print(map_values(removed));
+print(map_len(original), map_len(updated), map_len(removed));
+print(map_get_or(original, "alpha", -1), map_get_or(updated, "alpha", -1));
+print(map_contains(original, "mu"), map_contains(removed, "mu"));
