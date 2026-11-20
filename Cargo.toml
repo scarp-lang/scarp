@@ -1,11 +1,12 @@
 [package]
 name = "scarp"
-version = "0.0.6-alpha.7"
+version = "0.0.6-alpha.16"
 edition = "2021"
 rust-version = "1.74"
 description = "The Scarp programming language prototype"
 license = "Apache-2.0"
 repository = "https://github.com/scarp-lang/scarp"
+documentation = "https://scarp-lang.github.io/scarp-docs/"
 publish = false
 
 [lib]
@@ -26,6 +27,10 @@ harness = false
 
 [[bench]]
 name = "compiler"
+harness = false
+
+[[bench]]
+name = "bigint"
 harness = false
 
 [lints.rust]

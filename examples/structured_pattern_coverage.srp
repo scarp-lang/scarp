@@ -1,0 +1,16 @@
+// Nested record and tuple patterns must bind exactly once per selected arm.
+record Point { x: integer, y: integer }
+variant Event { Move(record Point), Idle }
+
+bind event = new Event::Move(new Point { x: 12, y: 30 });
+match on event {
+    case Move({x: horizontal, y: vertical}) {
+        print(horizontal);
+        print(vertical);
+    }
+    case Idle { print(0); }
+}
+
+bind pair = (4, 9);
+bind (first, second) = pair;
+print(first + second);

@@ -1,0 +1,16 @@
+// Deterministic map projections remain paired after persistent updates.
+bind original = [map: "z": 9, "a": 1, "m": 5];
+bind inserted = map_set(original, "b", 2);
+bind replaced = map_set(inserted, "m", 50);
+bind removed = map_remove(replaced, "z");
+
+print(map_keys(original));
+print(map_values(original));
+print(map_keys(inserted));
+print(map_values(inserted));
+print(map_keys(replaced));
+print(map_values(replaced));
+print(map_keys(removed));
+print(map_values(removed));
+print(map_keys(original));
+print(map_values(original));

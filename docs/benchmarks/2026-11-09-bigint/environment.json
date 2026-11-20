@@ -1,0 +1,16 @@
+{
+  "toolchain": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "target": "x86_64-Linux",
+  "base_source": "d222996be74ad3150417e084c7f59f67713eec9e",
+  "state": "BigInt feature branch; benchmark includes constructors/dispatch; format writes to sink",
+  "whole_benchmark_peak_rss_kib": 9472,
+  "whole_benchmark_user_seconds": 0.604246,
+  "whole_benchmark_system_seconds": 0.011436,
+  "repetitions": "15 through 10000 digits, 3 at 100000/1000000; one warmup per workload",
+  "limits": {
+    "max_steps": 100000000,
+    "max_bigint_digits": "min(2 * size, 1000000)",
+    "max_bigint_bytes": 8388608
+  },
+  "scope": "linear operations at 100000 and 1000000 digits; multiplication/division only through 10000"
+}

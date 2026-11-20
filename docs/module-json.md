@@ -1,7 +1,7 @@
 # Module JSON inspection and diagnostic explanations
 
-These are unreleased source-development features. Package version 0.0.5-alpha.1
-is unchanged; published binaries lack this tooling. Build the current checkout.
+The module inventory reports imports, dependencies and declarations with
+file-local spans. Build the current checkout to inspect fixed-array signatures.
 
 ```sh
 cargo run -- modules --json examples/inspection_json.srp
@@ -15,14 +15,26 @@ Its [in-memory JSON snapshot](../examples/inspection_json.modules.json) is check
 exactly by tests. Filesystem path labels differ from that virtual-loader snapshot.
 Ordinary `scarp modules <path>` retains its existing text inventory format.
 
-## Schema version 1
+## Schema versions
 
 The JSON writer emits one compact UTF-8 object followed by LF. Object field order
 and array order are deterministic for the same compiled sources and loader.
+Check `schema_version` before interpreting type strings.
+
+| Version | Types serialized by the inventory |
+| --- | --- |
+| 1 | Primitive types only |
+| 2 | At least one tuple type, with no arrays in any serialized type |
+| 3 | At least one fixed array, including an array nested inside a tuple |
+
+Private symbols participate in version selection. Arrays used inside function
+bodies or local bindings leave the version determined by the declarations.
+Version 3 uses canonical strings such as `array<integer, 2>` and
+`tuple<array<string, 0>, integer>`. The object fields below apply to all versions.
 
 | Object | Fields |
 | --- | --- |
-| Top level | schema_version=1, entry=0, modules, constant_dependencies |
+| Top level | schema_version, entry=0, modules, constant_dependencies |
 | Module | id, path, imports, dependencies, dependents, symbols |
 | Import | path, alias, target, span, path_span, alias_span |
 | Constant symbol | name, public, span, kind="constant", type |

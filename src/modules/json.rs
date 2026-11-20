@@ -23,28 +23,49 @@ fn span(out: &mut impl io::Write, file: &SourceFile, value: Span) -> io::Result<
 }
 
 impl ModuleProgram {
-    /// Primitive-only module metadata stays schema 1; structural tuple signatures use schema 2.
+    /// Variants use schema 5 and records use schema 4.
     pub fn inspection_schema_version(&self) -> u32 {
-        let composite = self
+        if self
+            .modules
+            .iter()
+            .flat_map(|module| &module.symbols)
+            .any(|symbol| matches!(symbol.kind, SymbolKind::Variant { .. }))
+        {
+            return 5;
+        }
+        if self
+            .modules
+            .iter()
+            .flat_map(|module| &module.symbols)
+            .any(|symbol| matches!(symbol.kind, SymbolKind::Record { .. }))
+        {
+            return 4;
+        }
+        let types = self
             .modules
             .iter()
             .flat_map(|m| &m.symbols)
-            .any(|s| match &s.kind {
-                SymbolKind::Constant(kind) => kind.as_primitive().is_none(),
+            .flat_map(|s| match &s.kind {
+                SymbolKind::Constant(kind) => Some(kind).into_iter().chain([].iter()),
+                SymbolKind::Record { .. } | SymbolKind::Variant { .. } => {
+                    None.into_iter().chain([].iter())
+                }
                 SymbolKind::Function {
                     parameters, result, ..
-                } => {
-                    result.as_primitive().is_none()
-                        || parameters.iter().any(|p| p.as_primitive().is_none())
-                }
+                } => Some(result).into_iter().chain(parameters.iter()),
             });
-        if composite {
-            2
-        } else {
-            1
+        let mut version = 1;
+        for kind in types {
+            if kind.contains_array() {
+                return 3;
+            }
+            if kind.as_primitive().is_none() {
+                version = 2;
+            }
         }
+        version
     }
-    /// Write versioned JSON (schema 1 for primitives, schema 2 for tuple signatures) with deterministic order and file-local byte spans.
+    /// Write versioned JSON with deterministic order and file-local byte spans.
     /// No source contents, constant values or default expressions are emitted.
     /// Writer errors preserve their kind and may leave a partial byte stream.
     ///
@@ -104,6 +125,38 @@ impl ModuleProgram {
                 write!(out, ",\"public\":{},\"span\":", symbol.public)?;
                 span(out, file, symbol.span)?;
                 match &symbol.kind {
+                    SymbolKind::Record { fields } => {
+                        out.write_all(b",\"kind\":\"record\",\"fields\":[")?;
+                        for (index, (name, kind)) in fields.iter().enumerate() {
+                            if index != 0 {
+                                out.write_all(b",")?;
+                            }
+                            out.write_all(b"{\"name\":")?;
+                            string(out, name)?;
+                            out.write_all(b",\"type\":")?;
+                            string(out, &kind.to_string())?;
+                            out.write_all(b"}")?;
+                        }
+                        out.write_all(b"]")?;
+                    }
+                    SymbolKind::Variant { cases } => {
+                        out.write_all(b",\"kind\":\"variant\",\"cases\":[")?;
+                        for (index, (tag, payload)) in cases.iter().enumerate() {
+                            if index != 0 {
+                                out.write_all(b",")?;
+                            }
+                            out.write_all(b"{\"name\":")?;
+                            string(out, tag)?;
+                            out.write_all(b",\"payload\":")?;
+                            if let Some(kind) = payload {
+                                string(out, &kind.to_string())?;
+                            } else {
+                                out.write_all(b"null")?;
+                            }
+                            out.write_all(b"}")?;
+                        }
+                        out.write_all(b"]")?;
+                    }
                     SymbolKind::Constant(kind) => {
                         write!(out, ",\"kind\":\"constant\",\"type\":\"{kind}\"")?
                     }

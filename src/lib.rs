@@ -11,8 +11,11 @@
 //! ```
 
 pub mod ast;
+pub mod bigint;
 /// Opt-in, experimental scalar C11 emitter (not a CLI build command).
 pub mod c_backend;
+/// Experimental bounded exact decimal arithmetic shared by the Rust API and source-level development.
+pub mod decimal;
 pub mod diagnostics;
 pub mod evaluator;
 pub mod input;
@@ -152,6 +155,44 @@ pub fn run_with_input_and_options(
     input_limits: InputLimits,
 ) -> Result<(), RunError> {
     interpreter::execute_with_input_and_options(
+        &compile(source).map_err(RunError::Diagnostic)?,
+        input,
+        stdout,
+        stderr,
+        options,
+        input_limits,
+    )
+}
+
+/// Run with an explicitly supplied interactive reader and prompt/output writer.
+/// Unlike ordinary print events, prompts become visible before the read and
+/// cannot be rolled back if a later operation fails.
+pub fn run_with_interactive_input(
+    source: &str,
+    input: &mut impl io::BufRead,
+    stdout: &mut impl io::Write,
+    stderr: &mut impl io::Write,
+) -> Result<(), RunError> {
+    run_with_interactive_input_and_options(
+        source,
+        input,
+        stdout,
+        stderr,
+        ExecutionOptions::default(),
+        InputLimits::default(),
+    )
+}
+
+/// Interactive execution with independent work, output and raw-input quotas.
+pub fn run_with_interactive_input_and_options(
+    source: &str,
+    input: &mut impl io::BufRead,
+    stdout: &mut impl io::Write,
+    stderr: &mut impl io::Write,
+    options: ExecutionOptions,
+    input_limits: InputLimits,
+) -> Result<(), RunError> {
+    interpreter::execute_with_interactive_input_and_options(
         &compile(source).map_err(RunError::Diagnostic)?,
         input,
         stdout,

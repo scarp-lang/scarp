@@ -1,0 +1,8 @@
+Base [map: "alpha": 1, "beta": 2]
+Updated [map: "alpha": 10, "beta": 2, "gamma": 3]
+Removed [map: "alpha": 10, "gamma": 3]
+Lookup 10 -1
+Contains true false
+Lengths 2 2
+true
+Pure [map: "alpha": 12, "beta": 2]

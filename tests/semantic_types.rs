@@ -146,7 +146,7 @@ fn builtin_metadata_uses_the_same_exact_signatures_as_runtime_checks() {
 #[test]
 fn caller_type_limits_have_exact_canonical_boundaries_and_precise_failures() {
     let limits = TypeLimits {
-        max_types: 8,
+        max_types: P::ALL.len(),
         ..TypeLimits::default()
     };
     scarp::compile_with_type_limits("bind x=1; print(x+2);", limits).unwrap();
@@ -156,7 +156,7 @@ fn caller_type_limits_have_exact_canonical_boundaries_and_precise_failures() {
     assert_eq!(&source[error.span.start..error.span.end], "variance([1.0])");
     let source="pure funcra a(x: integer)->integer{return x;} pure funcra b(y: integer)->integer{return y;} print(a(1));";
     let limits = TypeLimits {
-        max_types: 9,
+        max_types: P::ALL.len() + 1,
         max_components: 2,
         max_depth: 2,
         max_arity: 1,
@@ -166,7 +166,7 @@ fn caller_type_limits_have_exact_canonical_boundaries_and_precise_failures() {
             .unwrap()
             .type_registry()
             .len(),
-        9
+        P::ALL.len() + 1
     );
     for limits in [
         TypeLimits {
@@ -182,7 +182,7 @@ fn caller_type_limits_have_exact_canonical_boundaries_and_precise_failures() {
             ..TypeLimits::default()
         },
         TypeLimits {
-            max_types: 7,
+            max_types: P::ALL.len() - 1,
             ..TypeLimits::default()
         },
     ] {
@@ -227,7 +227,7 @@ fn linked_module_nodes_and_type_limit_errors_keep_owning_source_locations() {
         graph,
         ConstantLimits::default(),
         TypeLimits {
-            max_types: 8,
+            max_types: P::ALL.len(),
             ..TypeLimits::default()
         },
     )

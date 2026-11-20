@@ -1,17 +1,83 @@
 # Scarp
 
-**0.0.6-alpha.7** is the **latest published experimental GitHub prerelease**
-(11 November 2026), from exact source `b1c1fd232b418267d95520c69ee563ac99ecae30`.
-It adds typed conditional expressions and Unicode scalar string escapes.
-The latest published prerelease is
-[0.0.6-alpha.7](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.7),
-with seven verified assets for Windows x64, Linux x64 and macOS Apple Silicon.
-See [public notes](docs/releases/v0.0.6-alpha.7-publication.md) and
-[exact-source publication verification](docs/releases/v0.0.6-alpha.7-validation.md).
+## Official documentation
 
-**0.0.6-alpha.6** added [bounded input](docs/program-input.md),
-[scalar/text utilities](docs/text-foundations.md) and
-[immutable tuples with a Rust API migration](docs/tuples.md).
+Scarp's public learning guides, language reference and CLI documentation are
+maintained on the official Scarp Docs website.
+
+- [English documentation](https://scarp-lang.github.io/scarp-docs/)
+- [हिन्दी दस्तावेज़](https://scarp-lang.github.io/scarp-docs/hi/)
+- [Documentation source](https://github.com/scarp-lang/scarp-docs)
+
+Start with the [learning path](https://scarp-lang.github.io/scarp-docs/guide/learning-path)
+or check command availability in the [Command Finder](https://scarp-lang.github.io/scarp-docs/tooling/command-finder).
+The [release status matrix](https://scarp-lang.github.io/scarp-docs/reference/status)
+identifies the published version behind each guide. This repository keeps the
+compiler source, runnable examples, design records and release verification.
+See the [compiler documentation index](docs/README.md) for those records.
+
+## Compiler releases
+
+The latest published prerelease is
+[0.0.6-alpha.15](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.15).
+
+**0.0.6-alpha.15** applies the 1 MiB limit to token and AST inspection,
+meters equal-length UTF-8 string comparisons, and validates loader revisions
+before semantic cache reuse. The experimental Linux x86-64 ELF64 integer
+kernel adds checked shifts.
+[Release notes](docs/releases/v0.0.6-alpha.15-publication.md) ·
+[Verification record](docs/releases/v0.0.6-alpha.15-validation.md)
+
+**0.0.6-alpha.14** improves nested destructuring diagnostics and adds live editor
+cache quotas for Rust hosts. The experimental Linux x86-64 ELF64 integer
+kernel API now supports checked arithmetic, including division and remainder.
+[Release notes](docs/releases/v0.0.6-alpha.14-publication.md) ·
+[Verification record](docs/releases/v0.0.6-alpha.14-validation.md)
+
+**0.0.6-alpha.13** improves Option/Result propagation without duplicate payload
+allocation, adds opt-in syntax/semantic cache retention controls and source-revision
+eviction, and provides workspace-generation checks for editor diagnostics and
+navigation. It also adds regression fixtures for map projections and cache
+boundaries. These are interpreter and Rust embedding improvements, **not** general
+native executable compilation.
+[Release notes](docs/releases/v0.0.6-alpha.13-publication.md) ·
+[Published source](https://github.com/scarp-lang/scarp/tree/e755fda37cdaeed29434e848cb5dd41f2f2e7eb2)
+
+**Earlier published 0.0.6-alpha.12:**
+**0.0.6-alpha.12** adds records, variants, nested patterns, typed Option and Result, immutable
+lists and ordered maps. The [task board project](https://scarp-lang.github.io/scarp-docs/tutorials/task-board-alpha12) exercises
+these features across modules. Packages cover Windows x64, Linux x64 and
+macOS Apple Silicon.
+[Release notes](docs/releases/v0.0.6-alpha.12-publication.md) ·
+[Verification record](docs/releases/v0.0.6-alpha.12-validation.md)
+
+**0.0.6-alpha.11** adds [exact decimal values](https://scarp-lang.github.io/scarp-docs/language/decimal-alpha11), explicit rounding,
+and typed console input with `input_decimal()`.
+[Release notes](docs/releases/v0.0.6-alpha.11-publication.md) ·
+[Verification record](docs/releases/v0.0.6-alpha.11-validation.md)
+
+**0.0.6-alpha.10** adds [typed console input, EOF-aware reads, stream flushing
+and exact project output fixtures](https://scarp-lang.github.io/scarp-docs/tooling/interactive-input-alpha10).
+It also adds [fixed arrays](https://scarp-lang.github.io/scarp-docs/language/fixed-arrays-alpha10)
+and advanced [BigInt operations](docs/bigint.md).
+[Release notes](docs/releases/v0.0.6-alpha.10-publication.md) ·
+[Verification record](docs/releases/v0.0.6-alpha.10-validation.md)
+
+**0.0.6-alpha.9** adds [bounded BigInt](https://scarp-lang.github.io/scarp-docs/language/bigint-alpha9) and opt-in
+[structured project test reports](https://scarp-lang.github.io/scarp-docs/tooling/test-json-v2-alpha9).
+[Release notes](docs/releases/v0.0.6-alpha.9-publication.md) ·
+[Verification record](docs/releases/v0.0.6-alpha.9-validation.md)
+
+**0.0.6-alpha.8** added declarative projects, project testing, and Boolean
+assertions. [Alpha.8 verification](docs/releases/v0.0.6-alpha.8-validation.md) ·
+[Runnable calculator project](examples/projects/calculator/README.md)
+
+**0.0.6-alpha.7** added typed conditional expressions and Unicode scalar
+string escapes. [Alpha.7 verification](docs/releases/v0.0.6-alpha.7-validation.md)
+
+**0.0.6-alpha.6** added [bounded input](https://scarp-lang.github.io/scarp-docs/language/program-input-alpha6),
+[scalar/text utilities](https://scarp-lang.github.io/scarp-docs/language/text-foundations-alpha6) and
+[immutable tuples with a Rust API migration](https://scarp-lang.github.io/scarp-docs/language/tuples-alpha6).
 [Alpha.6 verification](docs/releases/v0.0.6-alpha.6-validation.md)
 
 **0.0.6-alpha.5** is an **earlier published experimental GitHub prerelease**
@@ -183,9 +249,8 @@ statements or contracts; it does not replace the old evaluating `check`.
 `launch` are available in published alpha.4 packages, but not in
 alpha.3 packages. Alpha.1 and alpha.2 lack the Scarp-first command names.
 
-The [documentation hub](docs/README.md) provides setup, tutorials, command and
-diagnostic references, Rust embedding, testing, troubleshooting, and compatibility
-guides. Start there for a reading path matched to your task.
+Use the [official learning path](https://scarp-lang.github.io/scarp-docs/guide/learning-path)
+to find installation instructions, tutorials and release-appropriate commands.
 
 [Source modules](docs/modules.md) organize programs with relative `.srp` imports,
 explicit aliases and public functions/scalar constants. Follow the
@@ -465,6 +530,12 @@ integrated typed calls, defaults, contracts, and bounded heap frames into main.
 Beta.3 published that work with CLI resource controls. Beta.2 binaries do not
 contain functions. Release notes
 describe immutable snapshots; branch names can move.
+
+## Support Scarp development
+
+Scarp is open source and free to use. You can [support its independent development on GitHub Sponsors](https://github.com/sponsors/sanskarIN) (monthly or one-time) to help with compiler work, testing, documentation, and tooling. Sponsorship does not unlock language features or determine the roadmap.
+
+You can also support development through [Buy Me a Coffee](https://buymeacoffee.com/sanskarIN).
 
 ## License
 

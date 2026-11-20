@@ -1,5 +1,6 @@
 //! Source identity and bounded reads; no lexer/parser filesystem access.
 use std::{
+    borrow::Cow,
     cell::RefCell,
     collections::BTreeMap,
     fs,
@@ -35,13 +36,40 @@ impl std::fmt::Display for SourceLoadError {
 }
 impl std::error::Error for SourceLoadError {}
 
+/// Source text and the optional editor revision of those bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoadedSource {
+    pub text: String,
+    pub revision: Option<u64>,
+}
+
 /// Implementations provide stable identities and honor the requested byte cap.
 /// The compiler also checks returned source lengths. No source is executed here.
 pub trait SourceLoader {
     fn resolve(&self, importer: Option<&str>, specifier: &str) -> Result<String, SourceLoadError>;
     fn load(&self, identity: &str, max_bytes: usize) -> Result<String, SourceLoadError>;
+
+    /// Read a source and its revision together. Editor hosts should keep the
+    /// workspace view stable for the duration of graph discovery.
+    fn load_with_revision(
+        &self,
+        identity: &str,
+        max_bytes: usize,
+    ) -> Result<LoadedSource, SourceLoadError> {
+        self.load(identity, max_bytes).map(|text| LoadedSource {
+            text,
+            revision: None,
+        })
+    }
+
     fn display_name(&self, identity: &str) -> String {
         identity.to_string()
+    }
+    /// Optional qualified-name prefix for diagnostics. Canonical identities
+    /// still resolve imports and set a lower bound on expansion charges.
+    /// Distinct modules must use distinct qualified-name prefixes.
+    fn diagnostic_qualifier(&self, _identity: &str) -> Option<String> {
+        None
     }
 }
 
@@ -91,7 +119,7 @@ pub(super) fn relative_path(
 /// Portable virtual paths, relative to an in-memory trusted root.
 #[derive(Debug, Clone, Default)]
 pub struct MemorySourceLoader {
-    files: BTreeMap<String, String>,
+    files: BTreeMap<String, LoadedSource>,
 }
 impl MemorySourceLoader {
     pub fn new() -> Self {
@@ -106,8 +134,52 @@ impl MemorySourceLoader {
         if self.files.contains_key(&name) {
             return Err(path_error(format!("source {name:?} is already registered")));
         }
-        self.files.insert(name, source.into());
+        self.files.insert(
+            name,
+            LoadedSource {
+                text: source.into(),
+                revision: None,
+            },
+        );
         Ok(())
+    }
+
+    /// Insert or replace an in-memory document. Use a fresh editor revision
+    /// when changing the document, including after deleting and reopening it.
+    pub fn set_document(
+        &mut self,
+        name: impl AsRef<str>,
+        source: impl Into<String>,
+        revision: u64,
+    ) -> Result<(), SourceLoadError> {
+        let name = relative_path("", name.as_ref(), false)?;
+        self.files.insert(
+            name,
+            LoadedSource {
+                text: source.into(),
+                revision: Some(revision),
+            },
+        );
+        Ok(())
+    }
+
+    /// Remove an in-memory document by its normalized path.
+    pub fn remove_document(&mut self, name: impl AsRef<str>) -> Result<bool, SourceLoadError> {
+        let name = relative_path("", name.as_ref(), false)?;
+        Ok(self.files.remove(&name).is_some())
+    }
+
+    fn document(&self, identity: &str, max_bytes: usize) -> Result<&LoadedSource, SourceLoadError> {
+        let document = self.files.get(identity).ok_or_else(|| {
+            SourceLoadError::new(SourceLoadKind::Io, format!("could not read {identity:?}"))
+        })?;
+        if document.text.len() > max_bytes {
+            return Err(SourceLoadError::new(
+                SourceLoadKind::Limit,
+                "module source byte limit exceeded",
+            ));
+        }
+        Ok(document)
     }
 }
 impl SourceLoader for MemorySourceLoader {
@@ -125,16 +197,15 @@ impl SourceLoader for MemorySourceLoader {
         Ok(name)
     }
     fn load(&self, identity: &str, max_bytes: usize) -> Result<String, SourceLoadError> {
-        let source = self.files.get(identity).ok_or_else(|| {
-            SourceLoadError::new(SourceLoadKind::Io, format!("could not read {identity:?}"))
-        })?;
-        if source.len() > max_bytes {
-            return Err(SourceLoadError::new(
-                SourceLoadKind::Limit,
-                "module source byte limit exceeded",
-            ));
-        }
-        Ok(source.clone())
+        Ok(self.document(identity, max_bytes)?.text.clone())
+    }
+
+    fn load_with_revision(
+        &self,
+        identity: &str,
+        max_bytes: usize,
+    ) -> Result<LoadedSource, SourceLoadError> {
+        self.document(identity, max_bytes).cloned()
     }
 }
 
@@ -143,6 +214,7 @@ impl SourceLoader for MemorySourceLoader {
 pub struct FileSourceLoader {
     root: PathBuf,
     native_paths: RefCell<BTreeMap<String, PathBuf>>,
+    relative_diagnostics: bool,
 }
 impl FileSourceLoader {
     pub fn new(root: impl AsRef<Path>) -> io::Result<Self> {
@@ -156,7 +228,14 @@ impl FileSourceLoader {
         Ok(Self {
             root,
             native_paths: RefCell::new(BTreeMap::new()),
+            relative_diagnostics: false,
         })
+    }
+    /// Use root-relative names for sources and qualified functions. Canonical
+    /// resolution and containment checks still use native paths.
+    pub fn with_relative_diagnostics(mut self) -> Self {
+        self.relative_diagnostics = true;
+        self
     }
     pub fn root(&self) -> &Path {
         &self.root
@@ -182,23 +261,41 @@ impl FileSourceLoader {
             .cloned()
             .unwrap_or_else(|| PathBuf::from(identity))
     }
+    fn diagnostic_path<'a>(&self, path: &'a Path) -> Cow<'a, str> {
+        if !self.relative_diagnostics {
+            return path.to_string_lossy();
+        }
+        path.strip_prefix(&self.root)
+            .ok()
+            .and_then(portable_name)
+            .unwrap_or_default()
+    }
+
+    fn read_error(
+        &self,
+        path: &Path,
+        kind: SourceLoadKind,
+        error: impl std::fmt::Display,
+    ) -> SourceLoadError {
+        let name = self.diagnostic_path(path);
+        let message = if name.is_empty() {
+            format!("could not read source file: {error}")
+        } else {
+            format!("could not read '{name}': {error}")
+        };
+        SourceLoadError::new(kind, message)
+    }
+
     fn checked(&self, path: &Path) -> Result<PathBuf, SourceLoadError> {
-        let path = fs::canonicalize(path).map_err(|error| {
-            SourceLoadError::new(
-                SourceLoadKind::Io,
-                format!("could not read '{}': {error}", path.display()),
-            )
-        })?;
+        let path = fs::canonicalize(path)
+            .map_err(|error| self.read_error(path, SourceLoadKind::Io, error))?;
         if !path.starts_with(&self.root) {
             return Err(path_error(
                 "canonical module path escapes the trusted source root",
             ));
         }
         if !path.is_file() {
-            return Err(SourceLoadError::new(
-                SourceLoadKind::Io,
-                format!("could not read '{}': not a regular file", path.display()),
-            ));
+            return Err(self.read_error(&path, SourceLoadKind::Io, "not a regular file"));
         }
         Ok(path)
     }
@@ -226,12 +323,8 @@ impl SourceLoader for FileSourceLoader {
         // Recheck canonical containment immediately before opening. This is a
         // trusted-tree loader, not a sandbox against concurrent hostile changes.
         let path = self.checked(&self.path(identity))?;
-        let file = fs::File::open(&path).map_err(|error| {
-            SourceLoadError::new(
-                SourceLoadKind::Io,
-                format!("could not read '{}': {error}", path.display()),
-            )
-        })?;
+        let file = fs::File::open(&path)
+            .map_err(|error| self.read_error(&path, SourceLoadKind::Io, error))?;
         let amount = file
             .metadata()
             .map_err(|error| SourceLoadError::new(SourceLoadKind::Io, error.to_string()))?
@@ -248,12 +341,7 @@ impl SourceLoader for FileSourceLoader {
         })?;
         file.take((max_bytes as u64).saturating_add(1))
             .read_to_end(&mut bytes)
-            .map_err(|error| {
-                SourceLoadError::new(
-                    SourceLoadKind::Io,
-                    format!("could not read '{}': {error}", path.display()),
-                )
-            })?;
+            .map_err(|error| self.read_error(&path, SourceLoadKind::Io, error))?;
         if bytes.len() > max_bytes {
             return Err(SourceLoadError::new(
                 SourceLoadKind::Limit,
@@ -261,16 +349,36 @@ impl SourceLoader for FileSourceLoader {
             ));
         }
         String::from_utf8(bytes).map_err(|_| {
-            SourceLoadError::new(
+            self.read_error(
+                &path,
                 SourceLoadKind::InvalidUtf8,
-                format!(
-                    "could not read '{}': source is not valid UTF-8",
-                    path.display()
-                ),
+                "source is not valid UTF-8",
             )
         })
     }
     fn display_name(&self, identity: &str) -> String {
-        self.path(identity).to_string_lossy().into_owned()
+        self.diagnostic_path(&self.path(identity)).into_owned()
     }
+
+    fn diagnostic_qualifier(&self, identity: &str) -> Option<String> {
+        if !self.relative_diagnostics {
+            return None;
+        }
+        let path = self.path(identity);
+        let relative = path.strip_prefix(&self.root).ok()?;
+        Some(portable_name(relative).map_or_else(
+            // The NUL distinguishes escaped native names from ordinary paths.
+            || format!("\0native:{relative:?}"),
+            Cow::into_owned,
+        ))
+    }
+}
+
+fn portable_name(path: &Path) -> Option<Cow<'_, str>> {
+    let name = path.to_str()?;
+    Some(if cfg!(windows) {
+        Cow::Owned(name.replace('\\', "/"))
+    } else {
+        Cow::Borrowed(name)
+    })
 }

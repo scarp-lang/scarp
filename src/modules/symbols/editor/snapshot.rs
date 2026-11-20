@@ -96,7 +96,6 @@ struct Line {
 }
 #[derive(Debug)]
 struct EditorData {
-    versions: Vec<u64>,
     lines: Vec<Vec<Line>>,
     total_lines: usize,
 }
@@ -106,6 +105,7 @@ struct EditorData {
 #[derive(Debug, Clone)]
 pub struct EditorSnapshot {
     index: SymbolIndex,
+    versions: Arc<Vec<u64>>,
     data: Arc<EditorData>,
 }
 
@@ -226,14 +226,25 @@ impl EditorSnapshot {
                 .expect("source map file count is authoritative");
             lines.push(index_lines(text, &mut total_lines, limits)?);
         }
+        let mut retained_versions = Vec::new();
+        retained_versions
+            .try_reserve_exact(versions.len())
+            .map_err(|_| EditorBuildError::Allocation)?;
+        retained_versions.extend_from_slice(versions);
         Ok(Self {
             index: index.clone(),
-            data: Arc::new(EditorData {
-                versions: versions.to_vec(),
-                lines,
-                total_lines,
-            }),
+            versions: Arc::new(retained_versions),
+            data: Arc::new(EditorData { lines, total_lines }),
         })
+    }
+
+    // The compilation cache calls this only after validating the exact source
+    // graph and collecting one current revision for each of its sources.
+    pub(in crate::modules) fn set_revisions(&mut self, versions: Vec<u64>) {
+        debug_assert_eq!(versions.len(), self.versions.len());
+        if self.versions.as_slice() != versions.as_slice() {
+            self.versions = Arc::new(versions);
+        }
     }
 
     pub fn symbols(&self) -> &SymbolIndex {
@@ -249,13 +260,13 @@ impl EditorSnapshot {
     /// Check *all* loaded documents before any symbol/range lookup. A changed
     /// import invalidates entry-file navigation, even at an unchanged offset.
     pub fn ensure_current(&self, versions: &[u64]) -> Result<(), EditorQueryError> {
-        if self.data.versions.len() != versions.len() {
+        if self.versions.len() != versions.len() {
             return Err(EditorQueryError::VersionCount {
-                expected: self.data.versions.len(),
+                expected: self.versions.len(),
                 actual: versions.len(),
             });
         }
-        for (source, (&indexed, &current)) in self.data.versions.iter().zip(versions).enumerate() {
+        for (source, (&indexed, &current)) in self.versions.iter().zip(versions).enumerate() {
             if indexed != current {
                 return Err(EditorQueryError::StaleVersion {
                     source,

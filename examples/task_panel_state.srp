@@ -1,0 +1,101 @@
+// Deterministic state transition core for a future UI host.
+// This example deliberately does not render a graphical user interface.
+// Collection storage is a fixed array until source-level dynamic lists exist.
+record Task {
+    title: string,
+    done: boolean,
+}
+
+record Panel {
+    tasks: array<record Task, 2>,
+    saved: integer,
+    active: boolean,
+}
+
+variant Action {
+    Submit(option<string>),
+    SetActive(boolean),
+}
+
+pure funcra validate_title(input: option<string>) -> result<string, string> {
+    match on input {
+        case None {
+            return new result<string, string>::Err("title missing");
+        }
+        case Some(value) {
+            match on value {
+                case "" { return new result<string, string>::Err("title empty"); }
+                case "quit" { return new result<string, string>::Err("reserved title"); }
+                case _ { return new result<string, string>::Ok(value); }
+            }
+        }
+    }
+}
+
+// A pure, typed event reducer: it returns a new snapshot or a recoverable
+// validation error and never mutates the previous Panel value.
+pure funcra reduce(current: record Panel, action: variant Action) -> result<record Panel, string> {
+    match on action {
+        case Submit(input) {
+            bind title = validate_title(input)?;
+            bind updated = new Task { title: title, done: false };
+            return new result<record Panel, string>::Ok(new Panel {
+                tasks: [array: updated, current->tasks[1]],
+                saved: current->saved + 1,
+                active: current->active,
+            });
+        }
+        case SetActive(flag) {
+            return new result<record Panel, string>::Ok(new Panel {
+                tasks: current->tasks,
+                saved: current->saved,
+                active: flag,
+            });
+        }
+    }
+}
+
+var panel = new Panel {
+    tasks: [array:
+        new Task { title: "Draft", done: false },
+        new Task { title: "Archive", done: true },
+    ],
+    saved: 0,
+    active: false,
+};
+bind original = panel;
+
+match on reduce(panel, new Action::Submit(new option<string>::None())) {
+    case Err(message) { print("Rejected", message); }
+    case Ok(next) { panel = next; }
+}
+assert(panel == original);
+
+match on reduce(panel, new Action::Submit(new option<string>::Some(""))) {
+    case Err(message) { print("Rejected", message); }
+    case Ok(next) { panel = next; }
+}
+assert(panel == original);
+
+match on reduce(panel, new Action::Submit(new option<string>::Some("quit"))) {
+    case Err(message) { print("Rejected", message); }
+    case Ok(next) { panel = next; }
+}
+assert(panel == original);
+
+match on reduce(panel, new Action::Submit(new option<string>::Some("Review PR"))) {
+    case Err(message) { print("Unexpected", message); }
+    case Ok(next) { panel = next; print("Saved", panel->tasks[0]->title, panel->saved); }
+}
+
+match on reduce(panel, new Action::SetActive(true)) {
+    case Err(message) { print("Unexpected", message); }
+    case Ok(next) { panel = next; }
+}
+match on panel->active {
+    case false { print("Inactive"); }
+    case true { print("Active"); }
+}
+assert(panel->tasks[1]->done);
+assert(original->tasks[0]->title == "Draft");
+print("Original", original->tasks[0]->title);

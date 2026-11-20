@@ -1,0 +1,18 @@
+// Persistent sorted maps: all updates return new immutable snapshots.
+pure funcra replace_alpha(values: map<string, integer>) -> map<string, integer> {
+    return map_set(values, "alpha", 12);
+}
+
+bind base = [map: "beta": 2, "alpha": 1];
+bind changed = map_set(base, "alpha", 10);
+bind added = map_set(changed, "gamma", 3);
+bind removed = map_remove(added, "beta");
+print("Base", base);
+print("Updated", added);
+print("Removed", removed);
+print("Lookup", map_get_or(removed, "alpha", 0), map_get_or(removed, "absent", -1));
+print("Contains", map_contains(removed, "alpha"), map_contains(removed, "beta"));
+print("Lengths", map_len(base), map_len(removed));
+bind same = map_remove(removed, "unknown");
+print(same == removed);
+print("Pure", replace_alpha(base));

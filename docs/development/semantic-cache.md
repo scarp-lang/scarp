@@ -43,6 +43,13 @@ fields:
    advance on every document edit. **Full byte comparison still takes place
    even if revisions are accidentally reused**.
 
+If `load_with_revision` supplies a revision with the source text, the caller's
+revision for that SourceId must agree. A mismatch returns
+`CachedCompileError::RevisionMismatch` before semantic lookup or retention.
+Loaders that supply only text continue to rely on the caller's revisions.
+Rust hosts that exhaustively match `CachedCompileError` should handle the
+new variant.
+
 No hash-only identity, mtime, weak validation of import aliases, process-global
 state, network or runtime dependency is used. Since the loaded graph and
 compiler code both live in the same process, compilation state is scoped to
@@ -84,6 +91,12 @@ assert!(Arc::ptr_eq(&first.program, &second.program));
 ```
 
 ## Capacity, eviction, and stats
+
+The alpha.16 candidate adds `ConstantCache::set_limits` to the separate
+scalar-evaluation cache. Reducing either retention quota evicts oldest
+entries first and preserves lifetime counters. A zero quota disables
+retention. Existing compiled programs remain usable, and reused constants
+still pay their original evaluation charge against the current budget.
 
 `CacheLimits` defaults to **four entries** and **16 MiB cumulative retained
 source bytes**. An entry whose source text exceeds the byte allowance, or

@@ -19,7 +19,7 @@ fn tuple(values: &[TypeId]) -> T {
 fn primitive_handles_and_legacy_value_type_paths_are_compatible() {
     let mut builder = builder();
     let registry = TypeRegistry::default();
-    assert_eq!(registry.len(), 8);
+    assert_eq!(registry.len(), P::ALL.len());
     assert!(!registry.is_empty());
     let mut ids = std::collections::HashSet::new();
     for &kind in P::ALL {
@@ -32,9 +32,9 @@ fn primitive_handles_and_legacy_value_type_paths_are_compatible() {
         assert_eq!(registry.get(id), Some(&T::Primitive(kind)));
         assert_eq!(registry.depth(id), Some(1));
     }
-    assert_eq!(builder.len(), 8);
+    assert_eq!(builder.len(), P::ALL.len());
     assert_eq!(builder.component_count(), 0);
-    assert_eq!(registry.iter().count(), 8);
+    assert_eq!(registry.iter().count(), P::ALL.len());
     assert_eq!(scarp::value::Value::Integer(1).kind(), P::Integer);
 }
 
@@ -181,7 +181,7 @@ fn foreign_handles_are_rejected_even_when_local_indices_match() {
     assert_eq!(a.index(), b.index());
     assert_ne!(a, b);
     assert_eq!(left.intern(tuple(&[b])), Err(Error::UnknownType(b)));
-    assert_eq!(left.len(), 9);
+    assert_eq!(left.len(), P::ALL.len() + 1);
     assert_eq!(left.component_count(), 1);
     let registry = left.finish();
     assert!(registry.get(b).is_none());
@@ -202,7 +202,7 @@ fn snapshots_are_immutable_shared_and_safe_for_concurrent_inspection() {
             let registry = r.clone();
             std::thread::spawn(move || {
                 assert_eq!(registry.depth(id), Some(2));
-                assert_eq!(registry.iter().count(), 9);
+                assert_eq!(registry.iter().count(), P::ALL.len() + 1);
                 registry.get(id).unwrap().clone()
             })
         })
@@ -220,7 +220,7 @@ fn snapshots_are_immutable_shared_and_safe_for_concurrent_inspection() {
 #[test]
 fn registry_limits_are_exact_and_duplicate_interning_does_not_consume_them() {
     let limits = TypeLimits {
-        max_types: 10,
+        max_types: P::ALL.len() + 2,
         max_components: 3,
         max_depth: 3,
         max_arity: 2,
@@ -228,17 +228,17 @@ fn registry_limits_are_exact_and_duplicate_interning_does_not_consume_them() {
     let mut b = Builder::new(limits).unwrap();
     let a = b.intern(tuple(&[P::Integer.id(), P::Float.id()])).unwrap();
     let c = b.intern(sequence(a, None)).unwrap();
-    assert_eq!(b.len(), 10);
+    assert_eq!(b.len(), P::ALL.len() + 2);
     assert_eq!(b.component_count(), 3);
     assert_eq!(b.intern(sequence(a, None)).unwrap(), c);
     assert_eq!(
         b.intern(tuple(&[])),
         Err(Error::Limit {
             resource: Resource::Types,
-            limit: 10
+            limit: P::ALL.len() + 2
         })
     );
-    assert_eq!(b.len(), 10);
+    assert_eq!(b.len(), P::ALL.len() + 2);
     assert_eq!(b.component_count(), 3);
     let mut b = Builder::new(TypeLimits {
         max_components: 1,
@@ -254,7 +254,7 @@ fn registry_limits_are_exact_and_duplicate_interning_does_not_consume_them() {
         })
     );
     assert_eq!(b.component_count(), 1);
-    assert_eq!(b.len(), 9);
+    assert_eq!(b.len(), P::ALL.len() + 1);
 }
 
 #[test]
@@ -297,7 +297,7 @@ fn depth_width_and_tensor_component_boundaries_precede_registration() {
             limit: 2
         })
     );
-    assert_eq!(b.len(), 9);
+    assert_eq!(b.len(), P::ALL.len() + 1);
     assert_eq!(b.component_count(), 3);
 }
 
@@ -305,7 +305,7 @@ fn depth_width_and_tensor_component_boundaries_precede_registration() {
 fn invalid_limits_and_zero_component_leaf_types_are_defined() {
     for limits in [
         TypeLimits {
-            max_types: 7,
+            max_types: P::ALL.len() - 1,
             ..TypeLimits::default()
         },
         TypeLimits {
@@ -316,7 +316,7 @@ fn invalid_limits_and_zero_component_leaf_types_are_defined() {
         assert!(matches!(Builder::new(limits), Err(Error::InvalidLimits)));
     }
     let mut b = Builder::new(TypeLimits {
-        max_types: 9,
+        max_types: P::ALL.len() + 1,
         max_components: 0,
         max_depth: 1,
         max_arity: 0,
@@ -331,7 +331,7 @@ fn invalid_limits_and_zero_component_leaf_types_are_defined() {
         })
     );
     let r = b.finish();
-    assert_eq!(r.len(), 9);
+    assert_eq!(r.len(), P::ALL.len() + 1);
 }
 
 #[test]
@@ -340,7 +340,7 @@ fn deep_type_graphs_construct_clone_hash_and_drop_without_rust_recursion() {
         .stack_size(128 * 1024)
         .spawn(|| {
             let mut b = Builder::new(TypeLimits {
-                max_types: 10_008,
+                max_types: P::ALL.len() + 10_000,
                 max_components: 10_000,
                 max_depth: 10_001,
                 max_arity: 1,
@@ -352,7 +352,7 @@ fn deep_type_graphs_construct_clone_hash_and_drop_without_rust_recursion() {
             }
             let r = b.finish();
             assert_eq!(r.depth(current), Some(10_001));
-            assert_eq!(r.clone().len(), 10_008);
+            assert_eq!(r.clone().len(), P::ALL.len() + 10_000);
             drop(r);
         })
         .unwrap()
@@ -379,7 +379,7 @@ fn generated_shared_graphs_preserve_topological_handles_and_canonical_shapes() {
         children.push(id);
     }
     let r = b.finish();
-    assert_eq!(r.len(), 8 + shapes.len());
+    assert_eq!(r.len(), P::ALL.len() + shapes.len());
     assert_eq!(r.iter().count(), r.len());
 }
 

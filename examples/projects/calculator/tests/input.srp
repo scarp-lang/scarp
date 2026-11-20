@@ -1,0 +1,5 @@
+import "../src/math.srp" as math;
+
+bind left = text_to_integer(read_line());
+bind right = text_to_integer(read_line());
+assert(math.add(left, right) == 42, "the supplied inputs should sum to 42");

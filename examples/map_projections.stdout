@@ -1,0 +1,8 @@
+[list: "a", "m", "z"]
+[list: 1, 5, 9]
+a 1
+3
+[list: <integer>]
+[list: <string>]
+[list: false, true]
+[list: "disabled", "enabled"]

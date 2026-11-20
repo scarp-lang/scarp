@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         effect: FunctionEffect::Pure,
     })?;
     let snapshot = types.finish();
-    assert_eq!(snapshot.len(), 11);
+    assert_eq!(snapshot.len(), PrimitiveType::ALL.len() + 3);
     assert_eq!(snapshot.depth(signature), Some(4));
     println!(
         "types: {}, signature depth: {}",
@@ -24,7 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let program = scarp::compile(
         "pure funcra twice(n: integer)->integer{return n*2;} bind answer=twice(21); print(answer);",
     )?;
-    assert_eq!(program.type_registry().len(), 9);
+    assert_eq!(program.type_registry().len(), PrimitiveType::ALL.len() + 1);
     assert_eq!(program.typed_expressions().count(), 3);
     for expression in program.typed_expressions() {
         assert!(expression

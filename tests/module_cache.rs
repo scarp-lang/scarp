@@ -1,6 +1,7 @@
 use scarp::{
     diagnostics::DiagnosticKind as Kind,
     modules::{
+        self,
         cache::{CacheLimits, CacheStatus, CachedCompileError, CompilationCache},
         ConstantLimits, MemorySourceLoader, ModuleLimits, SourceLoadError, SourceLoader,
     },
@@ -87,6 +88,95 @@ fn unchanged_program_reuses_only_resolved_semantics_and_still_reloads_sources() 
 }
 
 #[test]
+fn changed_diagnostic_qualifiers_refresh_both_compilation_caches() {
+    use scarp::modules::cache::{EditorCompilationCache, EditorCompileLimits};
+
+    struct Qualified<'a> {
+        inner: &'a MemorySourceLoader,
+        qualifier: &'a str,
+    }
+
+    impl SourceLoader for Qualified<'_> {
+        fn resolve(
+            &self,
+            importer: Option<&str>,
+            specifier: &str,
+        ) -> Result<String, SourceLoadError> {
+            self.inner.resolve(importer, specifier)
+        }
+
+        fn load(&self, identity: &str, max_bytes: usize) -> Result<String, SourceLoadError> {
+            self.inner.load(identity, max_bytes)
+        }
+
+        fn diagnostic_qualifier(&self, identity: &str) -> Option<String> {
+            (identity == "lib.srp").then(|| self.qualifier.to_owned())
+        }
+    }
+
+    let inner = loader(&[
+        (
+            "main.srp",
+            r#"import "lib.srp" as lib; print(lib.fail(0));"#,
+        ),
+        (
+            "lib.srp",
+            "pub funcra fail(input: integer) -> integer { return 42 / input; }",
+        ),
+    ]);
+    let first = Qualified {
+        inner: &inner,
+        qualifier: "first/lib.srp",
+    };
+    let second = Qualified {
+        inner: &inner,
+        qualifier: "second/lib.srp",
+    };
+    let mut compiler = CompilationCache::new(CacheLimits::default());
+    let mut editor = EditorCompilationCache::new(Default::default());
+    let revisions = [4, 8];
+    for (source, expected) in [
+        (&first, CacheStatus::Stored),
+        (&second, CacheStatus::Stored),
+        (&second, CacheStatus::Hit),
+    ] {
+        let cold =
+            modules::compile_with_loader("main.srp", source, ModuleLimits::default()).unwrap();
+        let cached = compile(&mut compiler, source, &revisions).unwrap();
+        let graph = modules::load("main.srp", source, ModuleLimits::default()).unwrap();
+        let indexed = editor
+            .resolve(graph, EditorCompileLimits::default(), |_| Some(4), None)
+            .unwrap();
+        let expected_error = cold
+            .check(ExecutionOptions::default())
+            .unwrap_err()
+            .diagnostic;
+        assert_eq!(cached.status, expected);
+        assert_eq!(indexed.status, expected);
+        assert_eq!(
+            cached
+                .program
+                .check(ExecutionOptions::default())
+                .unwrap_err()
+                .diagnostic,
+            expected_error
+        );
+        assert_eq!(
+            indexed
+                .program
+                .check(ExecutionOptions::default())
+                .unwrap_err()
+                .diagnostic,
+            expected_error
+        );
+        assert!(expected_error
+            .related
+            .iter()
+            .any(|label| label.message.contains(source.qualifier)));
+    }
+}
+
+#[test]
 fn source_edits_and_changed_revisions_never_reuse_a_previous_output() {
     let mut cache = CompilationCache::new(CacheLimits::default());
     let initial = loader(&[
@@ -119,6 +209,61 @@ fn source_edits_and_changed_revisions_never_reuse_a_previous_output() {
         &wrong_revision.program,
         &same_source_new_revision.program
     ));
+}
+
+#[test]
+fn semantic_cache_rejects_revisions_that_disagree_with_loaded_documents() {
+    let mut sources = loader(&[
+        ("main.srp", "import \"अंक.srp\" as lib; print(lib.value);"),
+        ("अंक.srp", "pub bind value=7;"),
+    ]);
+    sources
+        .set_document("अंक.srp", "pub bind value=7;", 4)
+        .unwrap();
+    // The entry loader does not supply a revision. Its supplied value is still
+    // accepted, while the imported document has an authoritative revision.
+    let mut cache = CompilationCache::new(CacheLimits::default());
+    let first = compile(&mut cache, &sources, &[12, 4]).unwrap();
+    let before = cache.stats();
+
+    sources
+        .set_document("अंक.srp", "pub bind value=7;", 5)
+        .unwrap();
+    let error = compile(&mut cache, &sources, &[12, 4]).unwrap_err();
+    assert!(matches!(
+        &error,
+        CachedCompileError::RevisionMismatch {
+            source: 1,
+            identity,
+            loaded: 5,
+            supplied: 4,
+        } if identity == "अंक.srp"
+    ));
+    assert_eq!(cache.stats(), before);
+
+    let mut tokens = modules::cache::TokenCache::new(Default::default());
+    let mut syntax = modules::cache::SyntaxCache::new(Default::default());
+    let error_with_frontends = cache
+        .compile_with_frontend_caches(
+            "main.srp",
+            &sources,
+            modules::cache::CachedCompileOptions::new(&[12, 4]),
+            &mut tokens,
+            &mut syntax,
+        )
+        .unwrap_err();
+    assert_eq!(error_with_frontends.to_string(), error.to_string());
+    assert_eq!(cache.stats(), before);
+
+    let current = compile(&mut cache, &sources, &[12, 5]).unwrap();
+    assert_eq!(current.status, CacheStatus::Stored);
+    assert!(!Arc::ptr_eq(&first.program, &current.program));
+    assert_eq!(cache.evict_identity_revision("अंक.srp", 4), 1);
+    let hit = compile(&mut cache, &sources, &[12, 5]).unwrap();
+    assert_eq!(hit.status, CacheStatus::Hit);
+    assert!(Arc::ptr_eq(&current.program, &hit.program));
+    assert_eq!(execute(&first), b"7\n");
+    assert_eq!(execute(&hit), b"7\n");
 }
 
 #[test]

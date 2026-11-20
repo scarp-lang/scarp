@@ -11,14 +11,14 @@ import json
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLISHED_VERSION = "0.0.6-alpha.7"
+PUBLISHED_VERSION = "0.0.6-alpha.15"
 ALPHA6_SOURCE = "cdf6a3924ec2a36c7beca5a9aec4f01a0bce515e"
 HISTORICAL_ALPHA3 = "0.0.6-alpha.3"
 HISTORICAL_ALPHA2 = "0.0.6-alpha.2"
 HISTORICAL_ALPHA1 = "0.0.6-alpha.1"
 HISTORICAL_ALPHA4 = "0.0.5-alpha.4"
 HISTORICAL_ALPHA5 = "0.0.5-alpha.5"
-PACKAGE_VERSION = "0.0.6-alpha.7"
+PACKAGE_VERSION = "0.0.6-alpha.16"
 
 
 def package_version():
@@ -87,19 +87,52 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
             "docs/README.md": (f"**{PUBLISHED_VERSION} prerelease**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/compatibility.md": (f"`{PUBLISHED_VERSION}` is **a published GitHub prerelease**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/reference/cli.md": (f"v{PUBLISHED_VERSION}",),
-            "docs/development/feature-matrix.md": (f"Cargo declares `{version}`",),
+            "docs/development/feature-matrix.md": (f"Published `{PUBLISHED_VERSION}`",),
             "CHANGELOG.md": (
-                f"## {PUBLISHED_VERSION} — published GitHub prerelease, 2026-11-11",
+                f"## {PUBLISHED_VERSION} — published GitHub prerelease, 2026-11-19",
+                "## 0.0.6-alpha.12 — published GitHub prerelease, 2026-11-16",
+                "## 0.0.6-alpha.11 — published GitHub prerelease, 2026-11-15",
+                "## 0.0.6-alpha.10 — published GitHub prerelease, 2026-11-14",
+                "## 0.0.6-alpha.9 — published GitHub prerelease, 2026-11-13",
                 "## 0.0.6-alpha.6 — published GitHub prerelease, 2026-11-10",
+            ),
+            f"docs/releases/v{PUBLISHED_VERSION}-validation.md": (
+                "Published GitHub experimental prerelease", "draft=false",
+                "prerelease=true", "SHA256SUMS",
             ),
             f"docs/releases/v{version}-publication.md": (
                 f"# Scarp v{version} — prerelease",
                 "## Compatibility and limits",
             ),
-            f"docs/releases/v{PUBLISHED_VERSION}-validation.md": (
+            "docs/releases/v0.0.6-alpha.12-validation.md": (
                 "Published GitHub experimental prerelease", "draft=false", "prerelease=true",
-                "b1c1fd232b418267d95520c69ee563ac99ecae30", "4712acbd01914b86ea2fdfcb904b24edf44e5f44", "441415412", "42987993233",
-                "fc584bd9eec7d2ce10a31892d418a1319543c669b5c36ef390761f885d11d319",
+                "a1f9c2fc1c6bc8f3e04878d30d658bb38fab441d", "747a4d251c00fe5a1d079c2392312a4fcfd75927",
+                "447160780", "7813b8c9905bf4e2594d8f986e29dda2b377e5b6",
+                "43880433859", "43880433751", "43883628126", "43883629159", "43887498190", "SHA256SUMS",
+            ),
+            "docs/releases/v0.0.6-alpha.11-validation.md": (
+                "Published GitHub experimental prerelease", "draft=false", "prerelease=true",
+                "79b57395957f47e1270ee542a856c844b82386de", "c935f7a6288b8657f1c7bec2eabfcdf5f5bc9480",
+                "446147628", "365aa44c7cf3985c1e7fed593d2a26bbff671652", "43726187182", "43726187071",
+                "43728347097", "43728347067", "43728751523", "SHA256SUMS",
+            ),
+            "docs/releases/v0.0.6-alpha.10-validation.md": (
+                "Published GitHub experimental prerelease", "draft=false", "prerelease=true",
+                "44fcd0f77ccb92648cdb1fc7632495c506c87cb3",
+                "43568032647", "43568031016", "43568914555", "43568914516",
+                "SHA256SUMS",
+            ),
+            "docs/releases/v0.0.6-alpha.9-validation.md": (
+                "Published GitHub experimental prerelease", "draft=false", "prerelease=true",
+                "0814997dc43982eb707a9a1aee72aab3a7ac8b41", "814eecaff12c2222a1315a388b016447a1b2cba9",
+                "e5f04913cba4618eb30e28d827f135baad41e76f", "444142848", "43416528607",
+                "43412714922", "43412714829", "43415500235", "43415500314", "SHA256SUMS",
+            ),
+            "docs/releases/v0.0.6-alpha.8-validation.md": (
+                "Published GitHub experimental prerelease", "draft=false", "prerelease=true",
+                "37253e7805c0ca594560700dd1deb3928458e60d", "aea9ff1d34307ecc337a8ef4c5230e0a654b6a79",
+                "43223948596", "43223948699", "43225464363", "43225464511",
+                "SHA256SUMS",
             ),
             "docs/releases/v0.0.6-alpha.5.md": ("Scarp v0.0.6-alpha.5", "source candidate", "Publication gates"),
             "docs/releases/v0.0.6-alpha.5-publication.md": (
@@ -229,12 +262,13 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
     def test_latest_published_anchor_and_immutable_candidate_snapshot(self):
         version = PUBLISHED_VERSION
         self.assertEqual(PACKAGE_VERSION, package_version())
-        self.assertEqual(version, PACKAGE_VERSION)
-        self.assertFalse((ROOT / ".github/release-request.json").exists())
-        for filename in ("README.md", "docs/README.md", "docs/compatibility.md"):
+        for filename in (
+            "README.md", "docs/README.md", "docs/compatibility.md",
+            "docs/reference/cli.md", "docs/releasing.md",
+        ):
             with self.subTest(file=filename):
                 text = (ROOT / filename).read_text(encoding="utf-8")
-                matches = re.findall(r"latest published prerelease is\s*\[([^]]+)\]", text)
+                matches = re.findall(r"latest published prerelease is\s*\[v?([^]]+)\]", text)
                 self.assertEqual(matches, [version])
                 self.assertIn(f"v{version}", text)
         # The tagged candidate file intentionally remains a pre-release

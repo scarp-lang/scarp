@@ -17,7 +17,7 @@ export RUSTDOCFLAGS="${RUSTDOCFLAGS-} -D warnings"
 
 cargo fmt --all -- --check
 rustfmt --edition 2021 --check scripts/benchmarks/compare.rs
-cargo clippy --locked --all-targets -- -D warnings
+cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked
 cargo test --locked --release
 cargo build --locked
@@ -52,9 +52,11 @@ for example in vectors vector_probabilities coefficient_fit scaled_norm terminal
 done
 cargo run --locked -- modules examples/module_inspection.srp
 cargo run --locked -- modules examples/constant_expressions.srp
+cargo run --locked -- verify examples/order_statistics.srp
+cargo run --locked -- exec examples/order_statistics.srp
 cargo run --locked -- run examples/typed_declarations.srp
 cargo run --locked -- check examples/typed_declarations.srp
-for example in scalar_conversions unicode_text symbol_navigation text_construction integer_collections bit_fields numerical_kernels root_mean_square collection_module topk_scores temperature_softmax sampled_calculus sample_cumulative_area cosine_similarity nucleus_selection pearson_correlation text_foundations; do
+for example in scalar_conversions unicode_text symbol_navigation text_construction integer_collections bit_fields numerical_kernels root_mean_square collection_module topk_scores temperature_softmax sampled_calculus sample_cumulative_area cosine_similarity nucleus_selection pearson_correlation text_foundations bigint_arithmetic bigint_sequences bigint_module; do
     cargo run --locked -- run "examples/$example.srp"
     cargo run --locked -- check "examples/$example.srp"
 done
@@ -66,6 +68,34 @@ cargo run --locked -- explain E0044
 
 cargo run --locked -- run examples/tuples.srp
 cargo run --locked -- check examples/tuples.srp
+cargo run --locked -- run examples/fixed_arrays.srp
+cargo run --locked -- check examples/fixed_arrays.srp
+cargo run --locked -- verify examples/app_state.srp
+cargo run --locked -- exec examples/app_state.srp
+cargo run --locked -- verify examples/variant_validation.srp
+cargo run --locked -- exec examples/variant_validation.srp
+cargo run --locked -- verify examples/ui_event_patterns.srp
+cargo run --locked -- exec examples/ui_event_patterns.srp
+cargo run --locked -- verify examples/typed_submission.srp
+cargo run --locked -- exec examples/typed_submission.srp
+cargo run --locked -- verify examples/typed_propagation.srp
+cargo run --locked -- exec examples/typed_propagation.srp
+cargo run --locked -- verify examples/boolean_match.srp
+cargo run --locked -- exec examples/boolean_match.srp
+cargo run --locked -- verify examples/scalar_literal_match.srp
+cargo run --locked -- exec examples/scalar_literal_match.srp
+cargo run --locked -- verify examples/task_panel_state.srp
+cargo run --locked -- exec examples/task_panel_state.srp
+cargo run --locked -- verify examples/typed_dynamic_lists.srp
+cargo run --locked -- exec examples/typed_dynamic_lists.srp
+cargo run --locked -- verify examples/persistent_list_updates.srp
+cargo run --locked -- exec examples/persistent_list_updates.srp
+cargo run --locked -- verify examples/typed_maps.srp
+cargo run --locked -- exec examples/typed_maps.srp
+cargo run --locked -- verify examples/persistent_maps.srp
+cargo run --locked -- exec examples/persistent_maps.srp
+cargo run --locked -- verify examples/map_projections.srp
+cargo run --locked -- exec examples/map_projections.srp
 cargo run --locked --example tuple_types
 cargo run --locked --example program_input
 cargo run --locked -- verify examples/program_input.srp
@@ -73,3 +103,14 @@ cargo run --locked -- run examples/program_input.srp < examples/program_input.st
 
 cargo run --locked -- verify examples/core_input_tuple.srp
 cargo run --locked -- run examples/core_input_tuple.srp < examples/core_input_tuple.stdin
+
+project=examples/projects/calculator
+cargo run --locked -- project info --json "$project"
+cargo run --locked -- verify "$project"
+cargo run --locked -- run "$project"
+cargo run --locked -- test --list --require-tests "$project"
+cargo run --locked -- test --json --require-tests "$project"
+
+task_board=examples/projects/task-board
+cargo run --locked -- verify "$task_board"
+cargo run --locked -- test --json --require-tests "$task_board"

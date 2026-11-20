@@ -1,0 +1,4 @@
+import "../src/math.srp" as math;
+
+assert(math.add(2, 3) == 5);
+assert(math.add(-3, 3) == 0, "opposites should cancel");
