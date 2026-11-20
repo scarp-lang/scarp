@@ -62,3 +62,49 @@ fn native_backend_does_not_silently_lower_map_values() {
     let error = scarp::c_backend::emit_program(&program).unwrap_err();
     assert_eq!(error.kind, DiagnosticKind::NativeUnsupported);
 }
+
+#[test]
+fn integer_map_snapshots_and_both_streams_survive_exact_work_boundaries() {
+    let source = r#"
+        bind original = [map: 9: "nine", 1: "one"];
+        bind old_keys = map_keys(original);
+        bind changed = map_set(original, 3, "three");
+        eprint("before");
+        print(old_keys);
+        print(map_values(changed));
+        print(map_len(original), map_len(changed));
+    "#;
+    let run = |max_steps| {
+        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        let result = scarp::run_with_io_and_options(
+            source,
+            &mut stdout,
+            &mut stderr,
+            ExecutionOptions {
+                limits: scarp::ExecutionLimits {
+                    max_steps,
+                    max_prints: 4,
+                },
+                ..ExecutionOptions::default()
+            },
+        );
+        (result, stdout, stderr)
+    };
+    const EXACT_STEPS: u64 = 232;
+    for steps in [0, 1, EXACT_STEPS - 1] {
+        let (result, stdout, stderr) = run(steps);
+        assert!(matches!(result, Err(RunError::Diagnostic(ref diagnostic))
+            if diagnostic.kind == DiagnosticKind::ExecutionLimit));
+        assert!(stdout.is_empty(), "stdout escaped at {steps} steps");
+        assert!(stderr.is_empty(), "stderr escaped at {steps} steps");
+    }
+    for steps in [EXACT_STEPS, EXACT_STEPS, EXACT_STEPS + 1] {
+        let (result, stdout, stderr) = run(steps);
+        result.unwrap();
+        assert_eq!(
+            stdout,
+            b"[list: 1, 9]\n[list: \"one\", \"three\", \"nine\"]\n2 3\n"
+        );
+        assert_eq!(stderr, b"before\n");
+    }
+}

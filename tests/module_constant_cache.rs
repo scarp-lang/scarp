@@ -456,3 +456,43 @@ fn byte_quota_counts_source_and_result_utf8_and_can_bypass_retention() {
         (1, bytes, 1)
     );
 }
+
+#[test]
+fn live_constant_quotas_evict_fifo_and_preserve_existing_programs() {
+    let first = loader(&[("main.srp", "pub bind n = 1; print(n);")]);
+    let second = loader(&[("main.srp", "pub bind n = 2; print(n);")]);
+    let mut cache = ConstantCache::new(ConstantCacheLimits::default());
+    let old_program = cached(&first, &mut cache);
+    let exact_bytes = cache.stats().retained_bytes;
+    cached(&second, &mut cache);
+    cached(&first, &mut cache); // Hits leave the insertion order unchanged.
+
+    let limits = ConstantCacheLimits {
+        max_entries: 1,
+        max_retained_bytes: exact_bytes,
+    };
+    cache.set_limits(limits);
+    assert_eq!(cache.limits(), limits);
+    assert_eq!(cache.stats().entries, 1);
+    assert_eq!(cache.stats().retained_bytes, exact_bytes);
+    assert_eq!(cache.stats().evictions, 1);
+    assert_eq!(output(&cached(&second, &mut cache)), "2\n");
+    assert_eq!(cache.stats().hits, 2);
+
+    for allowance in [exact_bytes - 1, 0] {
+        cache.set_limits(ConstantCacheLimits {
+            max_retained_bytes: allowance,
+            ..limits
+        });
+        assert_eq!(output(&cached(&second, &mut cache)), "2\n");
+        assert_eq!(cache.stats().entries, 0);
+        assert_eq!(cache.stats().retained_bytes, 0);
+    }
+    assert_eq!(cache.stats().evictions, 2);
+    assert_eq!(cache.stats().bypasses, 2);
+    assert_eq!(output(&old_program), "1\n");
+
+    cache.set_limits(limits);
+    cached(&first, &mut cache);
+    assert_eq!(cache.stats().entries, 1);
+}

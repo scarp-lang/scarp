@@ -71,6 +71,8 @@ The accepted binding-only sequence is stricter than general programs.
 The encoder checks actual machine-code growth against 200,000 bytes and caps
 the complete ELF object at 262,144 bytes. It uses fallible reserves and
 deterministic section offsets.
+The alpha.16 candidate probes every full 4 KiB stack page crossed while
+allocating a large frame. Both return paths restore the complete frame.
 No source path, timestamp, username, environment variable, or build identity
 is embedded in output. Unsupported input yields no object or partial file.
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.6-alpha.16 — source candidate under qualification
+
+- Add bounded `median` and type-7 `quantile` for finite numerical vectors.
+  Existing Scarp functions with the same names retain priority.
+- Experimental Linux x86-64 ELF64 integer kernels probe each full stack page
+  crossed by the frame prologue and preserve both existing return ABIs.
+- Rust hosts can change `ConstantCache` retention quotas in place. Entries are
+  evicted FIFO and previously compiled programs remain usable.
+- Verify integer map snapshots and both captured streams at the work limit.
+
 ## 0.0.6-alpha.15 — published GitHub prerelease, 2026-11-19
 
 - Apply the 1 MiB per-file source limit to token and AST inspection.

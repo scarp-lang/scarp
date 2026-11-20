@@ -47,8 +47,8 @@ try {
     if ($version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
         throw 'Expected a three-part package version'
     }
-    # Alpha.15 retains the extracted-package checks from alpha.14.
-    $contractVersion = if ($version -ceq '0.0.6-alpha.15') { '0.0.6-alpha.14' } else { $version }
+    # Alpha.15 and alpha.16 retain the extracted-package checks from alpha.14.
+    $contractVersion = if ($version -in @('0.0.6-alpha.15', '0.0.6-alpha.16')) { '0.0.6-alpha.14' } else { $version }
     $compiler = & rustc --version
     if ($LASTEXITCODE -ne 0) { throw 'Could not read compiler version' }
     $compilerDetails = & rustc --version --verbose
@@ -140,7 +140,7 @@ try {
     [System.IO.File]::WriteAllText($staticSource, 'print(1/0);')
     $staticCheck = Invoke-ScarpProcess -Executable $executable -Arguments @('verify', '--diagnostic-format=json', $staticSource)
     if ($staticCheck.ExitCode -ne 0 -or $staticCheck.Stdout.Length -ne 0 -or $staticCheck.Stderr.Length -ne 0) { throw 'Packaged verify must remain static and silent' }
-    if ($version -ceq '0.0.6-alpha.15') {
+    if ($version -in @('0.0.6-alpha.15', '0.0.6-alpha.16')) {
         $oversized = Join-Path $stagingRoot 'oversized-frontend.srp'
         [IO.File]::WriteAllText($oversized, (' ' * (1MB + 1)))
         foreach ($mode in @('tokens', 'ast')) {
@@ -169,6 +169,15 @@ try {
             [Text.Encoding]::UTF8.GetString($exact.Stdout) -cne "true$([char]10)" -or
             [Text.Encoding]::UTF8.GetString($exact.Stderr) -cne "pending$([char]10)") {
             throw 'Packaged text comparison output differs at the exact budget'
+        }
+    }
+    if ($version -ceq '0.0.6-alpha.16') {
+        $orderStatistics = Join-Path $extractedPackage 'examples/order_statistics.srp'
+        $expectedOutput = [IO.File]::ReadAllBytes((Join-Path $extractedPackage 'examples/order_statistics.stdout'))
+        $result = Invoke-ScarpProcess -Executable $executable -Arguments @('exec', $orderStatistics)
+        if ($result.ExitCode -ne 0 -or $result.Stderr.Length -ne 0 -or
+            [Convert]::ToBase64String($result.Stdout) -cne [Convert]::ToBase64String($expectedOutput)) {
+            throw 'Packaged bounded order statistics differ from the expected output'
         }
     }
     foreach ($navigationMode in @('symbols', 'references')) {

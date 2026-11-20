@@ -92,6 +92,12 @@ assert!(Arc::ptr_eq(&first.program, &second.program));
 
 ## Capacity, eviction, and stats
 
+The alpha.16 candidate adds `ConstantCache::set_limits` to the separate
+scalar-evaluation cache. Reducing either retention quota evicts oldest
+entries first and preserves lifetime counters. A zero quota disables
+retention. Existing compiled programs remain usable, and reused constants
+still pay their original evaluation charge against the current budget.
+
 `CacheLimits` defaults to **four entries** and **16 MiB cumulative retained
 source bytes**. An entry whose source text exceeds the byte allowance, or
 a zero-capacity cache, compiles normally but is returned with
