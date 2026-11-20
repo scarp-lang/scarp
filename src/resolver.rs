@@ -3,6 +3,11 @@
 use std::collections::HashMap;
 
 mod functions;
+mod nominal;
+mod patterns;
+mod records;
+mod variants;
+pub(crate) use variants::MatchTarget;
 mod type_info;
 
 use crate::types::{SourceType, TypeId, TypeLimits, TypeRegistryBuilder};
@@ -13,8 +18,8 @@ use functions::{build_call_graph, resolve_function};
 
 use crate::{
     ast::{
-        AssignmentOperator, BinaryOperator, Expression, ExpressionKind, FunctionDeclaration,
-        OutputTarget, PrintArgument, Program, Statement,
+        AssignmentOperator, BinaryOperator, BindingPattern, Expression, ExpressionKind,
+        FunctionDeclaration, OutputTarget, PatternKind, PrintArgument, Program, Statement,
     },
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     numeric::Builtin,
@@ -70,6 +75,10 @@ pub(crate) enum ResolvedStatement {
     Call {
         expression: ResolvedExpression,
     },
+    Assert {
+        condition: ResolvedExpression,
+        message: Option<String>,
+    },
     RepeatInit {
         count: ResolvedExpression,
         count_slot: usize,
@@ -103,6 +112,29 @@ pub(crate) enum ResolvedStatement {
         slot: usize,
         value: ResolvedExpression,
     },
+    /// Evaluate a checked Option/Result once, binding its success payload or
+    /// returning a typed absence/error through the normal function completion.
+    Propagate {
+        slot: usize,
+        value: ResolvedExpression,
+        plan: PropagationPlan,
+    },
+    Match {
+        value: ResolvedExpression,
+        dispatch: Box<[MatchTarget]>,
+    },
+    /// Bounded exact integer/text cases with a mandatory fallback for an
+    /// open-ended scalar domain. No unchecked payload or pattern evaluation.
+    MatchLiteral {
+        value: ResolvedExpression,
+        cases: Box<[(crate::ast::MatchLiteral, usize)]>,
+        otherwise: usize,
+    },
+    /// Compiler-verified tuple/array shape with one initializer evaluation.
+    Destructure {
+        steps: Vec<DestructureStep>,
+        value: ResolvedExpression,
+    },
     Update {
         slot: usize,
         operator: BinaryOperator,
@@ -114,6 +146,15 @@ pub(crate) enum ResolvedStatement {
         target: OutputTarget,
         newline: bool,
     },
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum DestructureStep {
+    Tuple(usize),
+    Array(usize),
+    Record(Box<[usize]>),
+    Bind(usize),
+    Discard,
 }
 
 #[derive(Debug, Clone)]
@@ -129,6 +170,89 @@ pub(crate) struct ResolvedExpression {
     pub kind: SourceType,
     pub types: Vec<TypeId>,
     pub calls: Vec<Option<ResolvedCall>>,
+    pub composites: std::collections::BTreeMap<usize, CompositeOperation>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct PropagationPlan {
+    pub outer: SourceType,
+    pub success_tag: u8,
+    pub failure_tag: u8,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum CompositeOperation {
+    Record {
+        kind: SourceType,
+        order: Box<[usize]>,
+    },
+    Field(usize),
+    Variant {
+        kind: SourceType,
+        tag: u8,
+    },
+}
+
+/// Pure persistent-list operations. All update forms return a fresh typed
+/// snapshot, preserving any aliases to the original immutable list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ListIntrinsic {
+    Push,
+    Set,
+    Remove,
+    Len,
+}
+impl ListIntrinsic {
+    pub(crate) fn from_name(name: &str) -> Option<Self> {
+        Some(match name {
+            "list_push" => Self::Push,
+            "list_set" => Self::Set,
+            "list_remove" => Self::Remove,
+            "list_len" => Self::Len,
+            _ => return None,
+        })
+    }
+    pub(crate) fn arity(self) -> usize {
+        match self {
+            Self::Push | Self::Remove => 2,
+            Self::Set => 3,
+            Self::Len => 1,
+        }
+    }
+}
+
+/// Bounded pure map operations; mutation always produces a new snapshot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MapIntrinsic {
+    Len,
+    Keys,
+    Values,
+    Contains,
+    GetOr,
+    Set,
+    Remove,
+}
+impl MapIntrinsic {
+    pub(crate) fn from_name(name: &str) -> Option<Self> {
+        Some(match name {
+            "map_len" => Self::Len,
+            "map_keys" => Self::Keys,
+            "map_values" => Self::Values,
+            "map_contains" => Self::Contains,
+            "map_get_or" => Self::GetOr,
+            "map_set" => Self::Set,
+            "map_remove" => Self::Remove,
+            _ => return None,
+        })
+    }
+
+    pub(crate) fn arity(self) -> usize {
+        match self {
+            Self::Len | Self::Keys | Self::Values => 1,
+            Self::Contains | Self::Remove => 2,
+            Self::GetOr | Self::Set => 3,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -139,11 +263,18 @@ pub(crate) enum ResolvedCall {
         parameters: Vec<usize>,
     },
     Builtin(Builtin),
-    ReadLine,
+    BigIntDivMod,
+    List(ListIntrinsic),
+    Map(MapIntrinsic),
+    Io(crate::input::IoBuiltin),
 }
 
 pub(crate) fn is_builtin_name(name: &str) -> bool {
-    name == "read_line" || Builtin::from_name(name).is_some()
+    name == "bigint_divmod"
+        || ListIntrinsic::from_name(name).is_some()
+        || MapIntrinsic::from_name(name).is_some()
+        || crate::input::IoBuiltin::from_name(name).is_some()
+        || Builtin::from_name(name).is_some()
 }
 
 /// Static function signature and call-graph information. Spans are source bytes.
@@ -277,6 +408,7 @@ pub fn resolve_with_type_limits(
     let mut statements = Vec::new();
     let mut metadata: Vec<FunctionInfo> = Vec::new();
     let mut names: HashMap<String, usize> = HashMap::new();
+    let layouts = nominal::collect(&program.statements, &mut registry)?;
     for statement in program.statements {
         if matches!(
             statement,
@@ -289,7 +421,12 @@ pub fn resolve_with_type_limits(
             )
             .with_help("use modules::compile_with_loader or modules::compile_file"));
         }
-        if let Statement::Function(function) = statement {
+        if let Statement::Function(mut function) = statement {
+            for parameter in &mut function.parameters {
+                parameter.kind = nominal::resolve_type(&layouts, &parameter.kind, parameter.span)?;
+            }
+            function.result =
+                nominal::resolve_type(&layouts, &function.result, function.name_span)?;
             check_name(&function.name, function.name_span)?;
             if function.name == "repeat" {
                 return Err(Diagnostic::new(
@@ -341,15 +478,15 @@ pub fn resolve_with_type_limits(
                 recursive: false,
             });
             declarations.push(function);
-        } else {
+        } else if !matches!(statement, Statement::Record(_) | Statement::Variant(_)) {
             statements.push(statement);
         }
     }
     let functions = declarations
         .into_iter()
-        .map(|f| resolve_function(f, &metadata, &names, &mut registry))
+        .map(|f| resolve_function(f, &metadata, &names, &layouts, &mut registry))
         .collect::<Result<Vec<_>, _>>()?;
-    let mut resolver = Resolver::new(&metadata, &names, &mut registry);
+    let mut resolver = Resolver::new(&metadata, &names, &layouts, &mut registry);
     resolver.statement_list(statements)?;
     let statement_count = resolver
         .statements
@@ -386,6 +523,7 @@ struct Resolver<'a> {
     loops: Vec<LoopContext>,
     functions: &'a [FunctionInfo],
     names: &'a HashMap<String, usize>,
+    layouts: &'a nominal::Layouts,
     result: Option<(SourceType, Span)>,
     pure: bool,
 }
@@ -401,6 +539,7 @@ impl<'a> Resolver<'a> {
     fn new(
         functions: &'a [FunctionInfo],
         names: &'a HashMap<String, usize>,
+        layouts: &'a nominal::Layouts,
         registry: &'a mut TypeRegistryBuilder,
     ) -> Self {
         Self {
@@ -411,6 +550,7 @@ impl<'a> Resolver<'a> {
             loops: Vec::new(),
             functions,
             names,
+            layouts,
             result: None,
             pure: false,
         }
@@ -423,6 +563,7 @@ impl<'a> Resolver<'a> {
             self.functions,
             self.names,
             self.pure,
+            self.layouts,
             self.registry,
         )
     }
@@ -439,327 +580,329 @@ impl<'a> Resolver<'a> {
         }
         Ok(())
     }
+    // Only the dispatch frame survives while recursively lowering a nested
+    // block. Per-statement temporaries can be large in debug builds.
+    #[inline(never)]
     fn statement_list(&mut self, statements: Vec<Statement>) -> Result<(), Diagnostic> {
         for statement in statements {
-            let span = statement.span();
             match statement {
-                Statement::Import { .. } | Statement::Export { .. } => {
-                    return Err(Diagnostic::new(
-                        DiagnosticKind::ModuleSyntax,
-                        span,
-                        "module declarations require an explicit source loader",
-                    )
-                    .with_help("use modules::compile_with_loader or modules::compile_file"));
-                }
-                Statement::Function(function) => {
-                    return Err(Diagnostic::new(
-                        DiagnosticKind::FunctionUnsupported,
-                        function.span,
-                        "function declarations are allowed only at file scope",
-                    ))
-                }
-                Statement::Return { value, span } => {
-                    let (expected, declaration) = self.result.clone().ok_or_else(|| {
-                        Diagnostic::new(
-                            DiagnosticKind::InvalidReturn,
-                            span,
-                            "return is only valid inside funcra",
-                        )
-                    })?;
-                    let value = value.map(|v| self.expression(v)).transpose()?;
-                    match (&value, &expected) {
-                        (None, kind) if *kind == ValueType::Unit => {}
-                        (Some(value), kind) if *kind != ValueType::Unit && &value.kind == kind => {}
-                        _ => {
-                            let mut error = Diagnostic::new(
-                                DiagnosticKind::InvalidReturn,
-                                span,
-                                format!(
-                                    "return must {}",
-                                    if expected == ValueType::Unit {
-                                        "be bare for a unit function".into()
-                                    } else {
-                                        format!("produce {expected}")
-                                    }
-                                ),
-                            )
-                            .with_related(
-                                declaration,
-                                format!("function declares result type {expected} here"),
-                            );
-                            if let Some(value) = &value {
-                                error = error.with_related(
-                                    value.syntax.nodes()[value.syntax.root()].span,
-                                    format!("returned expression has type {}", value.kind),
-                                );
-                            }
-                            return Err(error.with_help(if expected == ValueType::Unit {
-                                "use a bare return in a unit function".into()
-                            } else {
-                                format!("return an expression of type {expected}")
-                            }));
-                        }
-                    }
-                    self.emit(ResolvedStatement::Return { value }, span);
-                }
-                Statement::Call { expression, span } => {
-                    if !matches!(
-                        expression.nodes()[expression.root()].kind,
-                        ExpressionKind::UserCall { .. }
-                    ) {
-                        return Err(Diagnostic::new(
-                            DiagnosticKind::CallArguments,
-                            span,
-                            "a call statement requires a call expression",
-                        ));
-                    }
-                    let expression = self.expression(expression)?;
-                    self.emit(ResolvedStatement::Call { expression }, span);
-                }
+                Statement::Match(statement) => self.resolve_match(*statement),
+                Statement::Block { statements, span } => self.scoped_statements(statements, span),
                 Statement::Repeat {
                     count,
                     index,
                     index_span,
                     statements,
                     span,
-                } => {
-                    let count = self.expression(count)?;
-                    let count_span = count.syntax.nodes()[count.syntax.root()].span;
-                    require_type(&count.kind, ValueType::Integer, count_span).map_err(|error| {
-                        error.with_help(
-                            "repeat needs an integer count: repeat 5 as index { statements }",
-                        )
-                    })?;
-                    self.binding_name(&index, index_span)?;
-                    let count_slot = self.slot_types.len();
-                    let index_slot = count_slot + 1;
-                    self.slot_types.extend([
-                        SourceType::from(ValueType::Integer),
-                        SourceType::from(ValueType::Integer),
-                    ]);
-                    self.emit(
-                        ResolvedStatement::RepeatInit {
-                            count,
-                            count_slot,
-                            index_slot,
-                        },
-                        count_span,
-                    );
-                    let start = self.emit(
-                        ResolvedStatement::RepeatGuard {
-                            count_slot,
-                            index_slot,
-                            target: 0,
-                        },
-                        count_span,
-                    );
-                    self.loops.push(LoopContext {
-                        breaks: Vec::new(),
-                        continues: Vec::new(),
-                        scope_depth: self.scopes.len(),
-                    });
-                    self.enter_scope(span)?;
-                    self.scopes.last_mut().unwrap().insert(
-                        index,
-                        Binding {
-                            slot: index_slot,
-                            declaration: index_span,
-                            mutable: false,
-                            kind: ValueType::Integer.into(),
-                            repeat_index: true,
-                            parameter: false,
-                        },
-                    );
-                    self.statement_list(statements)?;
-                    self.retire_scope(span);
-                    self.scopes.pop();
-                    let next = self.emit(ResolvedStatement::RepeatNext { index_slot }, index_span);
-                    self.emit(ResolvedStatement::Jump { target: start }, count_span);
-                    let end = self.statements.len();
-                    if let ResolvedStatement::RepeatGuard { target, .. } =
-                        &mut self.statements[start].kind
-                    {
-                        *target = end;
-                    }
-                    let context = self.loops.pop().unwrap();
-                    self.finish_loop(context, next, end);
-                }
+                } => self.lower_repeat(count, index, index_span, statements, span),
                 Statement::While {
                     condition,
                     statements,
                     span,
-                } => {
-                    let condition = self.expression(condition)?;
-                    let condition_span = condition.syntax.nodes()[condition.syntax.root()].span;
-                    require_type(&condition.kind, ValueType::Boolean, condition_span).map_err(|error|
-                        error.with_help("while needs a boolean guard; compare values, for example while index < count { statements }"))?;
-                    let start = self.emit(
-                        ResolvedStatement::JumpIfFalse {
-                            condition,
-                            target: 0,
-                        },
-                        condition_span,
-                    );
-                    self.loops.push(LoopContext {
-                        breaks: Vec::new(),
-                        continues: Vec::new(),
-                        scope_depth: self.scopes.len(),
-                    });
-                    self.scoped_statements(statements, span)?;
-                    let context = self.loops.pop().unwrap();
-                    self.emit(ResolvedStatement::Jump { target: start }, span);
-                    let end = self.statements.len();
-                    if let ResolvedStatement::JumpIfFalse { target, .. } =
-                        &mut self.statements[start].kind
-                    {
-                        *target = end;
-                    }
-                    self.finish_loop(context, start, end);
-                }
-                Statement::Break { span } => {
-                    if self.loops.is_empty() {
-                        return Err(loop_control(span));
-                    }
-                    let depth = self.loops.last().unwrap().scope_depth;
-                    let retire = self.retirement_slots(depth);
-                    let index =
-                        self.emit(ResolvedStatement::LoopControl { target: 0, retire }, span);
-                    self.loops.last_mut().unwrap().breaks.push(index);
-                }
-                Statement::Continue { span } => {
-                    if self.loops.is_empty() {
-                        return Err(loop_control(span));
-                    }
-                    let depth = self.loops.last().unwrap().scope_depth;
-                    let retire = self.retirement_slots(depth);
-                    let index =
-                        self.emit(ResolvedStatement::LoopControl { target: 0, retire }, span);
-                    self.loops.last_mut().unwrap().continues.push(index);
-                }
+                } => self.lower_while(condition, statements, span),
                 Statement::If {
                     branches,
                     otherwise,
                     span,
-                } => {
-                    if branches.is_empty() {
-                        return Err(Diagnostic::new(
-                            DiagnosticKind::UnexpectedToken,
+                } => self.lower_if(branches, otherwise, span),
+                statement => self.lower_leaf(statement),
+            }?;
+        }
+        Ok(())
+    }
+
+    #[inline(never)]
+    fn lower_leaf(&mut self, statement: Statement) -> Result<(), Diagnostic> {
+        let span = statement.span();
+        match statement {
+            Statement::Import { .. } | Statement::Export { .. } => {
+                return Err(Diagnostic::new(
+                    DiagnosticKind::ModuleSyntax,
+                    span,
+                    "module declarations require an explicit source loader",
+                )
+                .with_help("use modules::compile_with_loader or modules::compile_file"));
+            }
+            Statement::Record(record) => {
+                return Err(nominal::definition_error(
+                    crate::types::NominalKind::Record,
+                    record.span,
+                    "record declarations are allowed only at file scope",
+                ));
+            }
+            Statement::Variant(variant) => {
+                return Err(nominal::definition_error(
+                    crate::types::NominalKind::Variant,
+                    variant.span,
+                    "variant declarations are allowed only at file scope",
+                ));
+            }
+            Statement::Function(function) => {
+                return Err(Diagnostic::new(
+                    DiagnosticKind::FunctionUnsupported,
+                    function.span,
+                    "function declarations are allowed only at file scope",
+                ))
+            }
+            Statement::Return { value, span } => {
+                let (expected, declaration) = self.result.clone().ok_or_else(|| {
+                    Diagnostic::new(
+                        DiagnosticKind::InvalidReturn,
+                        span,
+                        "return is only valid inside funcra",
+                    )
+                })?;
+                let value = value.map(|v| self.expression(v)).transpose()?;
+                match (&value, &expected) {
+                    (None, kind) if *kind == ValueType::Unit => {}
+                    (Some(value), kind) if *kind != ValueType::Unit && &value.kind == kind => {}
+                    _ => {
+                        let mut error = Diagnostic::new(
+                            DiagnosticKind::InvalidReturn,
                             span,
-                            "an if statement requires a condition and body",
+                            format!(
+                                "return must {}",
+                                if expected == ValueType::Unit {
+                                    "be bare for a unit function".into()
+                                } else {
+                                    format!("produce {expected}")
+                                }
+                            ),
+                        )
+                        .with_related(
+                            declaration,
+                            format!("function declares result type {expected} here"),
+                        );
+                        if let Some(value) = &value {
+                            error = error.with_related(
+                                value.syntax.nodes()[value.syntax.root()].span,
+                                format!("returned expression has type {}", value.kind),
+                            );
+                        }
+                        return Err(error.with_help(if expected == ValueType::Unit {
+                            "use a bare return in a unit function".into()
+                        } else {
+                            format!("return an expression of type {expected}")
+                        }));
+                    }
+                }
+                self.emit(ResolvedStatement::Return { value }, span);
+            }
+            Statement::Call { expression, span } => {
+                if !matches!(
+                    expression.nodes()[expression.root()].kind,
+                    ExpressionKind::UserCall { .. }
+                ) {
+                    return Err(Diagnostic::new(
+                        DiagnosticKind::CallArguments,
+                        span,
+                        "a call statement requires a call expression",
+                    ));
+                }
+                let expression = self.expression(expression)?;
+                self.emit(ResolvedStatement::Call { expression }, span);
+            }
+            Statement::Assert {
+                condition,
+                message,
+                span,
+            } => {
+                // Public AST clients can bypass text parsing, so enforce
+                // this diagnostic-size bound again at the semantic gate.
+                if message
+                    .as_ref()
+                    .is_some_and(|text| text.len() > crate::ast::MAX_ASSERT_MESSAGE_BYTES)
+                {
+                    return Err(Diagnostic::new(
+                        DiagnosticKind::CallArguments,
+                        span,
+                        "assertion message exceeds 256 UTF-8 bytes",
+                    ));
+                }
+                let condition = self.expression(condition)?;
+                let condition_span = condition.syntax.nodes()[condition.syntax.root()].span;
+                require_type(&condition.kind, ValueType::Boolean, condition_span)?;
+                self.emit(ResolvedStatement::Assert { condition, message }, span);
+            }
+            Statement::Break { span } => {
+                if self.loops.is_empty() {
+                    return Err(loop_control(span));
+                }
+                let depth = self.loops.last().unwrap().scope_depth;
+                let retire = self.retirement_slots(depth);
+                let index = self.emit(ResolvedStatement::LoopControl { target: 0, retire }, span);
+                self.loops.last_mut().unwrap().breaks.push(index);
+            }
+            Statement::Continue { span } => {
+                if self.loops.is_empty() {
+                    return Err(loop_control(span));
+                }
+                let depth = self.loops.last().unwrap().scope_depth;
+                let retire = self.retirement_slots(depth);
+                let index = self.emit(ResolvedStatement::LoopControl { target: 0, retire }, span);
+                self.loops.last_mut().unwrap().continues.push(index);
+            }
+            Statement::Declaration {
+                name,
+                name_span,
+                initializer,
+                mutable,
+                annotation,
+                propagate,
+                ..
+            } => {
+                self.binding_name(&name, name_span)?;
+                let current = self.scopes.last().expect("a file scope always exists");
+                if let Some(previous) = current.get(&name) {
+                    return Err(Diagnostic::new(
+                        DiagnosticKind::DuplicateBinding,
+                        name_span,
+                        format!("binding {name:?} is already declared in this scope"),
+                    )
+                    .with_related(previous.declaration, "the previous declaration is here")
+                    .with_help("choose a different name or introduce a nested scope"));
+                }
+                // Resolve before insertion: a shadowing initializer sees the outer name.
+                let value = self.expression(initializer)?;
+                let (kind, propagation) = if let Some(marker) = propagate {
+                    if mutable {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::InvalidReturn,
+                            marker,
+                            "propagation requires an immutable bind",
                         ));
                     }
-                    let mut exits = Vec::new();
-                    for branch in branches {
-                        let condition = self.expression(branch.condition)?;
-                        let condition_span = condition.syntax.nodes()[condition.syntax.root()].span;
-                        require_type(&condition.kind, ValueType::Boolean, condition_span)?;
-                        let guard = self.emit(
-                            ResolvedStatement::JumpIfFalse {
-                                condition,
-                                target: 0,
-                            },
-                            condition_span,
-                        );
-                        self.scoped_statements(branch.statements, branch.span)?;
-                        exits.push(self.emit(ResolvedStatement::Jump { target: 0 }, span));
-                        let next = self.statements.len();
-                        if let ResolvedStatement::JumpIfFalse { target, .. } =
-                            &mut self.statements[guard].kind
-                        {
-                            *target = next;
-                        }
-                    }
-                    self.scoped_statements(otherwise, span)?;
-                    let end = self.statements.len();
-                    for exit in exits {
-                        if let ResolvedStatement::Jump { target } = &mut self.statements[exit].kind
-                        {
-                            *target = end;
-                        }
-                    }
-                }
-                Statement::Block { statements, span } => {
-                    self.scoped_statements(statements, span)?;
-                }
-                Statement::Declaration {
-                    name,
-                    name_span,
-                    initializer,
-                    mutable,
-                    annotation,
-                    ..
-                } => {
-                    self.binding_name(&name, name_span)?;
-                    let current = self.scopes.last().expect("a file scope always exists");
-                    if let Some(previous) = current.get(&name) {
-                        return Err(Diagnostic::new(
-                            DiagnosticKind::DuplicateBinding,
-                            name_span,
-                            format!("binding {name:?} is already declared in this scope"),
+                    let (outer, declared) = self.result.as_ref().ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::InvalidReturn,
+                            marker,
+                            "propagation is only valid inside funcra",
                         )
-                        .with_related(previous.declaration, "the previous declaration is here")
-                        .with_help("choose a different name or introduce a nested scope"));
-                    }
-                    // Resolve before insertion: a shadowing initializer sees the outer name.
-                    let value = self.expression(initializer)?;
-                    require_value(&value.kind, span)?;
-                    require_annotation(
-                        annotation,
-                        &value.kind,
-                        value.syntax.nodes()[value.syntax.root()].span,
-                    )?;
-                    let slot = self.slot_types.len();
-                    let kind = value.kind.clone();
-                    self.slot_types.push(kind.clone());
-                    self.scopes
-                        .last_mut()
-                        .expect("a file scope always exists")
-                        .insert(
-                            name,
-                            Binding {
-                                slot,
-                                declaration: name_span,
-                                mutable,
-                                kind,
-                                repeat_index: false,
-                                parameter: false,
-                            },
-                        );
-                    self.emit(ResolvedStatement::Store { slot, value }, span);
-                }
-                Statement::Println { argument, .. } => {
-                    self.output(vec![argument], OutputTarget::Stdout, true, span)?;
-                }
-                Statement::Output {
-                    arguments,
-                    target,
-                    newline,
-                    ..
-                } => {
-                    self.output(arguments, target, newline, span)?;
-                }
-                Statement::Assign {
-                    name,
-                    name_span,
-                    operator,
-                    operator_span,
-                    value,
-                    ..
-                } => {
-                    if let AssignmentOperator::Compound(operator) = operator {
-                        if operator.is_comparison() {
-                            return Err(Diagnostic::new(
-                                DiagnosticKind::UnexpectedToken,
-                                operator_span,
-                                "compound assignment requires an arithmetic operator",
-                            ));
-                        }
-                    }
-                    check_name(&name, name_span)?;
-                    let binding = lookup(&self.scopes, &name)
-                        .ok_or_else(|| unknown_name(&name, name_span))?;
-                    if !binding.mutable {
+                    })?;
+                    let input = value.kind.as_variant().ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::InvalidReturn,
+                            marker,
+                            format!(
+                                "propagation requires option or result, found {}",
+                                value.kind
+                            ),
+                        )
+                    })?;
+                    let output = outer.as_variant().ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::InvalidReturn,
+                            marker,
+                            format!("enclosing funcra must return option or result, found {outer}"),
+                        )
+                        .with_related(*declared, "the result type is declared here")
+                    })?;
+                    let (success_tag, failure_tag) = if input.name().starts_with("option<")
+                        && output.name().starts_with("option<")
+                    {
+                        (1, 0)
+                    } else if input.name().starts_with("result<")
+                        && output.name().starts_with("result<")
+                        && input.cases()[1].1 == output.cases()[1].1
+                    {
+                        (0, 1)
+                    } else {
                         return Err(Diagnostic::new(
+                            DiagnosticKind::InvalidReturn,
+                            marker,
+                            format!("cannot propagate {} from a funcra returning {outer}", value.kind),
+                        )
+                        .with_related(*declared, "the enclosing result type is declared here")
+                        .with_help("use option-to-option propagation or result-to-result with an identical error type"));
+                    };
+                    let success = input.cases()[success_tag].1.as_ref().expect("payload case");
+                    (
+                        success.clone(),
+                        Some(PropagationPlan {
+                            outer: outer.clone(),
+                            success_tag: success_tag as u8,
+                            failure_tag: failure_tag as u8,
+                        }),
+                    )
+                } else {
+                    (value.kind.clone(), None)
+                };
+                require_value(&kind, span)?;
+                let annotation = annotation
+                    .map(|mut annotation| {
+                        annotation.kind =
+                            nominal::resolve_type(self.layouts, &annotation.kind, annotation.span)?;
+                        Ok(annotation)
+                    })
+                    .transpose()?;
+                require_annotation(
+                    annotation,
+                    &kind,
+                    value.syntax.nodes()[value.syntax.root()].span,
+                )?;
+                let slot = self.slot_types.len();
+                self.slot_types.push(kind.clone());
+                self.scopes
+                    .last_mut()
+                    .expect("a file scope always exists")
+                    .insert(
+                        name,
+                        Binding {
+                            slot,
+                            declaration: name_span,
+                            mutable,
+                            kind,
+                            repeat_index: false,
+                            parameter: false,
+                        },
+                    );
+                let operation = match propagation {
+                    Some(plan) => ResolvedStatement::Propagate { slot, value, plan },
+                    None => ResolvedStatement::Store { slot, value },
+                };
+                self.emit(operation, span);
+            }
+            Statement::Destructure {
+                pattern,
+                mutable,
+                initializer,
+                span,
+            } => {
+                self.resolve_destructure(pattern, mutable, initializer, span)?;
+            }
+            Statement::Println { argument, .. } => {
+                self.output(vec![argument], OutputTarget::Stdout, true, span)?;
+            }
+            Statement::Output {
+                arguments,
+                target,
+                newline,
+                ..
+            } => {
+                self.output(arguments, target, newline, span)?;
+            }
+            Statement::Assign {
+                name,
+                name_span,
+                operator,
+                operator_span,
+                value,
+                ..
+            } => {
+                if let AssignmentOperator::Compound(operator) = operator {
+                    if operator.is_comparison() {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::UnexpectedToken,
+                            operator_span,
+                            "compound assignment requires an arithmetic operator",
+                        ));
+                    }
+                }
+                check_name(&name, name_span)?;
+                let binding =
+                    lookup(&self.scopes, &name).ok_or_else(|| unknown_name(&name, name_span))?;
+                if !binding.mutable {
+                    return Err(Diagnostic::new(
                             DiagnosticKind::ImmutableAssignment,
                             name_span,
                             format!("cannot assign to immutable binding {name:?}"),
@@ -771,57 +914,206 @@ impl<'a> Resolver<'a> {
                         .with_help(if binding.repeat_index {
                             "repeat indices are read-only; copy the index into a separate var variable to change a local value"
                         } else if binding.parameter { "parameters are immutable; copy the parameter into a local var to change a local value" } else { "declare this binding with var to allow assignment" }));
-                    }
-                    let slot = binding.slot;
-                    let expected_type = binding.kind.clone();
-                    let declaration = binding.declaration;
-                    let value = self.expression(value)?;
-                    match operator {
-                        AssignmentOperator::Compound(operator)
-                            if operator.is_integer_only()
-                                && expected_type != ValueType::Integer =>
-                        {
-                            return Err(type_mismatch(
-                                operator_span,
-                                ValueType::Integer,
-                                expected_type,
-                            )
-                            .with_related(declaration, "the target binding is declared here"));
-                        }
-                        AssignmentOperator::Set if value.kind != expected_type => {
-                            let span = value.syntax.nodes()[value.syntax.root()].span;
-                            return Err(type_mismatch(span, expected_type, value.kind)
-                                .with_related(
-                                    declaration,
-                                    "the binding's type is established here",
-                                ));
-                        }
-                        AssignmentOperator::Compound(_)
-                            if !expected_type.is_numeric() || value.kind != expected_type =>
-                        {
-                            let (expected, found) = if expected_type.is_numeric() {
-                                (expected_type, value.kind)
-                            } else {
-                                (ValueType::Integer.into(), expected_type)
-                            };
-                            return Err(type_mismatch(operator_span, expected, found)
-                                .with_related(declaration, "the target binding is declared here"));
-                        }
-                        _ => {}
-                    }
-                    self.emit(
-                        match operator {
-                            AssignmentOperator::Set => ResolvedStatement::Store { slot, value },
-                            AssignmentOperator::Compound(operator) => ResolvedStatement::Update {
-                                slot,
-                                operator,
-                                value,
-                                operator_span,
-                            },
-                        },
-                        span,
-                    );
                 }
+                let slot = binding.slot;
+                let expected_type = binding.kind.clone();
+                let declaration = binding.declaration;
+                let value = self.expression(value)?;
+                match operator {
+                    AssignmentOperator::Compound(operator)
+                        if operator.is_integer_only()
+                            && !(operator == BinaryOperator::Remainder
+                                && expected_type == ValueType::BigInt)
+                            && expected_type != ValueType::Integer =>
+                    {
+                        return Err(type_mismatch(
+                            operator_span,
+                            ValueType::Integer,
+                            expected_type,
+                        )
+                        .with_related(declaration, "the target binding is declared here"));
+                    }
+                    AssignmentOperator::Set if value.kind != expected_type => {
+                        let span = value.syntax.nodes()[value.syntax.root()].span;
+                        return Err(type_mismatch(span, expected_type, value.kind)
+                            .with_related(declaration, "the binding's type is established here"));
+                    }
+                    AssignmentOperator::Compound(_)
+                        if !expected_type.is_numeric() || value.kind != expected_type =>
+                    {
+                        let (expected, found) = if expected_type.is_numeric() {
+                            (expected_type, value.kind)
+                        } else {
+                            (ValueType::Integer.into(), expected_type)
+                        };
+                        return Err(type_mismatch(operator_span, expected, found)
+                            .with_related(declaration, "the target binding is declared here"));
+                    }
+                    _ => {}
+                }
+                self.emit(
+                    match operator {
+                        AssignmentOperator::Set => ResolvedStatement::Store { slot, value },
+                        AssignmentOperator::Compound(operator) => ResolvedStatement::Update {
+                            slot,
+                            operator,
+                            value,
+                            operator_span,
+                        },
+                    },
+                    span,
+                );
+            }
+            Statement::Match(_)
+            | Statement::Block { .. }
+            | Statement::Repeat { .. }
+            | Statement::While { .. }
+            | Statement::If { .. } => unreachable!("container statement"),
+        }
+        Ok(())
+    }
+
+    #[inline(never)]
+    fn lower_repeat(
+        &mut self,
+        count: Expression,
+        index: String,
+        index_span: Span,
+        statements: Vec<Statement>,
+        span: Span,
+    ) -> Result<(), Diagnostic> {
+        let count = self.expression(count)?;
+        let count_span = count.syntax.nodes()[count.syntax.root()].span;
+        require_type(&count.kind, ValueType::Integer, count_span).map_err(|error| {
+            error.with_help("repeat needs an integer count: repeat 5 as index { statements }")
+        })?;
+        self.binding_name(&index, index_span)?;
+        let count_slot = self.slot_types.len();
+        let index_slot = count_slot + 1;
+        self.slot_types.extend([
+            SourceType::from(ValueType::Integer),
+            SourceType::from(ValueType::Integer),
+        ]);
+        self.emit(
+            ResolvedStatement::RepeatInit {
+                count,
+                count_slot,
+                index_slot,
+            },
+            count_span,
+        );
+        let start = self.emit(
+            ResolvedStatement::RepeatGuard {
+                count_slot,
+                index_slot,
+                target: 0,
+            },
+            count_span,
+        );
+        self.loops.push(LoopContext {
+            breaks: Vec::new(),
+            continues: Vec::new(),
+            scope_depth: self.scopes.len(),
+        });
+        self.enter_scope(span)?;
+        self.scopes.last_mut().unwrap().insert(
+            index,
+            Binding {
+                slot: index_slot,
+                declaration: index_span,
+                mutable: false,
+                kind: ValueType::Integer.into(),
+                repeat_index: true,
+                parameter: false,
+            },
+        );
+        self.statement_list(statements)?;
+        self.retire_scope(span);
+        self.scopes.pop();
+        let next = self.emit(ResolvedStatement::RepeatNext { index_slot }, index_span);
+        self.emit(ResolvedStatement::Jump { target: start }, count_span);
+        let end = self.statements.len();
+        if let ResolvedStatement::RepeatGuard { target, .. } = &mut self.statements[start].kind {
+            *target = end;
+        }
+        let context = self.loops.pop().unwrap();
+        self.finish_loop(context, next, end);
+        Ok(())
+    }
+
+    #[inline(never)]
+    fn lower_while(
+        &mut self,
+        condition: Expression,
+        statements: Vec<Statement>,
+        span: Span,
+    ) -> Result<(), Diagnostic> {
+        let condition = self.expression(condition)?;
+        let condition_span = condition.syntax.nodes()[condition.syntax.root()].span;
+        require_type(&condition.kind, ValueType::Boolean, condition_span).map_err(|error|
+            error.with_help("while needs a boolean guard; compare values, for example while index < count { statements }"))?;
+        let start = self.emit(
+            ResolvedStatement::JumpIfFalse {
+                condition,
+                target: 0,
+            },
+            condition_span,
+        );
+        self.loops.push(LoopContext {
+            breaks: Vec::new(),
+            continues: Vec::new(),
+            scope_depth: self.scopes.len(),
+        });
+        self.scoped_statements(statements, span)?;
+        let context = self.loops.pop().unwrap();
+        self.emit(ResolvedStatement::Jump { target: start }, span);
+        let end = self.statements.len();
+        if let ResolvedStatement::JumpIfFalse { target, .. } = &mut self.statements[start].kind {
+            *target = end;
+        }
+        self.finish_loop(context, start, end);
+        Ok(())
+    }
+
+    #[inline(never)]
+    fn lower_if(
+        &mut self,
+        branches: Vec<crate::ast::ConditionalBranch>,
+        otherwise: Vec<Statement>,
+        span: Span,
+    ) -> Result<(), Diagnostic> {
+        if branches.is_empty() {
+            return Err(Diagnostic::new(
+                DiagnosticKind::UnexpectedToken,
+                span,
+                "an if statement requires a condition and body",
+            ));
+        }
+        let mut exits = Vec::new();
+        for branch in branches {
+            let condition = self.expression(branch.condition)?;
+            let condition_span = condition.syntax.nodes()[condition.syntax.root()].span;
+            require_type(&condition.kind, ValueType::Boolean, condition_span)?;
+            let guard = self.emit(
+                ResolvedStatement::JumpIfFalse {
+                    condition,
+                    target: 0,
+                },
+                condition_span,
+            );
+            self.scoped_statements(branch.statements, branch.span)?;
+            exits.push(self.emit(ResolvedStatement::Jump { target: 0 }, span));
+            let next = self.statements.len();
+            if let ResolvedStatement::JumpIfFalse { target, .. } = &mut self.statements[guard].kind
+            {
+                *target = next;
+            }
+        }
+        self.scoped_statements(otherwise, span)?;
+        let end = self.statements.len();
+        for exit in exits {
+            if let ResolvedStatement::Jump { target } = &mut self.statements[exit].kind {
+                *target = end;
             }
         }
         Ok(())
@@ -936,19 +1228,91 @@ fn lookup<'a>(scopes: &'a [Scope], name: &str) -> Option<&'a Binding> {
 }
 
 fn resolve_expression(
-    syntax: Expression,
+    mut syntax: Expression,
     scopes: &[Scope],
     functions: &[FunctionInfo],
     names: &HashMap<String, usize>,
     pure: bool,
+    layouts: &nominal::Layouts,
     registry: &mut TypeRegistryBuilder,
 ) -> Result<ResolvedExpression, Diagnostic> {
     let mut slots = Vec::with_capacity(syntax.nodes().len());
     let mut calls = Vec::with_capacity(syntax.nodes().len());
     let mut types: Vec<SourceType> = Vec::with_capacity(syntax.nodes().len());
-    for node in syntax.nodes() {
+    let mut composite_operations = std::collections::BTreeMap::new();
+    for index in 0..syntax.nodes.len() {
+        let node = &mut syntax.nodes[index];
+        if let ExpressionKind::Array {
+            empty_element_type: Some(kind),
+            ..
+        }
+        | ExpressionKind::List {
+            empty_element_type: Some(kind),
+            ..
+        } = &mut node.kind
+        {
+            if kind.has_nominal_ref() {
+                *kind = nominal::resolve_type(layouts, kind, node.span)?;
+            }
+        }
+        if let ExpressionKind::Map {
+            empty_types: Some((key, value)),
+            ..
+        } = &mut node.kind
+        {
+            if key.has_nominal_ref() {
+                *key = nominal::resolve_type(layouts, key, node.span)?;
+            }
+            if value.has_nominal_ref() {
+                *value = nominal::resolve_type(layouts, value, node.span)?;
+            }
+        }
+        let node = &syntax.nodes[index];
         let mut call = None;
         let (kind, slot) = match &node.kind {
+            ExpressionKind::Variant(constructor) => {
+                let (kind, operation) =
+                    variants::constructor(layouts, constructor, &types, &syntax)?;
+                composite_operations.insert(index, operation);
+                (kind, None)
+            }
+            ExpressionKind::Record {
+                name,
+                name_span,
+                fields,
+            } => {
+                let kind =
+                    nominal::lookup(layouts, crate::types::NominalKind::Record, name, *name_span)?;
+                let operation = records::constructor(&kind, fields, &types, &syntax, node.span)?;
+                composite_operations.insert(index, operation);
+                (kind, None)
+            }
+            ExpressionKind::Field {
+                receiver,
+                name,
+                name_span,
+            } => {
+                let kind = &types[*receiver];
+                let record = kind.as_record().ok_or_else(|| {
+                    records::field_error(
+                        *name_span,
+                        format!("field access requires a record, found {kind}"),
+                    )
+                })?;
+                let (index_in_layout, (_, field_type)) = record
+                    .fields()
+                    .iter()
+                    .enumerate()
+                    .find(|(_, (field, _))| field == name)
+                    .ok_or_else(|| {
+                        records::field_error(
+                            *name_span,
+                            format!("{} has no field {name:?}", record.name()),
+                        )
+                    })?;
+                composite_operations.insert(index, CompositeOperation::Field(index_in_layout));
+                (field_type.clone(), None)
+            }
             ExpressionKind::Tuple { elements } => {
                 let mut members = Vec::new();
                 for &element in elements {
@@ -998,6 +1362,78 @@ fn resolve_expression(
                 })?;
                 (kind, None)
             }
+            ExpressionKind::List {
+                elements,
+                empty_element_type,
+            } => {
+                let element_type = if let Some((&first, rest)) = elements.split_first() {
+                    let first_span = syntax.nodes()[first].span;
+                    let kind = &types[first];
+                    require_value(kind, first_span)?;
+                    for &element in rest {
+                        require_type(&types[element], kind, syntax.nodes()[element].span).map_err(
+                            |error| {
+                                error.with_related(
+                                    first_span,
+                                    "the first list element has this type",
+                                )
+                            },
+                        )?;
+                    }
+                    kind
+                } else {
+                    empty_element_type
+                        .as_ref()
+                        .expect("parser supplied empty list element type")
+                };
+                let kind = SourceType::list(element_type).ok_or_else(|| {
+                    Diagnostic::new(
+                        DiagnosticKind::ListLimit,
+                        node.span,
+                        "list element type exceeds structural shape limits",
+                    )
+                })?;
+                (kind, None)
+            }
+            ExpressionKind::Map {
+                entries,
+                empty_types,
+            } => {
+                let (key, value) = if let Some((&(first_key, first_value), rest)) =
+                    entries.split_first()
+                {
+                    let key = &types[first_key];
+                    let value = &types[first_value];
+                    let key_span = syntax.nodes()[first_key].span;
+                    let value_span = syntax.nodes()[first_value].span;
+                    require_value(key, key_span)?;
+                    require_value(value, value_span)?;
+                    for &(next_key, next_value) in rest {
+                        require_type(&types[next_key], key, syntax.nodes()[next_key].span)
+                            .map_err(|error| {
+                                error.with_related(key_span, "the first map key has this type")
+                            })?;
+                        require_type(&types[next_value], value, syntax.nodes()[next_value].span)
+                            .map_err(|error| {
+                                error.with_related(value_span, "the first map value has this type")
+                            })?;
+                    }
+                    (key, value)
+                } else {
+                    let (key, value) = empty_types
+                        .as_ref()
+                        .expect("parser supplied empty map key and value types");
+                    (key, value)
+                };
+                let kind = SourceType::map(key, value).ok_or_else(|| {
+                    Diagnostic::new(
+                        DiagnosticKind::MapLimit,
+                        node.span,
+                        "map requires integer, boolean or string keys and a non-unit value",
+                    )
+                })?;
+                (kind, None)
+            }
             ExpressionKind::Integers { elements } => {
                 for &element in elements {
                     require_type(
@@ -1031,6 +1467,18 @@ fn resolve_expression(
                         syntax.nodes()[*index].span,
                     )?;
                     let element = array.element().clone();
+                    slots.push(None);
+                    calls.push(None);
+                    types.push(element);
+                    continue;
+                }
+                if let Some(list) = types[*vector].as_list() {
+                    require_type(
+                        &types[*index],
+                        ValueType::Integer,
+                        syntax.nodes()[*index].span,
+                    )?;
+                    let element = list.element().clone();
                     slots.push(None);
                     calls.push(None);
                     types.push(element);
@@ -1094,24 +1542,188 @@ fn resolve_expression(
             } => {
                 // Preserve existing user function names; kernels occupy call
                 // position only when no user declaration has this name.
-                if name == "read_line" && !names.contains_key(name) {
-                    if !arguments.is_empty() {
+                if let Some(input) =
+                    crate::input::IoBuiltin::from_name(name).filter(|_| !names.contains_key(name))
+                {
+                    let expected = input.arity();
+                    if arguments.len() != expected
+                        || arguments.iter().any(|argument| argument.label.is_some())
+                    {
+                        let qualifier = if input.prompts() { " string" } else { "" };
                         return Err(Diagnostic::new(
                             DiagnosticKind::CallArguments,
                             *function_span,
-                            "read_line requires zero arguments",
+                            format!("{name} requires {expected} positional{qualifier} arguments"),
                         ));
                     }
+                    for argument in arguments {
+                        require_type(
+                            &types[argument.expression],
+                            ValueType::String,
+                            syntax.nodes()[argument.expression].span,
+                        )?;
+                    }
                     if pure {
+                        let message = if input.output_target().is_some() {
+                            "pure expressions cannot flush program output"
+                        } else if input.prompts() {
+                            "pure expressions cannot prompt for program input"
+                        } else {
+                            "pure expressions cannot read program input"
+                        };
                         return Err(Diagnostic::new(
                             DiagnosticKind::ImpureFunction,
                             *function_span,
-                            "pure expressions cannot read program input",
+                            message,
                         ));
                     }
                     slots.push(None);
-                    calls.push(Some(ResolvedCall::ReadLine));
-                    types.push(ValueType::String.into());
+                    calls.push(Some(ResolvedCall::Io(input)));
+                    types.push(input.result_type());
+                    continue;
+                }
+                // Composite numerical intrinsic: its result is a structural tuple,
+                // not a primitive Builtin. User-declared functions can shadow it.
+                if name == "bigint_divmod" && !names.contains_key(name) {
+                    if arguments.len() != 2 || arguments.iter().any(|a| a.label.is_some()) {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::CallArguments,
+                            *function_span,
+                            "bigint_divmod requires two positional bigint arguments",
+                        ));
+                    }
+                    for argument in arguments {
+                        require_type(
+                            &types[argument.expression],
+                            ValueType::BigInt,
+                            syntax.nodes()[argument.expression].span,
+                        )?;
+                    }
+                    let kind =
+                        SourceType::tuple(vec![ValueType::BigInt.into(), ValueType::BigInt.into()])
+                            .expect("two primitive members form a valid source tuple");
+                    slots.push(None);
+                    calls.push(Some(ResolvedCall::BigIntDivMod));
+                    types.push(kind);
+                    continue;
+                }
+                if let Some(operation) =
+                    ListIntrinsic::from_name(name).filter(|_| !names.contains_key(name))
+                {
+                    if arguments.len() != operation.arity()
+                        || arguments.iter().any(|argument| argument.label.is_some())
+                    {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::CallArguments,
+                            *function_span,
+                            format!("{name} requires {} positional arguments", operation.arity()),
+                        ));
+                    }
+                    let first = arguments[0].expression;
+                    let list = types[first].as_list().ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::TypeMismatch,
+                            syntax.nodes()[first].span,
+                            format!("{name} requires list<T> as its first argument"),
+                        )
+                    })?;
+                    match operation {
+                        ListIntrinsic::Push => {
+                            let value = arguments[1].expression;
+                            require_type(
+                                &types[value],
+                                list.element(),
+                                syntax.nodes()[value].span,
+                            )?;
+                        }
+                        ListIntrinsic::Set => {
+                            let position = arguments[1].expression;
+                            let value = arguments[2].expression;
+                            require_type(
+                                &types[position],
+                                ValueType::Integer,
+                                syntax.nodes()[position].span,
+                            )?;
+                            require_type(
+                                &types[value],
+                                list.element(),
+                                syntax.nodes()[value].span,
+                            )?;
+                        }
+                        ListIntrinsic::Remove => {
+                            let position = arguments[1].expression;
+                            require_type(
+                                &types[position],
+                                ValueType::Integer,
+                                syntax.nodes()[position].span,
+                            )?;
+                        }
+                        ListIntrinsic::Len => {}
+                    }
+                    let result = if operation == ListIntrinsic::Len {
+                        SourceType::from(ValueType::Integer)
+                    } else {
+                        types[first].clone()
+                    };
+                    slots.push(None);
+                    calls.push(Some(ResolvedCall::List(operation)));
+                    types.push(result);
+                    continue;
+                }
+                if let Some(operation) =
+                    MapIntrinsic::from_name(name).filter(|_| !names.contains_key(name))
+                {
+                    if arguments.len() != operation.arity()
+                        || arguments.iter().any(|argument| argument.label.is_some())
+                    {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::CallArguments,
+                            *function_span,
+                            format!("{name} requires {} positional arguments", operation.arity()),
+                        ));
+                    }
+                    let first = arguments[0].expression;
+                    let map = types[first].as_map().ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::TypeMismatch,
+                            syntax.nodes()[first].span,
+                            format!("{name} requires map<K, V> as the first argument"),
+                        )
+                    })?;
+                    if !matches!(
+                        operation,
+                        MapIntrinsic::Len | MapIntrinsic::Keys | MapIntrinsic::Values
+                    ) {
+                        let key = arguments[1].expression;
+                        require_type(&types[key], map.key(), syntax.nodes()[key].span)?;
+                    }
+                    if matches!(operation, MapIntrinsic::GetOr | MapIntrinsic::Set) {
+                        let value = arguments[2].expression;
+                        require_type(&types[value], map.value(), syntax.nodes()[value].span)?;
+                    }
+                    let result = match operation {
+                        MapIntrinsic::Len => ValueType::Integer.into(),
+                        MapIntrinsic::Keys => SourceType::list(map.key()).ok_or_else(|| {
+                            Diagnostic::new(
+                                DiagnosticKind::ListLimit,
+                                *function_span,
+                                "map key projection exceeds list type shape limits",
+                            )
+                        })?,
+                        MapIntrinsic::Values => SourceType::list(map.value()).ok_or_else(|| {
+                            Diagnostic::new(
+                                DiagnosticKind::ListLimit,
+                                *function_span,
+                                "map value projection exceeds list type shape limits",
+                            )
+                        })?,
+                        MapIntrinsic::Contains => ValueType::Boolean.into(),
+                        MapIntrinsic::GetOr => map.value().clone(),
+                        MapIntrinsic::Set | MapIntrinsic::Remove => types[first].clone(),
+                    };
+                    slots.push(None);
+                    calls.push(Some(ResolvedCall::Map(operation)));
+                    types.push(result);
                     continue;
                 }
                 if let Some(builtin) =
@@ -1338,7 +1950,11 @@ fn resolve_expression(
                     BinaryOperator::Equal | BinaryOperator::NotEqual => {
                         require_value(&types[*left], *operator_span)?;
                     }
-                    operator if operator.is_integer_only() => {
+                    operator
+                        if operator.is_integer_only()
+                            && !(*operator == BinaryOperator::Remainder
+                                && types[*left] == ValueType::BigInt) =>
+                    {
                         require_type(&types[*left], ValueType::Integer, *operator_span)?;
                     }
                     _ => {
@@ -1389,6 +2005,7 @@ fn resolve_expression(
         kind,
         types,
         calls,
+        composites: composite_operations,
     })
 }
 
@@ -1408,6 +2025,7 @@ pub(crate) fn resolve_closed_expression(
         &[],
         &HashMap::new(),
         false,
+        &nominal::Layouts::new(),
         &mut TypeRegistryBuilder::new(TypeLimits::default())
             .map_err(|e| type_info::failure(e, Span::default()))?,
     )
@@ -1423,8 +2041,32 @@ pub(crate) fn require_type(
     if found == expected {
         Ok(())
     } else {
-        Err(type_mismatch(span, expected, found))
+        let error = type_mismatch(span, &expected, &found);
+        if let (Some(expected), Some(found)) =
+            (expected.nominal_declaration(), found.nominal_declaration())
+        {
+            return Err(error
+                .with_related(expected, "the expected type is declared here")
+                .with_related(found, "the actual type is declared here"));
+        }
+        Err(error)
     }
+}
+
+fn check_pattern_arity(
+    shape: &str,
+    expected: usize,
+    actual: usize,
+    span: Span,
+) -> Result<(), Diagnostic> {
+    if actual == expected {
+        return Ok(());
+    }
+    Err(Diagnostic::new(
+        DiagnosticKind::TypeMismatch,
+        span,
+        format!("{shape} destructuring requires {expected} elements, found {actual}"),
+    ))
 }
 
 fn require_value(kind: impl Into<SourceType>, span: Span) -> Result<(), Diagnostic> {
@@ -1480,6 +2122,7 @@ pub(crate) fn check_name(name: &str, span: Span) -> Result<(), Diagnostic> {
             | "return"
             | "needs"
             | "ensures"
+            | "assert"
     ) {
         Err(Diagnostic::new(
             DiagnosticKind::ReservedName,

@@ -61,6 +61,101 @@ fn execute(result: &CachedEditorProgram) -> Vec<u8> {
 }
 
 #[test]
+fn live_retention_limits_keep_newest_entries_and_preserve_issued_snapshots() {
+    let first_source = "bind value = 7;\nprint(value);";
+    let first = loader(&[("main.srp", first_source)]);
+    let second = loader(&[("main.srp", "bind value = 9;\nprint(value);")]);
+    let defaults = EditorCacheLimits::default();
+    let mut measure = EditorCompilationCache::new(defaults);
+    compile(&mut measure, &first, &[("main.srp", 1)]).unwrap();
+    let one = measure.stats();
+
+    for limits in [
+        EditorCacheLimits {
+            graphs: CacheLimits {
+                max_entries: 1,
+                ..defaults.graphs
+            },
+            ..defaults
+        },
+        EditorCacheLimits {
+            graphs: CacheLimits {
+                max_retained_source_bytes: one.retained_source_bytes,
+                ..defaults.graphs
+            },
+            ..defaults
+        },
+        EditorCacheLimits {
+            max_retained_index_items: one.retained_index_items,
+            ..defaults
+        },
+        EditorCacheLimits {
+            max_retained_name_bytes: one.retained_name_bytes,
+            ..defaults
+        },
+        EditorCacheLimits {
+            max_retained_lines: one.retained_lines,
+            ..defaults
+        },
+    ] {
+        let mut cache = EditorCompilationCache::new(defaults);
+        let older = compile(&mut cache, &first, &[("main.srp", 1)]).unwrap();
+        let newer = compile(&mut cache, &second, &[("main.srp", 2)]).unwrap();
+        // An access does not change FIFO order.
+        assert_eq!(
+            compile(&mut cache, &first, &[("main.srp", 1)])
+                .unwrap()
+                .status,
+            CacheStatus::Hit
+        );
+        cache.set_limits(limits);
+        assert_eq!(cache.limits(), limits);
+        let stats = cache.stats();
+        assert_eq!(
+            (stats.entries, stats.hits, stats.misses, stats.evictions),
+            (1, 1, 2, 1)
+        );
+        assert_eq!(stats.retained_source_bytes, one.retained_source_bytes);
+        assert_eq!(stats.retained_index_items, one.retained_index_items);
+        assert_eq!(stats.retained_name_bytes, one.retained_name_bytes);
+        assert_eq!(stats.retained_lines, one.retained_lines);
+        let reused = compile(&mut cache, &second, &[("main.srp", 3)]).unwrap();
+        assert_eq!(reused.status, CacheStatus::Hit);
+        assert!(Arc::ptr_eq(&reused.program, &newer.program));
+        assert!(newer.snapshot.ensure_current(&[2]).is_ok());
+        assert!(reused.snapshot.ensure_current(&[3]).is_ok());
+        assert!(older.snapshot.ensure_current(&[1]).is_ok());
+        let reference = first_source.rfind("value").unwrap();
+        let definition = older
+            .snapshot
+            .symbols()
+            .goto_definition(0, reference)
+            .unwrap();
+        assert_eq!(definition.name.as_ref(), "value");
+        assert_eq!(execute(&older), b"7\n");
+        assert_eq!(execute(&reused), b"9\n");
+
+        let disabled = EditorCacheLimits {
+            graphs: CacheLimits {
+                max_entries: 0,
+                ..limits.graphs
+            },
+            ..limits
+        };
+        cache.set_limits(disabled);
+        assert_eq!(cache.stats().retained_lines, 0);
+        assert_eq!(cache.stats().evictions, 2);
+        let uncached = compile(&mut cache, &first, &[("main.srp", u64::MAX)]).unwrap();
+        assert_eq!(uncached.status, CacheStatus::Uncached);
+        assert_eq!(execute(&uncached), b"7\n");
+        cache.set_limits(defaults);
+        let rebuilt = compile(&mut cache, &first, &[("main.srp", 0)]).unwrap();
+        assert_eq!(rebuilt.status, CacheStatus::Stored);
+        assert!(!Arc::ptr_eq(&rebuilt.program, &older.program));
+    }
+}
+
+#[test]
 fn revision_only_refresh_shares_navigation_and_keeps_old_snapshot_immutable() {
     let entry = "import \"lib/café.srp\" as lib;\r\nprint(\"🌍\", lib.value);";
     let sources = loader(&[

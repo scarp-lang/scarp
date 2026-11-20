@@ -1,5 +1,51 @@
 # Scarp documentation
 
+Public guides are maintained on [Scarp Docs in English](https://scarp-lang.github.io/scarp-docs/)
+and [Scarp Docs in हिन्दी](https://scarp-lang.github.io/scarp-docs/hi/).
+Start with the [release-aware learning path](https://scarp-lang.github.io/scarp-docs/guide/learning-path).
+The links below index compiler-specific references, implementation history and
+release evidence in this checkout.
+
+**0.0.6-alpha.15 prerelease** bounds frontend inspection, meters UTF-8
+string comparisons, validates semantic-cache revisions, and adds checked
+ELF64 integer-kernel shifts.
+[Public notes](releases/v0.0.6-alpha.15-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.15-validation.md)
+
+**0.0.6-alpha.14 prerelease** improves nested pattern diagnostics and adds
+live editor cache quotas and checked arithmetic for experimental ELF64 integer kernels.
+[Public notes](releases/v0.0.6-alpha.14-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.14-validation.md)
+
+**0.0.6-alpha.13 prerelease** improves Option/Result propagation, syntax and
+semantic cache retention controls, and opt-in editor workspace-generation
+checks. These additions do not enable general native executable compilation.
+[Public notes](releases/v0.0.6-alpha.13-publication.md)
+
+**0.0.6-alpha.12 prerelease** adds structured data and a multi-module
+[task board](task-board.md). [Verification](releases/v0.0.6-alpha.12-validation.md)
+
+**0.0.6-alpha.11 prerelease** adds [exact decimal values](decimal.md),
+explicit rounding, and interactive `input_decimal()`.
+[Public notes](releases/v0.0.6-alpha.11-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.11-validation.md)
+
+**0.0.6-alpha.10 prerelease** adds [typed console I/O](program-input.md),
+[output fixtures](project-testing.md), [fixed arrays](fixed-arrays.md)
+and expanded [BigInt arithmetic](bigint.md).
+[Public notes](releases/v0.0.6-alpha.10-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.10-validation.md)
+
+**0.0.6-alpha.9 prerelease** adds [bounded BigInt arithmetic](bigint.md) and
+[`scarp test --json=v2`](project-testing.md#structured-failure-reports).
+[Public notes](releases/v0.0.6-alpha.9-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.9-validation.md)
+
+**0.0.6-alpha.8 prerelease** was published on **12 November 2026**, adding
+declarative manifests, project tests, and Boolean assertions.
+[Public notes](releases/v0.0.6-alpha.8-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.8-validation.md)
+
 **0.0.6-alpha.7 prerelease** was published on **11 November 2026**, adding
 typed conditional expressions and Unicode scalar string escapes.
 [Public notes](releases/v0.0.6-alpha.7-publication.md) ·
@@ -66,7 +112,7 @@ updated for the **0.0.6-alpha.6 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
 contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.6-alpha.7](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.7),
+[0.0.6-alpha.15](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.15),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)
@@ -78,10 +124,15 @@ website deployment remain separate.
 in published alpha.6 and absent from alpha.5. Review the structural
 Rust API/schema migration before adopting that source.
 
-**Development fixed arrays:** [immutable fixed-size arrays](fixed-arrays.md)
+## Projects and testing
+
+- [Declarative project manifests](project-v2.md)
+- [Project test runner, JSON reports, filtering, and stdin fixtures](project-testing.md)
+- [Read-only project metadata](project-info.md)
+- [Boolean assertions](assertions.md)
+
+**Published fixed arrays:** [immutable fixed-size arrays](fixed-arrays.md)
 support homogeneous structural types, checked indexing and module interfaces.
-[Development scalar utilities](scalar-utilities.md) cover Unicode scalar
-transforms and checked operations on the signed 64-bit `integer` type.
 
 ## Guides and what each adds
 

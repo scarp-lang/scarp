@@ -314,6 +314,39 @@ fn cumulative_limits_report_the_same_first_failing_span_on_warm_builds() {
 }
 
 #[test]
+fn cached_text_comparisons_replay_checked_byte_work() {
+    let text = "é".repeat(65);
+    let library =
+        format!("// तुलना 🌍\r\npub bind text = \"{text}\"; pub bind same = text == \"{text}\";");
+    let sources = loader(&[
+        ("main.srp", "import \"तुलना.srp\" as lib; print(lib.same);"),
+        ("तुलना.srp", &library),
+    ]);
+    let mut cache = ConstantCache::new(ConstantCacheLimits::default());
+    assert_eq!(output(&cached(&sources, &mut cache)), "true\n");
+
+    let modules = ModuleLimits::default();
+    let exact = ConstantLimits {
+        max_nodes: 4,
+        max_steps: 8,
+    };
+    let warm = compile(&sources, modules, exact, Some(&mut cache)).unwrap();
+    assert_eq!(output(&warm), "true\n");
+    assert_eq!(cache.stats().hits, 2);
+
+    let short = ConstantLimits {
+        max_steps: 7,
+        ..exact
+    };
+    let warm = compile(&sources, modules, short, Some(&mut cache)).unwrap_err();
+    let cold = compile(&sources, modules, short, None).unwrap_err();
+    assert_same_error(&warm, &cold, Kind::ModuleLimit);
+    let at = warm.sources.locate_span(warm.diagnostic.span).unwrap();
+    assert_eq!(&library[at.span.start..at.span.end], "==");
+    assert_eq!(cache.stats().hits, 3);
+}
+
+#[test]
 fn warm_string_folds_preserve_expansion_and_index_quotas() {
     let text = "नमस्ते 🌍";
     let library = format!("pub bind original = \"{text}\";");
@@ -422,4 +455,44 @@ fn byte_quota_counts_source_and_result_utf8_and_can_bypass_retention() {
         (stats.entries, stats.retained_bytes, stats.evictions),
         (1, bytes, 1)
     );
+}
+
+#[test]
+fn live_constant_quotas_evict_fifo_and_preserve_existing_programs() {
+    let first = loader(&[("main.srp", "pub bind n = 1; print(n);")]);
+    let second = loader(&[("main.srp", "pub bind n = 2; print(n);")]);
+    let mut cache = ConstantCache::new(ConstantCacheLimits::default());
+    let old_program = cached(&first, &mut cache);
+    let exact_bytes = cache.stats().retained_bytes;
+    cached(&second, &mut cache);
+    cached(&first, &mut cache); // Hits leave the insertion order unchanged.
+
+    let limits = ConstantCacheLimits {
+        max_entries: 1,
+        max_retained_bytes: exact_bytes,
+    };
+    cache.set_limits(limits);
+    assert_eq!(cache.limits(), limits);
+    assert_eq!(cache.stats().entries, 1);
+    assert_eq!(cache.stats().retained_bytes, exact_bytes);
+    assert_eq!(cache.stats().evictions, 1);
+    assert_eq!(output(&cached(&second, &mut cache)), "2\n");
+    assert_eq!(cache.stats().hits, 2);
+
+    for allowance in [exact_bytes - 1, 0] {
+        cache.set_limits(ConstantCacheLimits {
+            max_retained_bytes: allowance,
+            ..limits
+        });
+        assert_eq!(output(&cached(&second, &mut cache)), "2\n");
+        assert_eq!(cache.stats().entries, 0);
+        assert_eq!(cache.stats().retained_bytes, 0);
+    }
+    assert_eq!(cache.stats().evictions, 2);
+    assert_eq!(cache.stats().bypasses, 2);
+    assert_eq!(output(&old_program), "1\n");
+
+    cache.set_limits(limits);
+    cached(&first, &mut cache);
+    assert_eq!(cache.stats().entries, 1);
 }

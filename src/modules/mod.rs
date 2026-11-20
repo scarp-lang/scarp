@@ -218,6 +218,12 @@ pub enum SymbolKind {
         pure: bool,
     },
     Constant(crate::types::SourceType),
+    Record {
+        fields: Vec<(String, crate::types::SourceType)>,
+    },
+    Variant {
+        cases: Vec<(String, Option<crate::types::SourceType>)>,
+    },
 }
 #[derive(Debug, Clone)]
 pub struct SymbolInfo {
@@ -239,6 +245,7 @@ pub struct ModuleProgram {
     program: ResolvedProgram,
     sources: Arc<SourceMap>,
     modules: Vec<ModuleInfo>,
+    diagnostic_qualifiers: Vec<Option<String>>,
     inspection: inspection::Inspection,
     constant_dependencies: Vec<ConstantDependency>,
 }
@@ -306,6 +313,33 @@ impl ModuleProgram {
             RunError::Output(error) => ModuleRunError::Output(error),
         })
     }
+
+    /// Explicit opt-in interactive prompts with source-mapped diagnostics.
+    /// Visible prompts cannot be rolled back after subsequent runtime failures.
+    pub fn execute_with_interactive_input(
+        &self,
+        input: &mut impl io::BufRead,
+        stdout: &mut impl io::Write,
+        stderr: &mut impl io::Write,
+        options: ExecutionOptions,
+        input_limits: crate::InputLimits,
+    ) -> Result<(), ModuleRunError> {
+        interpreter::execute_with_interactive_input_and_options(
+            &self.program,
+            input,
+            stdout,
+            stderr,
+            options,
+            input_limits,
+        )
+        .map_err(|error| match error {
+            RunError::Diagnostic(diagnostic) => ModuleRunError::Diagnostic(ModuleDiagnostic {
+                diagnostic,
+                sources: self.sources.clone(),
+            }),
+            RunError::Output(error) => ModuleRunError::Output(error),
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -319,6 +353,7 @@ struct Import {
 #[derive(Debug, Clone)]
 struct ParsedModule {
     identity: String,
+    diagnostic_qualifier: Option<String>,
     revision: Option<u64>,
     program: Program,
     imports: Vec<Import>,
@@ -405,6 +440,7 @@ impl ModuleGraph {
         self.imports += imports.len();
         let id = self.modules.len();
         self.modules.push(ParsedModule {
+            diagnostic_qualifier: loader.diagnostic_qualifier(&identity),
             identity,
             revision,
             program,
@@ -542,6 +578,8 @@ fn validate_imports(program: &Program, allowance: usize) -> Result<Vec<Import>, 
         };
         let declared = match statement {
             Statement::Function(f) => Some((f.name.as_str(), f.name_span)),
+            Statement::Record(r) => Some((r.name.as_str(), r.name_span)),
+            Statement::Variant(v) => Some((v.name.as_str(), v.name_span)),
             Statement::Declaration {
                 name, name_span, ..
             } => Some((name.as_str(), *name_span)),

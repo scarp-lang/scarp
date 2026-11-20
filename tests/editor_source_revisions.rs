@@ -3,8 +3,8 @@ use scarp::{
     modules::{
         self,
         cache::{
-            CacheStatus, EditorCacheLimits, EditorCompilationCache, EditorCompileError,
-            EditorCompileLimits, SyntaxCache, SyntaxCacheLimits,
+            CacheStatus, EditorAnalysisError, EditorCacheLimits, EditorCompilationCache,
+            EditorCompileError, EditorCompileLimits, SyntaxCache, SyntaxCacheLimits,
         },
         symbols::editor::EditorQueryError,
         LoadedSource, MemorySourceLoader, ModuleGraph, ModuleLimits, ModuleProgram,
@@ -204,6 +204,172 @@ fn deleted_and_invalid_edits_return_fresh_diagnostics() {
     assert_eq!(recovered.status, CacheStatus::Hit);
     assert!(recovered.snapshot.ensure_current(&[1, 4]).is_ok());
     assert!(before.snapshot.ensure_current(&[1, 4]).is_err());
+}
+
+#[test]
+fn alias_rebinding_rejects_a_late_success_even_when_document_revisions_match() {
+    struct ReboundLoader<'a> {
+        sources: &'a MemorySourceLoader,
+        dependency: &'a str,
+    }
+
+    impl SourceLoader for ReboundLoader<'_> {
+        fn resolve(
+            &self,
+            importer: Option<&str>,
+            specifier: &str,
+        ) -> Result<String, SourceLoadError> {
+            let path = if importer == Some("main.srp") && specifier == "active.srp" {
+                self.dependency
+            } else {
+                specifier
+            };
+            self.sources.resolve(importer, path)
+        }
+
+        fn load(&self, identity: &str, max_bytes: usize) -> Result<String, SourceLoadError> {
+            self.sources.load(identity, max_bytes)
+        }
+
+        fn load_with_revision(
+            &self,
+            identity: &str,
+            max_bytes: usize,
+        ) -> Result<LoadedSource, SourceLoadError> {
+            self.sources.load_with_revision(identity, max_bytes)
+        }
+    }
+
+    let mut sources = MemorySourceLoader::new();
+    sources
+        .set_document(
+            "main.srp",
+            "import \"active.srp\" as active; print(active.value, 1 / 0);",
+            3,
+        )
+        .unwrap();
+    sources
+        .set_document("left.srp", "pub bind value = 1;", 8)
+        .unwrap();
+    sources
+        .set_document("right.srp", "// नमस्ते 🌍\r\npub bind value = 2;", 8)
+        .unwrap();
+    let left = ReboundLoader {
+        sources: &sources,
+        dependency: "left.srp",
+    };
+    let right = ReboundLoader {
+        sources: &sources,
+        dependency: "right.srp",
+    };
+    let limits = EditorCompileLimits::default();
+    let mut cache = EditorCompilationCache::new(EditorCacheLimits::default());
+    let previously_published = cache
+        .analyze_loaded(11, Ok(load(&left)), limits, None)
+        .into_current(11)
+        .unwrap();
+    let queued = load(&left);
+    let current_graph = load(&right);
+    assert_eq!(queued.source_revision(0), current_graph.source_revision(0));
+    assert_eq!(queued.source_revision(1), current_graph.source_revision(1));
+    let current = cache
+        .analyze_loaded(12, Ok(current_graph), limits, None)
+        .into_current(12)
+        .unwrap();
+    assert_eq!(current.program.modules()[1].identity, "right.srp");
+    assert!(current.snapshot.ensure_current(&[3, 8]).is_ok());
+    assert!(previously_published
+        .snapshot
+        .ensure_current(&[3, 8])
+        .is_ok());
+    assert!(matches!(
+        cache
+            .analyze_loaded(11, Ok(queued), limits, None)
+            .into_current(12),
+        Err(EditorAnalysisError::Stale {
+            analyzed: 11,
+            current: 12,
+        })
+    ));
+
+    let warm = cache
+        .analyze_loaded(12, Ok(load(&right)), limits, None)
+        .into_current(12)
+        .unwrap();
+    assert_eq!(warm.status, CacheStatus::Hit);
+    assert!(Arc::ptr_eq(&current.program, &warm.program));
+    let cold = modules::resolve_indexed(load(&right), limits.index_limits).unwrap();
+    let mut expected = Vec::new();
+    let mut actual = Vec::new();
+    cold.index().write_references_json(&mut expected).unwrap();
+    warm.snapshot
+        .symbols()
+        .write_references_json(&mut actual)
+        .unwrap();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn late_loader_and_semantic_errors_do_not_publish_after_workspace_change() {
+    let mut sources = MemorySourceLoader::new();
+    sources
+        .set_document(
+            "main.srp",
+            "import \"lib.srp\" as lib; print(lib.value);",
+            1,
+        )
+        .unwrap();
+    let limits = EditorCompileLimits::default();
+    let mut cache = EditorCompilationCache::new(EditorCacheLimits::default());
+    let missing = modules::load("main.srp", &sources, ModuleLimits::default());
+    let stale_missing = cache.analyze_loaded(5, missing, limits, None);
+    let current_missing = modules::load("main.srp", &sources, ModuleLimits::default()).unwrap_err();
+    let Err(EditorAnalysisError::Compile(EditorCompileError::Module(error))) = cache
+        .analyze_loaded(
+            5,
+            modules::load("main.srp", &sources, ModuleLimits::default()),
+            limits,
+            None,
+        )
+        .into_current(5)
+    else {
+        panic!("current missing module diagnostic must reach the host");
+    };
+    assert_eq!(error.diagnostic, current_missing.diagnostic);
+    assert_eq!(error.render(), current_missing.render());
+
+    sources
+        .set_document(
+            "lib.srp",
+            "// 🌍\r\npub bind value: integer = \"wrong\";",
+            3,
+        )
+        .unwrap();
+    let pending_error = cache.analyze_loaded(6, Ok(load(&sources)), limits, None);
+    let cold_error = modules::resolve_indexed(load(&sources), limits.index_limits).unwrap_err();
+    let Err(EditorAnalysisError::Compile(EditorCompileError::Module(error))) = cache
+        .analyze_loaded(6, Ok(load(&sources)), limits, None)
+        .into_current(6)
+    else {
+        panic!("current semantic diagnostic must reach the host");
+    };
+    assert_eq!(error.diagnostic, cold_error.diagnostic);
+    assert_eq!(error.render(), cold_error.render());
+
+    sources
+        .set_document("lib.srp", "pub bind value: integer = 4;", 4)
+        .unwrap();
+    assert!(cache
+        .analyze_loaded(7, Ok(load(&sources)), limits, None)
+        .into_current(7)
+        .is_ok());
+    for (pending, generation) in [(stale_missing, 5), (pending_error, 6)] {
+        assert!(matches!(
+            pending.into_current(7),
+            Err(EditorAnalysisError::Stale { analyzed, current: 7 })
+                if analyzed == generation
+        ));
+    }
 }
 
 #[test]

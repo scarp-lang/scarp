@@ -63,6 +63,28 @@ fn supported_bitwise_forms_have_checked_lowering() {
 }
 
 #[test]
+fn native_text_limit_applies_to_emitted_bytes() {
+    use std::fmt::Write;
+
+    let chain = " ^ 1".repeat(200);
+    let mut source = String::new();
+    for slot in 0..12 {
+        writeln!(&mut source, "bind value{slot} = 1{chain};").unwrap();
+    }
+    // The lowered work-event count would overestimate this kernel at more
+    // than 200,000 bytes. Verify the actual .text size instead.
+    let object = emit_elf64_integer_kernel(&source).unwrap();
+    let text_header = le64(&object, 40) as usize + 64;
+    assert_eq!(le64(&object, text_header + 32), 108_423);
+
+    for slot in 12..24 {
+        writeln!(&mut source, "bind value{slot} = 1{chain};").unwrap();
+    }
+    let error = emit_elf64_integer_kernel(&source).unwrap_err();
+    assert_eq!(error.kind, DiagnosticKind::NativeUnsupported);
+}
+
+#[test]
 fn multiple_bindings_reuse_checked_integer_slots() {
     for source in [
         "bind a=1; bind b=2;",

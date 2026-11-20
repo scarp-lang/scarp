@@ -10,7 +10,8 @@ pub(super) struct ProgramTypes {
     bindings: Vec<TypeId>,
     functions: Vec<TypeId>,
     builtins: BTreeMap<Builtin, TypeId>,
-    input: Option<TypeId>,
+    divmod: Option<TypeId>,
+    input: BTreeMap<crate::input::IoBuiltin, TypeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,7 +69,9 @@ impl TypedExpression<'_> {
                     Some(ResolvedCall::Builtin(builtin)) => {
                         self.types.builtins.get(&builtin).copied()
                     }
-                    Some(ResolvedCall::ReadLine) => self.types.input,
+                    Some(ResolvedCall::Io(input)) => self.types.input.get(&input).copied(),
+                    Some(ResolvedCall::BigIntDivMod) => self.types.divmod,
+                    Some(ResolvedCall::List(_)) | Some(ResolvedCall::Map(_)) => None,
                     None => None,
                 };
                 TypedNode {
@@ -91,9 +94,12 @@ fn operation_expressions(
             ResolvedStatement::Call { expression } => (Some(expression), &[]),
             ResolvedStatement::RepeatInit { count, .. } => (Some(count), &[]),
             ResolvedStatement::JumpIfFalse { condition, .. } => (Some(condition), &[]),
-            ResolvedStatement::Store { value, .. } | ResolvedStatement::Update { value, .. } => {
-                (Some(value), &[])
-            }
+            ResolvedStatement::Store { value, .. }
+            | ResolvedStatement::Propagate { value, .. }
+            | ResolvedStatement::Destructure { value, .. }
+            | ResolvedStatement::Match { value, .. }
+            | ResolvedStatement::MatchLiteral { value, .. }
+            | ResolvedStatement::Update { value, .. } => (Some(value), &[]),
             ResolvedStatement::Output { arguments, .. } => (None, arguments),
             _ => (None, &[]),
         };
@@ -229,28 +235,48 @@ pub(super) fn build(
         functions.push(id);
     }
     let mut builtins = BTreeMap::new();
-    let mut input = None;
+    let mut divmod = None;
+    let mut input = BTreeMap::new();
     for (_, expression) in expressions(program) {
         for (index, call) in expression.calls.iter().enumerate() {
-            if matches!(call, Some(ResolvedCall::ReadLine)) && input.is_none() {
-                input = Some(
-                    registry
-                        .intern(TypeKind::Function {
-                            parameters: Vec::new().into(),
-                            result: ValueType::String.id(),
-                            effect: FunctionEffect::Impure,
-                        })
-                        .map_err(|error| failure(error, expression.syntax.nodes()[index].span))?,
-                );
-            }
-            if let Some(ResolvedCall::Builtin(builtin)) = call {
-                if let std::collections::btree_map::Entry::Vacant(entry) = builtins.entry(*builtin)
-                {
-                    let id = builtin
-                        .intern_signature(&mut registry)
-                        .map_err(|error| failure(error, expression.syntax.nodes()[index].span))?;
-                    entry.insert(id);
+            let span = expression.syntax.nodes()[index].span;
+            match call {
+                Some(ResolvedCall::Io(builtin)) => {
+                    if let std::collections::btree_map::Entry::Vacant(entry) = input.entry(*builtin)
+                    {
+                        let id = registry
+                            .intern(TypeKind::Function {
+                                parameters: vec![ValueType::String.id(); builtin.arity()].into(),
+                                result: expression.types[index],
+                                effect: FunctionEffect::Impure,
+                            })
+                            .map_err(|error| failure(error, span))?;
+                        entry.insert(id);
+                    }
                 }
+                Some(ResolvedCall::BigIntDivMod) if divmod.is_none() => {
+                    divmod = Some(
+                        registry
+                            .intern(TypeKind::Function {
+                                parameters: vec![ValueType::BigInt.id(), ValueType::BigInt.id()]
+                                    .into(),
+                                result: expression.types[index],
+                                effect: FunctionEffect::Pure,
+                            })
+                            .map_err(|error| failure(error, span))?,
+                    );
+                }
+                Some(ResolvedCall::Builtin(builtin)) => {
+                    if let std::collections::btree_map::Entry::Vacant(entry) =
+                        builtins.entry(*builtin)
+                    {
+                        let id = builtin
+                            .intern_signature(&mut registry)
+                            .map_err(|error| failure(error, span))?;
+                        entry.insert(id);
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -267,6 +293,7 @@ pub(super) fn build(
         bindings,
         functions,
         builtins,
+        divmod,
         input,
     })
 }

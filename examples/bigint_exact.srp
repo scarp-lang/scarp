@@ -1,0 +1,7 @@
+bind amount = bigint("1000000000000000000000000000007");
+bind parts = bigint_divmod(amount, bigint("9"));
+print(parts[0], parts[1]);
+
+bind width = bigint_pow(bigint("2"), 128);
+print(bigint_bit_length(width), bigint_to_radix(width, 16));
+print(bigint_sqrt(width), bigint_gcd(bigint("-84"), bigint("30")));

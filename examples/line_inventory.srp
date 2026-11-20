@@ -1,0 +1,9 @@
+// Read redirected UTF-8 input, preserving blank lines and a final unterminated line.
+var entries: integer = 0;
+var line = try_read_line();
+while line[0] {
+    entries += 1;
+    print(entries, "[", line[1], "]");
+    line = try_read_line();
+}
+print("Lines:", entries);

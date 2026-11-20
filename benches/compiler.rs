@@ -26,16 +26,32 @@ fn measure(name: &str, bytes: usize, iterations: u32, mut work: impl FnMut()) {
     }
 }
 
-fn measure_constant_edits(original: &MemorySourceLoader, files: &[(&str, &str)], iterations: u32) {
+struct ConstantEdit<'a> {
+    path: &'a str,
+    from: &'a str,
+    to: &'a str,
+    output: &'a [u8],
+    unchanged_folds: u64,
+    cold_workload: &'a str,
+    warm_workload: &'a str,
+}
+
+fn measure_constant_edits(
+    original: &MemorySourceLoader,
+    files: &[(&str, &str)],
+    iterations: u32,
+    edit: ConstantEdit<'_>,
+) {
     let mut edited = MemorySourceLoader::new();
     for &(name, source) in files {
-        let replacement = if name == "right.srp" {
-            r#"import "base.srp" as base; pub bind value: integer=base.value*3;"#
+        if name == edit.path {
+            assert_eq!(source.matches(edit.from).count(), 1);
+            let replacement = source.replace(edit.from, edit.to);
+            assert_eq!(source.len(), replacement.len());
+            edited.insert(name, replacement).unwrap();
         } else {
-            source
-        };
-        assert_eq!(source.len(), replacement.len());
-        edited.insert(name, replacement).unwrap();
+            edited.insert(name, source).unwrap();
+        }
     }
     let load = |source: &MemorySourceLoader, syntax: &mut SyntaxCache| {
         modules::load_with_syntax_cache("main.srp", source, ModuleLimits::default(), syntax)
@@ -53,7 +69,7 @@ fn measure_constant_edits(original: &MemorySourceLoader, files: &[(&str, &str)],
     let mut cold_syntax = SyntaxCache::new(SyntaxCacheLimits::default());
     let mut warm_syntax = SyntaxCache::new(SyntaxCacheLimits::default());
     let mut constants = ConstantCache::new(ConstantCacheLimits::default());
-    for (source, expected) in [(original, b"1537\n"), (&edited, b"2049\n")] {
+    for (source, expected) in [(original, b"1537\n".as_slice()), (&edited, edit.output)] {
         let cold = modules::resolve(load(source, &mut cold_syntax)).unwrap();
         let warm = resolve_cached(load(source, &mut warm_syntax), &mut constants);
         assert_eq!(cold.constant_dependencies(), warm.constant_dependencies());
@@ -66,31 +82,21 @@ fn measure_constant_edits(original: &MemorySourceLoader, files: &[(&str, &str)],
             assert!(err.is_empty());
         }
     }
-    assert_eq!(constants.stats().hits, 515);
-    assert_eq!(constants.stats().misses, 517);
+    assert_eq!(constants.stats().hits, edit.unchanged_folds);
+    assert_eq!(constants.stats().misses, 1032 - edit.unchanged_folds);
 
     // Both paths alternate the same two source versions with warm AST caches.
     let bytes = files.iter().map(|(_, text)| text.len()).sum();
     let mut cold_edits = [original, &edited].into_iter().cycle();
-    measure(
-        "module_constant_edits_cold_4files",
-        bytes,
-        iterations,
-        || {
-            let graph = load(cold_edits.next().unwrap(), &mut cold_syntax);
-            black_box(modules::resolve(graph).unwrap());
-        },
-    );
+    measure(edit.cold_workload, bytes, iterations, || {
+        let graph = load(cold_edits.next().unwrap(), &mut cold_syntax);
+        black_box(modules::resolve(graph).unwrap());
+    });
     let mut warm_edits = [original, &edited].into_iter().cycle();
-    measure(
-        "module_constant_edits_warm_4files",
-        bytes,
-        iterations,
-        || {
-            let graph = load(warm_edits.next().unwrap(), &mut warm_syntax);
-            black_box(resolve_cached(graph, &mut constants));
-        },
-    );
+    measure(edit.warm_workload, bytes, iterations, || {
+        let graph = load(warm_edits.next().unwrap(), &mut warm_syntax);
+        black_box(resolve_cached(graph, &mut constants));
+    });
 }
 
 fn measure_editor_revision_refresh(loader: &MemorySourceLoader, bytes: usize, iterations: u32) {
@@ -220,7 +226,28 @@ fn main() {
         black_box(resolved);
     });
     assert!(syntax_cache.stats().hits >= 4);
-    measure_constant_edits(&loader, &files, iterations);
+    for edit in [
+        ConstantEdit {
+            path: "right.srp",
+            from: "base.value*2",
+            to: "base.value*3",
+            output: b"2049\n",
+            unchanged_folds: 515,
+            cold_workload: "module_constant_edits_cold_4files",
+            warm_workload: "module_constant_edits_warm_4files",
+        },
+        ConstantEdit {
+            path: "base.srp",
+            from: "pub bind value: integer=v512;",
+            to: "pub bind value: integer=v511;",
+            output: b"1534\n",
+            unchanged_folds: 513,
+            cold_workload: "module_diamond_shared_edits_cold_4files",
+            warm_workload: "module_diamond_shared_edits_warm_4files",
+        },
+    ] {
+        measure_constant_edits(&loader, &files, iterations, edit);
+    }
 
     let mut token_cache = TokenCache::new(TokenCacheLimits::default());
     modules::load_with_token_cache(
@@ -346,7 +373,7 @@ fn main() {
         for _ in 1..4096 {
             assert_eq!(registry.intern(signature()).unwrap(), first);
         }
-        assert_eq!(registry.len(), 9);
+        assert_eq!(registry.len(), PrimitiveType::ALL.len() + 1);
         black_box(registry.finish());
     });
 }

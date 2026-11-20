@@ -1,0 +1,27 @@
+// Pure persistent collection operations: no mutation of published snapshots.
+record Task { title: string, done: boolean }
+
+pure funcra add_task(tasks: list<record Task>, title: string) -> list<record Task> {
+    return list_push(tasks, new Task { title: title, done: false });
+}
+
+bind empty: list<record Task> = [list: <record Task>];
+bind first = add_task(empty, "Draft");
+bind second = add_task(first, "Review");
+print("Counts", list_len(empty), list_len(first), list_len(second));
+print("First", second[0]->title, second[1]->title);
+
+// Replacing and removing return new lists without affecting their input.
+bind reviewed = list_set(second, 1, new Task { title: "Approved", done: true });
+bind only_one = list_remove(reviewed, 0);
+print("Snapshots", second[1]->title, reviewed[1]->title);
+print("Remaining", list_len(only_one), only_one[0]->title);
+assert(list_len(empty) == 0);
+assert(list_len(first) == 1);
+assert(list_len(second) == 2);
+assert(only_one[0]->done);
+
+// Length-independent list<T> permits assigning a new complete snapshot.
+var active: list<record Task> = first;
+active = only_one;
+print("Active", active[0]->title);

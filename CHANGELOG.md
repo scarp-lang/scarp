@@ -1,5 +1,105 @@
 # Changelog
 
+## 0.0.6-alpha.16 — source candidate under qualification
+
+- Add bounded `median` and type-7 `quantile` for finite numerical vectors.
+  Existing Scarp functions with the same names retain priority.
+- Add six bounded Unicode string utilities and eleven checked fixed-width
+  integer utilities. Cover typed module composition and editor cache parity.
+- Experimental Linux x86-64 ELF64 integer kernels probe each full stack page
+  crossed by the frame prologue and preserve both existing return ABIs.
+- Rust hosts can change `ConstantCache` retention quotas in place. Entries are
+  evicted FIFO and previously compiled programs remain usable.
+- Verify integer map snapshots and both captured streams at the work limit.
+
+## 0.0.6-alpha.15 — published GitHub prerelease, 2026-11-19
+
+- Apply the 1 MiB per-file source limit to token and AST inspection.
+- Charge string equality and inequality by UTF-8 bytes when the operands have
+  equal byte lengths. Constant evaluation and cache replay use the same charge.
+- Reject caller-supplied semantic cache revisions that disagree with revisions
+  returned alongside source text. Rust hosts should handle the new
+  `CachedCompileError::RevisionMismatch` variant.
+- Add checked left, arithmetic-right and logical-right shifts to the
+  experimental x86-64 ELF64 checked-kernel API. Invalid counts return status 3
+  and the operator's byte span.
+- Enforce the immutable binding subset for both ELF64 kernel APIs. Apply the
+  200,000-byte machine-code ceiling to the emitted bytes.
+
+## 0.0.6-alpha.14 — published GitHub prerelease, 2026-11-18
+
+- Report missing and duplicate separators, mismatched delimiters and end of
+  input at the relevant nested destructuring group.
+- Allow Rust hosts to adjust editor-cache retention quotas on a live cache.
+  FIFO eviction preserves previously returned programs and editor snapshots.
+- Verify cold and warm editor analysis across shared dependency edits and
+  cover persistent map projection output and rollback.
+- Add an experimental Linux x86-64 ELF64 kernel API for checked integer
+  arithmetic, with a status and source span for the first failure.
+- Reject native repeat operations that alias the count and index slots.
+
+## 0.0.6-alpha.13 — published GitHub prerelease, 2026-11-17
+
+- Forward Option and Result failures without a second payload allocation.
+- Add caller-owned syntax and semantic cache quota updates and targeted semantic
+  revision eviction. Preserve returned programs and FIFO order.
+- Add an opt-in workspace generation check for static editor analysis results.
+- Cover persistent map projections, aggregate quotas, and cache snapshot
+  boundaries with exact-output examples and regression tests.
+
+## 0.0.6-alpha.12 — published GitHub prerelease, 2026-11-16
+
+- Add nominal records, tagged variants, nested destructuring and exhaustive scalar matching.
+- Add concrete Option and Result types, typed propagation and cross-module type identity.
+- Add bounded, immutable dynamic lists and deterministic maps with persistent updates and ordered projections.
+- Add a multi-file task board and package-level checks for its output and tests.
+
+## 0.0.6-alpha.11 — published GitHub prerelease, 2026-11-15
+
+- Expose exact base-10 `decimal` in Scarp source, with checked arithmetic,
+  comparisons, typed module interfaces and explicit conversion and rounding.
+- Add `input_decimal(prompt)` for exact decimal console input and ship an
+  interactive example with byte-exact UTF-8 fixtures.
+- Charge the text quota before allocating strings produced by decimal formatting.
+
+## 0.0.6-alpha.10 — published GitHub prerelease, 2026-11-14
+
+- Add explicit UTF-8 input files, EOF-aware reads and opt-in terminal prompts.
+  `input_integer`, `input_float` and `input_bigint` parse checked values.
+  `try_read_line` keeps EOF distinct from empty lines and input errors.
+- Add stdout and stderr flush calls, plus exact `.stdout` and `.stderr`
+  comparison fixtures for project tests in both JSON report formats.
+- Add immutable fixed-size arrays, including typed empty values, nested
+  values, checked indexing, and an independent allocation limit.
+  Array-bearing module inventories use JSON schema 3.
+- Add advanced exact BigInt arithmetic, number theory, radix conversion,
+  signed bitwise operations, and a single-pass quotient/remainder tuple.
+- Add opt-in constant and revision-aware editor caches. Reduce allocations
+  during scalar IR verification and retain cold-build diagnostic parity.
+- Add an experimental exact Decimal foundation for Rust hosts.
+
+## 0.0.6-alpha.9 — published GitHub prerelease, 2026-11-13
+
+- Add opt-in `scarp test --json=v2` with compile, fixture, and runtime
+  phases, diagnostic codes, and project-relative source locations.
+- Add bounded exact `bigint` arithmetic, comparisons, explicit conversions,
+  and support for BigInt values in typed functions, modules, and tuples.
+- Keep project test schema 1 and the signed 64-bit `integer` type compatible.
+  Rust hosts can use `..Default::default()` for the new execution limits and
+  must extend exhaustive matches on the affected public enums.
+
+## 0.0.6-alpha.8 — published GitHub prerelease, 2026-11-12
+
+- Add bounded declarative `scarp.project` manifests, `scarp init`, project
+  `run` and `verify`, and read-only `project info` with optional JSON.
+- Run immediate project tests with `scarp test`, including read-only listing,
+  JSON reports, strict empty-suite checks, filename filtering, and bounded
+  per-test UTF-8 stdin fixtures.
+- Add typed Boolean assertions with optional static messages and source-located
+  `E0065` failures. `assert` becomes reserved. Rust hosts with exhaustive
+  matches on `Statement` or `DiagnosticKind` must handle the new variants.
+- Preserve legacy manifests, `create`, `launch`, and single-file execution.
+
 ## 0.0.6-alpha.7 — published GitHub prerelease, 2026-11-11
 
 - Add typed conditional expressions with exact branch result types and lazy

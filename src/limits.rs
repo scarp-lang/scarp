@@ -40,8 +40,12 @@ pub struct ExecutionOptions {
     pub max_vector_bytes: usize,
     /// Cumulative newly materialized UTF-8 string payload; sharing does not recharge.
     pub max_text_bytes: usize,
-    /// Cumulative immutable tuple member/structural payload, independent of text/vectors.
+    /// Cumulative immutable tuple, record and variant payload, independent of text/vectors.
     pub max_tuple_bytes: usize,
+    /// Largest allowed input/result BigInt decimal magnitude.
+    pub max_bigint_digits: usize,
+    /// Cumulative charged limb storage including temporary arithmetic buffers.
+    pub max_bigint_bytes: usize,
     /// Cumulative immutable fixed-array backing and type payload, independent of other values.
     pub max_array_bytes: usize,
 }
@@ -57,6 +61,8 @@ impl Default for ExecutionOptions {
             max_vector_bytes: 8 * 1024 * 1024,
             max_text_bytes: 8 * 1024 * 1024,
             max_tuple_bytes: 8 * 1024 * 1024,
+            max_bigint_digits: crate::bigint::DEFAULT_BIGINT_DIGITS,
+            max_bigint_bytes: crate::bigint::DEFAULT_BIGINT_BYTES,
             max_array_bytes: DEFAULT_ARRAY_BYTES,
         }
     }
@@ -80,6 +86,9 @@ pub(crate) struct Budget {
     text_limit: usize,
     tuple_remaining: usize,
     tuple_limit: usize,
+    bigint_digits: usize,
+    bigint_remaining: usize,
+    bigint_limit: usize,
     array_remaining: usize,
     array_limit: usize,
 }
@@ -90,7 +99,6 @@ pub(crate) struct BudgetAmounts {
     vector_bytes: usize,
     text_bytes: usize,
     tuple_bytes: usize,
-    array_bytes: usize,
 }
 
 impl BudgetAmounts {
@@ -100,7 +108,6 @@ impl BudgetAmounts {
             vector_bytes: self.vector_bytes - after.vector_bytes,
             text_bytes: self.text_bytes - after.text_bytes,
             tuple_bytes: self.tuple_bytes - after.tuple_bytes,
-            array_bytes: self.array_bytes - after.array_bytes,
         }
     }
 }
@@ -116,6 +123,9 @@ impl Budget {
             text_limit: usize::MAX,
             tuple_remaining: 8 * 1024 * 1024,
             tuple_limit: 8 * 1024 * 1024,
+            bigint_digits: crate::bigint::DEFAULT_BIGINT_DIGITS,
+            bigint_remaining: crate::bigint::DEFAULT_BIGINT_BYTES,
+            bigint_limit: crate::bigint::DEFAULT_BIGINT_BYTES,
             array_remaining: DEFAULT_ARRAY_BYTES,
             array_limit: DEFAULT_ARRAY_BYTES,
         }
@@ -127,6 +137,32 @@ impl Budget {
         self.vector_remaining = bytes;
         self.vector_limit = bytes;
         self
+    }
+
+    pub fn with_bigint_limits(mut self, digits: usize, bytes: usize) -> Self {
+        self.bigint_digits = digits.min(crate::bigint::MAX_BIGINT_DIGITS);
+        self.bigint_remaining = bytes;
+        self.bigint_limit = bytes;
+        self
+    }
+
+    pub fn check_bigint_digits(&self, digits: usize, span: Span) -> Result<(), Diagnostic> {
+        if digits > self.bigint_digits {
+            return Err(Diagnostic::new(DiagnosticKind::BigIntLimit, span,
+                format!("bigint decimal digit limit of {} exceeded", self.bigint_digits))
+                .with_help("reduce input/result digits or raise --max-bigint-digits / ExecutionOptions.max_bigint_digits up to 1000000"));
+        }
+        Ok(())
+    }
+
+    pub fn charge_bigint_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
+        if bytes > self.bigint_remaining {
+            return Err(Diagnostic::new(DiagnosticKind::BigIntLimit, span,
+                format!("cumulative bigint allocation limit of {} bytes exceeded", self.bigint_limit))
+                .with_help("reduce bigint materialization or raise --max-bigint-bytes / ExecutionOptions.max_bigint_bytes; scratch buffers also count"));
+        }
+        self.bigint_remaining -= bytes;
+        Ok(())
     }
 
     pub fn charge_vector_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
@@ -158,6 +194,26 @@ impl Budget {
         Ok(())
     }
 
+    pub(crate) fn charge_nominal_allocation(
+        &mut self,
+        bytes: usize,
+        span: Span,
+        error_kind: DiagnosticKind,
+    ) -> Result<(), Diagnostic> {
+        self.tuple_remaining = self.tuple_remaining.checked_sub(bytes).ok_or_else(|| {
+            Diagnostic::new(
+                error_kind,
+                span,
+                format!(
+                    "cumulative tuple, record and variant allocation limit of {} bytes exceeded",
+                    self.tuple_limit
+                ),
+            )
+            .with_help("reuse immutable values or raise --max-tuple-bytes")
+        })?;
+        Ok(())
+    }
+
     pub fn with_array_bytes(mut self, bytes: usize) -> Self {
         self.array_remaining = bytes;
         self.array_limit = bytes;
@@ -175,6 +231,42 @@ impl Budget {
                 ),
             )
             .with_help("reuse immutable arrays or raise --max-array-bytes / ExecutionOptions.max_array_bytes")
+        })?;
+        Ok(())
+    }
+
+    /// Lists and fixed arrays intentionally share one cumulative budget:
+    /// switching collection spellings cannot bypass the caller's allocation cap.
+    pub fn charge_list_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
+        self.array_remaining = self.array_remaining.checked_sub(bytes).ok_or_else(|| {
+            Diagnostic::new(
+                DiagnosticKind::ListAllocation,
+                span,
+                format!(
+                    "cumulative array/list allocation limit of {} bytes exceeded",
+                    self.array_limit
+                ),
+            )
+            .with_help("reuse immutable lists, or raise --max-array-bytes / ExecutionOptions.max_array_bytes")
+        })?;
+        Ok(())
+    }
+
+    /// Maps share the fixed-array/list cumulative payload quota, so
+    /// interchangeable immutable containers cannot bypass resource accounting.
+    pub fn charge_map_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
+        self.array_remaining = self.array_remaining.checked_sub(bytes).ok_or_else(|| {
+            Diagnostic::new(
+                DiagnosticKind::MapAllocation,
+                span,
+                format!(
+                    "cumulative array/list/map allocation limit of {} bytes exceeded",
+                    self.array_limit
+                ),
+            )
+            .with_help(
+                "reuse map snapshots or raise --max-array-bytes / ExecutionOptions.max_array_bytes",
+            )
         })?;
         Ok(())
     }
@@ -205,7 +297,9 @@ impl Budget {
         Ok(())
     }
 
-    pub fn charge(&mut self, amount: u64, span: Span) -> Result<(), Diagnostic> {
+    /// Verify remaining work without spending it. Interactive prompts use
+    /// this before exposing bytes when a selected read cannot even begin.
+    pub(crate) fn preflight_steps(&self, amount: u64, span: Span) -> Result<(), Diagnostic> {
         if self.remaining < amount {
             return Err(Diagnostic::new(
                 DiagnosticKind::ExecutionLimit,
@@ -214,6 +308,11 @@ impl Budget {
             )
             .with_help("check loop progress or raise --max-steps / ExecutionLimits.max_steps"));
         }
+        Ok(())
+    }
+
+    pub fn charge(&mut self, amount: u64, span: Span) -> Result<(), Diagnostic> {
+        self.preflight_steps(amount, span)?;
         self.remaining -= amount;
         Ok(())
     }
@@ -224,7 +323,6 @@ impl Budget {
             vector_bytes: self.vector_remaining,
             text_bytes: self.text_remaining,
             tuple_bytes: self.tuple_remaining,
-            array_bytes: self.array_remaining,
         }
     }
 
@@ -236,7 +334,6 @@ impl Budget {
             || spent.vector_bytes > self.vector_remaining
             || spent.text_bytes > self.text_remaining
             || spent.tuple_bytes > self.tuple_remaining
-            || spent.array_bytes > self.array_remaining
         {
             return false;
         }
@@ -244,7 +341,6 @@ impl Budget {
         self.vector_remaining -= spent.vector_bytes;
         self.text_remaining -= spent.text_bytes;
         self.tuple_remaining -= spent.tuple_bytes;
-        self.array_remaining -= spent.array_bytes;
         true
     }
 }
@@ -252,29 +348,4 @@ impl Budget {
 pub(crate) fn text_construction(span: Span, message: impl Into<String>) -> Diagnostic {
     Diagnostic::new(DiagnosticKind::TextConstruction, span, message)
         .with_help("use nonnegative repetition counts and smaller strings; raise --max-text-bytes / ExecutionOptions.max_text_bytes for the cumulative payload quota")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn replay_charges_array_storage_and_keeps_all_ledgers_on_failure() {
-        let span = Span::default();
-        let mut evaluated = Budget::new(6).with_array_bytes(8);
-        let before = evaluated.remaining_amounts();
-        evaluated.charge(3, span).unwrap();
-        evaluated.charge_array_allocation(8, span).unwrap();
-        let spent = before.spent(evaluated.remaining_amounts());
-
-        let mut exact = Budget::new(3).with_array_bytes(8);
-        assert!(exact.try_replay(spent));
-        assert_eq!(exact.remaining, 0);
-        assert_eq!(exact.array_remaining, 0);
-
-        let mut too_small = Budget::new(3).with_array_bytes(7);
-        assert!(!too_small.try_replay(spent));
-        assert_eq!(too_small.remaining, 3);
-        assert_eq!(too_small.array_remaining, 7);
-    }
 }

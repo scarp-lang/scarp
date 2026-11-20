@@ -1,5 +1,45 @@
 # Command-line reference
 
+## Project commands in v0.0.6-alpha.8
+
+| Command | Behavior |
+| --- | --- |
+| `scarp init DIRECTORY` | Scaffold a new project with a declarative manifest and starter source |
+| `scarp run [DIRECTORY]` | Execute the project entrypoint with the interpreter |
+| `scarp verify [DIRECTORY]` | Type-check the entrypoint and imports without executing runtime statements |
+| `scarp project info [--json] [DIRECTORY]` | Inspect the validated manifest and entrypoint |
+| `scarp test [--list] [--json] [--require-tests] [--filter SUBSTRING] [DIRECTORY]` | Discover or run project tests |
+
+The optional directory defaults to the current project. `run FILE` and
+`verify FILE` continue to accept standalone source files. See the
+[manifest format and migration](../project-v2.md), [test report and fixture
+contracts](../project-testing.md), and [assertion syntax](../assertions.md).
+
+Scarp v0.0.6-alpha.9 adds `scarp test --json=v2`
+for [structured diagnostics](../project-testing.md#structured-failure-reports).
+
+**Published in v0.0.6-alpha.10:** `scarp exec
+--input-file DATA.txt app.srp` selects a UTF-8 file as the program's explicit
+input source. `run FILE`, `run PROJECT` and `launch PROJECT` accept the
+same option. An input file takes priority over ambient stdin; normal input
+quotas, UTF-8 errors and transactional output remain unchanged. The path is
+relative to the process working directory, not automatically to the Scarp
+source directory. Static commands reject the flag. Input is streamed through
+a buffered file reader rather than loaded into memory all at once.
+
+**Published in v0.0.6-alpha.10:** `--interactive`
+allows `ask(prompt)` and `ask_or(prompt, fallback)` to flush a prompt before
+reading a line from stdin or an input file. `--interactive --input-file DATA.txt` makes
+interactive programs reproducible without reading ambient stdin; prompts are
+visible even if later input or runtime execution fails. Without `--interactive`,
+prompt built-ins report E0054. `ask_or` uses the fallback only at EOF.
+Alpha.11 adds `input_decimal(prompt)` for exact Decimal input.
+Alpha.10 includes `input(prompt)` and the typed variants
+`input_integer`, `input_float` and `input_bigint`. `try_read_line()` handles
+EOF from any explicitly selected reader. `flush_stdout()` and
+`flush_stderr()` publish the selected stream during interactive execution
+and replay after successful evaluation in other modes.
+
 Development builds accept `--max-array-bytes` on `exec`, `run`, `launch`, and
 `check`. The default cumulative fixed-array payload limit is 8,388,608 bytes.
 See [fixed arrays](../fixed-arrays.md) for the backing-storage charge.
@@ -40,8 +80,10 @@ Published v0.0.6-alpha.1 adds static `inspect symbols` and `inspect references`
 commands, which are absent from older alpha.5 packages.
 
 The latest published prerelease is
-[v0.0.6-alpha.7](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.7).
-It retains project-directory module inspection. The experimental C11 scalar
+[v0.0.6-alpha.15](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.15).
+Token and AST inspection apply the 1 MiB source file cap. The editor cache
+and checked ELF64 kernel are opt-in Rust embedding APIs.
+The CLI retains project-directory module inspection. The experimental C11 scalar
 source emitter is a Rust embedding API, **not** a Scarp CLI command;
 `scarp compile` still does not exist.
 
@@ -66,7 +108,7 @@ not alpha.3 packages. Confirm the exact release tag/commit and use
 | `scarp verify DIRECTORY` | From alpha.4: validate `Scarp.project` and check its entrypoint statically |
 | `scarp inspect tokens FILE` | List lexer tokens and real source locations |
 | `scarp inspect ast FILE` | Parse just the entry source and display its actual frontend syntax tree without execution |
-| `scarp inspect modules [--json] FILE` | Inspect statically checked modules; JSON retains schema version 1 |
+| `scarp inspect modules [--json] FILE` | Inspect statically checked modules. JSON uses schema 1, 2 or 3 according to the serialized types |
 | `scarp inspect symbols [--json] FILE|DIRECTORY` | From v0.0.6-alpha.1: show typed symbol definitions in a statically checked source graph |
 | `scarp inspect references [--json] FILE|DIRECTORY` | From v0.0.6-alpha.1: show source references and matching definitions without running statements |
 | `scarp explain E####` | Explain an existing compiler diagnostic |
@@ -139,15 +181,15 @@ scarp inspect ast examples/hello.srp
 scarp inspect ast --diagnostic-format=json examples/hello.srp
 ```
 
-`inspect ast` uses the actual Scarp lexer and parser. It **does not**
-resolve imported files, check types, or execute statements and therefore does
-not replace `verify`. Successful output is a human-readable **development
-debug representation**, not a frozen AST serialization, parser API contract,
-or schema-versioned JSON. `--json` is deliberately unavailable for successful
-AST output. The existing `--diagnostic-format=json|text` option applies only
-to parser/lexing diagnostics on stderr. The source path supports the normal
-`--` separator, Unicode and filenames containing spaces. There is no new
-top-level `scarp ast` alias.
+`inspect ast` stops after lexing and parsing the entry file. It prints a
+human-readable development debug representation. Use
+`--diagnostic-format=json|text` to format errors on stderr. The source path
+supports the `--` separator, Unicode and filenames containing spaces.
+
+The token and AST inspection commands read regular UTF-8 files up to 1 MiB,
+the same per-file limit used by CLI compilation. A larger source file returns
+status 1 with a read error. In JSON diagnostic mode, its error uses schema 1
+with a null primary location.
 
 ## Historical and existing CLI contracts
 
@@ -340,3 +382,12 @@ graph inspections; runtime budgets do not apply. They accept the existing
 `symbols` or `references` aliases are introduced. See the [navigation contract](../symbol-index.md)
 for snapshot-local IDs, precise source positions, limits, schema-v1 fixtures,
 implicit definitions and failure behavior. These commands are not in alpha.5.
+
+## BigInt flags
+
+Scarp v0.0.6-alpha.9 adds [BigInt](../bigint.md) flags `--max-bigint-digits` (default 10,000,
+maximum 1,000,000) and `--max-bigint-bytes` (default 8,388,608). `exec`/`run` and
+evaluating `check` accept them before the filename; static `verify` rejects
+runtime flags. E0051 diagnoses malformed decimal text, E0052 digit/payload
+quota exhaustion, and E0053 limb reservation failure. `explain` documents all
+three codes. [BigInt integration PR #200](https://github.com/scarp-lang/scarp/pull/200)

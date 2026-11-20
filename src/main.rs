@@ -1,10 +1,13 @@
 mod project;
+mod project_info;
+mod project_manifest;
+mod project_tests;
 
 use std::{
     env,
     ffi::{OsStr, OsString},
     fs,
-    io::{self, BufWriter, IsTerminal, Write},
+    io::{self, BufReader, BufWriter, IsTerminal, Read, Write},
     path::Path,
     process::ExitCode,
 };
@@ -24,10 +27,14 @@ Usage:
 Commands:
   inspect symbols|references [--json] <file.srp|project-directory>  Source navigation
   exec <file.srp>                  Execute a Scarp program
-  verify <file.srp|directory>      Perform static source or project validation
+  verify [file.srp|directory]      Perform static source or project validation
   inspect tokens <file.srp>        Inspect lexer tokens and source locations
-  create <directory>               Create a new runnable Scarp project
+  create <directory>               Create a legacy Scarp.project app
+  init <directory>                 Initialize a new scarp.project app
+  project info [--json] [directory]  Display validated project metadata
   launch <directory>               Execute a Scarp project entrypoint
+  run [directory|file.srp]          Run a project or legacy source file
+  test [--json|--json=v2] [--list] [--require-tests] [--filter SUBSTRING] [directory]  Project tests
   inspect ast <file.srp>           Show the parsed syntax tree (development)
   inspect modules [--json] <file.srp|directory>  Inspect statically checked modules
   explain E####                   Explain a real diagnostic code
@@ -42,6 +49,14 @@ Options:
 Examples:
   scarp exec examples/hello.srp
   scarp create demo
+  scarp init modern-demo
+  scarp project info --json modern-demo
+  scarp run modern-demo
+  scarp test modern-demo
+  scarp test --json modern-demo
+  scarp test --list modern-demo
+  scarp test --require-tests modern-demo
+  scarp test --filter math modern-demo
   scarp launch demo
   scarp verify examples/hello.srp
   scarp inspect tokens examples/hello.srp
@@ -56,11 +71,12 @@ verification. Native executable generation and package management are not suppor
 ";
 
 const VERIFY_HELP: &str =
-    "Usage: scarp verify [--diagnostic-format=json|text] [--] <file.srp|project-directory>
+    "Usage: scarp verify [--diagnostic-format=json|text] [--] [file.srp|project-directory]
 
-Statically validate the selected source file or an explicit Scarp project
-directory. Project mode validates Scarp.project and resolves its contained
-entrypoint using the same safety checks as launch.
+Statically validate the selected source file or a Scarp project. With no
+arguments, validate the current directory if it contains a project manifest.
+Project mode validates scarp.project or legacy Scarp.project and resolves its
+contained entrypoint using the same safety checks as launch.
 The real compiler loads imports, resolves names/types and checks constants
 without executing runtime statements or writing artifacts.
 Runtime arithmetic, contracts, dynamic paths and budgets are not evaluated.
@@ -119,7 +135,7 @@ const INSPECT_MODULES_HELP: &str =
 
 Statically check the source module graph and list real imports, dependencies,
 declarations and typed signatures without executing runtime statements.
-An explicit project directory resolves Scarp.project to its contained entrypoint.
+An explicit project directory resolves scarp.project or legacy Scarp.project.
 --json emits existing schema-version-1 module metadata; --diagnostic-format=json
 selects JSON stderr only for actual errors.
 ";
@@ -130,14 +146,22 @@ Execute a checked Scarp source file with the existing interpreter.
 --diagnostic-format=json is available for real compiler errors.
 Execution-limit options: --max-steps, --max-prints, --max-call-depth, --max-calls,
 --max-live-slots, --max-capture-bytes, --max-vector-bytes, --max-text-bytes,
---max-tuple-bytes, --max-array-bytes, --max-input-line-bytes, --max-input-bytes, --max-input-reads.
-Options precede the
-source path. -- before a filename permits filenames beginning with a dash.
+--max-tuple-bytes, --max-array-bytes, --max-bigint-digits, --max-bigint-bytes,
+--max-input-line-bytes, --max-input-bytes, --max-input-reads.
+--input-file PATH uses an explicit file instead of stdin for program input.
+--interactive enables input(prompt), ask, ask_or and typed input calls
+input_integer, input_float, input_bigint and input_decimal.
+Prompts are flushed before reading stdin or --input-file.
+Options precede the source path. -- permits filenames beginning with a dash.
 Program-argument forwarding and project entrypoint execution are not supported.
-read_line reads redirected UTF-8 stdin; terminal input is rejected at the selected call.
+read_line reads redirected UTF-8 stdin or --input-file PATH, or terminal input
+with --interactive. Without --interactive, prompt calls report E0054.
+Input-file paths are relative to the working directory and are read under input quotas.
 Input defaults: 65536 raw bytes per line, 1048576 total bytes, 4096 reads.
 CR/LF count toward input/text quotas. Input cannot be rolled back; output stays buffered.
-No interactive prompt is displayed or flushed before a read.
+try_read_line() returns (false, \"\") only at ordinary EOF. The flush_stdout()
+and flush_stderr() calls publish the selected stream immediately with
+--interactive. Otherwise, output and flushes replay after successful evaluation.
 ";
 
 const CREATE_HELP: &str = "Usage: scarp create [--] <new-directory>
@@ -147,13 +171,61 @@ Reject existing directories (even empty ones); never overwrite existing files.
 No network access, package installation, or native build occurs.
 ";
 
-const LAUNCH_HELP: &str =
-    "Usage: scarp launch [--diagnostic-format=json|text] [budget options] [--] <project-directory>
+const INIT_HELP: &str = "Usage: scarp init [--] <new-directory>
 
-Load Scarp.project from an explicit project directory, validate its entrypoint
+Initialize a new standalone application using the declarative scarp.project
+manifest, src/main.srp, README.md, .gitignore, tests/ and examples/.
+Reject existing paths and do not install packages or run any source.
+Use scarp verify DIRECTORY and scarp run DIRECTORY afterwards.
+";
+
+const TEST_HELP: &str =
+    "Usage: scarp test [--json|--json=v2] [--list] [--require-tests] [--filter SUBSTRING] [--] [project-directory]
+
+Run the immediate tests/*.srp files, or list them without source execution.
+Without a directory argument, use the current project directory.
+--json emits one schema-version-1 test report on stdout; failed test diagnostics
+are bounded and embedded in the JSON rather than printed separately.
+--json=v2 opts into structured per-test diagnostics with codes, source spans,
+and failure phases. Choose at most one JSON flag.
+--list reports discovered tests without compiling or running them; combine
+--json --list to obtain a machine-readable discovery report.
+--require-tests returns exit status 1 when no selected test files are discovered,
+even for --list/--json; the zero-test report remains visible for CI tooling.
+--filter SUBSTRING selects filenames containing a case-sensitive UTF-8 substring.
+It does not support regex/globs; use 1..128 bytes, no leading dash, separators,
+colon or control characters. An empty selection reports zero tests.
+Files are sorted lexicographically, limited to 64, and checked for symlinks.
+An absent tests/ directory counts as an empty suite.
+Optional sibling NAME.stdin, NAME.stdout and NAME.stderr fixtures supply
+bounded per-test input and compare expected output using exact UTF-8 bytes.
+Tests run only trusted Scarp code with existing deterministic default budgets.
+Interactive stdin and ordinary program stdout are not forwarded.
+A suite with no tests succeeds by default and reports an explicit zero-test result.
+Project/CLI errors go to stderr and do not output successful-report JSON.
+No dependency installation, per-test timeout, or custom budgets are supported.
+";
+
+const PROJECT_HELP: &str = "Usage:
+  scarp project info [--json] [--] [project-directory]
+
+Display validated local project metadata without executing Scarp source.
+The default directory is the current working directory. The parser checks
+manifest syntax and the entrypoint's canonical containment, existence and
+file type, but does not compile the source graph.
+--json prints schema-version-1 JSON with name, version, type, entry,
+manifest and format. Legacy Scarp.project reports a null version.
+No dependencies, lockfiles or network operations are involved.
+Errors go to stderr and do not emit partial successful JSON output.
+";
+
+const LAUNCH_HELP: &str = "Usage: scarp launch [--diagnostic-format=json|text] [budget options] [--] <project-directory>
+
+Load scarp.project or legacy Scarp.project from an explicit project directory, validate its entrypoint
 and execute the .srp file through the existing interpreter. The entrypoint
 must stay inside the project. Runtime budgets and diagnostic formats are
-identical to scarp exec. No implicit ancestor search or artifact generation.
+identical to scarp exec. Accepts --interactive and --input-file PATH.
+No implicit ancestor search or artifact generation.
 ";
 
 const GUIDE_HELP: &str = "Usage: scarp guide [command [subcommand]]
@@ -212,14 +284,17 @@ Function defaults: --max-call-depth 256, --max-calls 100000,
 --max-vector-bytes 8388608 (cumulative numerical element payload).
 Vector and tile buffers share this cumulative quota; retirement does not refund it.
 --max-text-bytes 8388608 limits cumulative new UTF-8 payload (1048576 bytes per string).
---max-tuple-bytes 8388608 limits cumulative immutable tuple member/type payload.
+--max-tuple-bytes 8388608 limits cumulative immutable tuple, record and variant payload.
+--max-bigint-digits 10000 (ceiling 1000000), --max-bigint-bytes 8388608 (limbs and scratch).
 --max-array-bytes 8388608 limits cumulative immutable fixed-array member/type payload.
 String sharing and direct literal output do not allocate text payload; retirement gives no refund.
 Snapshot bytes are a logical storage cap, not an exact process-memory limit.
 Counts are unsigned decimal digits, zero is valid, and each option may occur once.
 Example: scarp run --max-steps 2000000 --max-prints 10 examples/repeat.srp
 Use scarp check with the same options to evaluate without printing.
-read_line requires redirected UTF-8 stdin; terminal prompts are not supported.
+read_line requires redirected UTF-8 stdin or --input-file PATH by default.
+--interactive enables terminal input and visible ask/ask_or prompts, and works
+with --input-file for repeatable interactive-program tests.
 --max-input-line-bytes 65536, --max-input-bytes 1048576, --max-input-reads 4096.
 Raw input counts CR/LF and uses the text/work budgets. Output stays buffered.
 --diagnostic-format=json writes schema-1 errors to stderr, with local UTF-8 byte spans
@@ -239,7 +314,8 @@ Function defaults: --max-call-depth 256, --max-calls 100000,
 --max-vector-bytes 8388608 (cumulative numerical element payload).
 Vector and tile buffers share this cumulative quota; retirement does not refund it.
 --max-text-bytes 8388608 limits cumulative new UTF-8 payload (1048576 bytes per string).
---max-tuple-bytes 8388608 limits cumulative immutable tuple member/type payload.
+--max-tuple-bytes 8388608 limits cumulative immutable tuple, record and variant payload.
+--max-bigint-digits 10000 (ceiling 1000000), --max-bigint-bytes 8388608 (limbs and scratch).
 --max-array-bytes 8388608 limits cumulative immutable fixed-array member/type payload.
 String sharing and direct literal output do not allocate text payload; retirement gives no refund.
 All resource options take unsigned decimal counts, allow zero, and may occur once.
@@ -297,6 +373,15 @@ fn main() -> ExitCode {
     ExitCode::from(status)
 }
 
+// Activate project execution only when the directory actually contains a
+// manifest. Otherwise preserve legacy "run" usage errors and the original
+// "could not read DIRECTORY" single-file diagnostic.
+fn has_project_manifest(directory: &Path) -> bool {
+    directory.is_dir()
+        && (fs::symlink_metadata(directory.join(project::MANIFEST_V2)).is_ok()
+            || fs::symlink_metadata(directory.join(project::MANIFEST)).is_ok())
+}
+
 fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl Write) -> u8 {
     if args.is_empty() {
         return write_output(output.write_all(HELP.as_bytes()), errors);
@@ -304,11 +389,25 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
     // Canonical CLI routes reuse the existing Scarp library/lexer backends.
     // Existing entry points stay functional during an explicit migration window.
     match args.as_slice() {
+        [command, flag] if command == "init" && (flag == "--help" || flag == "-h") => {
+            return write_output(output.write_all(INIT_HELP.as_bytes()), errors);
+        }
         [command, flag] if command == "create" && (flag == "--help" || flag == "-h") => {
             return write_output(output.write_all(CREATE_HELP.as_bytes()), errors);
         }
         [command, flag] if command == "launch" && (flag == "--help" || flag == "-h") => {
             return write_output(output.write_all(LAUNCH_HELP.as_bytes()), errors);
+        }
+        [command, flag] if command == "test" && (flag == "--help" || flag == "-h") => {
+            return write_output(output.write_all(TEST_HELP.as_bytes()), errors);
+        }
+        [command, flag] if command == "project" && (flag == "--help" || flag == "-h") => {
+            return write_output(output.write_all(PROJECT_HELP.as_bytes()), errors);
+        }
+        [command, topic, flag]
+            if command == "project" && topic == "info" && (flag == "--help" || flag == "-h") =>
+        {
+            return write_output(output.write_all(PROJECT_HELP.as_bytes()), errors);
         }
         [command] if command == "guide" => {
             return write_output(output.write_all(HELP.as_bytes()), errors);
@@ -326,6 +425,9 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                 Some("version") => Some(VERSION_HELP),
                 Some("diagnose") => Some(DIAGNOSE_HELP),
                 Some("create") => Some(CREATE_HELP),
+                Some("init") => Some(INIT_HELP),
+                Some("test") => Some(TEST_HELP),
+                Some("project") => Some(PROJECT_HELP),
                 Some("launch") => Some(LAUNCH_HELP),
                 _ => None,
             };
@@ -433,7 +535,116 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         }
         _ => {}
     }
-    if args.first().is_some_and(|command| command == "create") {
+    if args.first().is_some_and(|command| command == "project") {
+        if args.get(1).map_or(true, |topic| topic != "info") {
+            let _ = writeln!(errors, "error: expected 'project info'\n\n{PROJECT_HELP}");
+            return 2;
+        }
+        let mut json = false;
+        let mut directory = None;
+        let mut separator = false;
+        let mut invalid = false;
+        for arg in args.iter().skip(2) {
+            if !separator && arg == "--" {
+                separator = true;
+            } else if !separator && arg == "--json" {
+                if json {
+                    invalid = true;
+                }
+                json = true;
+            } else if (!separator && arg.to_string_lossy().starts_with('-')) || directory.is_some()
+            {
+                invalid = true;
+            } else {
+                directory = Some(Path::new(arg));
+            }
+        }
+        if invalid {
+            let _ = writeln!(errors, "error: expected at most one project directory and a single --json flag\n\n{PROJECT_HELP}");
+            return 2;
+        }
+        let directory = directory.unwrap_or(Path::new("."));
+        return match project::info(directory) {
+            Ok(info) => write_output(project_info::write(&info, output, json), errors),
+            Err(message) => {
+                let _ = writeln!(errors, "error: {message}");
+                1
+            }
+        };
+    }
+    if args.first().is_some_and(|command| command == "test") {
+        use project_tests::JsonVersion;
+
+        let mut json = None;
+        let mut list_only = false;
+        let mut require_tests = false;
+        let mut filter: Option<String> = None;
+        let mut separator = false;
+        let mut directory = None;
+        let mut invalid = false;
+        let mut arguments = args.iter().skip(1);
+        while let Some(arg) = arguments.next() {
+            if !separator && arg == "--" {
+                separator = true;
+            } else if !separator && (arg == "--json" || arg == "--json=v2") {
+                if json.is_some() {
+                    invalid = true;
+                }
+                json = Some(if arg == "--json" {
+                    JsonVersion::V1
+                } else {
+                    JsonVersion::V2
+                });
+            } else if !separator && arg == "--list" {
+                if list_only {
+                    invalid = true;
+                }
+                list_only = true;
+            } else if !separator && arg == "--require-tests" {
+                if require_tests {
+                    invalid = true;
+                }
+                require_tests = true;
+            } else if !separator && arg == "--filter" {
+                if filter.is_some() {
+                    invalid = true;
+                }
+                match arguments.next().and_then(|value| value.to_str()) {
+                    Some(value) if project_tests::valid_filter(value) => {
+                        filter = Some(value.to_owned());
+                    }
+                    _ => invalid = true,
+                }
+            } else if (!separator && arg.to_string_lossy().starts_with('-')) || directory.is_some()
+            {
+                invalid = true;
+            } else {
+                directory = Some(Path::new(arg));
+            }
+        }
+        if invalid {
+            let _ = writeln!(
+                errors,
+                "error: expected at most one project directory and optional test flags\n\n{TEST_HELP}"
+            );
+            return 2;
+        }
+        return project_tests::run(
+            directory.unwrap_or(Path::new(".")),
+            output,
+            errors,
+            json,
+            list_only,
+            require_tests,
+            filter.as_deref(),
+        );
+    }
+    if args
+        .first()
+        .is_some_and(|command| command == "create" || command == "init")
+    {
+        let modern = args[0] == "init";
+        let command_help = if modern { INIT_HELP } else { CREATE_HELP };
         let destination = match args.as_slice() {
             [_, path] if !path.to_string_lossy().starts_with('-') => Some(path),
             [_, separator, path] if separator == "--" => Some(path),
@@ -442,12 +653,17 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         let Some(destination) = destination else {
             let _ = writeln!(
                 errors,
-                "error: expected a new project directory\n\n{CREATE_HELP}"
+                "error: expected a new project directory\n\n{command_help}"
             );
             return 2;
         };
         let destination = Path::new(destination);
-        return match project::create(destination) {
+        let created = if modern {
+            project::init(destination)
+        } else {
+            project::create(destination)
+        };
+        return match created {
             Ok(()) => write_output(
                 writeln!(output, "Created Scarp project: {}", destination.display()),
                 errors,
@@ -457,6 +673,23 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                 1
             }
         };
+    }
+    if matches!(args.as_slice(), [command] if command == "run" || command == "verify")
+        && has_project_manifest(Path::new("."))
+    {
+        args.push(OsString::from("."));
+    }
+    // A source path keeps the historical single-file run behavior. A project
+    // directory uses the project-aware launch path with identical budgets.
+    if args.first().is_some_and(|command| command == "run")
+        && args.len() > 1
+        && args
+            .last()
+            .is_some_and(|path| has_project_manifest(Path::new(path)))
+    {
+        let mut forwarded = args.clone();
+        forwarded[0] = OsString::from("launch");
+        return dispatch(forwarded, output, errors);
     }
     if args.first().is_some_and(|command| command == "launch") {
         let mut forwarded = args.clone();
@@ -586,6 +819,8 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         filename,
         options,
         input_limits,
+        input_file,
+        interactive,
         json,
         json_diagnostics,
     } = match invocation(&args) {
@@ -675,9 +910,46 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             }
         } else {
             let stdin = io::stdin();
-            let result = if stdin.is_terminal() {
-                // A selected read fails immediately; buffered output cannot
-                // serve as a visible interactive prompt in this mode.
+            let result = if let Some(input_path) = input_file {
+                // Explicit file selection never touches ambient stdin. Open
+                // only after source graph compilation and static checks pass.
+                let file = match fs::File::open(input_path) {
+                    Ok(file) => file,
+                    Err(error) => {
+                        let message = format!(
+                            "could not open input file '{}': {error}",
+                            Path::new(input_path).display()
+                        );
+                        if json_diagnostics {
+                            let _ = scarp::diagnostics::write_json_message(&message, None, errors);
+                        } else {
+                            let _ = writeln!(errors, "error: {message}");
+                        }
+                        return 1;
+                    }
+                };
+                let mut reader = BufReader::new(file);
+                if interactive {
+                    program.execute_with_interactive_input(
+                        &mut reader,
+                        output,
+                        errors,
+                        options,
+                        input_limits,
+                    )
+                } else {
+                    program.execute_with_input(&mut reader, output, errors, options, input_limits)
+                }
+            } else if interactive {
+                program.execute_with_interactive_input(
+                    &mut stdin.lock(),
+                    output,
+                    errors,
+                    options,
+                    input_limits,
+                )
+            } else if stdin.is_terminal() {
+                // Without explicit opt-in, terminal reads remain unavailable.
                 program.execute(output, errors, options)
             } else {
                 program.execute_with_input(&mut stdin.lock(), output, errors, options, input_limits)
@@ -693,7 +965,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             }
         };
     }
-    let source = match fs::read_to_string(path) {
+    let source = match read_frontend_source(path) {
         Ok(source) => source,
         Err(error) => {
             let message = format!("could not read '{}': {error}", path.display());
@@ -744,6 +1016,35 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
     }
 }
 
+fn read_frontend_source(path: &Path) -> io::Result<String> {
+    let limit = ModuleLimits::default().max_file_bytes;
+    let too_large = || {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("source file exceeds {limit} bytes"),
+        )
+    };
+    let metadata = fs::metadata(path)?;
+    if !metadata.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "not a regular file",
+        ));
+    }
+    if metadata.len() > limit as u64 {
+        return Err(too_large());
+    }
+    let mut source = String::new();
+    // Enforce the cap during the read as well, in case the file grows.
+    fs::File::open(path)?
+        .take(limit as u64 + 1)
+        .read_to_string(&mut source)?;
+    if source.len() > limit {
+        return Err(too_large());
+    }
+    Ok(source)
+}
+
 fn file_command(command: &OsStr) -> bool {
     matches!(
         command.to_str(),
@@ -763,6 +1064,8 @@ fn execution_limit_flag(flag: &str) -> bool {
             | "--max-vector-bytes"
             | "--max-text-bytes"
             | "--max-tuple-bytes"
+            | "--max-bigint-digits"
+            | "--max-bigint-bytes"
             | "--max-array-bytes"
             | "--max-input-line-bytes"
             | "--max-input-bytes"
@@ -800,6 +1103,8 @@ struct Invocation<'a> {
     filename: &'a OsStr,
     options: ExecutionOptions,
     input_limits: InputLimits,
+    input_file: Option<&'a OsStr>,
+    interactive: bool,
     json: bool,
     json_diagnostics: bool,
 }
@@ -808,6 +1113,8 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
     let command = args.first().ok_or("expected a command and a file path")?;
     let mut options = ExecutionOptions::default();
     let mut input_limits = InputLimits::default();
+    let mut input_file = None;
+    let mut interactive = false;
     let mut index = 1;
     let mut seen = Vec::new();
     let mut separator = false;
@@ -847,6 +1154,32 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
             index += 1;
             continue;
         }
+        if argument == "--interactive" {
+            if command != "run" {
+                return Err("--interactive is available only for executable programs");
+            }
+            if interactive {
+                return Err("--interactive cannot be repeated");
+            }
+            interactive = true;
+            index += 1;
+            continue;
+        }
+        if argument == "--input-file" {
+            if command != "run" {
+                return Err("--input-file is available only for executable programs");
+            }
+            if input_file.is_some() {
+                return Err("--input-file cannot be repeated");
+            }
+            let path = args.get(index + 1).ok_or("--input-file requires a path")?;
+            if path.to_string_lossy().starts_with("--") {
+                return Err("--input-file requires a path");
+            }
+            input_file = Some(path.as_os_str());
+            index += 2;
+            continue;
+        }
         let flag = match argument.to_str() {
             Some(flag) if execution_limit_flag(flag) => flag,
             _ => break,
@@ -880,6 +1213,13 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
                     "--max-vector-bytes" => options.max_vector_bytes = value,
                     "--max-text-bytes" => options.max_text_bytes = value,
                     "--max-tuple-bytes" => options.max_tuple_bytes = value,
+                    "--max-bigint-digits" => {
+                        if value > scarp::bigint::MAX_BIGINT_DIGITS {
+                            return Err("bigint digit limit cannot exceed 1000000");
+                        }
+                        options.max_bigint_digits = value;
+                    }
+                    "--max-bigint-bytes" => options.max_bigint_bytes = value,
                     "--max-array-bytes" => options.max_array_bytes = value,
                     "--max-input-line-bytes" => input_limits.max_line_bytes = value,
                     "--max-input-bytes" => input_limits.max_total_bytes = value,
@@ -902,6 +1242,8 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
         filename: filename.as_os_str(),
         options,
         input_limits,
+        input_file,
+        interactive,
         json,
         json_diagnostics,
     })
