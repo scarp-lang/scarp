@@ -13,6 +13,7 @@ use crate::{
 
 const MAX_TEXT_BYTES: usize = 200_000;
 const MAX_OBJECT_BYTES: usize = 262_144;
+const STACK_PROBE_INTERVAL: u32 = 4096; // Linux x86-64 base page size
 
 fn failure() -> Diagnostic {
     invalid(Span::default())
@@ -87,6 +88,23 @@ impl Code {
     fn store_rax(&mut self, dst: usize) -> Result<(), Diagnostic> {
         self.push(&[0x48, 0x89, 0x84, 0x24])?;
         self.push(&Self::slot(dst)?)
+    }
+
+    fn allocate_stack(&mut self, mut bytes: u32) -> Result<(), Diagnostic> {
+        // Touch each full page crossed so a large frame cannot jump a guard
+        // page. The final adjustment is less than one page and all slots are
+        // initialized by the verified IR before they are loaded.
+        while bytes >= STACK_PROBE_INTERVAL {
+            self.push(&[0x48, 0x81, 0xec])?; // sub rsp, imm32
+            self.push(&STACK_PROBE_INTERVAL.to_le_bytes())?;
+            self.push(&[0xc6, 0x04, 0x24, 0x00])?; // mov byte ptr [rsp], 0
+            bytes -= STACK_PROBE_INTERVAL;
+        }
+        if bytes != 0 {
+            self.push(&[0x48, 0x81, 0xec])?;
+            self.push(&bytes.to_le_bytes())?;
+        }
+        Ok(())
     }
 
     fn guard_overflow(&mut self, span: Span) -> Result<(), Diagnostic> {
@@ -242,9 +260,7 @@ fn text(program: &ScalarProgramIr, checked_arithmetic: bool) -> Result<Code, Dia
         .and_then(|n| u32::try_from(n).ok())
         .ok_or_else(failure)?;
     let mut code = Code::new(total_steps)?;
-    // sub rsp, imm32: no calls, all integer slots and temporaries are local.
-    code.push(&[0x48, 0x81, 0xec])?;
-    code.push(&stack_size.to_le_bytes())?;
+    code.allocate_stack(stack_size)?;
 
     for (slot, expr) in program.integer_stores() {
         for step in &expr.steps {

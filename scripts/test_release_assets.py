@@ -247,6 +247,24 @@ class ReleaseAssets(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "missing " + re.escape(member)):
                     verifier.verify(self.directory, version, COMMIT)
 
+    def test_alpha16_carries_forward_asset_contract_and_adds_statistics(self):
+        version = "0.0.6-alpha.16"
+        files = self.core_release_files(version)
+        self.build(version=version, extra_files=files)
+        self.assertEqual(len(verifier.verify(self.directory, version, COMMIT).splitlines()), 3)
+        for member in (
+            verifier.METADATA_MEMBER,
+            "docs/releases/v0.0.6-alpha.15-publication.md",
+            "docs/releases/v0.0.6-alpha.16-publication.md",
+            "examples/repeat.stdout",
+            "examples/order_statistics.stdout",
+        ):
+            with self.subTest(member=member):
+                damaged = {name: data for name, data in files.items() if name != member}
+                self.build(version=version, omit=member, extra_files=damaged)
+                with self.assertRaisesRegex(ValueError, "missing " + re.escape(member)):
+                    verifier.verify(self.directory, version, COMMIT)
+
     def test_alpha6_core_requires_input_tuple_and_prior_assets(self):
         version = "0.0.6-alpha.6"
         files = self.core_release_files(version)
