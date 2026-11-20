@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.6-alpha.16 — source candidate under qualification
+## 0.0.6-alpha.16 — published GitHub prerelease, 2026-11-20
 
 - Add bounded `median` and type-7 `quantile` for finite numerical vectors.
   Existing Scarp functions with the same names retain priority.
