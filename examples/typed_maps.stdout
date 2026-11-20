@@ -1,0 +1,5 @@
+[map: "a": 1, "z": 9]
+true
+[map: <integer, string>]
+[map: false: "disabled", true: "enabled"]
+[map: 1: [list: 3], 2: [list: 1, 2]]

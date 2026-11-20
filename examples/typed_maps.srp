@@ -1,0 +1,18 @@
+// Typed, immutable maps have canonical ordering irrespective of source order.
+pure funcra labels() -> map<string, integer> {
+    return [map: "z": 9, "a": 1];
+}
+
+bind original = labels();
+bind reversed = [map: "a": 1, "z": 9];
+print(original);
+print(original == reversed);
+bind empty: map<integer, string> = [map: <integer, string>];
+print(empty);
+bind features: map<boolean, string> = [map: true: "enabled", false: "disabled"];
+print(features);
+bind nested: map<integer, list<integer>> = [map:
+    2: [list: 1, 2],
+    1: [list: 3],
+];
+print(nested);

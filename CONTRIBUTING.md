@@ -4,6 +4,17 @@ Scarp is at the prototype stage. Small, tested changes are welcome. Read the
 [README](README.md) for the behavior that currently exists before proposing a
 language feature.
 
+Maintain public tutorials and language guides in the
+[Scarp Docs repository](https://github.com/scarp-lang/scarp-docs). Use the
+[English maintenance guide](https://scarp-lang.github.io/scarp-docs/project/maintenance)
+or [हिन्दी रखरखाव मार्गदर्शिका](https://scarp-lang.github.io/scarp-docs/hi/project/maintenance)
+to verify version pins and both languages. Keep runnable examples, design
+records, and release verification in the compiler repository.
+
+For a compiler link change, run
+`python3 scripts/check-official-docs-links.py /path/to/sitemap.xml` against the
+Scarp Docs production build or its deployed sitemap.
+
 ## Local setup
 
 Use the [feature matrix](docs/development/feature-matrix.md) to select coherent

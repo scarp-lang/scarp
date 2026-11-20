@@ -1,0 +1,46 @@
+// Development-only: explicit propagation from immutable bindings.
+record Task { title: string }
+
+pure funcra validate_title(value: option<string>) -> result<string, string> {
+    match on value {
+        case None { return new result<string, string>::Err("title missing"); }
+        case Some(title) {
+            if title == "" {
+                return new result<string, string>::Err("title empty");
+            }
+            return new result<string, string>::Ok(title);
+        }
+    }
+}
+
+// Failure skips the remaining body and returns Err from this function.
+// The successful payload is bound to title, with no unchecked extraction.
+pure funcra submit(value: option<string>) -> result<record Task, string> {
+    bind title: string = validate_title(value)?;
+    return new result<record Task, string>::Ok(new Task { title: title });
+}
+
+// Absence also propagates between distinct Option payload types.
+pure funcra has_title(value: option<string>) -> option<boolean> {
+    bind title = value?;
+    return new option<boolean>::Some(title != "");
+}
+
+funcra present(outcome: result<record Task, string>) -> unit {
+    match on outcome {
+        case Ok(task) { print("Saved", task->title); }
+        case Err(message) { print("Rejected", message); }
+    }
+}
+
+present(submit(new option<string>::Some("Review PR")));
+present(submit(new option<string>::Some("")));
+present(submit(new option<string>::None()));
+match on has_title(new option<string>::None()) {
+    case None { print("No title"); }
+    case Some(value) { print(value); }
+}
+match on has_title(new option<string>::Some("Ready")) {
+    case None { print("No title"); }
+    case Some(value) { print(value); }
+}

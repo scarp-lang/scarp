@@ -8,4 +8,5 @@ List the commands you ran and their outcomes. State any checks you could not run
 - [ ] Relevant behavior has tests.
 - [ ] Formatting, Clippy, tests, build, rustdoc, and example commands pass.
 - [ ] Documentation describes implemented behavior accurately.
+- [ ] Public guide changes link to a corresponding Scarp Docs PR when applicable.
 - [ ] The change contains no unrelated files or generated build output.

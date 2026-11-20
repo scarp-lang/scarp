@@ -1,12 +1,30 @@
 # Preparing a prerelease
 
 The latest published prerelease is
-[v0.0.6-alpha.7](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.7),
-published on **11 November 2026** from exact source `b1c1fd232b418267d95520c69ee563ac99ecae30`.
-See [postpublication verification](releases/v0.0.6-alpha.7-validation.md) for the
-annotated tag, independent source/control seven-job matrices and all seven assets.
-The fulfilled request is retired with this verification record. Future releases
-require their own authorization, exact source and fresh complete qualification.
+[v0.0.6-alpha.15](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.15),
+published from exact source `a21b7b6d942bd1ca9abbbbb522f92f9c8e21e281`.
+The [publication verification record](releases/v0.0.6-alpha.15-validation.md)
+lists the annotated tag, passing workflow runs, and all seven verified assets.
+The completed request was retired after public verification. A future
+publication requires separate maintainer approval for its full source SHA.
+
+See the [alpha.14 publication record](releases/v0.0.6-alpha.14-validation.md)
+for the previous source and package digests.
+
+See the earlier [alpha.13 public notes](releases/v0.0.6-alpha.13-publication.md)
+and [alpha.12 publication record](releases/v0.0.6-alpha.12-validation.md).
+
+The [alpha.11 verification record](releases/v0.0.6-alpha.11-validation.md)
+preserves its separate source and digests.
+
+The [alpha.10 verification record](releases/v0.0.6-alpha.10-validation.md)
+preserves its separate source and digests.
+
+The [alpha.9 verification record](releases/v0.0.6-alpha.9-validation.md)
+preserves its separate source and digests.
+
+The [alpha.8 verification record](releases/v0.0.6-alpha.8-validation.md)
+preserves its separate source, publication request, and asset digests.
 
 The earlier [v0.0.6-alpha.5](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.5)
 was published on 9 November from `205e92f166f186c3905e5880d41c31717b697b8e`.

@@ -1,0 +1,9 @@
+// Persistent map projections and deterministic boolean key order.
+bind flags = [map: true: "enabled", false: "disabled"];
+bind original_keys = map_keys(flags);
+bind original_values = map_values(flags);
+bind changed = map_set(flags, false, "off");
+print(original_keys);
+print(original_values);
+print(map_values(changed));
+print(map_len(flags), map_len(changed));

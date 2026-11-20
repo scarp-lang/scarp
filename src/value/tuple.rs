@@ -34,9 +34,15 @@ impl TupleValue {
             types.push(element.kind());
         }
         let kind = SourceType::tuple(types)?;
+        // A mixed tuple also traverses array type metadata during equality.
+        let metadata_work = if kind.contains_array() {
+            2 * kind.node_count() as u64
+        } else {
+            0
+        };
         let work = elements
             .iter()
-            .fold(1u64, |n, v| n.saturating_add(value_work(v)));
+            .fold(1 + metadata_work, |n, v| n.saturating_add(value_work(v)));
         let capture = elements.iter().fold(16usize, |n, v| {
             n.saturating_add(value_capture(v))
                 .saturating_add(std::mem::size_of::<Value>())
@@ -76,9 +82,14 @@ impl TupleValue {
             .checked_add(std::mem::size_of::<TupleStorage>())
     }
 }
-fn value_work(value: &Value) -> u64 {
+pub(super) fn value_work(value: &Value) -> u64 {
     match value {
         Value::Tuple(t) => t.work(),
+        Value::Array(a) => a.work(),
+        Value::List(l) => l.work(),
+        Value::Map(m) => m.work(),
+        Value::Record(r) => r.work(),
+        Value::Variant(v) => v.work(),
         Value::String(s) => (s.len() as u64).saturating_mul(6).saturating_add(2),
         Value::Vector(v) => (v.len() as u64).saturating_mul(32).saturating_add(2),
         Value::Integers(v) => (v.len() as u64).saturating_mul(24).saturating_add(12),
@@ -86,19 +97,39 @@ fn value_work(value: &Value) -> u64 {
             .saturating_mul(32)
             .saturating_add(t.height() as u64)
             .saturating_add(16),
+        Value::BigInt(n) => u64::try_from(n.decimal_digits())
+            .unwrap_or(u64::MAX)
+            .saturating_add(u64::from(n.is_negative())),
         _ => 32,
     }
 }
-fn value_capture(value: &Value) -> usize {
+pub(super) fn value_capture(value: &Value) -> usize {
     match value {
         Value::Tuple(t) => t.capture_bytes(),
+        Value::Array(a) => a.capture_bytes(),
+        Value::List(l) => l.capture_bytes(),
+        Value::Map(m) => m.capture_bytes(),
+        Value::Record(r) => r.capture_bytes(),
+        Value::Variant(v) => v.capture_bytes(),
         Value::String(s) => s.len().saturating_mul(6).saturating_add(2),
         Value::Vector(v) => v.len().saturating_mul(8),
         Value::Integers(v) => v.len().saturating_mul(8),
         Value::Tile(t) => t.len().saturating_mul(8).saturating_add(16),
+        Value::BigInt(n) => n.payload_bytes().max(
+            n.decimal_digits()
+                .saturating_add(usize::from(n.is_negative())),
+        ),
         _ => 8,
     }
 }
+pub(super) fn display_nested(value: &Value, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    if let Value::String(text) = value {
+        quoted(text, f)
+    } else {
+        fmt::Display::fmt(value, f)
+    }
+}
+
 fn quoted(text: &str, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.write_char('"')?;
     for ch in text.chars() {
@@ -122,15 +153,42 @@ impl fmt::Display for TupleValue {
             if index > 0 {
                 f.write_str(", ")?;
             }
-            if let Value::String(text) = value {
-                quoted(text, f)?;
-            } else {
-                value.fmt(f)?;
-            }
+            display_nested(value, f)?;
         }
         if self.len() == 1 {
             f.write_char(',')?;
         }
         f.write_char(')')
+    }
+}
+
+#[cfg(test)]
+mod bigint_tuple_budgets {
+    use super::{TupleValue, Value};
+    use crate::numeric::{self, Builtin};
+
+    #[test]
+    fn nested_bigint_is_charged_by_magnitude_not_scalar_placeholder() {
+        let text = "9".repeat(500);
+        let number = numeric::evaluate(Builtin::BigInt, &[Value::from(text.as_str())], 1000)
+            .expect("bounded exact input");
+        let inner = TupleValue::new(vec![number]).expect("tuple of bigint");
+        assert!(
+            inner.work() >= 500,
+            "inner work covers BigInt decimal formatting"
+        );
+        assert!(
+            inner.capture_bytes() >= 500,
+            "inner capture covers decimal magnitude"
+        );
+        let outer = TupleValue::new(vec![Value::Tuple(inner)]).expect("nested tuple");
+        assert!(
+            outer.work() >= 500,
+            "nested work cannot bypass BigInt charge"
+        );
+        assert!(
+            outer.capture_bytes() >= 500,
+            "nested capture cannot bypass BigInt charge"
+        );
     }
 }

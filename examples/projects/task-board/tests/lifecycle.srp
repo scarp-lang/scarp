@@ -1,0 +1,23 @@
+import "../src/board.srp" as tasks;
+
+bind initial = tasks.empty();
+var board = initial;
+match on tasks.apply(board, new tasks.Action::Add(new option<string>::Some("Réviser"))) {
+    case Ok(next) { board = next; }
+    case Err(_) { assert(false); }
+}
+bind before = board;
+match on tasks.apply(board, new tasks.Action::Complete("Réviser")) {
+    case Ok(next) { board = next; }
+    case Err(_) { assert(false); }
+}
+match on tasks.find(board, "Réviser") {
+    case Some(task) { assert(task->title == "Réviser" and task->done); }
+    case None { assert(false); }
+}
+assert(not before->tasks[0]->done);
+assert(list_len(initial->tasks) == 0);
+match on tasks.apply(board, new tasks.Action::Complete("Réviser")) {
+    case Ok(next) { assert(next == board); }
+    case Err(_) { assert(false); }
+}

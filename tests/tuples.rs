@@ -156,7 +156,7 @@ fn malformed_empty_unit_and_unimplemented_mutation_forms_fail_cleanly() {
         "bind x:tuple<unit>=(1,);",
         "bind x:tuple<integer=(1,);",
         "var x=(1,); x[0]=2;",
-        "bind (a,b)=(1,2);",
+        "bind (a,b)=(1,);",
     ] {
         assert!(scarp::compile(source).is_err(), "{source}");
     }

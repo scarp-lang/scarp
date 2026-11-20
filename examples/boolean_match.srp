@@ -1,0 +1,15 @@
+// A finite boolean match has exactly two literal cases.
+pure funcra button_label(active: boolean) -> string {
+    match on active {
+        case false { return "Enable"; }
+        case true { return "Disable"; }
+    }
+}
+
+print(button_label(false));
+print(button_label(true));
+
+match on false {
+    case true { print("Unexpected"); }
+    case _ { print("Ready"); }
+}

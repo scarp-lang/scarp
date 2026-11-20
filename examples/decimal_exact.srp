@@ -1,0 +1,9 @@
+pure funcra taxed(price: decimal, rate: decimal) -> decimal {
+    return price + price * rate;
+}
+
+bind total: decimal = taxed(decimal("199.99"), decimal("0.18"));
+bind scores: array<decimal, 2> = [array: decimal("0.1"), decimal("0.2")];
+print(decimal_format(total, 2, "half_even"));
+print(scores[0] + scores[1]);
+print(decimal_div_rounded(decimal("1"), decimal("3"), 2, "half_even"));

@@ -1,14 +1,20 @@
 //! Parse declarations, assignments, blocks, and print statements without execution.
 
-use crate::types::{SourceType, MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH};
-use std::collections::VecDeque;
+use crate::types::{
+    SourceType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_LIST_LENGTH, MAX_MAP_ENTRIES,
+    MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY,
+};
+use std::collections::{BTreeMap, VecDeque};
+
+mod patterns;
+mod variants;
 
 use crate::{
     ast::{
         AssignmentOperator, BinaryOperator, CallArgument, ConditionalBranch,
         ConditionalExpressionBranch, Contract, Expression, ExpressionKind, ExpressionNode,
         FunctionDeclaration, LogicalOperator, OutputTarget, Parameter, PrintArgument, Program,
-        Statement,
+        Statement, MAX_ASSERT_MESSAGE_BYTES,
     },
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     lexer::{Token, TokenKind},
@@ -21,6 +27,9 @@ pub const MAX_EXPRESSION_DEPTH: usize = 64;
 /// Maximum nested statement blocks, independent of expression parentheses.
 pub const MAX_BLOCK_DEPTH: usize = 64;
 
+/// Maximum immediate members in one fixed-array destructuring group.
+pub const MAX_DESTRUCTURE_BINDINGS: usize = 128;
+
 /// Parse a token stream. An omitted EOF token is treated as the end of input.
 pub fn parse(tokens: &[Token]) -> Result<Program, Diagnostic> {
     Parser {
@@ -28,6 +37,7 @@ pub fn parse(tokens: &[Token]) -> Result<Program, Diagnostic> {
         cursor: 0,
         pending: VecDeque::new(),
         type_end: 0,
+        builtin_variants: BTreeMap::new(),
     }
     .program()
     .map_err(|error| *error.0)
@@ -52,6 +62,7 @@ struct Parser<'a> {
     cursor: usize,
     pending: VecDeque<Token>,
     type_end: usize,
+    builtin_variants: BTreeMap<String, crate::ast::VariantDeclaration>,
 }
 
 impl Parser<'_> {
@@ -70,7 +81,7 @@ impl Parser<'_> {
         let token = self
             .current()
             .cloned()
-            .ok_or_else(|| self.expected("'>' after tuple type"))?;
+            .ok_or_else(|| self.expected("'>' after a type"))?;
         let remainder = match token.kind {
             TokenKind::Greater => Vec::new(),
             TokenKind::ShiftRight => vec![TokenKind::Greater],
@@ -80,7 +91,7 @@ impl Parser<'_> {
             TokenKind::UnsignedEqual => {
                 vec![TokenKind::Greater, TokenKind::Greater, TokenKind::Equal]
             }
-            _ => return Err(self.expected("'>' after tuple type")),
+            _ => return Err(self.expected("'>' after a type")),
         };
         self.advance();
         for (offset, kind) in remainder.into_iter().enumerate().rev() {
@@ -121,8 +132,18 @@ impl Parser<'_> {
     }
 
     fn program(mut self) -> Result<Program, ParseError> {
+        let mut statements = self.statement_list(0, false)?;
+        // Monomorphized built-in variants share the exact same checked
+        // construction, matching, and value paths as user-defined variants.
+        // Their names contain '<' and cannot collide with source identifiers.
+        let mut generated: Vec<_> = self
+            .builtin_variants
+            .into_values()
+            .map(|declaration| Statement::Variant(Box::new(declaration)))
+            .collect();
+        generated.append(&mut statements);
         Ok(Program {
-            statements: self.statement_list(0, false)?,
+            statements: generated,
         })
     }
 
@@ -135,6 +156,18 @@ impl Parser<'_> {
     ) -> Result<Vec<Statement>, ParseError> {
         let mut statements = Vec::new();
         while let Some(token) = self.current() {
+            if self.keyword_then_identifier("variant") {
+                self.variant_into(&mut statements, in_block)?;
+                continue;
+            }
+            if self.match_start() {
+                self.match_into(&mut statements, depth)?;
+                continue;
+            }
+            if self.keyword_then_identifier("record") {
+                self.record_into(&mut statements, in_block)?;
+                continue;
+            }
             if self.module_start() {
                 self.module_into(&mut statements, in_block)?;
                 continue;
@@ -238,13 +271,17 @@ impl Parser<'_> {
         } else {
             let declaration = if self.keyword("funcra") || self.keyword("pure") {
                 Statement::Function(self.function()?)
+            } else if self.keyword_then_identifier("variant") {
+                Statement::Variant(Box::new(self.variant_declaration()?))
+            } else if self.keyword_then_identifier("record") {
+                Statement::Record(Box::new(self.record()?))
             } else if self.keyword("bind") {
                 self.declaration()?
             } else {
                 return Err(ParseError::new(
                     DiagnosticKind::ModuleSyntax,
                     start,
-                    "pub requires a funcra declaration or an immutable scalar bind",
+                    "pub requires a funcra, record, variant or immutable scalar bind declaration",
                 )
                 .with_help("export a function or write pub bind name = scalar_literal;"));
             };
@@ -264,6 +301,137 @@ impl Parser<'_> {
     ) -> Result<(), ParseError> {
         statements.push(self.module_statement(in_block)?);
         Ok(())
+    }
+
+    fn keyword_then_identifier(&self, word: &str) -> bool {
+        self.keyword(word)
+            && self
+                .tokens
+                .get(self.cursor + 1)
+                .is_some_and(|token| matches!(token.kind, TokenKind::Identifier(_)))
+    }
+
+    #[inline(never)]
+    fn record_into(
+        &mut self,
+        statements: &mut Vec<Statement>,
+        in_block: bool,
+    ) -> Result<(), ParseError> {
+        if in_block {
+            return Err(ParseError::new(
+                DiagnosticKind::RecordDefinition,
+                self.current().unwrap().span,
+                "record declarations are allowed only at file scope",
+            ));
+        }
+        statements.push(Statement::Record(Box::new(self.record()?)));
+        Ok(())
+    }
+
+    fn record(&mut self) -> Result<crate::ast::RecordDeclaration, ParseError> {
+        let start = self.current().unwrap().span.start;
+        self.advance();
+        let (name, name_span) = self.identifier()?;
+        self.punctuation(TokenKind::LeftBrace, "'{' after the record name")?;
+        let mut fields = Vec::new();
+        while !self.at(&TokenKind::RightBrace) {
+            let (field, field_span) = self.identifier()?;
+            self.record_width(fields.len(), field_span)?;
+            self.punctuation(TokenKind::Colon, "':' after the field name")?;
+            let start = self
+                .current()
+                .ok_or_else(|| self.expected("a field type"))?
+                .span
+                .start;
+            let kind = self.value_type(false)?;
+            fields.push((
+                field,
+                field_span,
+                crate::ast::TypeAnnotation {
+                    kind,
+                    span: Span::new(start, self.type_end),
+                },
+            ));
+            if !self.at(&TokenKind::Comma) {
+                break;
+            }
+            self.advance();
+        }
+        let end = self.punctuation(TokenKind::RightBrace, "'}'")?.end;
+        Ok(crate::ast::RecordDeclaration {
+            name,
+            name_span,
+            fields,
+            span: Span::new(start, end),
+        })
+    }
+
+    fn record_width(&self, count: usize, span: Span) -> Result<(), ParseError> {
+        if count >= crate::types::MAX_RECORD_FIELDS {
+            return Err(ParseError::new(
+                DiagnosticKind::RecordField,
+                span,
+                "records support at most 32 fields",
+            ));
+        }
+        Ok(())
+    }
+
+    fn record_literal_start(&self) -> bool {
+        if !self.keyword_then_identifier("new") {
+            return false;
+        }
+        let after_name = self.cursor + 2;
+        let after_type = if self
+            .tokens
+            .get(after_name)
+            .is_some_and(|t| t.kind == TokenKind::Dot)
+        {
+            after_name + 2
+        } else {
+            after_name
+        };
+        self.tokens
+            .get(after_type)
+            .is_some_and(|t| t.kind == TokenKind::LeftBrace)
+    }
+
+    #[inline(never)]
+    fn record_literal(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+    ) -> Result<usize, ParseError> {
+        let opening = self.current().unwrap().span;
+        self.expression_depth(depth, opening)?;
+        self.advance();
+        let (name, name_span) = self.qualified_identifier()?;
+        self.punctuation(TokenKind::LeftBrace, "'{' after the record name")?;
+        let mut fields = Vec::new();
+        while !self.at(&TokenKind::RightBrace) {
+            let label = self.identifier()?;
+            self.record_width(fields.len(), label.1)?;
+            self.punctuation(TokenKind::Colon, "':' after the field name")?;
+            let expression = self.logical_or(nodes, depth + 1)?;
+            fields.push(CallArgument {
+                label: Some(label),
+                expression,
+            });
+            if !self.at(&TokenKind::Comma) {
+                break;
+            }
+            self.advance();
+        }
+        let end = self.punctuation(TokenKind::RightBrace, "'}'")?.end;
+        Ok(push(
+            nodes,
+            ExpressionKind::Record {
+                name,
+                name_span,
+                fields,
+            },
+            Span::new(opening.start, end),
+        ))
     }
 
     fn qualified_identifier(&mut self) -> Result<(String, Span), ParseError> {
@@ -297,11 +465,99 @@ impl Parser<'_> {
         }
     }
 
+    /// Collapse a consecutive brace-only chain into one physical parse frame.
+    ///
+    /// Every intermediate block contains exactly one child block and no
+    /// sibling statements. Their AST and byte spans remain identical to the
+    /// ordinary recursive parser, but 64 nested braces do not retain 64
+    /// statement-list frames while parsing a deeply nested expression.
+    ///
+    /// A preflight of matching braces is required: if a parent has further
+    /// statements after the child block, fall back to the general parser.
+    #[inline(never)]
+    fn compact_block_chain(&mut self, depth: usize) -> Result<Option<Statement>, ParseError> {
+        if !self.pending.is_empty() {
+            return Ok(None);
+        }
+        let start = self.cursor;
+        let mut count = 0usize;
+        while matches!(
+            self.tokens.get(start + count).map(|t| &t.kind),
+            Some(TokenKind::LeftBrace)
+        ) {
+            count += 1;
+            // Stop before bounds that would violate the normal depth limit.
+            if count > MAX_BLOCK_DEPTH {
+                break;
+            }
+        }
+        if count < 2 {
+            return Ok(None);
+        }
+        let mut balance = 0usize;
+        let mut inner_close = None;
+        for (position, token) in self.tokens.iter().enumerate().skip(start + count - 1) {
+            match token.kind {
+                TokenKind::LeftBrace => balance += 1,
+                TokenKind::RightBrace => {
+                    balance -= 1;
+                    if balance == 0 {
+                        inner_close = Some(position);
+                        break;
+                    }
+                }
+                TokenKind::Eof => return Ok(None),
+                _ => {}
+            }
+        }
+        let Some(inner_close) = inner_close else {
+            return Ok(None);
+        };
+        // A string with an unmatched parent block is still handled by the
+        // standard parser; optimization does not change syntax diagnostics.
+        if (1..count).any(|offset| {
+            !matches!(
+                self.tokens.get(inner_close + offset).map(|t| &t.kind),
+                Some(TokenKind::RightBrace)
+            )
+        }) {
+            return Ok(None);
+        }
+        // Check the same nesting limit as one-by-one block() calls, before
+        // advancing cursor or allocating any AST nodes.
+        for offset in 0..count {
+            if depth + offset >= MAX_BLOCK_DEPTH {
+                let opening = self.tokens[start + offset].span;
+                return Err(ParseError::new(
+                    DiagnosticKind::BlockNesting,
+                    opening,
+                    format!("block nesting exceeds {MAX_BLOCK_DEPTH} levels"),
+                )
+                .with_help("reduce the number of nested statement blocks"));
+            }
+        }
+        self.cursor += count;
+        let mut body = self.statement_list(depth + count, true)?;
+        for offset in (0..count).rev() {
+            let end = self.punctuation(TokenKind::RightBrace, "'}'")?.end;
+            let span = Span::new(self.tokens[start + offset].span.start, end);
+            let node = Statement::Block {
+                statements: body,
+                span,
+            };
+            body = vec![node];
+        }
+        Ok(body.pop())
+    }
+
     fn container_statement(
         &mut self,
         depth: usize,
         in_block: bool,
     ) -> Result<Statement, ParseError> {
+        if let Some(compact) = self.compact_block_chain(depth)? {
+            return Ok(compact);
+        }
         match &self.current().expect("container start").kind {
             TokenKind::LeftBrace => {
                 let (statements, span) = self.block(depth)?;
@@ -392,7 +648,12 @@ impl Parser<'_> {
         statements: &mut Vec<Statement>,
     ) -> Result<(), ParseError> {
         while let Some(token) = self.current() {
-            if self.container_start() || self.module_start() {
+            if self.container_start()
+                || self.module_start()
+                || self.match_start()
+                || self.keyword_then_identifier("record")
+                || self.keyword_then_identifier("variant")
+            {
                 break;
             }
             match &token.kind {
@@ -442,6 +703,9 @@ impl Parser<'_> {
                 {
                     statements.push(self.output_statement()?);
                 }
+                TokenKind::Identifier(name) if name == "assert" => {
+                    statements.push(self.assertion()?);
+                }
                 TokenKind::Identifier(name) if name == "let" => {
                     let modifier = self.tokens.get(self.cursor + 1).filter(
                         |next| matches!(&next.kind, TokenKind::Identifier(name) if name == "mut"),
@@ -468,6 +732,20 @@ impl Parser<'_> {
                     statements.push(self.declaration()?);
                 }
                 TokenKind::Identifier(name) => {
+                    if let Some(arrow) = self
+                        .tokens
+                        .get(self.cursor + 1)
+                        .filter(|t| t.kind == TokenKind::Arrow)
+                    {
+                        return Err(ParseError::new(
+                            DiagnosticKind::ImmutableAssignment,
+                            arrow.span,
+                            "record fields are immutable",
+                        )
+                        .with_help(
+                            "construct a replacement record and assign it to the var binding",
+                        ));
+                    }
                     if self
                         .tokens
                         .get(self.cursor + 1)
@@ -536,6 +814,23 @@ impl Parser<'_> {
         Ok(())
     }
 
+    #[inline(never)]
+    fn destructure(&mut self, start: usize, mutable: bool) -> Result<Statement, ParseError> {
+        let pattern = self.binding_pattern()?;
+        self.punctuation(TokenKind::Equal, "'=' after the destructuring pattern")?;
+        let initializer = self.expression()?;
+        let end = self
+            .punctuation(TokenKind::Semicolon, "';' after destructuring")
+            .map_err(|error| error.with_help("finish the destructuring declaration with ';'"))?
+            .end;
+        Ok(Statement::Destructure {
+            pattern,
+            mutable,
+            initializer,
+            span: Span::new(start, end),
+        })
+    }
+
     // Keep declaration temporaries out of recursive statement-list frames.
     fn declaration(&mut self) -> Result<Statement, ParseError> {
         let token = self.current().expect("declaration keyword is present");
@@ -546,6 +841,9 @@ impl Parser<'_> {
         let mutable = name == "var";
         let keyword = if mutable { "var" } else { "bind" };
         self.advance();
+        if self.pattern_group_kind().is_some() {
+            return self.destructure(start, mutable);
+        }
         if self.keyword("mut")
             && matches!(
                 self.tokens.get(self.cursor + 1).map(|token| &token.kind),
@@ -578,7 +876,7 @@ impl Parser<'_> {
                     error.0.kind = DiagnosticKind::UnexpectedToken;
                     error.0.message = error.0.message.replace("parameter", "binding");
                 }
-                error.with_help("binding types are integer, float, vector, integers, tile, boolean or string; an initializer is required")
+                error.with_help("binding types are integer, float, bigint, vector, integers, tile, boolean or string; an initializer is required")
             })?;
             Some(crate::ast::TypeAnnotation {
                 kind,
@@ -599,6 +897,20 @@ impl Parser<'_> {
                 error
             }
         })?;
+        let propagate = if self.at(&TokenKind::Question) {
+            let span = self.current().expect("question mark is present").span;
+            self.advance();
+            if mutable {
+                return Err(ParseError::new(
+                    DiagnosticKind::InvalidReturn,
+                    span,
+                    "propagation binding must use bind, not var",
+                ));
+            }
+            Some(span)
+        } else {
+            None
+        };
         let end = self
             .punctuation(TokenKind::Semicolon, "';'")
             .map_err(|error| error.with_help(format!("end the {keyword} declaration with ';'")))?
@@ -609,6 +921,7 @@ impl Parser<'_> {
             mutable,
             annotation,
             initializer: Expression { nodes, root },
+            propagate,
             span: Span::new(start, end),
         })
     }
@@ -674,19 +987,78 @@ impl Parser<'_> {
     }
 
     fn value_type(&mut self, result: bool) -> Result<SourceType, ParseError> {
-        self.source_type(result, 0)
+        let mut remaining = MAX_SOURCE_TYPE_NODES;
+        self.source_type(result, 0, &mut remaining, false)
     }
-    fn source_type(&mut self, result: bool, depth: usize) -> Result<SourceType, ParseError> {
+
+    fn source_type(
+        &mut self,
+        result: bool,
+        depth: usize,
+        remaining: &mut usize,
+        inside_array: bool,
+    ) -> Result<SourceType, ParseError> {
         let (name, span) = self.identifier()?;
         self.type_end = span.end;
+        let inside_array = inside_array || name == "array";
+        let limit = if inside_array {
+            DiagnosticKind::ArrayLimit
+        } else {
+            DiagnosticKind::TupleLimit
+        };
+        *remaining = remaining
+            .checked_sub(1)
+            .ok_or_else(|| ParseError::new(limit, span, "type exceeds 4096 structural nodes"))?;
+        if matches!(name.as_str(), "tuple" | "array" | "list" | "map")
+            && depth >= MAX_COMPOSITE_DEPTH
+        {
+            return Err(ParseError::new(
+                limit,
+                span,
+                "composite type nesting exceeds 32 levels",
+            ));
+        }
+        if name == "map" {
+            self.punctuation(TokenKind::Less, "'<' after map")?;
+            let key = self.source_type(false, depth + 1, remaining, inside_array)?;
+            self.punctuation(TokenKind::Comma, "',' separating map key and value types")?;
+            let value = self.source_type(false, depth + 1, remaining, inside_array)?;
+            let end = self.type_close()?.end;
+            return SourceType::map(key, value).ok_or_else(|| {
+                ParseError::new(
+                    DiagnosticKind::MapLimit,
+                    Span::new(span.start, end),
+                    "map keys must be integer, boolean or string; map values must be non-unit",
+                )
+            });
+        }
+        if name == "list" {
+            self.punctuation(TokenKind::Less, "'<' after list")?;
+            let element = self.source_type(false, depth + 1, remaining, inside_array)?;
+            let end = self.type_close()?.end;
+            return SourceType::list(element).ok_or_else(|| {
+                ParseError::new(
+                    DiagnosticKind::ListLimit,
+                    Span::new(span.start, end),
+                    "list element type exceeds the supported shape limits",
+                )
+            });
+        }
+        if name == "array" {
+            self.punctuation(TokenKind::Less, "'<' after array")?;
+            let element = self.source_type(false, depth + 1, remaining, true)?;
+            self.punctuation(TokenKind::Comma, "',' before the array length")?;
+            let length = self.array_length()?;
+            let end = self.type_close()?.end;
+            return SourceType::array(element, length).ok_or_else(|| {
+                ParseError::new(
+                    DiagnosticKind::ArrayLimit,
+                    Span::new(span.start, end),
+                    "array type exceeds shape limits",
+                )
+            });
+        }
         if name == "tuple" {
-            if depth >= MAX_TUPLE_DEPTH {
-                return Err(ParseError::new(
-                    DiagnosticKind::TupleLimit,
-                    span,
-                    "tuple type nesting exceeds 32 levels",
-                ));
-            }
             self.punctuation(TokenKind::Less, "'<' after tuple")?;
             let mut elements = Vec::new();
             loop {
@@ -697,33 +1069,41 @@ impl Parser<'_> {
                         "tuple type arity exceeds 32",
                     ));
                 }
-                elements.push(self.source_type(false, depth + 1)?);
+                elements.push(self.source_type(false, depth + 1, remaining, inside_array)?);
                 if !self.at(&TokenKind::Comma) {
                     break;
                 }
                 self.advance();
-                if matches!(
-                    self.current().map(|t| &t.kind),
-                    Some(
-                        TokenKind::Greater
-                            | TokenKind::ShiftRight
-                            | TokenKind::UnsignedRight
-                            | TokenKind::GreaterEqual
-                            | TokenKind::RightEqual
-                            | TokenKind::UnsignedEqual
-                    )
-                ) {
+                if self.current().is_some_and(|t| is_type_close(&t.kind)) {
                     break;
                 }
             }
             let end = self.type_close()?.end;
+            let limit = if elements.iter().any(SourceType::contains_array) {
+                DiagnosticKind::ArrayLimit
+            } else {
+                limit
+            };
             return SourceType::tuple(elements).ok_or_else(|| {
                 ParseError::new(
-                    DiagnosticKind::TupleLimit,
+                    limit,
                     Span::new(span.start, end),
                     "tuple type exceeds shape limits",
                 )
             });
+        }
+        if matches!(name.as_str(), "option" | "result") && self.at(&TokenKind::Less) {
+            return self.builtin_variant_type(&name, span, depth, remaining, inside_array);
+        }
+        if name == "variant" {
+            let (name, span) = self.qualified_identifier()?;
+            self.type_end = span.end;
+            return Ok(SourceType::VariantRef(name.into()));
+        }
+        if name == "record" {
+            let (name, span) = self.qualified_identifier()?;
+            self.type_end = span.end;
+            return Ok(SourceType::RecordRef(name.into()));
         }
         if let Some(kind) =
             ValueType::from_name(&name).filter(|kind| result || *kind != ValueType::Unit)
@@ -745,9 +1125,170 @@ impl Parser<'_> {
                 ),
             )
             .with_help(
-                "use integer, float, vector, integers, tile, boolean, string, or unit for a result",
+                "use integer, float, bigint, decimal, vector, integers, tile, boolean, string, or unit for a result",
             )),
         }
+    }
+
+    /// Reify a concrete Option/Result specialization as a private nominal
+    /// variant. This deliberately does not introduce user-defined generics.
+    /// The regular nominal resolver assigns checked TypeIds and case layouts.
+    fn builtin_variant_type(
+        &mut self,
+        family: &str,
+        opening: Span,
+        depth: usize,
+        remaining: &mut usize,
+        inside_array: bool,
+    ) -> Result<SourceType, ParseError> {
+        if depth >= MAX_COMPOSITE_DEPTH {
+            return Err(ParseError::new(
+                DiagnosticKind::TupleLimit,
+                opening,
+                "parameterized type nesting exceeds 32 levels",
+            ));
+        }
+        self.punctuation(TokenKind::Less, "'<' after the type constructor")?;
+        let first_span = self
+            .current()
+            .ok_or_else(|| self.expected("the first type argument"))?
+            .span;
+        let first = self.source_type(false, depth + 1, remaining, inside_array)?;
+        let second = if family == "result" {
+            self.punctuation(TokenKind::Comma, "',' between result type arguments")?;
+            Some(self.source_type(false, depth + 1, remaining, inside_array)?)
+        } else {
+            None
+        };
+        let end = self.type_close()?.end;
+        if first == ValueType::Unit || second.as_ref().is_some_and(|ty| ty == &ValueType::Unit) {
+            return Err(ParseError::new(
+                DiagnosticKind::VariantDefinition,
+                Span::new(opening.start, end),
+                "option and result payload types cannot be unit",
+            ));
+        }
+        let name = match &second {
+            Some(error) => format!("result<{first}, {error}>"),
+            None => format!("option<{first}>"),
+        };
+        if name.len() > 4096 {
+            return Err(ParseError::new(
+                DiagnosticKind::TupleLimit,
+                Span::new(opening.start, end),
+                "parameterized type spelling exceeds 4096 bytes",
+            ));
+        }
+        if !self.builtin_variants.contains_key(&name) {
+            if self.builtin_variants.len() >= 4096 {
+                return Err(ParseError::new(
+                    DiagnosticKind::VariantDefinition,
+                    opening,
+                    "program exceeds 4096 concrete option/result types",
+                ));
+            }
+            let span = Span::new(opening.start, end);
+            let case = |tag: &str, payload: Option<SourceType>| crate::ast::VariantCase {
+                name: tag.to_owned(),
+                span: opening,
+                payload: payload.map(|kind| crate::ast::TypeAnnotation {
+                    kind,
+                    span: first_span,
+                }),
+            };
+            let cases = match second {
+                Some(error) => vec![case("Ok", Some(first)), case("Err", Some(error))],
+                None => vec![case("None", None), case("Some", Some(first))],
+            };
+            self.builtin_variants.insert(
+                name.clone(),
+                crate::ast::VariantDeclaration {
+                    name: name.clone(),
+                    name_span: opening,
+                    cases,
+                    span,
+                },
+            );
+        }
+        Ok(SourceType::VariantRef(name.into()))
+    }
+
+    fn array_length(&mut self) -> Result<usize, ParseError> {
+        let Some(Token {
+            kind: TokenKind::Integer(digits),
+            span,
+        }) = self.current()
+        else {
+            return Err(self.array_length_error(self.current().map(|token| token.span)));
+        };
+        let mut span = *span;
+        let mut length = digits.parse::<usize>().ok();
+        self.advance();
+        // The ordinary decimal lexer deliberately leaves separators unsupported.
+        // Join only an immediately adjacent suffix in this type position.
+        if let Some(Token {
+            kind: TokenKind::Identifier(suffix),
+            span: suffix_span,
+        }) = self.current()
+        {
+            if span.end == suffix_span.start && suffix.starts_with('_') {
+                span.end = suffix_span.end;
+                length = length.and_then(|initial| {
+                    suffix[1..].split('_').try_fold(initial, |n, group| {
+                        if group.is_empty() {
+                            return None;
+                        }
+                        group.bytes().try_fold(n, |n, digit| {
+                            if !digit.is_ascii_digit() {
+                                return None;
+                            }
+                            n.checked_mul(10)?.checked_add(usize::from(digit - b'0'))
+                        })
+                    })
+                });
+                self.advance();
+            }
+        }
+        if !self
+            .current()
+            .is_some_and(|token| is_type_close(&token.kind))
+        {
+            return Err(self.array_length_error(Some(span)));
+        }
+        length
+            .filter(|&n| n <= MAX_ARRAY_LENGTH)
+            .ok_or_else(|| self.array_length_error(Some(span)))
+    }
+
+    fn array_length_error(&self, span: Option<Span>) -> ParseError {
+        let mut span = span.unwrap_or_else(|| {
+            let end = self.tokens.last().map_or(0, |token| token.span.end);
+            Span::new(end, end)
+        });
+        if self.pending.is_empty() {
+            for token in &self.tokens[self.cursor..] {
+                if is_type_close(&token.kind)
+                    || matches!(
+                        token.kind,
+                        TokenKind::Comma
+                            | TokenKind::RightBracket
+                            | TokenKind::RightParen
+                            | TokenKind::Semicolon
+                            | TokenKind::Equal
+                            | TokenKind::Eof
+                    )
+                {
+                    break;
+                }
+                span.end = token.span.end;
+            }
+        }
+        ParseError::new(
+            DiagnosticKind::ArrayLimit,
+            span,
+            "array length must be a decimal integer literal from 0 through 4096",
+        )
+        .with_help("write a nonnegative base-10 length, such as array<integer, 2>")
     }
 
     fn function(&mut self) -> Result<FunctionDeclaration, ParseError> {
@@ -812,6 +1353,49 @@ impl Parser<'_> {
             contracts,
             statements,
             span: Span::new(start, body.end),
+        })
+    }
+
+    /// `assert(boolean_expression);` or `assert(condition, "message");`.
+    /// The message is static, bounded and never treated as executable code.
+    fn assertion(&mut self) -> Result<Statement, ParseError> {
+        let start = self
+            .current()
+            .expect("assert keyword is present")
+            .span
+            .start;
+        self.advance();
+        self.punctuation(TokenKind::LeftParen, "'(' after assert")?;
+        let condition = self.expression()?;
+        let message = if self.at(&TokenKind::Comma) {
+            self.advance();
+            let text = match self.current() {
+                Some(Token {
+                    kind: TokenKind::String(text),
+                    ..
+                }) => text.clone(),
+                _ => return Err(self.expected("a quoted assertion message")),
+            };
+            if text.len() > MAX_ASSERT_MESSAGE_BYTES {
+                return Err(ParseError::new(
+                    DiagnosticKind::CallArguments,
+                    self.current().expect("quoted message is present").span,
+                    format!("assertion message exceeds {MAX_ASSERT_MESSAGE_BYTES} UTF-8 bytes"),
+                ));
+            }
+            self.advance();
+            Some(text)
+        } else {
+            None
+        };
+        self.punctuation(TokenKind::RightParen, "')' after assert")?;
+        let end = self
+            .punctuation(TokenKind::Semicolon, "';' after assert")?
+            .end;
+        Ok(Statement::Assert {
+            condition,
+            message,
+            span: Span::new(start, end),
         })
     }
 
@@ -959,6 +1543,8 @@ impl Parser<'_> {
         })
     }
 
+    // Keep the nested expression stack bounded even with 64 nested groups.
+    #[inline(never)]
     fn logical_or(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
@@ -1162,7 +1748,11 @@ impl Parser<'_> {
         depth: usize,
     ) -> Result<usize, ParseError> {
         let mut vector = self.primary(nodes, depth)?;
-        while self.at(&TokenKind::LeftBracket) {
+        while self.at(&TokenKind::LeftBracket) || self.at(&TokenKind::Arrow) {
+            if self.at(&TokenKind::Arrow) {
+                vector = self.record_field(nodes, vector)?;
+                continue;
+            }
             let opening = self.current().unwrap().span;
             self.expression_depth(depth, opening)?;
             self.advance();
@@ -1189,6 +1779,26 @@ impl Parser<'_> {
         Ok(vector)
     }
 
+    #[inline(never)]
+    fn record_field(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        receiver: usize,
+    ) -> Result<usize, ParseError> {
+        self.advance();
+        let (name, name_span) = self.identifier()?;
+        let span = Span::new(nodes[receiver].span.start, name_span.end);
+        Ok(push(
+            nodes,
+            ExpressionKind::Field {
+                receiver,
+                name,
+                name_span,
+            },
+            span,
+        ))
+    }
+
     // Keep list/call buffers out of every parenthesized primary's debug frame.
     // Combined block/expression limits must also fit small native thread stacks.
     fn vector_literal(
@@ -1200,11 +1810,26 @@ impl Parser<'_> {
         self.expression_depth(depth, opening)?;
         // This prefix extends previously invalid syntax; [integer] still reads
         // a normal binding named integer and does not change float vectors.
-        let integers = self.keyword("integer")
-            && self
-                .tokens
-                .get(self.cursor + 1)
-                .is_some_and(|token| token.kind == TokenKind::Colon);
+        let tagged = self
+            .tokens
+            .get(self.cursor + 1)
+            .is_some_and(|token| token.kind == TokenKind::Colon);
+        if tagged && self.keyword("array") {
+            self.advance();
+            self.advance();
+            return self.array_literal(nodes, depth, opening);
+        }
+        if tagged && self.keyword("list") {
+            self.advance();
+            self.advance();
+            return self.list_literal(nodes, depth, opening);
+        }
+        if tagged && self.keyword("map") {
+            self.advance();
+            self.advance();
+            return self.map_literal(nodes, depth, opening);
+        }
+        let integers = tagged && self.keyword("integer");
         if integers {
             self.advance();
             self.advance();
@@ -1232,6 +1857,164 @@ impl Parser<'_> {
                 ExpressionKind::Integers { elements }
             } else {
                 ExpressionKind::Vector { elements }
+            },
+            Span::new(opening.start, end),
+        ))
+    }
+
+    fn array_literal(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+        opening: Span,
+    ) -> Result<usize, ParseError> {
+        let mut elements = Vec::new();
+        let empty_element_type = if self.at(&TokenKind::Less) {
+            self.advance();
+            let mut remaining = MAX_SOURCE_TYPE_NODES - 1;
+            let element = self.source_type(false, 1, &mut remaining, true)?;
+            self.type_close()?;
+            Some(element)
+        } else {
+            if self.at(&TokenKind::RightBracket) {
+                return Err(self
+                    .expected("an array element or '<type>'")
+                    .with_help("write a typed empty array such as [array: <integer>]"));
+            }
+            loop {
+                if elements.len() == MAX_ARRAY_LENGTH {
+                    return Err(ParseError::new(
+                        DiagnosticKind::ArrayLimit,
+                        self.current().map_or(opening, |token| token.span),
+                        "array literal exceeds 4096 elements",
+                    ));
+                }
+                elements.push(self.logical_or(nodes, depth + 1)?);
+                if !self.at(&TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+                if self.at(&TokenKind::RightBracket) {
+                    break;
+                }
+            }
+            None
+        };
+        let end = self
+            .punctuation(TokenKind::RightBracket, "']' after array literal")?
+            .end;
+        Ok(push(
+            nodes,
+            ExpressionKind::Array {
+                elements,
+                empty_element_type,
+            },
+            Span::new(opening.start, end),
+        ))
+    }
+
+    fn list_literal(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+        opening: Span,
+    ) -> Result<usize, ParseError> {
+        let mut elements = Vec::new();
+        let empty_element_type = if self.at(&TokenKind::Less) {
+            self.advance();
+            let mut remaining = MAX_SOURCE_TYPE_NODES - 1;
+            let element = self.source_type(false, 1, &mut remaining, false)?;
+            self.type_close()?;
+            Some(element)
+        } else {
+            if self.at(&TokenKind::RightBracket) {
+                return Err(self.expected("a list element or '<type>'").with_help(
+                    "write an explicitly typed empty list, for example [list: <integer>]",
+                ));
+            }
+            loop {
+                if elements.len() == MAX_LIST_LENGTH {
+                    return Err(ParseError::new(
+                        DiagnosticKind::ListLimit,
+                        self.current().map_or(opening, |token| token.span),
+                        "list literal exceeds 4096 elements",
+                    ));
+                }
+                elements.push(self.logical_or(nodes, depth + 1)?);
+                if !self.at(&TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+                if self.at(&TokenKind::RightBracket) {
+                    break;
+                }
+            }
+            None
+        };
+        let end = self
+            .punctuation(TokenKind::RightBracket, "']' after list literal")?
+            .end;
+        Ok(push(
+            nodes,
+            ExpressionKind::List {
+                elements,
+                empty_element_type,
+            },
+            Span::new(opening.start, end),
+        ))
+    }
+
+    fn map_literal(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+        opening: Span,
+    ) -> Result<usize, ParseError> {
+        let mut entries = Vec::new();
+        let empty_types = if self.at(&TokenKind::Less) {
+            self.advance();
+            let mut remaining = MAX_SOURCE_TYPE_NODES - 1;
+            let key = self.source_type(false, 1, &mut remaining, false)?;
+            self.punctuation(TokenKind::Comma, "',' between map key and value types")?;
+            let value = self.source_type(false, 1, &mut remaining, false)?;
+            self.type_close()?;
+            Some((key, value))
+        } else {
+            if self.at(&TokenKind::RightBracket) {
+                return Err(self
+                    .expected("a map key/value entry or '<key, value>'")
+                    .with_help("write [map: <integer, string>] for an empty map"));
+            }
+            loop {
+                if entries.len() == MAX_MAP_ENTRIES {
+                    return Err(ParseError::new(
+                        DiagnosticKind::MapLimit,
+                        self.current().map_or(opening, |token| token.span),
+                        "map literal exceeds 1024 entries",
+                    ));
+                }
+                let key = self.logical_or(nodes, depth + 1)?;
+                self.punctuation(TokenKind::Colon, "':' separating map key and value")?;
+                let value = self.logical_or(nodes, depth + 1)?;
+                entries.push((key, value));
+                if !self.at(&TokenKind::Comma) {
+                    break;
+                }
+                self.advance();
+                if self.at(&TokenKind::RightBracket) {
+                    break;
+                }
+            }
+            None
+        };
+        let end = self
+            .punctuation(TokenKind::RightBracket, "']' after map literal")?
+            .end;
+        Ok(push(
+            nodes,
+            ExpressionKind::Map {
+                entries,
+                empty_types,
             },
             Span::new(opening.start, end),
         ))
@@ -1277,12 +2060,20 @@ impl Parser<'_> {
         ))
     }
 
+    // Keep the nested expression stack bounded even with 64 nested groups.
+    #[inline(never)]
     fn primary(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
         depth: usize,
     ) -> Result<usize, ParseError> {
         match self.current().map(|token| &token.kind) {
+            Some(TokenKind::Identifier(_)) if self.variant_literal_start() => {
+                self.variant_literal(nodes, depth)
+            }
+            Some(TokenKind::Identifier(_)) if self.record_literal_start() => {
+                self.record_literal(nodes, depth)
+            }
             Some(TokenKind::Identifier(_))
                 if self
                     .tokens
@@ -1362,11 +2153,138 @@ impl Parser<'_> {
         Ok((result, end))
     }
 
+    /// Parse deeply nested parenthesized integer infix expressions with a
+    /// bounded *heap* operator stack instead of recursively consuming every
+    /// logical/arithmetic precedence frame for each pair of parentheses.
+    ///
+    /// This is a conservative fast path. It requires a balanced, syntactically
+    /// valid region consisting exclusively of integer literals, known binary
+    /// arithmetic/bitwise operators, and parentheses. All mixed expressions,
+    /// tuples, function calls, conditions, unary signs and invalid syntax
+    /// continue through the existing complete grammar without reinterpretation.
+    ///
+    /// Only four-or-more nested groups use this path; ordinary source remains
+    /// on the original parser. Each Group retains its original byte spans and
+    /// every operator is reduced using the existing precedence table.
+    #[inline(never)]
+    fn grouped_integer_infix(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+    ) -> Result<Option<usize>, ParseError> {
+        if !self.pending.is_empty() {
+            return Ok(None);
+        }
+        let start = self.cursor;
+        let mut openings = 0usize;
+        let mut max_openings = 0usize;
+        let mut expecting_operand = true;
+        let mut final_position = None;
+        for (position, token) in self.tokens.iter().enumerate().skip(start) {
+            match &token.kind {
+                TokenKind::LeftParen if expecting_operand => {
+                    openings += 1;
+                    max_openings = max_openings.max(openings);
+                }
+                TokenKind::Integer(_) if expecting_operand => expecting_operand = false,
+                TokenKind::RightParen if !expecting_operand && openings > 0 => {
+                    openings -= 1;
+                    if openings == 0 {
+                        final_position = Some(position);
+                        break;
+                    }
+                }
+                kind if !expecting_operand && infix_operator(kind).is_some() => {
+                    expecting_operand = true;
+                }
+                _ => return Ok(None),
+            }
+        }
+        let Some(final_position) = final_position else {
+            return Ok(None);
+        };
+        if max_openings < 4 {
+            return Ok(None);
+        }
+        enum Operator {
+            Opening(Span),
+            Binary(BinaryOperator, Span, u8),
+        }
+        let mut operators: Vec<Operator> = Vec::new();
+        let mut operands: Vec<usize> = Vec::new();
+        while self.cursor <= final_position {
+            let token = self.current().expect("preflight validated expression");
+            match &token.kind {
+                TokenKind::LeftParen => {
+                    let span = token.span;
+                    self.expression_depth(
+                        depth
+                            + operators
+                                .iter()
+                                .filter(|op| matches!(op, Operator::Opening(_)))
+                                .count(),
+                        span,
+                    )?;
+                    operators.push(Operator::Opening(span));
+                    self.advance();
+                }
+                TokenKind::Integer(_) => {
+                    operands.push(self.atom(nodes)?);
+                }
+                TokenKind::RightParen => {
+                    let closing = token.span;
+                    self.advance();
+                    loop {
+                        match operators.pop().expect("preflight checked balanced groups") {
+                            Operator::Opening(opening) => {
+                                let expression =
+                                    operands.pop().expect("preflight checked group operand");
+                                operands.push(push(
+                                    nodes,
+                                    ExpressionKind::Group { expression },
+                                    Span::new(opening.start, closing.end),
+                                ));
+                                break;
+                            }
+                            Operator::Binary(operator, span, _) => {
+                                reduce_binary(nodes, &mut operands, operator, span);
+                            }
+                        }
+                    }
+                }
+                kind => {
+                    let (operator, precedence) =
+                        infix_operator(kind).expect("preflight validated infix operator");
+                    let span = token.span;
+                    self.advance();
+                    while matches!(
+                        operators.last(),
+                        Some(Operator::Binary(_, _, old)) if *old >= precedence
+                    ) {
+                        let Some(Operator::Binary(operator, span, _)) = operators.pop() else {
+                            unreachable!("checked binary operator");
+                        };
+                        reduce_binary(nodes, &mut operands, operator, span);
+                    }
+                    operators.push(Operator::Binary(operator, span, precedence));
+                }
+            }
+        }
+        debug_assert!(operators.is_empty());
+        debug_assert_eq!(operands.len(), 1);
+        Ok(operands.pop())
+    }
+
+    // Keep the nested expression stack bounded even with 64 nested groups.
+    #[inline(never)]
     fn group_expression(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
         depth: usize,
     ) -> Result<usize, ParseError> {
+        if let Some(compact) = self.grouped_integer_infix(nodes, depth)? {
+            return Ok(compact);
+        }
         let opening = self.current().unwrap().span;
         self.expression_depth(depth, opening)?;
         self.advance();
@@ -1491,6 +2409,18 @@ impl Parser<'_> {
             _ => Err(self.expected("a literal, variable name, or '('")),
         }
     }
+}
+
+fn is_type_close(kind: &TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::Greater
+            | TokenKind::ShiftRight
+            | TokenKind::UnsignedRight
+            | TokenKind::GreaterEqual
+            | TokenKind::RightEqual
+            | TokenKind::UnsignedEqual
+    )
 }
 
 fn assignment_operator(kind: &TokenKind) -> Option<AssignmentOperator> {

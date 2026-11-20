@@ -89,6 +89,33 @@ fn stderr(output: &Output) -> String {
 }
 
 #[test]
+fn frontend_inspection_enforces_the_source_file_byte_limit() {
+    let fixture = Fixture::new();
+    let maximum = scarp::modules::ModuleLimits::default().max_file_bytes;
+    let exact = fixture.file("सीमा.srp", vec![b' '; maximum]);
+    let oversized = fixture.file("oversized.srp", vec![b' '; maximum + 1]);
+    for mode in [&["tokens"][..], &["inspect", "tokens"], &["inspect", "ast"]] {
+        let output = command().args(mode).arg(&exact).output().unwrap();
+        assert!(output.status.success(), "{}", stderr(&output));
+        let output = command()
+            .args(mode)
+            .arg("--diagnostic-format=json")
+            .arg(&oversized)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        assert!(output.stdout.is_empty());
+        let diagnostic = stderr(&output);
+        assert!(diagnostic.contains("\"schema_version\":1"), "{diagnostic}");
+        assert!(diagnostic.contains("\"primary\":null"), "{diagnostic}");
+        assert!(
+            diagnostic.contains(&format!("source file exceeds {maximum} bytes")),
+            "{diagnostic}"
+        );
+    }
+}
+
+#[test]
 fn loop_budgets_are_available_to_run_and_check_without_partial_output() {
     let fixture = Fixture::new();
     let infinite = fixture.file("infinite.srp", "println(\"before\"); while true {}");

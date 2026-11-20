@@ -1,0 +1,40 @@
+// Model a two-item task panel and apply submissions without UI or global state.
+record Task {
+    title: string,
+    done: boolean,
+}
+
+record TaskPanel {
+    items: array<record Task, 2>,
+    saved: integer,
+}
+
+pure funcra submit(current: record TaskPanel, title: string) -> tuple<record TaskPanel, string> {
+    if title == "" {
+        return (current, "Enter a task title");
+    }
+    bind items = current->items;
+    bind updated = new Task { title: title, done: false };
+    return (new TaskPanel {
+        saved: current->saved + 1,
+        items: [array: updated, items[1]],
+    }, "");
+}
+
+var panel = new TaskPanel {
+    items: [array: new Task { title: "Draft", done: false },
+                   new Task { title: "Archive", done: true }],
+    saved: 0,
+};
+bind original = panel;
+
+bind (rejected, error) = submit(panel, "");
+assert(rejected == panel);
+print(error);
+
+bind (next, message) = submit(panel, "Review settings");
+assert(message == "");
+panel = next;
+assert(original->items[0]->title == "Draft");
+assert(panel->items[1]->done);
+print(panel->items[0]->title, panel->saved);

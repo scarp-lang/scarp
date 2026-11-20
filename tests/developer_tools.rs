@@ -20,17 +20,28 @@ fn json(program: &modules::ModuleProgram) -> Vec<u8> {
 #[test]
 fn every_diagnostic_code_has_a_unique_stable_lookup_and_explanation() {
     let mut codes = std::collections::HashSet::new();
-    assert_eq!(Kind::ALL.len(), 58);
-    // E0051-E0053 are reserved for the independent BigInt development slice.
-    for (&kind, number) in Kind::ALL.iter().zip((1..=50).chain(54..=61)) {
+    assert_eq!(Kind::ALL.len(), 83);
+    for (&kind, number) in Kind::ALL.iter().zip(1..=83) {
         assert_eq!(kind.code(), format!("E{number:04}"));
         assert!(codes.insert(kind.code()));
         assert_eq!(Kind::from_code(kind.code()), Some(kind));
         assert!(!kind.explanation().is_empty());
     }
-    for invalid in ["E0000", "E0051", "E9999", "e0007", "E00007", "7", ""] {
+    for invalid in ["E0000", "E0084", "E9999", "e0007", "E00007", "7", ""] {
         assert_eq!(Kind::from_code(invalid), None);
     }
+    assert_eq!(Kind::AssertionFailure.code(), "E0065");
+    assert_eq!(Kind::PromptIo.code(), "E0066");
+    assert_eq!(Kind::StreamFlush.code(), "E0067");
+    assert_eq!(Kind::InvalidDecimal.code(), "E0068");
+    assert_eq!(Kind::DecimalLimit.code(), "E0069");
+    assert_eq!(Kind::DecimalInexact.code(), "E0070");
+    assert_eq!(Kind::ListLimit.code(), "E0078");
+    assert_eq!(Kind::ListIndex.code(), "E0079");
+    assert_eq!(Kind::ListAllocation.code(), "E0080");
+    assert_eq!(Kind::MapLimit.code(), "E0081");
+    assert_eq!(Kind::MapKey.code(), "E0082");
+    assert_eq!(Kind::MapAllocation.code(), "E0083");
     const OVERFLOW: &str = Kind::ArithmeticOverflow.code();
     assert_eq!(OVERFLOW, "E0007");
 }

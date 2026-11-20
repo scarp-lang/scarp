@@ -1,6 +1,12 @@
 //! Semantic type identities. Source-language legality is checked separately.
 mod source;
-pub use source::{SourceType, TupleType, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH};
+pub use source::{
+    ArrayType, ListType, MapType, RecordType, SourceType, TupleType, VariantType, MAX_ARRAY_LENGTH,
+    MAX_COMPOSITE_DEPTH, MAX_EXPANDED_VALUE_NODES, MAX_LIST_LENGTH, MAX_MAP_ENTRIES,
+    MAX_RECORD_FIELDS, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH, MAX_VARIANT_CASES,
+};
+
+pub(crate) use source::NominalKind;
 
 use std::{
     collections::HashMap,
@@ -22,6 +28,8 @@ pub enum PrimitiveType {
     Tile,
     Boolean,
     String,
+    BigInt,
+    Decimal,
 }
 
 impl PrimitiveType {
@@ -34,6 +42,8 @@ impl PrimitiveType {
         Self::Tile,
         Self::Boolean,
         Self::String,
+        Self::BigInt,
+        Self::Decimal,
     ];
     pub const fn id(self) -> TypeId {
         TypeId(self as u64)
@@ -48,16 +58,19 @@ impl PrimitiveType {
             "tile" => Self::Tile,
             "boolean" => Self::Boolean,
             "string" => Self::String,
+            "bigint" => Self::BigInt,
+            "decimal" => Self::Decimal,
             _ => return None,
         })
     }
     pub(crate) fn is_numeric(self) -> bool {
-        matches!(self, Self::Integer | Self::Float)
+        matches!(
+            self,
+            Self::Integer | Self::Float | Self::BigInt | Self::Decimal
+        )
     }
-}
-impl fmt::Display for PrimitiveType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
+    pub(crate) const fn name(self) -> &'static str {
+        match self {
             Self::Unit => "unit",
             Self::Integer => "integer",
             Self::Float => "float",
@@ -66,7 +79,14 @@ impl fmt::Display for PrimitiveType {
             Self::Tile => "tile",
             Self::Boolean => "boolean",
             Self::String => "string",
-        })
+            Self::BigInt => "bigint",
+            Self::Decimal => "decimal",
+        }
+    }
+}
+impl fmt::Display for PrimitiveType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
     }
 }
 
@@ -126,15 +146,27 @@ pub enum FunctionEffect {
     Impure,
 }
 
-// Children are IDs rather than owned subtrees. Source tuples use Tuple; other
-// composite descriptors remain tooling-only until their value contracts are implemented.
+// Children are IDs rather than owned subtrees. Fixed arrays use Sequence
+// with a length; a length-free Sequence remains a tooling descriptor.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeKind {
     Primitive(PrimitiveType),
     Tuple(Box<[TypeId]>),
+    Record {
+        definition: DefinitionId,
+        fields: Box<[TypeId]>,
+    },
+    Variant {
+        definition: DefinitionId,
+        cases: Box<[Option<TypeId>]>,
+    },
     Sequence {
         element: TypeId,
         length: Option<u64>,
+    },
+    Mapping {
+        key: TypeId,
+        value: TypeId,
     },
     Applied {
         constructor: DefinitionId,
@@ -157,19 +189,48 @@ pub enum TypeKind {
 impl TypeKind {
     fn children(&self) -> impl Iterator<Item = TypeId> + '_ {
         let (single, others): (Option<TypeId>, &[TypeId]) = match self {
-            Self::Tuple(values) => (None, values),
+            Self::Tuple(values) | Self::Record { fields: values, .. } => (None, values),
             Self::Sequence { element, .. } | Self::Tensor { element, .. } => (Some(*element), &[]),
+            Self::Mapping { key, value } => (Some(*key), std::slice::from_ref(value)),
             Self::Applied { arguments, .. } => (None, arguments),
             Self::Function {
                 parameters, result, ..
             } => (Some(*result), parameters),
             _ => (None, &[]),
         };
-        single.into_iter().chain(others.iter().copied())
+        let cases = match self {
+            Self::Variant { cases, .. } => cases.as_ref(),
+            _ => &[],
+        };
+        single
+            .into_iter()
+            .chain(others.iter().copied())
+            .chain(cases.iter().copied().flatten())
+    }
+    // A concrete Option/Result still has two checked source-level cases,
+    // even though its canonical Applied descriptor retains only the concrete
+    // type arguments. Keep the original variant arity/component accounting.
+    fn builtin_case_width(&self) -> Option<usize> {
+        match self {
+            Self::Applied {
+                constructor,
+                arguments,
+            } if constructor.module == u32::MAX
+                && ((constructor.declaration == 0 && arguments.len() == 1)
+                    || (constructor.declaration == 1 && arguments.len() == 2)) =>
+            {
+                Some(2)
+            }
+            _ => None,
+        }
     }
     fn width(&self) -> usize {
+        if let Some(width) = self.builtin_case_width() {
+            return width;
+        }
         match self {
-            Self::Tuple(v) => v.len(),
+            Self::Tuple(v) | Self::Record { fields: v, .. } => v.len(),
+            Self::Variant { cases, .. } => cases.len(),
             Self::Applied { arguments, .. } => arguments.len(),
             Self::Function { parameters, .. } => parameters.len(),
             Self::Tensor { dimensions, .. } => dimensions.len(),
@@ -177,6 +238,12 @@ impl TypeKind {
         }
     }
     fn components(&self) -> Option<usize> {
+        if let Some(count) = self.builtin_case_width() {
+            return Some(count);
+        }
+        if let Self::Variant { cases, .. } = self {
+            return Some(cases.len());
+        }
         let children = self.children().count();
         children.checked_add(if let Self::Tensor { dimensions, .. } = self {
             dimensions.len()
@@ -188,7 +255,7 @@ impl TypeKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TypeLimits {
-    /// Unique types, including the eight universal primitives.
+    /// Unique types, including the ten universal primitives.
     pub max_types: usize,
     /// Retained child references and tensor axis descriptors, not process bytes.
     pub max_components: usize,
@@ -216,6 +283,8 @@ pub enum TypeResource {
 pub enum TypeRegistryError {
     InvalidLimits,
     UnknownType(TypeId),
+    UnresolvedRecord,
+    UnresolvedVariant,
     Limit {
         resource: TypeResource,
         limit: usize,
@@ -229,6 +298,8 @@ impl fmt::Display for TypeRegistryError {
             Self::InvalidLimits => f.write_str(
                 "type limits require room for all primitives, positive depth and 32-bit indices",
             ),
+            Self::UnresolvedRecord => f.write_str("record type was not resolved"),
+            Self::UnresolvedVariant => f.write_str("variant type was not resolved"),
             Self::UnknownType(_) => f.write_str("type handle does not belong to this registry"),
             Self::Limit { resource, limit } => {
                 write!(f, "semantic type {resource:?} limit of {limit} exceeded")
@@ -240,7 +311,7 @@ impl fmt::Display for TypeRegistryError {
 }
 impl std::error::Error for TypeRegistryError {}
 
-static PRIMITIVES: [TypeKind; 8] = [
+static PRIMITIVES: [TypeKind; 10] = [
     TypeKind::Primitive(PrimitiveType::Unit),
     TypeKind::Primitive(PrimitiveType::Integer),
     TypeKind::Primitive(PrimitiveType::Float),
@@ -249,6 +320,8 @@ static PRIMITIVES: [TypeKind; 8] = [
     TypeKind::Primitive(PrimitiveType::Tile),
     TypeKind::Primitive(PrimitiveType::Boolean),
     TypeKind::Primitive(PrimitiveType::String),
+    TypeKind::Primitive(PrimitiveType::BigInt),
+    TypeKind::Primitive(PrimitiveType::Decimal),
 ];
 static NEXT_ARENA: AtomicU32 = AtomicU32::new(1);
 
@@ -385,7 +458,7 @@ impl TypeRegistryBuilder {
     pub fn component_count(&self) -> usize {
         self.components
     }
-    fn depth(&self, id: TypeId) -> Option<usize> {
+    pub(crate) fn depth(&self, id: TypeId) -> Option<usize> {
         if id.primitive().is_some() {
             return Some(1);
         }
