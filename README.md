@@ -19,7 +19,12 @@ See the [compiler documentation index](docs/README.md) for those records.
 ## Compiler releases
 
 The latest published prerelease is
-[0.0.6-alpha.15](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.15).
+[0.0.6-alpha.16](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.16).
+
+**0.0.6-alpha.16** adds bounded median and quantile, Unicode operations, and checked 64-bit
+integer utilities.
+[Release notes](docs/releases/v0.0.6-alpha.16-publication.md) ·
+[Verification record](docs/releases/v0.0.6-alpha.16-validation.md)
 
 **0.0.6-alpha.15** applies the 1 MiB limit to token and AST inspection,
 meters equal-length UTF-8 string comparisons, and validates loader revisions
