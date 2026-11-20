@@ -81,6 +81,48 @@ pub(super) fn evaluate(
             result.push_str(&text[start..]);
             result
         }
+        Builtin::TextLower | Builtin::TextUpper => {
+            // Unicode scalar case mappings may expand (e.g. U+0130 lowercases
+            // to two scalars). Count exact UTF-8 bytes before reserving storage.
+            // The two full traversals are charged independently of output bytes.
+            budget.charge(
+                u64::try_from(text.len())
+                    .unwrap_or(u64::MAX)
+                    .saturating_mul(2)
+                    .max(1),
+                span,
+            )?;
+            let mut bytes = 0usize;
+            for scalar in text.chars() {
+                let mapped_bytes: usize = if function == Builtin::TextLower {
+                    scalar.to_lowercase().map(char::len_utf8).sum()
+                } else {
+                    scalar.to_uppercase().map(char::len_utf8).sum()
+                };
+                bytes = bytes
+                    .checked_add(mapped_bytes)
+                    .ok_or_else(|| size_error(span))?;
+            }
+            let mut result = reserve(bytes, budget, span)?;
+            for scalar in text.chars() {
+                if function == Builtin::TextLower {
+                    result.extend(scalar.to_lowercase());
+                } else {
+                    result.extend(scalar.to_uppercase());
+                }
+            }
+            result
+        }
+        Builtin::TextReverse => {
+            // Reverse Unicode scalar values, not raw UTF-8 bytes or grapheme
+            // clusters. The operation preserves each scalar's UTF-8 encoding.
+            budget.charge(u64::try_from(text.len()).unwrap_or(u64::MAX).max(1), span)?;
+            let mut result = reserve(text.len(), budget, span)?;
+            for scalar in text.chars().rev() {
+                result.push(scalar);
+            }
+            result
+        }
         Builtin::TextConcat => {
             let right = args[1].as_str().expect("checked string argument");
             let bytes = text

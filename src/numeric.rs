@@ -102,6 +102,9 @@ pub enum Builtin {
     TextToFloat,
     TextTrim,
     TextReplace,
+    TextLower,
+    TextUpper,
+    TextReverse,
     BigInt,
     BigIntFromInteger,
     BigIntToInteger,
@@ -183,6 +186,9 @@ impl Builtin {
             "text_to_float" => Self::TextToFloat,
             "text_trim" => Self::TextTrim,
             "text_replace" => Self::TextReplace,
+            "text_lower" => Self::TextLower,
+            "text_upper" => Self::TextUpper,
+            "text_reverse" => Self::TextReverse,
             "variance" => Self::Variance,
             "stddev" => Self::StdDev,
             "cosine_similarity" => Self::CosineSimilarity,
@@ -290,7 +296,12 @@ impl Builtin {
             Self::BigIntSqrt => &[ValueType::BigInt],
             Self::IntegerToText => &[Integer],
             Self::FloatToText => &[Float],
-            Self::TextToInteger | Self::TextToFloat | Self::TextTrim => &[String],
+            Self::TextToInteger
+            | Self::TextToFloat
+            | Self::TextTrim
+            | Self::TextLower
+            | Self::TextUpper
+            | Self::TextReverse => &[String],
             Self::TextReplace => &[String, String, String],
             Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
             Self::Median => &[Vector],
@@ -377,9 +388,13 @@ impl Builtin {
             Self::BigIntBitLength => ValueType::Integer,
             Self::BigIntToText | Self::BigIntToRadix => ValueType::String,
             Self::BigIntToInteger => ValueType::Integer,
-            Self::IntegerToText | Self::FloatToText | Self::TextTrim | Self::TextReplace => {
-                ValueType::String
-            }
+            Self::IntegerToText
+            | Self::FloatToText
+            | Self::TextTrim
+            | Self::TextReplace
+            | Self::TextLower
+            | Self::TextUpper
+            | Self::TextReverse => ValueType::String,
             Self::TextToInteger => ValueType::Integer,
             Self::TextToFloat => ValueType::Float,
             Self::Variance
@@ -801,6 +816,9 @@ pub(crate) fn evaluate_with_spans(
             | Builtin::TextRepeat
             | Builtin::TextTrim
             | Builtin::TextReplace
+            | Builtin::TextLower
+            | Builtin::TextUpper
+            | Builtin::TextReverse
     ) {
         return text::evaluate(function, args, budget, span, argument_span);
     }
@@ -1205,6 +1223,9 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::IntsFromVector
         | Builtin::ToFloat
         | Builtin::ToInteger
+        | Builtin::TextLower
+        | Builtin::TextUpper
+        | Builtin::TextReverse
         | Builtin::TextConcat
         | Builtin::TextSlice
         | Builtin::TextRepeat
