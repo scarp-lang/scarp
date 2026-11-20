@@ -121,6 +121,21 @@ impl ConstantCache {
         }
     }
 
+    /// Reconfigure retention in FIFO order while keeping lifetime counters.
+    /// A zero quota disables retention until both quotas are positive again.
+    pub fn set_limits(&mut self, limits: ConstantCacheLimits) {
+        self.limits = limits;
+        while self.entries.len() > limits.max_entries
+            || self.stats.retained_bytes > limits.max_retained_bytes
+        {
+            self.evict_oldest();
+        }
+    }
+
+    pub fn limits(&self) -> ConstantCacheLimits {
+        self.limits
+    }
+
     pub fn stats(&self) -> ConstantCacheStats {
         ConstantCacheStats {
             entries: self.entries.len(),
@@ -226,10 +241,7 @@ impl ConstantCache {
         while self.entries.len() >= self.limits.max_entries
             || self.stats.retained_bytes > self.limits.max_retained_bytes - bytes
         {
-            let key = self.fifo.pop_front().expect("a fitting entry can evict");
-            let old = self.entries.remove(&key).expect("FIFO key is indexed");
-            self.stats.retained_bytes -= old.bytes;
-            self.stats.evictions = self.stats.evictions.saturating_add(1);
+            self.evict_oldest();
         }
         self.stats.retained_bytes += bytes;
         let key = Arc::new(Key {
@@ -245,5 +257,15 @@ impl ConstantCache {
         let previous = self.entries.insert(key.clone(), entry);
         debug_assert!(previous.is_none(), "only newly evaluated keys are stored");
         self.fifo.push_back(key);
+    }
+
+    fn evict_oldest(&mut self) {
+        let key = self
+            .fifo
+            .pop_front()
+            .expect("an empty cache fits any quota");
+        let old = self.entries.remove(&key).expect("FIFO key is indexed");
+        self.stats.retained_bytes -= old.bytes;
+        self.stats.evictions = self.stats.evictions.saturating_add(1);
     }
 }

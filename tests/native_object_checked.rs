@@ -171,6 +171,30 @@ fn checked_kernel_applies_the_native_slot_limit() {
     );
 }
 
+fn large_stack_source(tail: &str) -> String {
+    use std::fmt::Write;
+
+    let mut source = String::new();
+    for slot in 0..255 {
+        writeln!(source, "bind v{slot} = 1;").unwrap();
+    }
+    source.push_str("bind result = v254");
+    source.push_str(&" + 1".repeat(400));
+    source.push_str(tail);
+    source.push(';');
+    source
+}
+
+#[test]
+fn multi_page_frame_probes_each_page_before_allocating_the_tail() {
+    let kernel = emit_elf64_checked_integer_kernel(&large_stack_source("")).unwrap();
+    // The generated ELF header is 64 bytes and .text is 16-byte aligned.
+    let probe = [0x48, 0x81, 0xec, 0, 0x10, 0, 0, 0xc6, 0x04, 0x24, 0];
+    assert_eq!(&kernel.object[64..75], &probe);
+    assert_eq!(&kernel.object[75..86], &probe);
+    assert_eq!(&kernel.object[86..89], &[0x48, 0x81, 0xec]);
+}
+
 #[test]
 fn integer_kernels_require_immutable_binding_statements() {
     for source in [
@@ -227,7 +251,13 @@ int main(void) {
     )
     .unwrap();
 
-    for source in CASES {
+    let large_success = large_stack_source("");
+    let large_failure = large_stack_source(" + (1 / 0)");
+    for source in CASES
+        .iter()
+        .copied()
+        .chain([large_success.as_str(), large_failure.as_str()])
+    {
         let kernel = emit_elf64_checked_integer_kernel(source).unwrap();
         fs::write(&object, &kernel.object).unwrap();
         let link = Command::new(&cc)
