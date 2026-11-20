@@ -82,6 +82,8 @@ pub(super) fn evaluate(
                 .ok_or_else(|| index_error(argument_span(1), index))
         }
         Builtin::TextFind
+        | Builtin::TextRFind
+        | Builtin::TextCount
         | Builtin::TextContains
         | Builtin::TextStartsWith
         | Builtin::TextEndsWith => {
@@ -89,7 +91,13 @@ pub(super) fn evaluate(
             let work = if matches!(function, Builtin::TextStartsWith | Builtin::TextEndsWith) {
                 bytes(needle.len()).max(1)
             } else if needle.is_empty() {
-                1
+                // Counting empty matches and reverse-find on empty text both
+                // traverse Unicode scalar boundaries rather than bytes.
+                if matches!(function, Builtin::TextCount | Builtin::TextRFind) {
+                    bytes(text.len()).max(1)
+                } else {
+                    1
+                }
             } else {
                 bytes(text.len())
                     .saturating_mul(bytes(needle.len()))
@@ -102,6 +110,16 @@ pub(super) fn evaluate(
                 Builtin::TextStartsWith => Ok(Value::Boolean(text.starts_with(needle))),
                 Builtin::TextEndsWith => Ok(Value::Boolean(text.ends_with(needle))),
                 Builtin::TextContains => Ok(Value::Boolean(text.contains(needle))),
+                Builtin::TextCount => {
+                    // Rust's non-overlapping matches respect UTF-8 boundaries.
+                    // The empty needle matches at every scalar boundary,
+                    // including both ends, so its count is text_len + 1.
+                    integer(text.matches(needle).count(), span)
+                }
+                Builtin::TextRFind => match text.rfind(needle) {
+                    Some(offset) => integer(text[..offset].chars().count(), span),
+                    None => Ok(Value::Integer(-1)),
+                },
                 _ => match text.find(needle) {
                     Some(offset) => integer(text[..offset].chars().count(), span),
                     None => Ok(Value::Integer(-1)),
