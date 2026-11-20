@@ -1,0 +1,25 @@
+// Structural destructuring evaluates one initializer for multiple bindings.
+pure funcra make_pair(value: integer) -> tuple<integer, string> {
+    return (value * 2, "ready");
+}
+
+bind (result, state) = make_pair(21);
+print(result, state);
+
+var [first, second, third] = [array: 3, 5, 7];
+first += second;
+print(first, third);
+
+// The underscore ignores the corresponding element, without storing it.
+bind (_, answer) = (true, 42);
+print(answer);
+
+{
+    bind (result, note) = (5, "inner");
+    print(result, note);
+}
+print(result);
+
+bind ([(quantity, unit_price), (_, spare_price)], currency) =
+    ([array: (2, 15), (1, 7)], "INR");
+print(quantity * unit_price + spare_price, currency);

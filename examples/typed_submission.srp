@@ -1,0 +1,28 @@
+// Concrete option/result specializations use checked, exhaustive variant matches.
+// Explicit propagation is a follow-up; every early exit here is a normal return.
+record Task { title: string, done: boolean }
+
+pure funcra submit(title: option<string>) -> result<record Task, string> {
+    match on title {
+        case None { return new result<record Task, string>::Err("title is missing"); }
+        case Some(value) {
+            if value == "" {
+                return new result<record Task, string>::Err("title is required");
+            }
+            return new result<record Task, string>::Ok(new Task {
+                title: value, done: false
+            });
+        }
+    }
+}
+
+funcra present(outcome: result<record Task, string>) -> unit {
+    match on outcome {
+        case Err(message) { print("Rejected", message); }
+        case Ok(task) { print("Saved", task->title); }
+    }
+}
+
+present(submit(new option<string>::Some("Write tests")));
+present(submit(new option<string>::Some("")));
+present(submit(new option<string>::None()));

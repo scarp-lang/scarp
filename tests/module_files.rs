@@ -12,6 +12,40 @@ use std::{
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[test]
+fn relative_diagnostics_preserve_module_expansion_limits() {
+    let fixture = Fixture::new();
+    fixture.file(
+        "main.srp",
+        "import \"lib.srp\" as lib; print(lib.answer());",
+    );
+    let library = fixture.file(
+        "lib.srp",
+        "pub pure funcra answer() -> integer { return 42; }",
+    );
+    let canonical = fs::canonicalize(library).unwrap();
+    // One qualified target in the declaration table and one at its call site.
+    let exact = 2 * (canonical.to_str().unwrap().len() + "::answer".len());
+    let loader = modules::FileSourceLoader::new(&fixture.directory).unwrap();
+    for loader in [loader.clone(), loader.with_relative_diagnostics()] {
+        let limits = ModuleLimits {
+            max_expansion_bytes: exact,
+            ..ModuleLimits::default()
+        };
+        modules::compile_with_loader("main.srp", &loader, limits).unwrap();
+        let error = modules::compile_with_loader(
+            "main.srp",
+            &loader,
+            ModuleLimits {
+                max_expansion_bytes: exact - 1,
+                ..limits
+            },
+        )
+        .unwrap_err();
+        assert_eq!(error.diagnostic.kind, Kind::ModuleLimit);
+    }
+}
+
+#[test]
 fn json_cli_preserves_unicode_dash_paths_and_local_byte_spans() {
     let fixture = Fixture::new();
     fixture.file("-値.srp", "// café 🌍\r\npub bind answer: integer=6*7;");

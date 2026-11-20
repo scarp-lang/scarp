@@ -8,7 +8,8 @@
 //! never influences the program's memory semantics or execution budget.
 
 use super::{
-    ResolvedArgument, ResolvedExpression, ResolvedOperation, ResolvedProgram, ResolvedStatement,
+    DestructureStep, ResolvedArgument, ResolvedExpression, ResolvedOperation, ResolvedProgram,
+    ResolvedStatement,
 };
 use std::collections::VecDeque;
 
@@ -49,6 +50,7 @@ fn audit_frame(
         let op = &operations[pc].kind;
         let mut state_out = state.clone();
         let mut successors: Vec<usize> = Vec::with_capacity(2);
+        let mut match_targets = &[][..];
 
         match op {
             ResolvedStatement::Return { value } => {
@@ -57,7 +59,11 @@ fn audit_frame(
                     read_slots(value, &state)?;
                 }
             }
-            ResolvedStatement::Call { expression } => {
+            ResolvedStatement::Call { expression }
+            | ResolvedStatement::Assert {
+                condition: expression,
+                ..
+            } => {
                 read_slots(expression, &state)?;
                 successors.push(pc + 1);
             }
@@ -123,6 +129,34 @@ fn audit_frame(
                     .ok_or_else(|| format!("store targets out-of-range slot {slot}"))? = true;
                 successors.push(pc + 1);
             }
+            ResolvedStatement::Propagate { slot, value, .. } => {
+                read_slots(value, &state)?;
+                // Only the successful path continues to the next operation.
+                *state_out
+                    .get_mut(*slot)
+                    .ok_or_else(|| format!("propagation targets out-of-range slot {slot}"))? = true;
+                successors.push(pc + 1);
+            }
+            ResolvedStatement::Match { value, dispatch } => {
+                read_slots(value, &state)?;
+                match_targets = dispatch;
+            }
+            ResolvedStatement::MatchLiteral {
+                value,
+                cases,
+                otherwise,
+            } => {
+                read_slots(value, &state)?;
+                // The wildcard is required by the resolver, but the audit
+                // conservatively checks every exact-case branch as reachable.
+                successors.extend(cases.iter().map(|(_, target)| *target));
+                successors.push(*otherwise);
+            }
+            ResolvedStatement::Destructure { steps, value } => {
+                read_slots(value, &state)?;
+                initialize_pattern(&mut state_out, steps)?;
+                successors.push(pc + 1);
+            }
             ResolvedStatement::Update { slot, value, .. } => {
                 if !state.get(*slot).copied().unwrap_or(false) {
                     return Err(format!("update reads uninitialized or retired slot {slot}"));
@@ -140,14 +174,27 @@ fn audit_frame(
             }
         }
 
-        for next in successors {
+        for (next, payload) in successors.into_iter().map(|next| (next, None)).chain(
+            match_targets
+                .iter()
+                .map(|target| (target.instruction, target.payload.as_ref())),
+        ) {
+            let mut branch;
+            let incoming = match payload {
+                Some(payload) => {
+                    branch = state_out.clone();
+                    initialize_pattern(&mut branch, &payload.steps)?;
+                    &branch
+                }
+                None => &state_out,
+            };
             let previous = at
                 .get_mut(next)
                 .ok_or_else(|| format!("control flow jumps outside operation stream to {next}"))?;
             let changed = match previous {
                 Some(existing) => {
                     let mut changed = false;
-                    for (bit, next_bit) in existing.iter_mut().zip(&state_out) {
+                    for (bit, next_bit) in existing.iter_mut().zip(incoming) {
                         if *bit && !*next_bit {
                             *bit = false;
                             changed = true;
@@ -156,13 +203,24 @@ fn audit_frame(
                     changed
                 }
                 None => {
-                    *previous = Some(state_out.clone());
+                    *previous = Some(incoming.clone());
                     true
                 }
             };
             if changed {
                 pending.push_back(next);
             }
+        }
+    }
+    Ok(())
+}
+
+fn initialize_pattern(state: &mut [bool], steps: &[DestructureStep]) -> Result<(), String> {
+    for step in steps {
+        if let DestructureStep::Bind(slot) = step {
+            *state
+                .get_mut(*slot)
+                .ok_or_else(|| format!("pattern initializes out-of-range slot {slot}"))? = true;
         }
     }
     Ok(())
@@ -283,6 +341,42 @@ mod tests {
             .contains("outside operation stream"));
         program.statements[0].kind = ResolvedStatement::Retire { slots: vec![99] };
         assert!(audit(&program).unwrap_err().contains("out-of-range"));
+    }
+
+    #[test]
+    fn match_payload_slot_is_initialized_only_on_the_tag_edge() {
+        let mut program = crate::compile(
+            "variant V { Empty, Found(integer) }
+             match on new V::Found(3) { case Empty {} case Found(n) { print(n); } }",
+        )
+        .unwrap();
+        let ResolvedStatement::Match { dispatch, .. } = &mut program.statements[0].kind else {
+            panic!("expected dispatch")
+        };
+        assert!(dispatch[0].payload.is_none());
+        assert!(dispatch[1].payload.take().is_some());
+        assert!(audit(&program).unwrap_err().contains("uninitialized"));
+    }
+
+    #[test]
+    fn each_nested_match_binding_must_be_initialized_by_its_edge() {
+        let mut program = crate::compile(
+            "record Item { coordinates: tuple<integer, integer> }
+             variant V { Empty, Found(record Item) }
+             match on new V::Empty() {
+                 case Empty {}
+                 case Found({coordinates: (left, right)}) { print(left, right); }
+             }",
+        )
+        .unwrap();
+        let ResolvedStatement::Match { dispatch, .. } = &mut program.statements[0].kind else {
+            panic!("expected dispatch")
+        };
+        let plan = dispatch[1].payload.as_mut().unwrap();
+        let removed = plan.steps.last_mut().unwrap();
+        assert!(matches!(removed, DestructureStep::Bind(_)));
+        *removed = DestructureStep::Discard;
+        assert!(audit(&program).unwrap_err().contains("uninitialized"));
     }
 
     #[test]

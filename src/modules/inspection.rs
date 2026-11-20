@@ -174,6 +174,29 @@ impl ModuleProgram {
                 let visibility = if symbol.public { "pub" } else { "private" };
                 let at = positions.at(symbol.span.start - file.start);
                 match &symbol.kind {
+                    SymbolKind::Record { fields } => {
+                        write!(out, "  {visibility} record {} {{", symbol.name)?;
+                        for (index, (name, kind)) in fields.iter().enumerate() {
+                            if index != 0 {
+                                out.write_all(b", ")?;
+                            }
+                            write!(out, "{name}: {kind}")?;
+                        }
+                        out.write_all(b"}")?;
+                    }
+                    SymbolKind::Variant { cases } => {
+                        write!(out, "  {visibility} variant {} {{", symbol.name)?;
+                        for (index, (tag, payload)) in cases.iter().enumerate() {
+                            if index != 0 {
+                                out.write_all(b", ")?;
+                            }
+                            write!(out, "{tag}")?;
+                            if let Some(kind) = payload {
+                                write!(out, "({kind})")?;
+                            }
+                        }
+                        out.write_all(b"}")?;
+                    }
                     SymbolKind::Constant(kind) => {
                         write!(out, "  {visibility} bind {}: {kind}", symbol.name)?
                     }

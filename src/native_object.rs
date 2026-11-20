@@ -6,7 +6,7 @@
 //! This is NOT Scarp's general program execution/printing semantics, a
 //! native executable compiler, or an available CLI command.
 
-use crate::diagnostics::Diagnostic;
+use crate::diagnostics::{Diagnostic, Span};
 
 /// Emit a deterministic ELF64 relocatable object from integer bindings.
 ///
@@ -18,4 +18,36 @@ use crate::diagnostics::Diagnostic;
 /// experimental and has no stable ABI or user-facing native CLI command.
 pub fn emit_elf64_integer_kernel(source: &str) -> Result<Vec<u8>, Diagnostic> {
     crate::scalar_ir::emit_integer_kernel(source)
+}
+
+/// A checked integer kernel and its file-local UTF-8 failure spans.
+#[derive(Debug, PartialEq, Eq)]
+pub struct CheckedElf64Kernel {
+    pub object: Vec<u8>,
+    /// On failure, the returned `span_id` indexes this table from zero.
+    pub failure_spans: Vec<Span>,
+}
+
+/// Runtime ABI status for signed integer arithmetic overflow.
+pub const CHECKED_KERNEL_INTEGER_OVERFLOW: u32 = 1;
+
+/// Runtime ABI status for a zero divisor in signed division or remainder.
+pub const CHECKED_KERNEL_DIVISION_BY_ZERO: u32 = 2;
+
+/// Runtime ABI status for an integer shift count outside 0 through 63.
+pub const CHECKED_KERNEL_INVALID_SHIFT: u32 = 3;
+
+/// Emit a deterministic, freestanding x86-64 ELF64 checked integer kernel.
+///
+/// The distinct SysV AMD64 symbol `scarp_checked_scalar_kernel` takes no
+/// arguments and returns a C struct `{ int64_t value; uint32_t status;
+/// uint32_t span_id; }`. Success returns the last binding value, status zero
+/// and span ID zero. Failure returns zero as the value, a nonzero status and
+/// the index of the operator in `failure_spans`.
+///
+/// The linear binding subset adds signed addition, subtraction, multiplication,
+/// negation, division, remainder and fixed-width shifts to the bitwise kernel.
+/// Configurable interpreter execution budgets are outside this experimental ABI.
+pub fn emit_elf64_checked_integer_kernel(source: &str) -> Result<CheckedElf64Kernel, Diagnostic> {
+    crate::scalar_ir::emit_checked_integer_kernel(source)
 }

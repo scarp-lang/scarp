@@ -1,0 +1,6 @@
+// The same immutable program can be executed from a fresh or cached compile.
+bind initial = [map: "b": 2, "a": 1];
+bind updated = map_set(initial, "a", 7);
+print(map_get_or(initial, "a", 0));
+print(map_get_or(updated, "a", 0));
+print(map_keys(updated)[0]);

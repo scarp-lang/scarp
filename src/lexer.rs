@@ -49,6 +49,7 @@ pub enum TokenKind {
     Semicolon,
     Comma,
     Colon,
+    Question,
     Dot,
     Arrow,
     Eof,
@@ -99,6 +100,7 @@ impl fmt::Display for TokenKind {
             Self::RightBrace => f.write_str("}"),
             Self::Comma => f.write_str(","),
             Self::Colon => f.write_str(":"),
+            Self::Question => f.write_str("?"),
             Self::Dot => f.write_str("."),
             Self::Arrow => f.write_str("->"),
             Self::Semicolon => f.write_str(";"),
@@ -203,6 +205,10 @@ impl Lexer<'_> {
                 ':' => {
                     self.bump();
                     TokenKind::Colon
+                }
+                '?' => {
+                    self.bump();
+                    TokenKind::Question
                 }
                 '-' if self.source[self.cursor..].starts_with("->") => {
                     self.bump();
