@@ -32,7 +32,7 @@ fn native_backend_explicitly_rejects_map_projection_lifecycle() {
 #[test]
 fn empty_map_projections_are_typed_and_deterministic() {
     let source = r#"
-        bind empty: map<string, integer> = [map:];
+        bind empty: map<string, integer> = [map: <string, integer>];
         bind keys: list<string> = map_keys(empty);
         bind values: list<integer> = map_values(empty);
         print(keys);
@@ -41,5 +41,5 @@ fn empty_map_projections_are_typed_and_deterministic() {
     "#;
     let mut output = Vec::new();
     scarp::run(source, &mut output).expect("empty typed map projections should execute");
-    assert_eq!(output, b"[list:]\n[list:]\n0\n");
+    assert_eq!(output, b"[list: <string>]\n[list: <integer>]\n0\n");
 }
