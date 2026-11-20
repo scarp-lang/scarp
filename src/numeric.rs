@@ -7,6 +7,7 @@ use crate::{
 };
 
 mod bigints;
+mod bits;
 mod correlation;
 pub(crate) mod decimals;
 mod integers;
@@ -44,6 +45,13 @@ pub enum Builtin {
     IntsFromVector,
     ToFloat,
     ToInteger,
+    BitsCountOnes,
+    BitsLeadingZeros,
+    BitsTrailingZeros,
+    BitsReverse,
+    BitsSwapBytes,
+    BitsRotateLeft,
+    BitsRotateRight,
     TextConcat,
     TextSlice,
     TextRepeat,
@@ -214,6 +222,13 @@ impl Builtin {
             "ints_from_vector" => Self::IntsFromVector,
             "to_float" => Self::ToFloat,
             "to_integer" => Self::ToInteger,
+            "bits_count_ones" => Self::BitsCountOnes,
+            "bits_leading_zeros" => Self::BitsLeadingZeros,
+            "bits_trailing_zeros" => Self::BitsTrailingZeros,
+            "bits_reverse" => Self::BitsReverse,
+            "bits_swap_bytes" => Self::BitsSwapBytes,
+            "bits_rotate_left" => Self::BitsRotateLeft,
+            "bits_rotate_right" => Self::BitsRotateRight,
             "text_concat" => Self::TextConcat,
             "text_slice" => Self::TextSlice,
             "text_repeat" => Self::TextRepeat,
@@ -320,6 +335,12 @@ impl Builtin {
             Self::IntsFromVector => &[Vector],
             Self::ToFloat => &[Integer],
             Self::ToInteger => &[Float],
+            Self::BitsCountOnes
+            | Self::BitsLeadingZeros
+            | Self::BitsTrailingZeros
+            | Self::BitsReverse
+            | Self::BitsSwapBytes => &[Integer],
+            Self::BitsRotateLeft | Self::BitsRotateRight => &[Integer, Integer],
             Self::TextLength | Self::TextBytes => &[String],
             Self::TextFromCodepoint => &[Integer],
             Self::TextCodepoint | Self::TextRepeat => &[String, Integer],
@@ -429,7 +450,14 @@ impl Builtin {
             | Self::TextCodepoint
             | Self::TextFind
             | Self::TextRFind
-            | Self::TextCount => ValueType::Integer,
+            | Self::TextCount
+            | Self::BitsCountOnes
+            | Self::BitsLeadingZeros
+            | Self::BitsTrailingZeros
+            | Self::BitsReverse
+            | Self::BitsSwapBytes
+            | Self::BitsRotateLeft
+            | Self::BitsRotateRight => ValueType::Integer,
             Self::ToFloat => ValueType::Float,
             Self::TextConcat | Self::TextSlice | Self::TextRepeat => ValueType::String,
             Self::TextContains | Self::TextStartsWith | Self::TextEndsWith => ValueType::Boolean,
@@ -804,6 +832,18 @@ pub(crate) fn evaluate_with_spans(
                 value.kind(),
             ));
         }
+    }
+    if matches!(
+        function,
+        Builtin::BitsCountOnes
+            | Builtin::BitsLeadingZeros
+            | Builtin::BitsTrailingZeros
+            | Builtin::BitsReverse
+            | Builtin::BitsSwapBytes
+            | Builtin::BitsRotateLeft
+            | Builtin::BitsRotateRight
+    ) {
+        return bits::evaluate(function, args, budget, span, argument_span);
     }
     if function.is_bigint() {
         return bigints::evaluate(function, args, budget, span, argument_span);
@@ -1239,6 +1279,13 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::IntsFromVector
         | Builtin::ToFloat
         | Builtin::ToInteger
+        | Builtin::BitsCountOnes
+        | Builtin::BitsLeadingZeros
+        | Builtin::BitsTrailingZeros
+        | Builtin::BitsReverse
+        | Builtin::BitsSwapBytes
+        | Builtin::BitsRotateLeft
+        | Builtin::BitsRotateRight
         | Builtin::TextFromCodepoint
         | Builtin::TextRFind
         | Builtin::TextCount
