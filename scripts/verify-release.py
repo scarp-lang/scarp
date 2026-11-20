@@ -354,6 +354,8 @@ def verify(directory, version, commit, source_directory=None):
         alpha6_16_files = (
             "docs/releases/v0.0.6-alpha.16-publication.md", "docs/order-statistics.md",
             "examples/order_statistics.srp", "examples/order_statistics.stdout",
+            "docs/scalar-utilities.md", "examples/core_collections.srp",
+            "examples/core_collections.stdout", "examples/modules/collection_tools.srp",
         ) if version == "0.0.6-alpha.16" else ()
         release_files = (METADATA_MEMBER,) if version in EXTERNAL_DOCS_VERSIONS else (f"docs/releases/v{version}.md",)
         for member in (

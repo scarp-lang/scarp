@@ -172,12 +172,14 @@ try {
         }
     }
     if ($version -ceq '0.0.6-alpha.16') {
-        $orderStatistics = Join-Path $extractedPackage 'examples/order_statistics.srp'
-        $expectedOutput = [IO.File]::ReadAllBytes((Join-Path $extractedPackage 'examples/order_statistics.stdout'))
-        $result = Invoke-ScarpProcess -Executable $executable -Arguments @('exec', $orderStatistics)
-        if ($result.ExitCode -ne 0 -or $result.Stderr.Length -ne 0 -or
-            [Convert]::ToBase64String($result.Stdout) -cne [Convert]::ToBase64String($expectedOutput)) {
-            throw 'Packaged bounded order statistics differ from the expected output'
+        foreach ($example in @('order_statistics', 'core_collections')) {
+            $source = Join-Path $extractedPackage "examples/$example.srp"
+            $expectedOutput = [IO.File]::ReadAllBytes((Join-Path $extractedPackage "examples/$example.stdout"))
+            $result = Invoke-ScarpProcess -Executable $executable -Arguments @('exec', $source)
+            if ($result.ExitCode -ne 0 -or $result.Stderr.Length -ne 0 -or
+                [Convert]::ToBase64String($result.Stdout) -cne [Convert]::ToBase64String($expectedOutput)) {
+                throw "Packaged example $example differs from the expected output"
+            }
         }
     }
     foreach ($navigationMode in @('symbols', 'references')) {
@@ -339,7 +341,7 @@ try {
         $metadata = [System.Text.Encoding]::UTF8.GetString($json.Stdout) | ConvertFrom-Json -AsHashtable
         $expectedSchema = if ($example -in @('variant_validation', 'ui_event_patterns', 'typed_submission', 'typed_propagation', 'task_panel_state', 'structured_pattern_coverage')) { 5 }
         elseif ($example -in @('app_state', 'typed_dynamic_lists', 'persistent_list_updates')) { 4 }
-        elseif ($example -in @('fixed_arrays', 'typed_maps', 'persistent_maps', 'map_projections')) { 3 }
+        elseif ($example -in @('fixed_arrays', 'typed_maps', 'persistent_maps', 'map_projections', 'core_collections')) { 3 }
         elseif ($example -in @('tuples', 'core_input_tuple', 'data_destructure')) { 2 }
         else { 1 }
         if ($metadata.schema_version -ne $expectedSchema -or $metadata.entry -ne 0 -or $metadata.modules.Count -lt 1) {

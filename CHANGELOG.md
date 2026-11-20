@@ -4,6 +4,8 @@
 
 - Add bounded `median` and type-7 `quantile` for finite numerical vectors.
   Existing Scarp functions with the same names retain priority.
+- Add six bounded Unicode string utilities and eleven checked fixed-width
+  integer utilities. Cover typed module composition and editor cache parity.
 - Experimental Linux x86-64 ELF64 integer kernels probe each full stack page
   crossed by the frame prologue and preserve both existing return ABIs.
 - Rust hosts can change `ConstantCache` retention quotas in place. Entries are

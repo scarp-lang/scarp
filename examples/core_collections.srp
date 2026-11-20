@@ -1,0 +1,7 @@
+import "modules/collection_tools.srp" as collections;
+
+bind labels = collections.labels();
+print(labels[0], labels[1], labels[2]);
+print(text_rfind(labels[2], "न"), text_count(labels[2], "न"));
+print(integer_abs(-42), integer_sign(-42), integer_gcd(-42, 30), integer_lcm(-42, 30));
+print(bits_count_ones(-1), bits_leading_zeros(1), bits_rotate_left(1, 63));

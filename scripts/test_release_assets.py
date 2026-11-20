@@ -258,6 +258,7 @@ class ReleaseAssets(unittest.TestCase):
             "docs/releases/v0.0.6-alpha.16-publication.md",
             "examples/repeat.stdout",
             "examples/order_statistics.stdout",
+            "examples/modules/collection_tools.srp",
         ):
             with self.subTest(member=member):
                 damaged = {name: data for name, data in files.items() if name != member}
