@@ -10,6 +10,7 @@ mod bigints;
 mod bits;
 mod correlation;
 pub(crate) mod decimals;
+mod integer_scalar;
 mod integers;
 mod kernels;
 mod nucleus;
@@ -45,6 +46,10 @@ pub enum Builtin {
     IntsFromVector,
     ToFloat,
     ToInteger,
+    IntegerAbs,
+    IntegerSign,
+    IntegerGcd,
+    IntegerLcm,
     BitsCountOnes,
     BitsLeadingZeros,
     BitsTrailingZeros,
@@ -222,6 +227,10 @@ impl Builtin {
             "ints_from_vector" => Self::IntsFromVector,
             "to_float" => Self::ToFloat,
             "to_integer" => Self::ToInteger,
+            "integer_abs" => Self::IntegerAbs,
+            "integer_sign" => Self::IntegerSign,
+            "integer_gcd" => Self::IntegerGcd,
+            "integer_lcm" => Self::IntegerLcm,
             "bits_count_ones" => Self::BitsCountOnes,
             "bits_leading_zeros" => Self::BitsLeadingZeros,
             "bits_trailing_zeros" => Self::BitsTrailingZeros,
@@ -335,6 +344,8 @@ impl Builtin {
             Self::IntsFromVector => &[Vector],
             Self::ToFloat => &[Integer],
             Self::ToInteger => &[Float],
+            Self::IntegerAbs | Self::IntegerSign => &[Integer],
+            Self::IntegerGcd | Self::IntegerLcm => &[Integer, Integer],
             Self::BitsCountOnes
             | Self::BitsLeadingZeros
             | Self::BitsTrailingZeros
@@ -457,7 +468,11 @@ impl Builtin {
             | Self::BitsReverse
             | Self::BitsSwapBytes
             | Self::BitsRotateLeft
-            | Self::BitsRotateRight => ValueType::Integer,
+            | Self::BitsRotateRight
+            | Self::IntegerAbs
+            | Self::IntegerSign
+            | Self::IntegerGcd
+            | Self::IntegerLcm => ValueType::Integer,
             Self::ToFloat => ValueType::Float,
             Self::TextConcat | Self::TextSlice | Self::TextRepeat => ValueType::String,
             Self::TextContains | Self::TextStartsWith | Self::TextEndsWith => ValueType::Boolean,
@@ -887,6 +902,12 @@ pub(crate) fn evaluate_with_spans(
     ) {
         return parse_format::evaluate(function, args, budget, span, argument_span);
     }
+    if matches!(
+        function,
+        Builtin::IntegerAbs | Builtin::IntegerSign | Builtin::IntegerGcd | Builtin::IntegerLcm
+    ) {
+        return integer_scalar::evaluate(function, args, budget, span, argument_span);
+    }
     if function.is_scalar_text() {
         return scalar_text::evaluate(function, args, budget, span, argument_span);
     }
@@ -1279,6 +1300,10 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::IntsFromVector
         | Builtin::ToFloat
         | Builtin::ToInteger
+        | Builtin::IntegerAbs
+        | Builtin::IntegerSign
+        | Builtin::IntegerGcd
+        | Builtin::IntegerLcm
         | Builtin::BitsCountOnes
         | Builtin::BitsLeadingZeros
         | Builtin::BitsTrailingZeros
