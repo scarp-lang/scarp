@@ -1,6 +1,10 @@
 # Your first Scarp program
 
-This tutorial uses development main and its canonical `print` statement. Older
+Start with the [official learning path](https://scarp-lang.github.io/scarp-docs/guide/learning-path)
+or the [Hindi learning path](https://scarp-lang.github.io/scarp-docs/hi/guide/learning-path)
+to choose a tutorial for your compiler release.
+
+This historical tutorial records a development build and its canonical `print` statement. Older
 published interpreters use `println` for these single-argument examples. It
 teaches the complete file-to-output path before introducing variables.
 Use [getting started](../getting-started.md) to select an executable.

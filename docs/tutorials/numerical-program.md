@@ -1,10 +1,12 @@
 # Your first numerical program
 
-This tutorial uses the alpha.2 numerical implementation. Build the current source
+For current examples, use the official
+[numerics guide](https://scarp-lang.github.io/scarp-docs/language/numerics).
+
+This historical tutorial uses the alpha.2 numerical implementation. Build the matching source
 with `cargo build --locked --offline`, then verify `cargo run -- --version`.
 An older alpha.1 executable accepts floats but does not implement vectors.
-For current downloads, use the
-[latest prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.1),
+See the [historical v0.0.5-alpha.1 prerelease](https://github.com/scarp-lang/scarp/releases/tag/v0.0.5-alpha.1),
 which includes these kernels and the later module system.
 
 ## Construct data and read an element
