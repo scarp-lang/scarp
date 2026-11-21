@@ -705,10 +705,7 @@ impl Workspace {
                                     )
                                 })?;
                             let length = array.len();
-                            budget.charge(
-                                (length + array.kind().node_count() + 1) as u64,
-                                span,
-                            )?;
+                            budget.charge((length + array.kind().node_count() + 1) as u64, span)?;
                             let bytes = ArrayValue::allocation_bytes(array.element_type(), length)
                                 .ok_or_else(|| {
                                     Diagnostic::new(
