@@ -68,7 +68,7 @@ fn input_file_and_immediate_ask_combine_with_eof_fallback() {
 }
 
 #[test]
-fn explicit_file_input_without_prompt_capability_remains_noninteractive() {
+fn exec_automatically_enables_prompt_capability_but_run_remains_opt_in() {
     let fixture = Fixture::new();
     let source = fixture.write("app.srp", br#"print(read_line_or("fallback"));"#);
     let input = fixture.write("empty.txt", b"");
@@ -77,10 +77,15 @@ fn explicit_file_input_without_prompt_capability_remains_noninteractive() {
     assert_eq!(result.stdout, b"fallback\n");
 
     let source = fixture.write("ask.srp", br#"print(ask("Name: "));"#);
-    let result = cli("exec", &["--input-file", input.to_str().unwrap()], &source);
-    assert_eq!(result.status.code(), Some(1));
-    assert!(result.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&result.stderr).contains("E0054"));
+    let exec = cli("exec", &["--input-file", input.to_str().unwrap()], &source);
+    assert_eq!(exec.status.code(), Some(1));
+    assert_eq!(exec.stdout, b"Name: ");
+    assert!(String::from_utf8_lossy(&exec.stderr).contains("E0055"));
+
+    let run = cli("run", &["--input-file", input.to_str().unwrap()], &source);
+    assert_eq!(run.status.code(), Some(1));
+    assert!(run.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&run.stderr).contains("E0054"));
 }
 
 #[test]
