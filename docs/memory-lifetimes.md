@@ -121,6 +121,10 @@ views and composite aliases do until their final holder is dropped.
 `tests/lifetime_windows.rs` checks Scarp-level behavior and cumulative
 numerical quotas. `cargo bench --bench lifetime -- --quick` prints median
 time per operation for empty and nonempty views, constructors, and clones.
-Compare identical benchmark source, hardware, toolchain and optimization
-settings on baseline and candidate before making speed claims. The weak
+Run `sh scripts/benchmarks/compare-lifetime.sh BASE_COMMIT` with a
+complete Git history to check out the pinned baseline in a temporary worktree,
+copy the **same** benchmark source to both revisions, and print a comparison
+on the same machine and toolchain. Lifetime feature pull requests named
+`feature/lifetime-*` also run this comparison in Linux CI. Comparisons are
+indicative short samples, not a promise about RSS or a speedup. The weak
 reference checks demonstrate buffer release, **not** total RSS measurement.
