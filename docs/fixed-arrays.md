@@ -38,7 +38,7 @@ name.
   quoted and escaped. A runtime diagnostic before output replay leaves both
   output streams empty.
 
-## Traversal and fallback lookup in development builds
+## Traversal and fallback lookup in alpha.17 source
 
 - `array_len(values)` returns the number of elements as an `integer`. Use it
   as the count in `repeat array_len(values) as index` to visit elements in
