@@ -15,6 +15,88 @@ fn run(source: &str) -> (Vec<u8>, Vec<u8>) {
     (out, err)
 }
 
+#[test]
+fn array_queries_preserve_exact_types_and_cover_index_boundaries() {
+    let source = r#"
+        bind rows = [array: [array: "नमस्ते"], [array: "Scarp"]];
+        bind first: array<string, 1> = array_get_or(rows, 0, [array: "fallback"]);
+        bind last = array_get_or(rows, 1, [array: "fallback"]);
+        print(array_len(rows), array_len(first), first[0], last[0]);
+        print(array_get_or(rows, -1, [array: "negative"])[0]);
+        print(array_get_or(rows, 2, [array: "past end"])[0]);
+        print(array_get_or(rows, 9223372036854775807, [array: "large"])[0]);
+        bind empty = [array: <integer>];
+        print(array_len(empty), array_get_or(empty, 0, -5));
+    "#;
+    assert_eq!(
+        run(source).0,
+        "2 1 नमस्ते Scarp\nnegative\npast end\nlarge\n0 -5\n".as_bytes()
+    );
+
+    let members = vec!["1"; MAX_ARRAY_LENGTH].join(",");
+    let largest = format!(
+        "bind a = [array: {members}]; print(array_len(a), array_get_or(a, {}, 0));",
+        MAX_ARRAY_LENGTH - 1
+    );
+    assert_eq!(
+        run(&largest).0,
+        format!("{MAX_ARRAY_LENGTH} 1\n").as_bytes()
+    );
+}
+
+#[test]
+fn array_queries_reject_wrong_arity_and_types_at_the_call_or_argument() {
+    for (call, kind, highlighted) in [
+        ("array_len()", Kind::CallArguments, "array_len"),
+        (
+            "array_len(values: [array: 1])",
+            Kind::CallArguments,
+            "array_len",
+        ),
+        ("array_len([list: 1])", Kind::TypeMismatch, "[list: 1]"),
+        (
+            "array_get_or([array: 1], 0)",
+            Kind::CallArguments,
+            "array_get_or",
+        ),
+        ("array_get_or([1.0], 0, 0)", Kind::TypeMismatch, "[1.0]"),
+        (
+            "array_get_or([array: 1], false, 0)",
+            Kind::TypeMismatch,
+            "false",
+        ),
+        (
+            "array_get_or([array: [array: 1]], 0, [array: <integer>])",
+            Kind::TypeMismatch,
+            "[array: <integer>]",
+        ),
+    ] {
+        let source = format!("// नमस्ते\r\nprint({call});");
+        let diagnostic = scarp::compile(&source).unwrap_err();
+        assert_eq!(diagnostic.kind, kind, "{call}");
+        assert_eq!(
+            &source[diagnostic.span.start..diagnostic.span.end],
+            highlighted
+        );
+    }
+}
+
+#[test]
+fn array_lookup_arguments_execute_once_and_eagerly_in_source_order() {
+    let source = r#"
+        funcra make() -> array<integer, 1> { print("array"); return [array: 7]; }
+        funcra index() -> integer { print("index"); return 0; }
+        funcra fallback() -> integer { print("fallback"); return 9; }
+        print(array_get_or(make(), index(), fallback()));
+    "#;
+    assert_eq!(run(source).0, b"array\nindex\nfallback\n7\n");
+    failure(
+        "print(99); print(array_get_or([array: 7], 0, 1 / 0));",
+        ExecutionOptions::default(),
+        Kind::DivisionByZero,
+    );
+}
+
 fn failure(source: &str, options: ExecutionOptions, kind: Kind) -> Diagnostic {
     let expected = scarp::check_with_options(source, options).unwrap_err();
     let (mut out, mut err) = (Vec::new(), Vec::new());

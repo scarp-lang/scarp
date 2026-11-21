@@ -71,7 +71,9 @@ impl TypedExpression<'_> {
                     }
                     Some(ResolvedCall::Io(input)) => self.types.input.get(&input).copied(),
                     Some(ResolvedCall::BigIntDivMod) => self.types.divmod,
-                    Some(ResolvedCall::List(_)) | Some(ResolvedCall::Map(_)) => None,
+                    Some(ResolvedCall::Array(_) | ResolvedCall::List(_) | ResolvedCall::Map(_)) => {
+                        None
+                    }
                     None => None,
                 };
                 TypedNode {

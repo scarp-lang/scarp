@@ -193,6 +193,30 @@ pub(crate) enum CompositeOperation {
     },
 }
 
+/// Pure queries on immutable fixed-size arrays.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ArrayIntrinsic {
+    Len,
+    GetOr,
+}
+
+impl ArrayIntrinsic {
+    fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "array_len" => Some(Self::Len),
+            "array_get_or" => Some(Self::GetOr),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn arity(self) -> usize {
+        match self {
+            Self::Len => 1,
+            Self::GetOr => 3,
+        }
+    }
+}
+
 /// Pure persistent-list operations. All update forms return a fresh typed
 /// snapshot, preserving any aliases to the original immutable list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -264,6 +288,7 @@ pub(crate) enum ResolvedCall {
     },
     Builtin(Builtin),
     BigIntDivMod,
+    Array(ArrayIntrinsic),
     List(ListIntrinsic),
     Map(MapIntrinsic),
     Io(crate::input::IoBuiltin),
@@ -271,6 +296,7 @@ pub(crate) enum ResolvedCall {
 
 pub(crate) fn is_builtin_name(name: &str) -> bool {
     name == "bigint_divmod"
+        || ArrayIntrinsic::from_name(name).is_some()
         || ListIntrinsic::from_name(name).is_some()
         || MapIntrinsic::from_name(name).is_some()
         || crate::input::IoBuiltin::from_name(name).is_some()
@@ -1605,6 +1631,49 @@ fn resolve_expression(
                     slots.push(None);
                     calls.push(Some(ResolvedCall::BigIntDivMod));
                     types.push(kind);
+                    continue;
+                }
+                if let Some(operation) =
+                    ArrayIntrinsic::from_name(name).filter(|_| !names.contains_key(name))
+                {
+                    if arguments.len() != operation.arity()
+                        || arguments.iter().any(|argument| argument.label.is_some())
+                    {
+                        return Err(Diagnostic::new(
+                            DiagnosticKind::CallArguments,
+                            *function_span,
+                            format!("{name} requires {} positional arguments", operation.arity()),
+                        ));
+                    }
+                    let first = arguments[0].expression;
+                    let array = types[first].as_array().ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::TypeMismatch,
+                            syntax.nodes()[first].span,
+                            format!("{name} requires array<T, N> as its first argument"),
+                        )
+                    })?;
+                    let result = match operation {
+                        ArrayIntrinsic::Len => ValueType::Integer.into(),
+                        ArrayIntrinsic::GetOr => {
+                            let index = arguments[1].expression;
+                            let fallback = arguments[2].expression;
+                            require_type(
+                                &types[index],
+                                ValueType::Integer,
+                                syntax.nodes()[index].span,
+                            )?;
+                            require_type(
+                                &types[fallback],
+                                array.element(),
+                                syntax.nodes()[fallback].span,
+                            )?;
+                            array.element().clone()
+                        }
+                    };
+                    slots.push(None);
+                    calls.push(Some(ResolvedCall::Array(operation)));
+                    types.push(result);
                     continue;
                 }
                 if let Some(operation) =

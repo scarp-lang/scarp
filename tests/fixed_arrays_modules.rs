@@ -48,6 +48,36 @@ fn modules_link_fixed_array_signatures_defaults_contracts_and_private_helpers() 
 }
 
 #[test]
+fn array_queries_link_in_pure_functions_and_respect_function_shadowing() {
+    let library = r#"
+        pub pure funcra last(a: array<integer, 2>, fallback: integer = -1) -> integer {
+            return array_get_or(a, array_len(a) - 1, fallback);
+        }
+    "#;
+    let custom = r#"
+        pub pure funcra array_get_or(a: integer) -> integer { return a; }
+        pub pure funcra call_local() -> integer { return array_get_or(10); }
+    "#;
+    let entry = r#"
+        import "lib.srp" as lib;
+        import "custom.srp" as custom;
+        print(lib.last([array: 8, 9]), custom.call_local());
+    "#;
+    let program = compile(&[
+        ("main.srp", entry),
+        ("lib.srp", library),
+        ("custom.srp", custom),
+    ])
+    .unwrap();
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    program
+        .execute(&mut out, &mut err, Default::default())
+        .unwrap();
+    assert_eq!(out, b"9 10\n");
+    assert!(err.is_empty());
+}
+
+#[test]
 fn inventory_schema_selects_serialized_types_and_preserves_exact_json() {
     for (kind, version, canonical) in [
         ("integer", 1, "integer"),
@@ -136,6 +166,8 @@ fn both_native_backends_reject_arrays_before_emission() {
     for source in [
         "bind values=[array:1];",
         "bind result=[array:1][0];",
+        "bind result=array_len([array:1]);",
+        "bind result=array_get_or([array:1], 2, 0);",
         "bind result=([array:1],)[0][0];",
         "pure funcra unused()->array<integer,0>{return [array: <integer>];} bind result=1;",
     ] {

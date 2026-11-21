@@ -6,7 +6,9 @@ use crate::{
     input::IoBuiltin,
     limits::Budget,
     numeric::{self, Builtin},
-    resolver::{self, ListIntrinsic, MapIntrinsic, ResolvedCall, ResolvedExpression},
+    resolver::{
+        self, ArrayIntrinsic, ListIntrinsic, MapIntrinsic, ResolvedCall, ResolvedExpression,
+    },
     types::{SourceType, MAX_LIST_LENGTH, MAX_MAP_ENTRIES},
     value::{
         finite_number, key_compare, key_work, type_mismatch, ArrayValue, ListValue, MapValue,
@@ -51,6 +53,7 @@ enum Task {
     Index(usize, Span),
     Builtin(Builtin, usize, Span),
     BigIntDivMod(usize, Span),
+    ArrayIntrinsic(ArrayIntrinsic, Span),
     ListIntrinsic(ListIntrinsic, usize, Span),
     MapIntrinsic(MapIntrinsic, usize, Span),
     UserCall(usize, usize, Span),
@@ -161,6 +164,7 @@ impl Workspace {
                 | Task::Index(_, span)
                 | Task::Builtin(_, _, span)
                 | Task::BigIntDivMod(_, span)
+                | Task::ArrayIntrinsic(_, span)
                 | Task::ListIntrinsic(_, _, span)
                 | Task::MapIntrinsic(_, _, span)
                 | Task::Negate(span)
@@ -183,6 +187,9 @@ impl Workspace {
                                 }
                                 Some(ResolvedCall::BigIntDivMod) => {
                                     Task::BigIntDivMod(index, node.span)
+                                }
+                                Some(ResolvedCall::Array(op)) => {
+                                    Task::ArrayIntrinsic(*op, node.span)
                                 }
                                 Some(ResolvedCall::List(op)) => {
                                     Task::ListIntrinsic(*op, index, node.span)
@@ -663,6 +670,23 @@ impl Workspace {
                     values.truncate(start);
                     values.extend([Value::BigInt(quotient), Value::BigInt(remainder)]);
                     finish_tuple(values, 2, budget, span)?;
+                }
+                Task::ArrayIntrinsic(operation, span) => {
+                    let start = values.len() - operation.arity();
+                    let array = values[start].as_array().expect("checked array argument");
+                    let result = match operation {
+                        ArrayIntrinsic::Len => Value::Integer(array.len() as i64),
+                        ArrayIntrinsic::GetOr => {
+                            let index = values[start + 1].require_integer(span)?;
+                            usize::try_from(index)
+                                .ok()
+                                .and_then(|index| array.elements().get(index))
+                                .unwrap_or(&values[start + 2])
+                                .clone()
+                        }
+                    };
+                    values.truncate(start);
+                    values.push(result);
                 }
                 Task::ListIntrinsic(operation, node, span) => {
                     let ExpressionKind::UserCall { arguments, .. } =
