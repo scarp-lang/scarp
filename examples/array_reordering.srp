@@ -1,0 +1,16 @@
+pure funcra reorder(values: array<integer, 4>) -> array<integer, 4> {
+    return array_swap(array_reverse(values), 0, 3);
+}
+
+bind original = [array: 1, 2, 3, 4];
+bind reversed = array_reverse(original);
+bind swapped = array_swap(reversed, 1, 3);
+print(original[0], reversed[0], swapped[1], swapped[3]);
+print(reorder(original));
+
+bind empty = [array: <integer>];
+print(array_reverse(empty));
+
+bind words = [array: [array: "red"], [array: "blue"]];
+bind changed = array_swap(words, 0, 1);
+print(words[0][0], changed[0][0]);
