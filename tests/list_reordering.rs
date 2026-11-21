@@ -75,7 +75,11 @@ fn static_type_and_arity_checks_preserve_unicode_crlf_offsets() {
         ("list_swap([list: 1], 0)", Kind::CallArguments, "list_swap"),
         ("list_reverse([array: 1])", Kind::TypeMismatch, "[array: 1]"),
         ("list_swap([list: 1], true, 0)", Kind::TypeMismatch, "true"),
-        ("list_swap([list: 1], 0, false)", Kind::TypeMismatch, "false"),
+        (
+            "list_swap([list: 1], 0, false)",
+            Kind::TypeMismatch,
+            "false",
+        ),
     ] {
         let source = format!("// नमस्ते 🌏\r\nprint({call});");
         let error = scarp::compile(&source).unwrap_err();
@@ -143,7 +147,11 @@ fn generated_reversals_and_swaps_match_rust_reference_lists() {
         } else {
             format!(
                 "[list: {}]",
-                values.iter().map(i64::to_string).collect::<Vec<_>>().join(", ")
+                values
+                    .iter()
+                    .map(i64::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
         };
         let mut expected = values.clone();
@@ -153,7 +161,11 @@ fn generated_reversals_and_swaps_match_rust_reference_lists() {
         } else {
             format!(
                 "[list: {}]",
-                expected.iter().map(i64::to_string).collect::<Vec<_>>().join(", ")
+                expected
+                    .iter()
+                    .map(i64::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
         };
         assert_eq!(
@@ -168,7 +180,11 @@ fn generated_reversals_and_swaps_match_rust_reference_lists() {
             expected.swap(first, second);
             let result = format!(
                 "[list: {}]\n",
-                expected.iter().map(i64::to_string).collect::<Vec<_>>().join(", ")
+                expected
+                    .iter()
+                    .map(i64::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
             );
             assert_eq!(
                 run(&format!("print(list_swap({literal}, {first}, {second}));")),
