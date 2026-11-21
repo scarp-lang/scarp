@@ -716,8 +716,12 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         if invocation(&args).is_err() && invocation(&with_placeholder).is_ok() {
             let Some(target) = default_exec_target() else {
                 let message = "no Scarp entrypoint found in the current directory; add scarp.project, src/main.srp or main.srp, or pass an explicit .srp path";
-                if args.iter().any(|argument| argument == "--diagnostic-format=json") {
-                    let _ = scarp::diagnostics::write_json_message(message, Some(EXEC_HELP), errors);
+                if args
+                    .iter()
+                    .any(|argument| argument == "--diagnostic-format=json")
+                {
+                    let _ =
+                        scarp::diagnostics::write_json_message(message, Some(EXEC_HELP), errors);
                 } else {
                     let _ = writeln!(errors, "error: {message}");
                 }
