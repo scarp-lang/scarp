@@ -1,14 +1,14 @@
 # Preparing a prerelease
 
 The latest published prerelease is
-[v0.0.6-alpha.16](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.16),
-published from exact source `244f713b4fa48f02a98b8e3e3c11025363f35260`.
-The [publication verification record](releases/v0.0.6-alpha.16-validation.md)
+[v0.0.6-alpha.17](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.17),
+published from exact source `7831a37939965f557ce746e1d86bf82d3d629f74`.
+The [publication verification record](releases/v0.0.6-alpha.17-validation.md)
 lists the annotated tag, passing workflow runs, and all seven verified assets.
 The completed request was retired after public verification. A future
 publication requires separate maintainer approval for its full source SHA.
 
-See the [alpha.15 publication record](releases/v0.0.6-alpha.15-validation.md)
+See the [alpha.16 publication record](releases/v0.0.6-alpha.16-validation.md)
 for the previous source and package digests.
 
 See the earlier [alpha.13 public notes](releases/v0.0.6-alpha.13-publication.md)

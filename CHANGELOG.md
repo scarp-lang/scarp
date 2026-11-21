@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.6-alpha.17 — candidate
+## 0.0.6-alpha.17 — published GitHub prerelease, 2026-11-21
 
 - Add `array_len` for counted traversal and `array_get_or` for typed fallback
   lookup on fixed arrays.

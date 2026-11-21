@@ -1,5 +1,11 @@
 # Version and API compatibility
 
+`0.0.6-alpha.17` is **a published GitHub prerelease**. Fixed-array queries and
+Boolean console input are interpreter features. Ordinary array indexing
+retains its existing bounds diagnostic.
+[Public notes](releases/v0.0.6-alpha.17-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.17-validation.md)
+
 `0.0.6-alpha.16` is **a published GitHub prerelease**. Rust hosts with exhaustive
 `numeric::Builtin` matches should handle the new statistics, text, and
 integer variants. `ConstantCache` limits can be changed on a live cache.
@@ -129,7 +135,7 @@ The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.6-alpha.16](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.16).
+[0.0.6-alpha.17](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.17).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a
