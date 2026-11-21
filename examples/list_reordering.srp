@@ -1,0 +1,18 @@
+pure funcra reorder(xs: list<integer>) -> list<integer> {
+    return list_swap(list_reverse(xs), 0, 2);
+}
+
+bind original = [list: 1, 2, 3];
+bind reversed = list_reverse(original);
+bind swapped = list_swap(reversed, 0, 2);
+print(original);
+print(reversed);
+print(swapped);
+print(reorder(original));
+
+bind empty = [list: <integer>];
+print(list_reverse(empty));
+
+bind nested = [list: [list: "one"], [list: "two"]];
+bind changed = list_swap(nested, 0, 1);
+print(nested[0][0], changed[0][0]);
