@@ -266,7 +266,19 @@ impl<'a> InputState<'a> {
                 _ => return Err(prompt_io(span)),
             }
         }
-        writer.flush().map_err(|_| prompt_io(span))?;
+        // An interrupted flush is transient, like an interrupted write. Charge
+        // each retry so a hostile writer cannot spin forever, and reserve
+        // enough work for the first reader probe before attempting it again.
+        loop {
+            match writer.flush() {
+                Ok(()) => break,
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => {
+                    budget.charge(1, span)?;
+                    budget.preflight_steps(1, span)?;
+                }
+                Err(_) => return Err(prompt_io(span)),
+            }
+        }
         self.read_line(budget, span)
     }
 
@@ -475,5 +487,79 @@ mod tests {
             .unwrap_err();
         assert_eq!(error.kind, Kind::InputEof);
         assert_eq!(writer.0, b">");
+    }
+
+    #[test]
+    fn interrupted_prompt_flush_is_retried_before_reading_input() {
+        struct InterruptFlushOnce {
+            bytes: Vec<u8>,
+            flush_calls: usize,
+        }
+
+        impl Write for InterruptFlushOnce {
+            fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+                self.bytes.extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                self.flush_calls += 1;
+                if self.flush_calls == 1 {
+                    Err(io::ErrorKind::Interrupted.into())
+                } else {
+                    Ok(())
+                }
+            }
+        }
+
+        let mut reader = Cursor::new(b"Ada\n");
+        let mut writer = InterruptFlushOnce {
+            bytes: Vec::new(),
+            flush_calls: 0,
+        };
+        {
+            let mut input =
+                InputState::interactive(&mut reader, &mut writer, InputLimits::default());
+            let result = input.ask("Name: ", &mut Budget::new(64), Span::default()).unwrap();
+            assert_eq!(result.as_str(), Some("Ada"));
+        }
+        assert_eq!(writer.bytes, b"Name: ");
+        assert_eq!(writer.flush_calls, 2);
+        assert_eq!(reader.position(), 4);
+    }
+
+    #[test]
+    fn repeated_interrupted_prompt_flushes_exhaust_work_without_reading() {
+        struct InterruptFlushForever {
+            bytes: Vec<u8>,
+            flush_calls: usize,
+        }
+
+        impl Write for InterruptFlushForever {
+            fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+                self.bytes.extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                self.flush_calls += 1;
+                Err(io::ErrorKind::Interrupted.into())
+            }
+        }
+
+        let mut reader = Cursor::new(b"Ada\n");
+        let mut writer = InterruptFlushForever {
+            bytes: Vec::new(),
+            flush_calls: 0,
+        };
+        {
+            let mut input =
+                InputState::interactive(&mut reader, &mut writer, InputLimits::default());
+            let error = input.ask(">", &mut Budget::new(3), Span::default()).unwrap_err();
+            assert_eq!(error.kind, Kind::ExecutionLimit);
+        }
+        assert_eq!(writer.bytes, b">");
+        assert_eq!(writer.flush_calls, 2);
+        assert_eq!(reader.position(), 0);
     }
 }
