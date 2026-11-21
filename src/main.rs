@@ -703,7 +703,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             .iter()
             .skip(1)
             .take_while(|argument| argument.as_os_str() != OsStr::new("--"))
-            .any(|argument| argument == "--interactive");
+            .any(|argument| argument.as_os_str() == OsStr::new("--interactive"));
         if !already_interactive {
             args.insert(1, OsString::from("--interactive"));
         }
@@ -1139,7 +1139,9 @@ fn diagnostic_format_hint(args: &[OsString]) -> bool {
         };
         if let Some(value) = argument.strip_prefix("--diagnostic-format=") {
             json |= value == "json";
-        } else if execution_limit_flag(argument) {
+        } else if argument == "--interactive" {
+            continue;
+        } else if argument == "--input-file" || execution_limit_flag(argument) {
             args.next();
         } else if argument != "--json" {
             break;
