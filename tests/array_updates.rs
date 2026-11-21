@@ -37,7 +37,10 @@ fn updated_arrays_preserve_old_snapshots_exact_types_and_nested_values() {
         print(replace_last(current)[2]);
     "#;
     assert_eq!(run(source), ("8 99 3\none नमस्ते\n100\n".as_bytes().to_vec(), Vec::new()));
-    assert_eq!(run("pure funcra array_set(n: integer) -> integer { return n + 1; } print(array_set(41));").0, b"42\n");
+    assert_eq!(
+        run("pure funcra array_set(n: integer) -> integer { return n + 1; } print(array_set(41));").0,
+        b"42\n"
+    );
 }
 
 #[test]
