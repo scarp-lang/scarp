@@ -118,9 +118,9 @@ fn one_exec_command_accepts_explicit_root_nested_and_dash_prefixed_files() {
     ws.write("--private.srp", "print(9);");
 
     for (args, expected) in [
-        (vec!["exec", "calculator.srp"], b"5\n".as_slice()),
-        (vec!["exec", "src/calculator.srp"], b"42\n".as_slice()),
-        (vec!["exec", "--", "--private.srp"], b"9\n".as_slice()),
+        (vec!["exec", "calculator.srp"], &b"5\n"[..]),
+        (vec!["exec", "src/calculator.srp"], &b"42\n"[..]),
+        (vec!["exec", "--", "--private.srp"], &b"9\n"[..]),
     ] {
         let result = cli(&ws.0, &args);
         assert!(result.status.success(), "{args:?}: {result:?}");
