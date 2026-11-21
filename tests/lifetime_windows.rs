@@ -62,3 +62,12 @@ fn creating_empty_windows_does_not_recharge_vector_payload_quota() {
         DiagnosticKind::VectorBudget
     );
 }
+
+#[test]
+fn runnable_lifetime_example_matches_checked_output() {
+    let source = include_str!("../examples/lifetime_windows.srp");
+    assert_eq!(
+        output(source),
+        include_str!("../examples/lifetime_windows.stdout")
+    );
+}
