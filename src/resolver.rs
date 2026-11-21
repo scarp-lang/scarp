@@ -198,6 +198,7 @@ pub(crate) enum CompositeOperation {
 pub(crate) enum ArrayIntrinsic {
     Len,
     GetOr,
+    Set,
 }
 
 impl ArrayIntrinsic {
@@ -205,6 +206,7 @@ impl ArrayIntrinsic {
         match name {
             "array_len" => Some(Self::Len),
             "array_get_or" => Some(Self::GetOr),
+            "array_set" => Some(Self::Set),
             _ => None,
         }
     }
@@ -212,7 +214,7 @@ impl ArrayIntrinsic {
     pub(crate) fn arity(self) -> usize {
         match self {
             Self::Len => 1,
-            Self::GetOr => 3,
+            Self::GetOr | Self::Set => 3,
         }
     }
 }
@@ -1655,20 +1657,24 @@ fn resolve_expression(
                     })?;
                     let result = match operation {
                         ArrayIntrinsic::Len => ValueType::Integer.into(),
-                        ArrayIntrinsic::GetOr => {
+                        ArrayIntrinsic::GetOr | ArrayIntrinsic::Set => {
                             let index = arguments[1].expression;
-                            let fallback = arguments[2].expression;
+                            let value = arguments[2].expression;
                             require_type(
                                 &types[index],
                                 ValueType::Integer,
                                 syntax.nodes()[index].span,
                             )?;
                             require_type(
-                                &types[fallback],
+                                &types[value],
                                 array.element(),
-                                syntax.nodes()[fallback].span,
+                                syntax.nodes()[value].span,
                             )?;
-                            array.element().clone()
+                            if operation == ArrayIntrinsic::Set {
+                                types[first].clone()
+                            } else {
+                                array.element().clone()
+                            }
                         }
                     };
                     slots.push(None);
