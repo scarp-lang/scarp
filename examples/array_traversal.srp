@@ -1,0 +1,8 @@
+bind readings = [array: 10, 20, 30];
+var total = 0;
+repeat array_len(readings) as index {
+    total += readings[index];
+}
+print("Total:", total);
+print("Missing reading:", array_get_or(readings, 3, 0));
+print("Empty length:", array_len([array: <integer>]));

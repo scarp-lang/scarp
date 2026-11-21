@@ -38,6 +38,20 @@ name.
   quoted and escaped. A runtime diagnostic before output replay leaves both
   output streams empty.
 
+## Traversal and fallback lookup in development builds
+
+- `array_len(values)` returns the number of elements as an `integer`. Use it
+  as the count in `repeat array_len(values) as index` to visit elements in
+  source order. An empty array runs zero iterations.
+- `array_get_or(values, index, fallback)` returns the element at the integer
+  index or the fallback for a negative or out-of-bounds index. The fallback
+  must have the array's exact element type. All three arguments evaluate once
+  in source order, including the fallback for an in-bounds lookup.
+
+Both operations are pure. They use constant-time length and index access
+and share immutable values without copying array backing storage. See the
+[runnable traversal example](../examples/array_traversal.srp).
+
 ## Bounds and accounting
 
 | Measure | Ceiling |
