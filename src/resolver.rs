@@ -199,6 +199,8 @@ pub(crate) enum ArrayIntrinsic {
     Len,
     GetOr,
     Set,
+    Reverse,
+    Swap,
 }
 
 impl ArrayIntrinsic {
@@ -207,14 +209,16 @@ impl ArrayIntrinsic {
             "array_len" => Some(Self::Len),
             "array_get_or" => Some(Self::GetOr),
             "array_set" => Some(Self::Set),
+            "array_reverse" => Some(Self::Reverse),
+            "array_swap" => Some(Self::Swap),
             _ => None,
         }
     }
 
     pub(crate) fn arity(self) -> usize {
         match self {
-            Self::Len => 1,
-            Self::GetOr | Self::Set => 3,
+            Self::Len | Self::Reverse => 1,
+            Self::GetOr | Self::Set | Self::Swap => 3,
         }
     }
 }
@@ -1661,6 +1665,17 @@ fn resolve_expression(
                     })?;
                     let result = match operation {
                         ArrayIntrinsic::Len => ValueType::Integer.into(),
+                        ArrayIntrinsic::Reverse => types[first].clone(),
+                        ArrayIntrinsic::Swap => {
+                            for argument in &arguments[1..] {
+                                require_type(
+                                    &types[argument.expression],
+                                    ValueType::Integer,
+                                    syntax.nodes()[argument.expression].span,
+                                )?;
+                            }
+                            types[first].clone()
+                        }
                         ArrayIntrinsic::GetOr | ArrayIntrinsic::Set => {
                             let index = arguments[1].expression;
                             let value = arguments[2].expression;
