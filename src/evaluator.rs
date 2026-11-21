@@ -747,6 +747,7 @@ impl Workspace {
                     } else {
                         let index = if operation == ListIntrinsic::Set
                             || operation == ListIntrinsic::Remove
+                            || operation == ListIntrinsic::Swap
                         {
                             let n = values[start + 1].require_integer(span)?;
                             Some(
@@ -759,6 +760,26 @@ impl Workspace {
                                             expression.syntax.nodes()[arguments[1].expression].span,
                                             format!(
                                                 "index {n} is outside dynamic list length {}",
+                                                list.len()
+                                            ),
+                                        )
+                                    })?,
+                            )
+                        } else {
+                            None
+                        };
+                        let second_index = if operation == ListIntrinsic::Swap {
+                            let position = values[start + 2].require_integer(span)?;
+                            Some(
+                                usize::try_from(position)
+                                    .ok()
+                                    .filter(|&index| index < list.len())
+                                    .ok_or_else(|| {
+                                        Diagnostic::new(
+                                            DiagnosticKind::ListIndex,
+                                            expression.syntax.nodes()[arguments[2].expression].span,
+                                            format!(
+                                                "index {position} is outside dynamic list length {}",
                                                 list.len()
                                             ),
                                         )
@@ -815,6 +836,17 @@ impl Workspace {
                                 let index = index.expect("checked list index");
                                 items.extend_from_slice(&elements[..index]);
                                 items.extend_from_slice(&elements[index + 1..]);
+                            }
+                            ListIntrinsic::Reverse => {
+                                items.extend_from_slice(elements);
+                                items.reverse();
+                            }
+                            ListIntrinsic::Swap => {
+                                items.extend_from_slice(elements);
+                                items.swap(
+                                    index.expect("checked first list index"),
+                                    second_index.expect("checked second list index"),
+                                );
                             }
                             ListIntrinsic::Len => unreachable!("length needs no allocation"),
                         }
