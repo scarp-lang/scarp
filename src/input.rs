@@ -520,7 +520,9 @@ mod tests {
         {
             let mut input =
                 InputState::interactive(&mut reader, &mut writer, InputLimits::default());
-            let result = input.ask("Name: ", &mut Budget::new(64), Span::default()).unwrap();
+            let result = input
+                .ask("Name: ", &mut Budget::new(64), Span::default())
+                .unwrap();
             assert_eq!(result.as_str(), Some("Ada"));
         }
         assert_eq!(writer.bytes, b"Name: ");
@@ -555,7 +557,9 @@ mod tests {
         {
             let mut input =
                 InputState::interactive(&mut reader, &mut writer, InputLimits::default());
-            let error = input.ask(">", &mut Budget::new(3), Span::default()).unwrap_err();
+            let error = input
+                .ask(">", &mut Budget::new(3), Span::default())
+                .unwrap_err();
             assert_eq!(error.kind, Kind::ExecutionLimit);
         }
         assert_eq!(writer.bytes, b">");
