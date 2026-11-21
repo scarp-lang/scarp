@@ -162,5 +162,9 @@ fn malformed_manifest_never_falls_back_to_an_unrelated_source() {
     assert!(failure.stdout.is_empty());
 
     let malformed_option = cli(&ws.0, &["exec", "--max-steps"]);
-    assert_eq!(malformed_option.status.code(), Some(2), "{malformed_option:?}");
+    assert_eq!(
+        malformed_option.status.code(),
+        Some(2),
+        "{malformed_option:?}"
+    );
 }
