@@ -26,7 +26,7 @@ Usage:
 
 Commands:
   inspect symbols|references [--json] <file.srp|project-directory>  Source navigation
-  exec <file.srp>                  Execute a Scarp program
+  exec [file.srp|project-directory]  Execute current project or selected source
   verify [file.srp|directory]      Perform static source or project validation
   inspect tokens <file.srp>        Inspect lexer tokens and source locations
   create <directory>               Create a legacy Scarp.project app
@@ -47,6 +47,7 @@ Options:
   -V, --version                   Show the prototype version
 
 Examples:
+  scarp exec                         # Run the current project or default main.srp
   scarp exec examples/hello.srp
   scarp create demo
   scarp init modern-demo
@@ -140,22 +141,26 @@ An explicit project directory resolves scarp.project or legacy Scarp.project.
 selects JSON stderr only for actual errors.
 ";
 
-const EXEC_HELP: &str = "Usage: scarp exec [budget options] [--] <file.srp>
+const EXEC_HELP: &str = "Usage: scarp exec [budget options] [--] [file.srp|project-directory]
 
-Execute a checked Scarp source file with the existing interpreter.
+Run the current project or a selected source file with the interpreter.
+Without a path, use the current scarp.project/Scarp.project entrypoint, then
+src/main.srp, then main.srp. No parent-directory or arbitrary-file search.
+Explicit source paths and project directories remain supported.
+Terminal prompts and typed input work by default; no --interactive needed.
+A selected input call can wait for user input. Use Ctrl+C to cancel.
 --diagnostic-format=json is available for real compiler errors.
 Execution-limit options: --max-steps, --max-prints, --max-call-depth, --max-calls,
 --max-live-slots, --max-capture-bytes, --max-vector-bytes, --max-text-bytes,
 --max-tuple-bytes, --max-array-bytes, --max-bigint-digits, --max-bigint-bytes,
 --max-input-line-bytes, --max-input-bytes, --max-input-reads.
 --input-file PATH uses an explicit file instead of stdin for program input.
---interactive enables input(prompt), ask, ask_or and typed input calls
-input_integer, input_boolean, input_float, input_bigint and input_decimal.
+--interactive is accepted for compatibility but not required for exec.
 Prompts are flushed before reading stdin or --input-file.
 Options precede the source path. -- permits filenames beginning with a dash.
 Program-argument forwarding and project entrypoint execution are not supported.
-read_line reads redirected UTF-8 stdin or --input-file PATH, or terminal input
-with --interactive. Without --interactive, prompt calls report E0054.
+read_line reads redirected UTF-8 stdin, terminal input or --input-file PATH.
+Legacy run and library execution retain their explicit interactive-mode contract.
 Input-file paths are relative to the working directory and are read under input quotas.
 Input defaults: 65536 raw bytes per line, 1048576 total bytes, 4096 reads.
 CR/LF count toward input/text quotas. Input cannot be rolled back; output stays buffered.
@@ -380,6 +385,21 @@ fn has_project_manifest(directory: &Path) -> bool {
     directory.is_dir()
         && (fs::symlink_metadata(directory.join(project::MANIFEST_V2)).is_ok()
             || fs::symlink_metadata(directory.join(project::MANIFEST)).is_ok())
+}
+
+// A zero-argument exec runs the active project's declared source, with a
+// predictable fallback for tiny standalone examples. Do not scan arbitrary
+// files or parent directories: that could execute an unrelated program.
+fn default_exec_target() -> Option<&'static str> {
+    if has_project_manifest(Path::new(".")) {
+        Some(".")
+    } else if Path::new("src/main.srp").is_file() {
+        Some("src/main.srp")
+    } else if Path::new("main.srp").is_file() {
+        Some("main.srp")
+    } else {
+        None
+    }
 }
 
 fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl Write) -> u8 {
@@ -674,6 +694,38 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             }
         };
     }
+    // exec is the ergonomic default. A single entry command works for both
+    // prompted/typed input and ordinary output without a separate I/O mode.
+    // Keep historical run/launch semantics intact for existing integrations.
+    if args.first().is_some_and(|command| command == "exec") {
+        args[0] = OsString::from("run");
+        let already_interactive = args
+            .iter()
+            .skip(1)
+            .take_while(|argument| argument.as_os_str() != OsStr::new("--"))
+            .any(|argument| argument == "--interactive");
+        if !already_interactive {
+            args.insert(1, OsString::from("--interactive"));
+        }
+
+        // Reuse the real CLI parser to distinguish an omitted positional path
+        // from a malformed option or an explicit filename. This also supports
+        // scarp exec --max-steps N and other ordinary budget flags.
+        let mut with_placeholder = args.clone();
+        with_placeholder.push(OsString::from("."));
+        if invocation(&args).is_err() && invocation(&with_placeholder).is_ok() {
+            let Some(target) = default_exec_target() else {
+                let message = "no Scarp entrypoint found in the current directory; add scarp.project, src/main.srp or main.srp, or pass an explicit .srp path";
+                if args.iter().any(|argument| argument == "--diagnostic-format=json") {
+                    let _ = scarp::diagnostics::write_json_message(message, Some(EXEC_HELP), errors);
+                } else {
+                    let _ = writeln!(errors, "error: {message}");
+                }
+                return 2;
+            };
+            args.push(OsString::from(target));
+        }
+    }
     if matches!(args.as_slice(), [command] if command == "run" || command == "verify")
         && has_project_manifest(Path::new("."))
     {
@@ -757,8 +809,6 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
                 return 2;
             }
         }
-    } else if args.first().is_some_and(|command| command == "exec") {
-        args[0] = OsString::from("run");
     }
     let format_hint = diagnostic_format_hint(&args);
     if args.first().is_some_and(|command| command == "explain") {
