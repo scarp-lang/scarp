@@ -1,0 +1,12 @@
+pure funcra replace_last(values: array<integer, 3>) -> array<integer, 3> {
+    return array_set(values, 2, 100);
+}
+
+bind original = [array: 4, 8, 12];
+bind updated = array_set(original, 1, 99);
+print(original[1], updated[1], array_len(updated));
+
+bind nested = [array: [array: "one"], [array: "two"]];
+bind localized = array_set(nested, 0, [array: "नमस्ते"]);
+print(nested[0][0], localized[0][0]);
+print(replace_last(updated)[2]);
