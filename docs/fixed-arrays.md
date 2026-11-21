@@ -52,6 +52,26 @@ Both operations are pure. They use constant-time length and index access
 and share immutable values without copying array backing storage. See the
 [runnable traversal example](../examples/array_traversal.srp).
 
+## Persistent element updates (alpha.18 candidate)
+
+`array_set(values, index, value)` is a pure, persistent fixed-array operation.
+It returns a new array with exactly one element replaced; the old array and
+all existing aliases remain unchanged. The replacement must have the exact
+array element type, and the result keeps the original `array<T, N>` type.
+Arguments are evaluated exactly once in source order.
+
+```scarp
+bind original = [array: 4, 8, 12];
+bind changed = array_set(original, 1, 99);
+print(original[1], changed[1]); // 8 99
+```
+
+Negative or out-of-bounds indices raise E0063 at the index expression. Every
+successful update allocates a fresh fixed-array backing and charges the
+cumulative array allocation budget (E0064), including for nested arrays.
+This is not an in-place mutation; the existing indexed assignment restriction
+remains unchanged. See the [runnable update example](../examples/array_updates.srp).
+
 ## Bounds and accounting
 
 | Measure | Ceiling |
