@@ -28,6 +28,8 @@ shadowed by a user-declared function of the same name:
 | `list_push(xs, value)` | `(list<T>, T) -> list<T>` | Appends, returns new snapshot |
 | `list_set(xs, index, value)` | `(list<T>, integer, T) -> list<T>` | Replaces, returns new snapshot |
 | `list_remove(xs, index)` | `(list<T>, integer) -> list<T>` | Removes, returns new snapshot |
+| `list_reverse(xs)` | `list<T> -> list<T>` | Reverses elements in a new snapshot |
+| `list_swap(xs, first, second)` | `(list<T>, integer, integer) -> list<T>` | Swaps two indexed elements in a new snapshot |
 
 Arguments are positional and type-checked exactly. Runtime indexing uses a
 zero-based `integer` and E0079 on negative/out-of-range indices. Push rejects
@@ -37,6 +39,13 @@ fixed arrays share the configured `ExecutionOptions.max_array_bytes`
 allocation budget; immutable aliases retain their original value. Full
 execution output is committed only on success. The byte allowance is logical
 payload accounting and not a promise about process RSS.
+
+`list_reverse` accepts an empty list. `list_swap` evaluates the receiver and both
+indices exactly once, in source order; equal indices are valid. A negative or
+out-of-bounds index produces E0079 at the first invalid index argument.
+Both operations allocate and charge a complete new immutable list snapshot,
+including for empty reversed lists. See
+[the runnable reordering example](../examples/list_reordering.srp).
 
 The implementation does **not** define an `in-place append` operation,
 persistent tree optimization, map keys, iteration syntax, slicing, native
