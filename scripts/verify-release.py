@@ -9,7 +9,7 @@ import subprocess
 import tarfile
 import zipfile
 
-EXTERNAL_DOCS_VERSIONS = {"0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5", "0.0.6-alpha.6", "0.0.6-alpha.7", "0.0.6-alpha.8", "0.0.6-alpha.9", "0.0.6-alpha.10", "0.0.6-alpha.11", "0.0.6-alpha.12", "0.0.6-alpha.13", "0.0.6-alpha.14", "0.0.6-alpha.15", "0.0.6-alpha.16", "0.0.6-alpha.17"}
+EXTERNAL_DOCS_VERSIONS = {"0.0.5-alpha.2", "0.0.5-alpha.3", "0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5", "0.0.6-alpha.6", "0.0.6-alpha.7", "0.0.6-alpha.8", "0.0.6-alpha.9", "0.0.6-alpha.10", "0.0.6-alpha.11", "0.0.6-alpha.12", "0.0.6-alpha.13", "0.0.6-alpha.14", "0.0.6-alpha.15", "0.0.6-alpha.16", "0.0.6-alpha.17", "0.0.6-alpha.18"}
 DOCUMENTATION_REPOSITORY = "https://github.com/scarp-lang/scarp-docs"
 METADATA_SOURCE = ".github/release-metadata.json"
 METADATA_MEMBER = "RELEASE-METADATA.json"
@@ -34,7 +34,7 @@ def release_notes_at(source_directory, commit, version):
     if version not in EXTERNAL_DOCS_VERSIONS:
         return data
     metadata = validate_release_metadata(data, version)
-    if version in ("0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5", "0.0.6-alpha.6", "0.0.6-alpha.7", "0.0.6-alpha.8", "0.0.6-alpha.9", "0.0.6-alpha.10", "0.0.6-alpha.11", "0.0.6-alpha.12", "0.0.6-alpha.13", "0.0.6-alpha.14", "0.0.6-alpha.15", "0.0.6-alpha.16", "0.0.6-alpha.17"):
+    if version in ("0.0.5-alpha.4", "0.0.5-alpha.5", "0.0.6-alpha.1", "0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5", "0.0.6-alpha.6", "0.0.6-alpha.7", "0.0.6-alpha.8", "0.0.6-alpha.9", "0.0.6-alpha.10", "0.0.6-alpha.11", "0.0.6-alpha.12", "0.0.6-alpha.13", "0.0.6-alpha.14", "0.0.6-alpha.15", "0.0.6-alpha.16", "0.0.6-alpha.17", "0.0.6-alpha.18"):
         # Read the reviewed notes from the exact approved source commit. Unlike
         # earlier metadata-only releases, alpha.4 carries a real feature/limit
         # inventory and must not render notes from a moving checkout.
@@ -43,14 +43,14 @@ def release_notes_at(source_directory, commit, version):
         # immutable source commit, never from a moving checkout.
         notes_path = (
             f"docs/releases/v{version}-publication.md"
-            if version in ("0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5", "0.0.6-alpha.6", "0.0.6-alpha.7", "0.0.6-alpha.8", "0.0.6-alpha.9", "0.0.6-alpha.10", "0.0.6-alpha.11", "0.0.6-alpha.12", "0.0.6-alpha.13", "0.0.6-alpha.14", "0.0.6-alpha.15", "0.0.6-alpha.16", "0.0.6-alpha.17")
+            if version in ("0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5", "0.0.6-alpha.6", "0.0.6-alpha.7", "0.0.6-alpha.8", "0.0.6-alpha.9", "0.0.6-alpha.10", "0.0.6-alpha.11", "0.0.6-alpha.12", "0.0.6-alpha.13", "0.0.6-alpha.14", "0.0.6-alpha.15", "0.0.6-alpha.16", "0.0.6-alpha.17", "0.0.6-alpha.18")
             else f"docs/releases/v{version}.md"
         )
         notes = subprocess.check_output(
             ["git", "-C", str(source_directory), "show", f"{commit}:{notes_path}"],
             text=True, encoding="utf-8",
         ).rstrip()
-        if version in ("0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5", "0.0.6-alpha.6", "0.0.6-alpha.7", "0.0.6-alpha.8", "0.0.6-alpha.9", "0.0.6-alpha.10", "0.0.6-alpha.11", "0.0.6-alpha.12", "0.0.6-alpha.13", "0.0.6-alpha.14", "0.0.6-alpha.15", "0.0.6-alpha.16", "0.0.6-alpha.17"):
+        if version in ("0.0.6-alpha.2", "0.0.6-alpha.3", "0.0.6-alpha.4", "0.0.6-alpha.5", "0.0.6-alpha.6", "0.0.6-alpha.7", "0.0.6-alpha.8", "0.0.6-alpha.9", "0.0.6-alpha.10", "0.0.6-alpha.11", "0.0.6-alpha.12", "0.0.6-alpha.13", "0.0.6-alpha.14", "0.0.6-alpha.15", "0.0.6-alpha.16", "0.0.6-alpha.17", "0.0.6-alpha.18"):
             if (
                 not notes.startswith(f"# Scarp v{version} — prerelease\n")
                 or any(phrase in notes.lower() for phrase in (
@@ -156,8 +156,8 @@ def verify(directory, version, commit, source_directory=None):
         if not fields.get("compiler", "").startswith("rustc "):
             raise ValueError(f"missing compiler record: {name}")
         executable = "scarp.exe" if extension == ".zip" else "scarp"
-        # Alpha.14 through alpha.17 carry forward the alpha.13 assets.
-        contract_version = "0.0.6-alpha.13" if version in ("0.0.6-alpha.14", "0.0.6-alpha.15", "0.0.6-alpha.16", "0.0.6-alpha.17") else version
+        # Alpha.14 through alpha.18 carry forward the alpha.13 assets.
+        contract_version = "0.0.6-alpha.13" if version in ("0.0.6-alpha.14", "0.0.6-alpha.15", "0.0.6-alpha.16", "0.0.6-alpha.17", "0.0.6-alpha.18") else version
         iteration_examples = (
             "examples/loops.srp", "examples/loops.stdout",
             "examples/repeat.srp", "examples/repeat.stdout",
@@ -346,24 +346,28 @@ def verify(directory, version, commit, source_directory=None):
             "docs/releases/v0.0.6-alpha.14-publication.md",
             "examples/structured_pattern_coverage.srp", "examples/structured_pattern_coverage.stdout",
             "examples/map_string_projection_snapshots.srp", "examples/map_string_projection_snapshots.stdout",
-        ) if version in ("0.0.6-alpha.14", "0.0.6-alpha.15", "0.0.6-alpha.16", "0.0.6-alpha.17") else ()
+        ) if version in ("0.0.6-alpha.14", "0.0.6-alpha.15", "0.0.6-alpha.16", "0.0.6-alpha.17", "0.0.6-alpha.18") else ()
         alpha6_15_files = (
             "docs/releases/v0.0.6-alpha.15-publication.md", "docs/native-elf64.md",
             "docs/development/semantic-cache.md",
-        ) if version in ("0.0.6-alpha.15", "0.0.6-alpha.16", "0.0.6-alpha.17") else ()
+        ) if version in ("0.0.6-alpha.15", "0.0.6-alpha.16", "0.0.6-alpha.17", "0.0.6-alpha.18") else ()
         alpha6_16_files = (
             "docs/releases/v0.0.6-alpha.16-publication.md", "docs/order-statistics.md",
             "examples/order_statistics.srp", "examples/order_statistics.stdout",
             "docs/scalar-utilities.md", "examples/core_collections.srp",
             "examples/core_collections.stdout", "examples/modules/collection_tools.srp",
-        ) if version in ("0.0.6-alpha.16", "0.0.6-alpha.17") else ()
+        ) if version in ("0.0.6-alpha.16", "0.0.6-alpha.17", "0.0.6-alpha.18") else ()
         alpha6_17_files = (
             "docs/releases/v0.0.6-alpha.17-publication.md",
             "docs/fixed-arrays.md", "docs/program-input.md",
             "examples/array_traversal.srp", "examples/array_traversal.stdout",
             "examples/interactive/boolean_prompt.srp", "examples/interactive/boolean_prompt.stdin",
             "examples/interactive/boolean_prompt.stdout",
-        ) if version == "0.0.6-alpha.17" else ()
+        ) if version in ("0.0.6-alpha.17", "0.0.6-alpha.18") else ()
+        alpha6_18_files = (
+            "docs/releases/v0.0.6-alpha.18-publication.md",
+            "examples/array_updates.srp", "examples/array_updates.stdout",
+        ) if version == "0.0.6-alpha.18" else ()
         release_files = (METADATA_MEMBER,) if version in EXTERNAL_DOCS_VERSIONS else (f"docs/releases/v{version}.md",)
         for member in (
             executable, "LICENSE", "README.md", "CHANGELOG.md", "CONTRIBUTING.md",
@@ -372,7 +376,7 @@ def verify(directory, version, commit, source_directory=None):
             *iteration_examples, *syntax_migration_files, *function_files, *float_files, *vector_files,
             *alpha3_files, *alpha4_files, *module_files, *alpha2_files, *type_tooling_files,
             *project_files, *alpha5_files, *alpha6_files, *alpha6_2_files, *alpha6_3_files, *alpha6_4_files, *alpha6_5_files, *alpha6_6_files,
-            *alpha6_7_files, *alpha6_8_files, *alpha6_9_files, *alpha6_10_files, *alpha6_11_files, *alpha6_12_files, *alpha6_13_files, *alpha6_14_files, *alpha6_15_files, *alpha6_16_files, *alpha6_17_files,
+            *alpha6_7_files, *alpha6_8_files, *alpha6_9_files, *alpha6_10_files, *alpha6_11_files, *alpha6_12_files, *alpha6_13_files, *alpha6_14_files, *alpha6_15_files, *alpha6_16_files, *alpha6_17_files, *alpha6_18_files,
         ):
             if root + "/" + member not in paths:
                 raise ValueError(f"{name}: missing {member}")
