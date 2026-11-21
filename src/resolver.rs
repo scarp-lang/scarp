@@ -231,6 +231,8 @@ pub(crate) enum ListIntrinsic {
     Set,
     Remove,
     Len,
+    Reverse,
+    Swap,
 }
 impl ListIntrinsic {
     pub(crate) fn from_name(name: &str) -> Option<Self> {
@@ -239,14 +241,16 @@ impl ListIntrinsic {
             "list_set" => Self::Set,
             "list_remove" => Self::Remove,
             "list_len" => Self::Len,
+            "list_reverse" => Self::Reverse,
+            "list_swap" => Self::Swap,
             _ => return None,
         })
     }
     pub(crate) fn arity(self) -> usize {
         match self {
             Self::Push | Self::Remove => 2,
-            Self::Set => 3,
-            Self::Len => 1,
+            Self::Set | Self::Swap => 3,
+            Self::Len | Self::Reverse => 1,
         }
     }
 }
@@ -1748,7 +1752,16 @@ fn resolve_expression(
                                 syntax.nodes()[position].span,
                             )?;
                         }
-                        ListIntrinsic::Len => {}
+                        ListIntrinsic::Swap => {
+                            for argument in &arguments[1..] {
+                                require_type(
+                                    &types[argument.expression],
+                                    ValueType::Integer,
+                                    syntax.nodes()[argument.expression].span,
+                                )?;
+                            }
+                        }
+                        ListIntrinsic::Len | ListIntrinsic::Reverse => {}
                     }
                     let result = if operation == ListIntrinsic::Len {
                         SourceType::from(ValueType::Integer)
