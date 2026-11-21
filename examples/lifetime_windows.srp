@@ -1,0 +1,9 @@
+// Lifetime preserves value snapshots without explicit memory management.
+bind data = [1.0, 2.0, 3.0];
+bind tail = window(data, 1, 2);
+bind empty = window(data, 2, 0);
+print(len(empty), tail);
+
+bind numbers: integers = [integer: 7, 8, 9];
+bind empty_numbers = ints_window(numbers, 2, 0);
+print(ints_len(empty_numbers), ints_window(numbers, 1, 2));
