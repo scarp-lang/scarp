@@ -42,7 +42,7 @@ fn creating_empty_windows_does_not_recharge_vector_payload_quota() {
     let source = r#"
         bind values = [1.0, 2.0, 3.0];
         repeat 12 as i {
-            bind empty = window(values, i, 0);
+            bind empty = window(values, 0, 0);
             print(len(empty));
         }
     "#;
