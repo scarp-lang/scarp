@@ -875,8 +875,14 @@ impl Parser<'_> {
                 if error.0.kind == DiagnosticKind::FunctionDefinition {
                     error.0.kind = DiagnosticKind::UnexpectedToken;
                     error.0.message = error.0.message.replace("parameter", "binding");
+                    return error.with_help(
+                        "use a value type such as integer, decimal, tuple<integer, string>, or list<integer>",
+                    );
                 }
-                error.with_help("binding types are integer, float, bigint, vector, integers, tile, boolean or string; an initializer is required")
+                if error.0.kind == DiagnosticKind::UnexpectedToken && error.0.help.is_none() {
+                    return error.with_help(format!("use {keyword} name: type = expression;"));
+                }
+                error
             })?;
             Some(crate::ast::TypeAnnotation {
                 kind,

@@ -69,6 +69,19 @@ fn unknown_unit_and_malformed_binding_types_have_actionable_errors() {
 }
 
 #[test]
+fn nested_array_annotation_retains_its_length_repair_and_source_span() {
+    let source =
+        "// café 🌍\r\nbind rows: list<array<integer, 4097>> = [list: <array<integer, 0>>];";
+    let error = scarp::parse(source).unwrap_err();
+    assert_eq!(error.kind, Kind::ArrayLimit);
+    assert_eq!(&source[error.span.start..error.span.end], "4097");
+    assert_eq!(
+        error.help.as_deref(),
+        Some("write a nonnegative base-10 length, such as array<integer, 2>")
+    );
+}
+
+#[test]
 fn inferred_and_annotated_types_do_not_coerce_or_change_assignment_rules() {
     for source in [
         "bind n: float=1;",
