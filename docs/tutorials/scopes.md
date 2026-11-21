@@ -1,6 +1,9 @@
 # Scopes and shadowing
 
-This development-only tutorial explains which declaration a name refers to,
+See the official guide to [variables and lexical scope](https://scarp-lang.github.io/scarp-docs/language/variables)
+for current behavior.
+
+This historical tutorial explains which declaration a name refers to,
 what survives a block, and how a shadowing initializer behaves. A block contains
 statements between `{` and `}` and does not need a trailing semicolon.
 

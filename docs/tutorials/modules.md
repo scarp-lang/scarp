@@ -1,7 +1,8 @@
 # Split a numerical program into files
 
-Use a build identifying as `scarp 0.0.5-alpha.1`; published alpha.4 does not
-support imports. Run `cargo run -- --version` in this checkout to verify it.
+The official [modules and visibility guide](https://scarp-lang.github.io/scarp-docs/language/modules-and-visibility)
+covers current imports and exports. This historical example targets
+`v0.0.5-alpha.1`. The preceding `v0.0.4-alpha.4` release predates imports.
 
 The shipped example consists of three files:
 

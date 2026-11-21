@@ -1,6 +1,11 @@
 # Variables and mutation
 
-This tutorial requires the development stack. Published v0.0.1 does not support
+The official guides cover current
+[variables and lexical scope](https://scarp-lang.github.io/scarp-docs/language/variables)
+in English and [चर व स्कोप](https://scarp-lang.github.io/scarp-docs/hi/language/variables)
+in Hindi.
+
+This historical tutorial was written against the development stack. Published v0.0.1 does not support
 declarations. It shows how to name values, choose mutability, and keep earlier
 results when values change. The precise rules are in the
 [variable reference](../variables.md).

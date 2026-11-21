@@ -1,6 +1,9 @@
 # Make decisions with if, elif, and else
 
-This tutorial requires the development conditional branch. It builds on
+For the current syntax, read the official
+[control-flow guide](https://scarp-lang.github.io/scarp-docs/language/control-flow).
+
+This historical tutorial was written for the development conditional branch. It builds on
 [variables](variables.md) and [the boolean rules](../proposals/0004-boolean-expressions.md).
 The published v0.0.1 interpreter does not support this syntax.
 
