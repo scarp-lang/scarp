@@ -341,7 +341,7 @@ try {
         $metadata = [System.Text.Encoding]::UTF8.GetString($json.Stdout) | ConvertFrom-Json -AsHashtable
         $expectedSchema = if ($example -in @('variant_validation', 'ui_event_patterns', 'typed_submission', 'typed_propagation', 'task_panel_state', 'structured_pattern_coverage')) { 5 }
         elseif ($example -in @('app_state', 'typed_dynamic_lists', 'persistent_list_updates')) { 4 }
-        elseif ($example -in @('fixed_arrays', 'array_updates', 'typed_maps', 'persistent_maps', 'map_projections', 'core_collections')) { 3 }
+        elseif ($example -in @('fixed_arrays', 'array_updates', 'array_reordering', 'typed_maps', 'persistent_maps', 'map_projections', 'core_collections')) { 3 }
         elseif ($example -in @('tuples', 'core_input_tuple', 'data_destructure')) { 2 }
         else { 1 }
         if ($metadata.schema_version -ne $expectedSchema -or $metadata.entry -ne 0 -or $metadata.modules.Count -lt 1) {
