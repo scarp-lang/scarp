@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.6-alpha.18 — source release candidate, not published
+
+- Add pure, quota-bounded persistent `array_set` for fixed-size arrays, with
+  exact replacement types, index diagnostics, and source-level examples.
+- Retry interrupted interactive prompt flushes while preserving execution
+  budgets and requiring output flush before input consumption.
+- Strengthen structured module-inspection JSON tests across records, variants,
+  nested types, Unicode, and CRLF input.
+
+
 ## 0.0.6-alpha.17 — published GitHub prerelease, 2026-11-21
 
 - Add `array_len` for counted traversal and `array_get_or` for typed fallback
