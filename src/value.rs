@@ -1,6 +1,9 @@
 //! Runtime values, finite numerical storage and inferred binding types.
 
-use std::{fmt, sync::Arc};
+use std::{
+    fmt,
+    sync::{Arc, OnceLock},
+};
 
 use crate::diagnostics::{Diagnostic, DiagnosticKind, Span};
 
@@ -95,19 +98,31 @@ impl NumericVector {
         if values.len() > MAX_VECTOR_LENGTH {
             return None;
         }
+        let length = values.len();
+        let storage = if values.is_empty() {
+            // Canonical immutable empty storage avoids repeated allocations and
+            // lets an empty view release a much larger original backing buffer.
+            static EMPTY: OnceLock<Arc<Vec<FiniteFloat>>> = OnceLock::new();
+            Arc::clone(EMPTY.get_or_init(|| Arc::new(Vec::new())))
+        } else {
+            Arc::new(values)
+        };
         Some(Self {
-            length: values.len(),
+            length,
             offset: 0,
-            storage: Arc::new(values),
+            storage,
         })
     }
 
-    /// Select a finite, contiguous range without copying elements. The new
-    /// immutable value retains the backing allocation until its last view
-    /// is dropped, even when the visible range is empty.
+    /// Select a contiguous range without copying numerical elements.
+    /// Nonempty windows share the original allocation. Empty windows instead
+    /// share canonical empty storage and cannot pin the source buffer.
     pub fn window(&self, start: usize, length: usize) -> Option<Self> {
         if start.checked_add(length)? > self.length {
             return None;
+        }
+        if length == 0 {
+            return Self::from_finite(Vec::new());
         }
         Some(Self {
             storage: Arc::clone(&self.storage),
@@ -166,15 +181,26 @@ impl IntegerVector {
         if values.len() > MAX_VECTOR_LENGTH {
             return None;
         }
+        let length = values.len();
+        let storage = if values.is_empty() {
+            static EMPTY: OnceLock<Arc<Vec<i64>>> = OnceLock::new();
+            Arc::clone(EMPTY.get_or_init(|| Arc::new(Vec::new())))
+        } else {
+            Arc::new(values)
+        };
         Some(Self {
-            length: values.len(),
+            length,
             offset: 0,
-            storage: Arc::new(values),
+            storage,
         })
     }
+    /// Nonempty windows share storage; empty windows detach from their source.
     pub fn window(&self, start: usize, length: usize) -> Option<Self> {
         if start.checked_add(length)? > self.length {
             return None;
+        }
+        if length == 0 {
+            return Self::from_values(Vec::new());
         }
         Some(Self {
             storage: Arc::clone(&self.storage),
@@ -536,3 +562,67 @@ impl fmt::Display for Value {
 }
 
 pub(crate) use crate::types::type_mismatch;
+
+#[cfg(test)]
+mod lifetime_storage_tests {
+    use super::{IntegerVector, NumericVector, TupleValue, Value};
+    use std::sync::Arc;
+
+    #[test]
+    fn empty_numeric_windows_do_not_retain_large_backing_buffers() {
+        let source = NumericVector::new(&vec![1.5; 8192]).unwrap();
+        let backing = Arc::downgrade(&source.storage);
+        let nonempty = source.window(2, 4).unwrap();
+        let empty = source.window(2, 0).unwrap();
+        let at_end = source.window(source.len(), 0).unwrap();
+        let empty_clone = empty.clone();
+
+        assert_eq!(nonempty.len(), 4);
+        assert_eq!(empty.len(), 0);
+        assert_eq!(empty.as_slice(), &[]);
+        assert!(Arc::ptr_eq(&empty.storage, &at_end.storage));
+        assert_eq!(Arc::strong_count(&source.storage), 2);
+        assert!(source.window(source.len() + 1, 0).is_none());
+        assert!(source.window(usize::MAX, 1).is_none());
+
+        drop(source);
+        assert!(backing.upgrade().is_some(), "nonempty view retains the source");
+        drop(nonempty);
+        assert!(backing.upgrade().is_none(), "empty views must not pin source");
+        assert_eq!(empty_clone, at_end);
+    }
+
+    #[test]
+    fn empty_integer_windows_detach_including_nested_windows() {
+        let source = IntegerVector::new(&[1, 2, 3, 4]).unwrap();
+        let backing = Arc::downgrade(&source.storage);
+        let nonempty = source.window(1, 2).unwrap();
+        let empty = nonempty.window(nonempty.len(), 0).unwrap();
+        let independent_empty = IntegerVector::from_values(Vec::new()).unwrap();
+
+        assert!(Arc::ptr_eq(&empty.storage, &independent_empty.storage));
+        assert_eq!(empty.as_slice(), &[]);
+        assert_eq!(nonempty.as_slice(), &[2, 3]);
+        assert_eq!(Arc::strong_count(&source.storage), 2);
+        assert!(nonempty.window(3, 0).is_none());
+
+        drop(source);
+        assert!(backing.upgrade().is_some());
+        drop(nonempty);
+        assert!(backing.upgrade().is_none());
+        assert_eq!(empty.len(), 0);
+    }
+
+    #[test]
+    fn nested_composite_aliases_retain_nonempty_storage_until_final_drop() {
+        let source = NumericVector::new(&[2.0, 3.0]).unwrap();
+        let backing = Arc::downgrade(&source.storage);
+        let tuple = TupleValue::new(vec![Value::Vector(source.clone())]).unwrap();
+        let alias = tuple.clone();
+        drop(source);
+        drop(tuple);
+        assert!(backing.upgrade().is_some(), "tuple alias keeps vector alive");
+        drop(alias);
+        assert!(backing.upgrade().is_none(), "final composite drop releases vector");
+    }
+}
