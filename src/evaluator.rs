@@ -698,7 +698,8 @@ impl Workspace {
                                     .ok_or_else(|| {
                                         Diagnostic::new(
                                             DiagnosticKind::ArrayIndex,
-                                            expression.syntax.nodes()[arguments[argument].expression]
+                                            expression.syntax.nodes()
+                                                [arguments[argument].expression]
                                                 .span,
                                             format!(
                                                 "index {position} is outside fixed array length {}",
@@ -1203,7 +1204,6 @@ pub(crate) fn apply_binary(
     };
     result.map(Value::Integer).ok_or_else(|| overflow(span))
 }
-
 
 fn snapshot_array(
     array: &ArrayValue,
