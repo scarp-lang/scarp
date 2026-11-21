@@ -73,7 +73,11 @@ fn reordering_arguments_evaluate_once_in_source_order() {
 fn typed_reordering_errors_keep_exact_utf8_and_crlf_source_spans() {
     for (call, kind, highlighted) in [
         ("array_reverse()", Kind::CallArguments, "array_reverse"),
-        ("array_swap([array: 1], 0)", Kind::CallArguments, "array_swap"),
+        (
+            "array_swap([array: 1], 0)",
+            Kind::CallArguments,
+            "array_swap",
+        ),
         (
             "array_reverse([integer: 1])",
             Kind::TypeMismatch,
@@ -103,14 +107,8 @@ fn typed_reordering_errors_keep_exact_utf8_and_crlf_source_spans() {
 #[test]
 fn swap_rejects_first_and_second_invalid_positions_and_empty_arrays() {
     for (source, highlighted) in [
-        (
-            "print(1); print(array_swap([array: 8, 9], -1, 1));",
-            "-1",
-        ),
-        (
-            "print(1); print(array_swap([array: 8, 9], 0, 2));",
-            "2",
-        ),
+        ("print(1); print(array_swap([array: 8, 9], -1, 1));", "-1"),
+        ("print(1); print(array_swap([array: 8, 9], 0, 2));", "2"),
         (
             "print(1); print(array_swap([array: <integer>], 0, 0));",
             "0",
@@ -181,13 +179,19 @@ fn reordering_operations_charge_execution_work_before_copying() {
 #[test]
 fn generated_reversals_and_swaps_match_rust_reference_arrays() {
     for length in 0..=24usize {
-        let elements = (0..length).map(|value| value as i64 * 7 - 19).collect::<Vec<_>>();
+        let elements = (0..length)
+            .map(|value| value as i64 * 7 - 19)
+            .collect::<Vec<_>>();
         let literal = if elements.is_empty() {
             "[array: <integer>]".to_owned()
         } else {
             format!(
                 "[array: {}]",
-                elements.iter().map(i64::to_string).collect::<Vec<_>>().join(", ")
+                elements
+                    .iter()
+                    .map(i64::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
         };
         let actual = run(&format!("print(array_reverse({literal}));"));
@@ -198,10 +202,18 @@ fn generated_reversals_and_swaps_match_rust_reference_arrays() {
         } else {
             format!(
                 "[array: {}]",
-                expected.iter().map(i64::to_string).collect::<Vec<_>>().join(", ")
+                expected
+                    .iter()
+                    .map(i64::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
         };
-        assert_eq!(actual, format!("{display}\n").into_bytes(), "length={length}");
+        assert_eq!(
+            actual,
+            format!("{display}\n").into_bytes(),
+            "length={length}"
+        );
         if length > 0 {
             let left = length / 3;
             let right = length - 1;
@@ -210,7 +222,11 @@ fn generated_reversals_and_swaps_match_rust_reference_arrays() {
             expected.swap(left, right);
             let display = format!(
                 "[array: {}]\n",
-                expected.iter().map(i64::to_string).collect::<Vec<_>>().join(", ")
+                expected
+                    .iter()
+                    .map(i64::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
             );
             assert_eq!(actual, display.into_bytes(), "length={length}");
         }
