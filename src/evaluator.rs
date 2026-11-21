@@ -53,7 +53,7 @@ enum Task {
     Index(usize, Span),
     Builtin(Builtin, usize, Span),
     BigIntDivMod(usize, Span),
-    ArrayIntrinsic(ArrayIntrinsic, Span),
+    ArrayIntrinsic(ArrayIntrinsic, usize, Span),
     ListIntrinsic(ListIntrinsic, usize, Span),
     MapIntrinsic(MapIntrinsic, usize, Span),
     UserCall(usize, usize, Span),
@@ -164,7 +164,7 @@ impl Workspace {
                 | Task::Index(_, span)
                 | Task::Builtin(_, _, span)
                 | Task::BigIntDivMod(_, span)
-                | Task::ArrayIntrinsic(_, span)
+                | Task::ArrayIntrinsic(_, _, span)
                 | Task::ListIntrinsic(_, _, span)
                 | Task::MapIntrinsic(_, _, span)
                 | Task::Negate(span)
@@ -189,7 +189,7 @@ impl Workspace {
                                     Task::BigIntDivMod(index, node.span)
                                 }
                                 Some(ResolvedCall::Array(op)) => {
-                                    Task::ArrayIntrinsic(*op, node.span)
+                                    Task::ArrayIntrinsic(*op, index, node.span)
                                 }
                                 Some(ResolvedCall::List(op)) => {
                                     Task::ListIntrinsic(*op, index, node.span)
@@ -671,7 +671,7 @@ impl Workspace {
                     values.extend([Value::BigInt(quotient), Value::BigInt(remainder)]);
                     finish_tuple(values, 2, budget, span)?;
                 }
-                Task::ArrayIntrinsic(operation, span) => {
+                Task::ArrayIntrinsic(operation, node, span) => {
                     let start = values.len() - operation.arity();
                     let array = values[start].as_array().expect("checked array argument");
                     let result = match operation {
@@ -683,6 +683,52 @@ impl Workspace {
                                 .and_then(|index| array.elements().get(index))
                                 .unwrap_or(&values[start + 2])
                                 .clone()
+                        }
+                        ArrayIntrinsic::Set => {
+                            let ExpressionKind::UserCall { arguments, .. } =
+                                &expression.syntax.nodes()[node].kind
+                            else {
+                                unreachable!("resolved array operation");
+                            };
+                            let position = values[start + 1].require_integer(span)?;
+                            let index = usize::try_from(position)
+                                .ok()
+                                .filter(|&index| index < array.len())
+                                .ok_or_else(|| {
+                                    Diagnostic::new(
+                                        DiagnosticKind::ArrayIndex,
+                                        expression.syntax.nodes()[arguments[1].expression].span,
+                                        format!(
+                                            "index {position} is outside fixed array length {}",
+                                            array.len()
+                                        ),
+                                    )
+                                })?;
+                            let length = array.len();
+                            budget.charge(
+                                (length + array.kind().node_count() + 1) as u64,
+                                span,
+                            )?;
+                            let bytes = ArrayValue::allocation_bytes(array.element_type(), length)
+                                .ok_or_else(|| {
+                                    Diagnostic::new(
+                                        DiagnosticKind::ArrayAllocation,
+                                        span,
+                                        "array update allocation size overflow",
+                                    )
+                                })?;
+                            budget.charge_array_allocation(bytes, span)?;
+                            let mut items = Vec::new();
+                            items.try_reserve_exact(length).map_err(|_| {
+                                Diagnostic::new(
+                                    DiagnosticKind::ArrayAllocation,
+                                    span,
+                                    "could not reserve new immutable array storage",
+                                )
+                            })?;
+                            items.extend_from_slice(array.elements());
+                            items[index] = values[start + 2].clone();
+                            Value::Array(ArrayValue::from_checked(array.kind().clone(), items))
                         }
                     };
                     values.truncate(start);
