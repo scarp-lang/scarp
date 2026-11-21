@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.6-alpha.17 — candidate
+
+- Add `array_len` for counted traversal and `array_get_or` for typed fallback
+  lookup on fixed arrays.
+- Add `input_boolean(prompt)` with the existing interactive prompt behavior
+  and E0084 for malformed Boolean input.
+- Preserve the exact invalid length span and repair guidance for nested array
+  type annotations.
+- Point legacy tutorials to the official English and Hindi Scarp Docs site.
+
 ## 0.0.6-alpha.16 — published GitHub prerelease, 2026-11-20
 
 - Add bounded `median` and type-7 `quantile` for finite numerical vectors.

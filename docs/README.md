@@ -6,6 +6,9 @@ Start with the [release-aware learning path](https://scarp-lang.github.io/scarp-
 The links below index compiler-specific references, implementation history and
 release evidence in this checkout.
 
+The `0.0.6-alpha.17` source candidate adds fixed-array queries, Boolean console
+input and more precise binding diagnostics. [Candidate release notes](releases/v0.0.6-alpha.17-publication.md)
+
 **0.0.6-alpha.16 prerelease** adds bounded median and quantile, Unicode operations, and checked 64-bit
 integer utilities.
 [Public notes](releases/v0.0.6-alpha.16-publication.md) ·

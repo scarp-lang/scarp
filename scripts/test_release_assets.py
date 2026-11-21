@@ -266,6 +266,26 @@ class ReleaseAssets(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "missing " + re.escape(member)):
                     verifier.verify(self.directory, version, COMMIT)
 
+    def test_alpha17_requires_array_and_boolean_examples_and_prior_assets(self):
+        version = "0.0.6-alpha.17"
+        files = self.core_release_files(version)
+        self.build(version=version, extra_files=files)
+        self.assertEqual(len(verifier.verify(self.directory, version, COMMIT).splitlines()), 3)
+        for member in (
+            verifier.METADATA_MEMBER,
+            "docs/releases/v0.0.6-alpha.17-publication.md",
+            "examples/array_traversal.stdout",
+            "examples/interactive/boolean_prompt.stdin",
+            "examples/interactive/boolean_prompt.stdout",
+            "examples/order_statistics.stdout",
+            "examples/projects/task-board/tests/lifecycle.srp",
+        ):
+            with self.subTest(member=member):
+                damaged = {name: data for name, data in files.items() if name != member}
+                self.build(version=version, omit=member, extra_files=damaged)
+                with self.assertRaisesRegex(ValueError, "missing " + re.escape(member)):
+                    verifier.verify(self.directory, version, COMMIT)
+
     def test_alpha6_core_requires_input_tuple_and_prior_assets(self):
         version = "0.0.6-alpha.6"
         files = self.core_release_files(version)

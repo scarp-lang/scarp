@@ -21,6 +21,10 @@ See the [compiler documentation index](docs/README.md) for those records.
 The latest published prerelease is
 [0.0.6-alpha.16](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.16).
 
+The `0.0.6-alpha.17` source candidate adds fixed-array queries, Boolean console
+input and more precise binding diagnostics.
+[Candidate release notes](docs/releases/v0.0.6-alpha.17-publication.md)
+
 **0.0.6-alpha.16** adds bounded median and quantile, Unicode operations, and checked 64-bit
 integer utilities.
 [Release notes](docs/releases/v0.0.6-alpha.16-publication.md) ·

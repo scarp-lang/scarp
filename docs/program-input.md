@@ -216,7 +216,7 @@ echo control, formatting or new input data type is introduced.
 | --- | --- | --- |
 | `input(prompt)` | `string` | Yes |
 | `input_integer(prompt)` | signed 64-bit `integer` | Yes |
-| `input_boolean(prompt)` (development) | `boolean` | Yes |
+| `input_boolean(prompt)` (alpha.17 source) | `boolean` | Yes |
 | `input_float(prompt)` | finite binary64 `float` | Yes |
 | `input_bigint(prompt)` | arbitrary-precision `bigint` within configured limits | Yes |
 | `input_decimal(prompt)` | [exact bounded `decimal`](decimal.md) | Yes since alpha.11 |
@@ -246,8 +246,8 @@ Run the [interactive calculator](../examples/interactive/typed_calculator.srp),
 [exact integer addition](../examples/interactive/exact_integer.srp) and
 [EOF-aware Unicode inventory](../examples/line_inventory.srp) with the shipped
 input fixtures.
-The [Boolean prompt example](../examples/interactive/boolean_prompt.srp) runs
-on development builds.
+Run the [Boolean prompt example](../examples/interactive/boolean_prompt.srp)
+with a compiler built from alpha.17 source or later.
 
 ## Verification
 
