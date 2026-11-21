@@ -684,49 +684,44 @@ impl Workspace {
                                 .unwrap_or(&values[start + 2])
                                 .clone()
                         }
-                        ArrayIntrinsic::Set => {
+                        ArrayIntrinsic::Set | ArrayIntrinsic::Swap => {
                             let ExpressionKind::UserCall { arguments, .. } =
                                 &expression.syntax.nodes()[node].kind
                             else {
                                 unreachable!("resolved array operation");
                             };
-                            let position = values[start + 1].require_integer(span)?;
-                            let index = usize::try_from(position)
-                                .ok()
-                                .filter(|&index| index < array.len())
-                                .ok_or_else(|| {
-                                    Diagnostic::new(
-                                        DiagnosticKind::ArrayIndex,
-                                        expression.syntax.nodes()[arguments[1].expression].span,
-                                        format!(
-                                            "index {position} is outside fixed array length {}",
-                                            array.len()
-                                        ),
-                                    )
-                                })?;
-                            let length = array.len();
-                            budget.charge((length + array.kind().node_count() + 1) as u64, span)?;
-                            let bytes = ArrayValue::allocation_bytes(array.element_type(), length)
-                                .ok_or_else(|| {
-                                    Diagnostic::new(
-                                        DiagnosticKind::ArrayAllocation,
-                                        span,
-                                        "array update allocation size overflow",
-                                    )
-                                })?;
-                            budget.charge_array_allocation(bytes, span)?;
-                            let mut items = Vec::new();
-                            items.try_reserve_exact(length).map_err(|_| {
-                                Diagnostic::new(
-                                    DiagnosticKind::ArrayAllocation,
-                                    span,
-                                    "could not reserve new immutable array storage",
-                                )
-                            })?;
-                            items.extend_from_slice(array.elements());
-                            items[index] = values[start + 2].clone();
-                            Value::Array(ArrayValue::from_checked(array.kind().clone(), items))
+                            let check_index = |argument: usize| -> Result<usize, Diagnostic> {
+                                let position = values[start + argument].require_integer(span)?;
+                                usize::try_from(position)
+                                    .ok()
+                                    .filter(|&index| index < array.len())
+                                    .ok_or_else(|| {
+                                        Diagnostic::new(
+                                            DiagnosticKind::ArrayIndex,
+                                            expression.syntax.nodes()[arguments[argument].expression]
+                                                .span,
+                                            format!(
+                                                "index {position} is outside fixed array length {}",
+                                                array.len()
+                                            ),
+                                        )
+                                    })
+                            };
+                            let first = check_index(1)?;
+                            if operation == ArrayIntrinsic::Swap {
+                                let second = check_index(2)?;
+                                snapshot_array(array, budget, span, |items| {
+                                    items.swap(first, second);
+                                })?
+                            } else {
+                                snapshot_array(array, budget, span, |items| {
+                                    items[first] = values[start + 2].clone();
+                                })?
+                            }
                         }
+                        ArrayIntrinsic::Reverse => snapshot_array(array, budget, span, |items| {
+                            items.reverse();
+                        })?,
                     };
                     values.truncate(start);
                     values.push(result);
@@ -1207,6 +1202,41 @@ pub(crate) fn apply_binary(
         BinaryOperator::Equal | BinaryOperator::NotEqual => unreachable!("equality handled above"),
     };
     result.map(Value::Integer).ok_or_else(|| overflow(span))
+}
+
+
+fn snapshot_array(
+    array: &ArrayValue,
+    budget: &mut Budget,
+    span: Span,
+    edit: impl FnOnce(&mut [Value]),
+) -> Result<Value, Diagnostic> {
+    // Each snapshot owns a new immutable backing. Charge work and the shared
+    // array/list/map allocation quota before attempting a fallible reservation.
+    let length = array.len();
+    budget.charge((length + array.kind().node_count() + 1) as u64, span)?;
+    let bytes = ArrayValue::allocation_bytes(array.element_type(), length).ok_or_else(|| {
+        Diagnostic::new(
+            DiagnosticKind::ArrayAllocation,
+            span,
+            "array snapshot allocation size overflow",
+        )
+    })?;
+    budget.charge_array_allocation(bytes, span)?;
+    let mut elements = Vec::new();
+    elements.try_reserve_exact(length).map_err(|_| {
+        Diagnostic::new(
+            DiagnosticKind::ArrayAllocation,
+            span,
+            "could not reserve new immutable array storage",
+        )
+    })?;
+    elements.extend_from_slice(array.elements());
+    edit(&mut elements);
+    Ok(Value::Array(ArrayValue::from_checked(
+        array.kind().clone(),
+        elements,
+    )))
 }
 
 fn finish_tuple(
