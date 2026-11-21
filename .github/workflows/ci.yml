@@ -122,3 +122,23 @@ jobs:
           cargo bench --locked --offline --bench compiler -- --quick
           cargo bench --locked --offline --bench bigint -- --quick
           cargo bench --locked --offline --bench lifetime -- --quick
+
+  lifetime_comparison:
+    name: Lifetime / baseline comparison
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'feature/lifetime-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out candidate and baseline history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - name: Compare Lifetime against exact PR base
+        shell: bash
+        run: sh scripts/benchmarks/compare-lifetime.sh "${{ github.event.pull_request.base.sha }}"
