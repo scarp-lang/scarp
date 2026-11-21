@@ -586,9 +586,15 @@ mod lifetime_storage_tests {
         assert!(source.window(usize::MAX, 1).is_none());
 
         drop(source);
-        assert!(backing.upgrade().is_some(), "nonempty view retains the source");
+        assert!(
+            backing.upgrade().is_some(),
+            "nonempty view retains the source"
+        );
         drop(nonempty);
-        assert!(backing.upgrade().is_none(), "empty views must not pin source");
+        assert!(
+            backing.upgrade().is_none(),
+            "empty views must not pin source"
+        );
         assert_eq!(empty_clone, at_end);
     }
 
@@ -621,8 +627,14 @@ mod lifetime_storage_tests {
         let alias = tuple.clone();
         drop(source);
         drop(tuple);
-        assert!(backing.upgrade().is_some(), "tuple alias keeps vector alive");
+        assert!(
+            backing.upgrade().is_some(),
+            "tuple alias keeps vector alive"
+        );
         drop(alias);
-        assert!(backing.upgrade().is_none(), "final composite drop releases vector");
+        assert!(
+            backing.upgrade().is_none(),
+            "final composite drop releases vector"
+        );
     }
 }
