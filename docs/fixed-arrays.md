@@ -72,6 +72,23 @@ cumulative array allocation budget (E0064), including for nested arrays.
 This is not an in-place mutation; the existing indexed assignment restriction
 remains unchanged. See the [runnable update example](../examples/array_updates.srp).
 
+## Pure array reordering (development source)
+
+- `array_reverse(values)` returns a new fixed array with elements in reverse
+  order. Empty and single-element arrays are supported.
+- `array_swap(values, first, second)` returns a new fixed array with the
+  two indexed elements exchanged. Equal indices are valid; both indices must
+  be integers within the array bounds.
+
+Both functions preserve the exact `array<T, N>` type and leave the input
+and its aliases unchanged. Arguments evaluate once, from left to right.
+Negative or out-of-bounds swap indices report E0063 at the first invalid
+index expression. Each successful operation reserves and charges a new
+immutable backing under the shared collection quota (E0064), even for empty
+arrays. Reordering also charges execution work proportional to the array
+length. Neither operation changes the existing 4,096-element maximum.
+
+See the [runnable reordering example](../examples/array_reordering.srp).
 ## Bounds and accounting
 
 | Measure | Ceiling |
