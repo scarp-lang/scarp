@@ -181,6 +181,14 @@ fn errors_identify_the_typed_call_without_exposing_invalid_input() {
         ("input_integer", " 42\n", Kind::NumericConversion),
         ("input_integer", "0xAB\n", Kind::NumericConversion),
         ("input_integer", "private marker\n", Kind::NumericConversion),
+        (
+            "input_boolean",
+            "private marker\n",
+            Kind::InvalidBooleanInput,
+        ),
+        ("input_boolean", "TRUE\n", Kind::InvalidBooleanInput),
+        ("input_boolean", "false \r\n", Kind::InvalidBooleanInput),
+        ("input_boolean", "1\n", Kind::InvalidBooleanInput),
         ("input_float", "1e9999\n", Kind::NumericConversion),
         ("input_float", "NaN\n", Kind::NumericConversion),
         ("input_float", "1.\n", Kind::NumericConversion),
@@ -208,9 +216,49 @@ fn errors_identify_the_typed_call_without_exposing_invalid_input() {
         );
         assert_eq!(error.kind, kind);
         assert!(error.message.contains(name));
-        assert!(!error.message.contains(data.trim()));
+        if kind == Kind::InvalidBooleanInput {
+            assert_eq!(
+                error.message,
+                "input_boolean: expected the literal true or false"
+            );
+        } else {
+            assert!(!error.message.contains(data.trim()));
+        }
         assert_eq!(&source[error.span.start..error.span.end], call);
         assert_eq!(stdout, b"value> ");
+        assert!(stderr.is_empty());
+    }
+}
+
+#[test]
+fn boolean_input_distinguishes_empty_lines_eof_and_valid_final_lines() {
+    let source = r#"
+        bind answer: boolean = input_boolean("Continue? ");
+        print(answer);
+    "#;
+    for (data, expected) in [
+        ("\n", Err(Kind::InvalidBooleanInput)),
+        ("", Err(Kind::InputEof)),
+        ("true\r\n", Ok("Continue? true\n")),
+        ("false", Ok("Continue? false\n")),
+    ] {
+        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        let result = scarp::run_with_interactive_input(
+            source,
+            &mut Cursor::new(data),
+            &mut stdout,
+            &mut stderr,
+        );
+        match expected {
+            Ok(output) => {
+                result.unwrap();
+                assert_eq!(stdout, output.as_bytes());
+            }
+            Err(kind) => {
+                assert_eq!(diagnostic(result.unwrap_err()).kind, kind);
+                assert_eq!(stdout, b"Continue? ");
+            }
+        }
         assert!(stderr.is_empty());
     }
 }
@@ -284,6 +332,7 @@ fn type_metadata_reports_each_result_and_impurity() {
         ("try_read_line()", None),
         (r#"input("x")"#, Some(ValueType::String)),
         (r#"input_integer("x")"#, Some(ValueType::Integer)),
+        (r#"input_boolean("x")"#, Some(ValueType::Boolean)),
         (r#"input_float("x")"#, Some(ValueType::Float)),
         (r#"input_bigint("x")"#, Some(ValueType::BigInt)),
         (r#"input_decimal("x")"#, Some(ValueType::Decimal)),
@@ -476,7 +525,12 @@ fn flush_calls_share_print_and_capture_budgets() {
 fn interactive_examples_match_golden_output_via_the_cli() {
     use std::{fs, path::Path, process::Command};
     let examples = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/interactive");
-    for example in ["typed_calculator", "exact_integer", "exact_decimal"] {
+    for example in [
+        "typed_calculator",
+        "exact_integer",
+        "exact_decimal",
+        "boolean_prompt",
+    ] {
         let source = examples.join(format!("{example}.srp"));
         let expected = fs::read(source.with_extension("stdout")).unwrap();
         let verify = Command::new(env!("CARGO_BIN_EXE_scarp"))
@@ -502,6 +556,7 @@ fn both_native_backends_reject_the_new_io_calls() {
     for source in [
         "bind line = try_read_line();",
         r#"bind number = input_integer("Value> ");"#,
+        r#"bind answer = input_boolean("Continue? ");"#,
         r#"bind number = input_decimal("Value> ");"#,
         "flush_stdout();",
     ] {
@@ -523,6 +578,11 @@ fn named_or_non_string_prompt_arguments_are_rejected() {
     for (source, kind) in [
         (r#"input(prompt: "x");"#, Kind::CallArguments),
         ("input_integer(1);", Kind::TypeMismatch),
+        ("input_boolean(1);", Kind::TypeMismatch),
+        (
+            r#"pure funcra confirm() -> boolean { return input_boolean("Continue? "); }"#,
+            Kind::ImpureFunction,
+        ),
         ("input_decimal(1);", Kind::TypeMismatch),
         (r#"try_read_line("x");"#, Kind::CallArguments),
         ("flush_stderr(1);", Kind::CallArguments),

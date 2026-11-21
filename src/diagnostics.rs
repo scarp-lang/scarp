@@ -185,6 +185,7 @@ diagnostic_catalogue! {
     MapLimit => ("E0081", "Typed map key, value or length limits were exceeded. Keys must be integer, boolean or string. Maps contain at most 1024 distinct entries."),
     MapKey => ("E0082", "Duplicate map key in a source map literal, or map key not found where a key is required. Use unique keys; order is canonical rather than insertion based."),
     MapAllocation => ("E0083", "Map payload exceeded the existing shared array/list/map byte quota, or its storage could not be reserved."),
+    InvalidBooleanInput => ("E0084", "Invalid boolean input. Enter the lowercase literal true or false without surrounding whitespace."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

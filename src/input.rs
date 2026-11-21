@@ -19,6 +19,7 @@ pub(crate) enum IoBuiltin {
     AskOr,
     TryReadLine,
     Integer,
+    Boolean,
     Float,
     BigInt,
     Decimal,
@@ -35,6 +36,7 @@ impl IoBuiltin {
             "ask_or" => Some(Self::AskOr),
             "try_read_line" => Some(Self::TryReadLine),
             "input_integer" => Some(Self::Integer),
+            "input_boolean" => Some(Self::Boolean),
             "input_float" => Some(Self::Float),
             "input_bigint" => Some(Self::BigInt),
             "input_decimal" => Some(Self::Decimal),
@@ -47,7 +49,13 @@ impl IoBuiltin {
     pub(crate) fn prompts(self) -> bool {
         matches!(
             self,
-            Self::Ask | Self::AskOr | Self::Integer | Self::Float | Self::BigInt | Self::Decimal
+            Self::Ask
+                | Self::AskOr
+                | Self::Integer
+                | Self::Boolean
+                | Self::Float
+                | Self::BigInt
+                | Self::Decimal
         )
     }
 
@@ -66,6 +74,7 @@ impl IoBuiltin {
                     .expect("valid input tuple type")
             }
             Self::Integer => ValueType::Integer.into(),
+            Self::Boolean => ValueType::Boolean.into(),
             Self::Float => ValueType::Float.into(),
             Self::BigInt => ValueType::BigInt.into(),
             Self::Decimal => ValueType::Decimal.into(),
@@ -88,6 +97,19 @@ impl IoBuiltin {
         budget: &mut Budget,
         span: Span,
     ) -> Result<Value, Diagnostic> {
+        if self == Self::Boolean {
+            budget.charge(1, span)?;
+            return match value.as_str().expect("checked input line") {
+                "true" => Ok(Value::Boolean(true)),
+                "false" => Ok(Value::Boolean(false)),
+                _ => Err(Diagnostic::new(
+                    Kind::InvalidBooleanInput,
+                    span,
+                    "input_boolean: expected the literal true or false",
+                )
+                .with_help("enter lowercase true or false without surrounding whitespace")),
+            };
+        }
         let (conversion, action) = match self {
             Self::Integer => (Builtin::TextToInteger, "input_integer"),
             Self::Float => (Builtin::TextToFloat, "input_float"),

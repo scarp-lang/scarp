@@ -1,0 +1,10 @@
+// Run with scarp exec --interactive examples/interactive/boolean_prompt.srp.
+repeat 2 as attempt {
+    bind confirmed: boolean = input_boolean("Continue (true/false)? ");
+    if confirmed {
+        print("Continuing");
+    } else {
+        print("Stopped");
+        break;
+    }
+}
