@@ -80,7 +80,9 @@ Published v0.0.6-alpha.1 adds static `inspect symbols` and `inspect references`
 commands, which are absent from older alpha.5 packages.
 
 The latest published prerelease is
-[v0.0.6-alpha.16](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.16).
+[v0.0.6-alpha.17](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.17).
+`scarp exec --interactive` supports `input_boolean(prompt)` for lowercase
+`true` and `false` input.
 The interpreter provides bounded statistics, Unicode text and signed 64-bit
 integer utilities. Token and AST inspection apply the 1 MiB source file cap.
 The editor cache

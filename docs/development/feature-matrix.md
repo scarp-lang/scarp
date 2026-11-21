@@ -1,5 +1,10 @@
 # Feature completeness and development roadmap
 
+Published `0.0.6-alpha.17` adds `array_len`, `array_get_or`, and `input_boolean`
+to the interpreter and improves nested array type diagnostics.
+[Public notes](../releases/v0.0.6-alpha.17-publication.md) ·
+[Exact-source verification](../releases/v0.0.6-alpha.17-validation.md)
+
 Published `0.0.6-alpha.16` adds bounded median and quantile, Unicode operations, and checked 64-bit
 integer utilities.
 [Public notes](../releases/v0.0.6-alpha.16-publication.md) ·

@@ -6,8 +6,10 @@ Start with the [release-aware learning path](https://scarp-lang.github.io/scarp-
 The links below index compiler-specific references, implementation history and
 release evidence in this checkout.
 
-The `0.0.6-alpha.17` source candidate adds fixed-array queries, Boolean console
-input and more precise binding diagnostics. [Candidate release notes](releases/v0.0.6-alpha.17-publication.md)
+**0.0.6-alpha.17 prerelease** adds fixed-array queries, Boolean console input
+and more precise binding diagnostics.
+[Public notes](releases/v0.0.6-alpha.17-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.17-validation.md)
 
 **0.0.6-alpha.16 prerelease** adds bounded median and quantile, Unicode operations, and checked 64-bit
 integer utilities.
@@ -120,7 +122,7 @@ updated for the **0.0.6-alpha.6 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
 contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.6-alpha.16](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.16),
+[0.0.6-alpha.17](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.17),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)
