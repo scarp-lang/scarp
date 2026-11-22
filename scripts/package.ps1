@@ -8,9 +8,10 @@ param(
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 function Invoke-ScarpProcess {
-    param([string]$Executable, [string[]]$Arguments, [byte[]]$InputBytes = @())
+    param([string]$Executable, [string[]]$Arguments, [byte[]]$InputBytes = @(), [string]$WorkingDirectory = '')
     $start = [System.Diagnostics.ProcessStartInfo]::new()
     $start.FileName = $Executable
+    if ($WorkingDirectory) { $start.WorkingDirectory = $WorkingDirectory }
     $start.UseShellExecute = $false
     $start.CreateNoWindow = $true
     $start.RedirectStandardInput = $true
@@ -136,6 +137,62 @@ try {
     $canonicalRun = Invoke-ScarpProcess -Executable $executable -Arguments @('exec', (Join-Path $extractedPackage 'examples/hello.srp'))
     $legacyRun = Invoke-ScarpProcess -Executable $executable -Arguments @('run', (Join-Path $extractedPackage 'examples/hello.srp'))
     if ($canonicalRun.ExitCode -ne 0 -or $canonicalRun.Stderr.Length -ne 0 -or [System.Convert]::ToBase64String($canonicalRun.Stdout) -cne [System.Convert]::ToBase64String($legacyRun.Stdout)) { throw 'Packaged exec differs from run' }
+    # Alpha.18: test the actual extracted compiler, not only the development
+    # binary. Manifest precedence, conventional entrypoints, and typed prompts
+    # must work with zero-argument exec on every supported package target.
+    if ($version -eq '0.0.6-alpha.18') {
+        $workspace = Join-Path $stagingRoot 'unified-exec-smoke'
+        $srcDir = Join-Path $workspace 'src'
+        New-Item -ItemType Directory -Path $srcDir -Force | Out-Null
+        $rootMain = Join-Path $workspace 'main.srp'
+        $srcMain = Join-Path $srcDir 'main.srp'
+        $declared = Join-Path $srcDir 'declared.srp'
+        $manifest = Join-Path $workspace 'scarp.project'
+        [IO.File]::WriteAllText($rootMain, 'print("root");')
+        [IO.File]::WriteAllText($srcMain, 'print("src");')
+        [IO.File]::WriteAllText($declared, 'print("declared");')
+        [IO.File]::WriteAllText($manifest, 'project "smoke" { version: "0.1.0" entry: "src/declared.srp" type: "application" dependencies {} }')
+        $selected = Invoke-ScarpProcess -Executable $executable -Arguments @('exec') -WorkingDirectory $workspace
+        if ($selected.ExitCode -ne 0 -or $selected.Stderr.Length -ne 0 -or
+            [Text.Encoding]::UTF8.GetString($selected.Stdout) -cne "declared`n") {
+            throw 'Packaged exec did not prioritize the project manifest'
+        }
+        Remove-Item -LiteralPath $manifest
+        $srcResult = Invoke-ScarpProcess -Executable $executable -Arguments @('exec') -WorkingDirectory $workspace
+        if ($srcResult.ExitCode -ne 0 -or $srcResult.Stderr.Length -ne 0 -or
+            [Text.Encoding]::UTF8.GetString($srcResult.Stdout) -cne "src`n") {
+            throw 'Packaged exec did not select src/main.srp'
+        }
+        Remove-Item -LiteralPath $srcMain
+        $rootResult = Invoke-ScarpProcess -Executable $executable -Arguments @('exec', '--max-steps', '10000') -WorkingDirectory $workspace
+        if ($rootResult.ExitCode -ne 0 -or $rootResult.Stderr.Length -ne 0 -or
+            [Text.Encoding]::UTF8.GetString($rootResult.Stdout) -cne "root`n") {
+            throw 'Packaged exec did not select main.srp after src/main.srp'
+        }
+        [IO.File]::WriteAllText($rootMain, 'bind n: integer = input_integer("Number: "); print(n + n);')
+        $prompt = Invoke-ScarpProcess -Executable $executable -Arguments @('exec') -InputBytes ([Text.Encoding]::UTF8.GetBytes("21`n")) -WorkingDirectory $workspace
+        if ($prompt.ExitCode -ne 0 -or $prompt.Stderr.Length -ne 0 -or
+            [Text.Encoding]::UTF8.GetString($prompt.Stdout) -cne "Number: 42`n") {
+            throw 'Packaged exec did not enable typed stdin automatically'
+        }
+        $run = Invoke-ScarpProcess -Executable $executable -Arguments @('run', 'main.srp') -WorkingDirectory $workspace
+        if ($run.ExitCode -ne 1 -or $run.Stdout.Length -ne 0 -or
+            -not [Text.Encoding]::UTF8.GetString($run.Stderr).Contains('E0054')) {
+            throw 'Packaged run unexpectedly enabled interactive input'
+        }
+        [IO.File]::WriteAllText($manifest, 'this is not a valid project manifest')
+        $invalid = Invoke-ScarpProcess -Executable $executable -Arguments @('exec') -WorkingDirectory $workspace
+        if ($invalid.ExitCode -ne 1 -or $invalid.Stdout.Length -ne 0) {
+            throw 'Packaged exec bypassed an invalid manifest'
+        }
+        Remove-Item -LiteralPath $manifest
+        Remove-Item -LiteralPath $rootMain
+        $missing = Invoke-ScarpProcess -Executable $executable -Arguments @('exec') -WorkingDirectory $workspace
+        if ($missing.ExitCode -ne 2 -or $missing.Stdout.Length -ne 0 -or
+            -not [Text.Encoding]::UTF8.GetString($missing.Stderr).Contains('no Scarp entrypoint')) {
+            throw 'Packaged exec did not reject a missing entrypoint'
+        }
+    }
     $staticSource = Join-Path $stagingRoot 'static-verification.srp'
     [System.IO.File]::WriteAllText($staticSource, 'print(1/0);')
     $staticCheck = Invoke-ScarpProcess -Executable $executable -Arguments @('verify', '--diagnostic-format=json', $staticSource)
