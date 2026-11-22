@@ -47,6 +47,15 @@ jobs:
       - name: Build, extract, and smoke-test package
         shell: pwsh
         run: ./scripts/package.ps1 -Target '${{ matrix.target }}'
+      - name: Compare payloads from a clean second release build
+        shell: pwsh
+        run: |
+          & cargo clean --release --target '${{ matrix.target }}'
+          if ($LASTEXITCODE -ne 0) { throw 'Could not clean the first release build' }
+          ./scripts/package.ps1 -Target '${{ matrix.target }}' -OutputDirectory 'target/rebuilt-dist'
+          $python = if ($IsWindows) { 'python' } else { 'python3' }
+          & $python ./scripts/verify-package-rebuild.py dist target/rebuilt-dist '${{ matrix.target }}' --require-byte-identical-archives
+          if ($LASTEXITCODE -ne 0) { throw 'Release package payload is not reproducible' }
       - name: Upload verified archive and checksum
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
