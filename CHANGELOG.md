@@ -6,6 +6,9 @@
   targets pass, verifying the combined archives against the exact source commit
   before any publication authorization.
 
+- Validate the exact release archive member inventory and reject path
+  traversal, duplicates, symlinks, and unapproved bundled files.
+
 - Canonicalize Windows ZIP and Unix tar.gz archives with stable file ordering,
   ownership, permissions, and timestamps. A clean second release build must
   reproduce the complete archive SHA-256 bytes on the same OS/toolchain runner.

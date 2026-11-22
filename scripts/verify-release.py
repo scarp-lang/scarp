@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import stat
 import subprocess
 import tarfile
 import zipfile
@@ -94,12 +95,83 @@ def source_files_at(source_directory, commit):
     return files
 
 
+def validate_archive_inventory(members, root, executable, source_files):
+    """Reject duplicate, unsafe, non-file entries and unexpected release payloads.
+
+    Archive entries are (name, kind) pairs where kind is file, dir or other.
+    An exact source manifest makes the archive inventory closed: besides the
+    binary and BUILD-INFO, only the approved source files and parent dirs may
+    be present. Older standalone verification without a source directory still
+    applies all path and entry-type safety checks.
+    """
+    expected_files = set(source_files) | {executable, "BUILD-INFO.txt"}
+    expected_dirs = {root}
+    for member in expected_files:
+        parts = member.split("/")
+        for position in range(1, len(parts)):
+            expected_dirs.add(root + "/" + "/".join(parts[:position]))
+    seen = set()
+    actual_files = set()
+    for member, kind in members:
+        if not isinstance(member, str) or not member or "\\" in member or member.startswith("/"):
+            raise ValueError(f"unsafe archive member: {member!r}")
+        normalized = member.rstrip("/")
+        if not normalized or any(part in ("", ".", "..") for part in normalized.split("/")):
+            raise ValueError(f"unsafe archive member: {member!r}")
+        if normalized != root and not normalized.startswith(root + "/"):
+            raise ValueError(f"archive member outside package root: {member!r}")
+        if normalized in seen:
+            raise ValueError(f"duplicate archive member: {member!r}")
+        seen.add(normalized)
+        if kind not in ("file", "dir"):
+            raise ValueError(f"non-regular archive member: {member!r}")
+        if normalized == root:
+            if kind != "dir":
+                raise ValueError("package root is not a directory")
+            continue
+        relative = normalized[len(root) + 1:]
+        if kind == "dir":
+            if source_files and normalized not in expected_dirs:
+                raise ValueError(f"unexpected archive directory: {member!r}")
+        else:
+            if member.endswith("/"):
+                raise ValueError(f"archive file has directory syntax: {member!r}")
+            actual_files.add(relative)
+    if source_files:
+        missing = sorted(expected_files - actual_files)
+        unexpected = sorted(actual_files - expected_files)
+        if missing or unexpected:
+            raise ValueError(
+                f"release archive inventory differs: missing={missing[:5]}, "
+                f"unexpected={unexpected[:5]}"
+            )
+
+
+def zip_archive_members(package):
+    for entry in package.infolist():
+        unix_mode = stat.S_IFMT(entry.external_attr >> 16) if entry.create_system == 3 else 0
+        kind = "dir" if entry.is_dir() else "file"
+        if unix_mode not in (0, stat.S_IFDIR if kind == "dir" else stat.S_IFREG):
+            kind = "other"
+        yield entry.filename, kind
+
+
+def tar_archive_members(package):
+    for entry in package.getmembers():
+        kind = "dir" if entry.isdir() else "file" if entry.isfile() else "other"
+        yield entry.name, kind
+
+
 def verify(directory, version, commit, source_directory=None):
     if not re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", version):
         raise ValueError("expected a three-part package version")
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("expected the full release commit")
     source_files = source_files_at(source_directory, commit) if source_directory is not None else {}
+    # Historical release tests supply deliberately partial source manifests to
+    # verify selected blob digests. Preserve those older contracts while making
+    # alpha.18 archives a closed inventory against their complete Git source.
+    inventory_source_files = source_files if version == "0.0.6-alpha.18" else {}
     checksums = []
     for target, extension in (
         ("x86_64-pc-windows-msvc", ".zip"),
@@ -120,6 +192,7 @@ def verify(directory, version, commit, source_directory=None):
         metadata = None
         if extension == ".zip":
             with zipfile.ZipFile(archive) as package:
+                validate_archive_inventory(zip_archive_members(package), root, "scarp.exe", inventory_source_files)
                 paths = set(package.namelist())
                 record = package.read(root + "/BUILD-INFO.txt")
                 verify_source_members(package.read, root, source_files)
@@ -127,6 +200,7 @@ def verify(directory, version, commit, source_directory=None):
                     metadata = package.read(root + "/" + METADATA_MEMBER)
         else:
             with tarfile.open(archive, "r:gz") as package:
+                validate_archive_inventory(tar_archive_members(package), root, "scarp", inventory_source_files)
                 paths = set(package.getnames())
                 stream = package.extractfile(root + "/BUILD-INFO.txt")
                 if stream is None:
