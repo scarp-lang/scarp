@@ -387,6 +387,49 @@ impl TypeRegistry {
         }
         Ok(left == right)
     }
+
+    /// Whether a callable value with `candidate` signature may be used where
+    /// `expected` is required. This is a semantic-type query, not source-level
+    /// function-value support: Scarp still calls user functions by name.
+    ///
+    /// Parameters and results are invariant (their TypeIds must match exactly).
+    /// A pure function may fill an impure callable slot, but not the reverse.
+    /// In particular, this does not make signatures from distinct registries
+    /// interchangeable, or implement default arguments, captures or closures.
+    ///
+    /// Both handles are validated before comparing kinds, even if one is not a
+    /// function. Non-callable types are incompatible rather than an error.
+    pub fn accepts_callable(
+        &self,
+        expected: TypeId,
+        candidate: TypeId,
+    ) -> Result<bool, TypeRegistryError> {
+        let expected_kind = self
+            .get(expected)
+            .ok_or(TypeRegistryError::UnknownType(expected))?;
+        let candidate_kind = self
+            .get(candidate)
+            .ok_or(TypeRegistryError::UnknownType(candidate))?;
+        match (expected_kind, candidate_kind) {
+            (
+                TypeKind::Function {
+                    parameters: expected_parameters,
+                    result: expected_result,
+                    effect: expected_effect,
+                },
+                TypeKind::Function {
+                    parameters: candidate_parameters,
+                    result: candidate_result,
+                    effect: candidate_effect,
+                },
+            ) => Ok(expected_parameters == candidate_parameters
+                && expected_result == candidate_result
+                && (expected_effect == candidate_effect
+                    || (*expected_effect == FunctionEffect::Impure
+                        && *candidate_effect == FunctionEffect::Pure))),
+            _ => Ok(false),
+        }
+    }
     pub fn iter(&self) -> impl Iterator<Item = (TypeId, &TypeKind)> {
         PRIMITIVES
             .iter()
