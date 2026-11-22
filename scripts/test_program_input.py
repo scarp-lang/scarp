@@ -64,10 +64,11 @@ def main():
             import select
             master, slave = pty.openpty()
             try:
-                # No terminal input or EOF is supplied. A hidden blocking read
-                # would timeout, and buffered program output must remain empty.
+                # Legacy run without --interactive must reject a prompt
+                # before reading from a real terminal with no available input.
+                # In contrast, exec is intentionally prompt-capable by default.
                 result = subprocess.run(
-                    [binary, "exec", str(source)], stdin=slave,
+                    [binary, "run", str(source)], stdin=slave,
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10, check=False,
                 )
                 assert result.returncode == 1 and not result.stdout and b"E0054" in result.stderr, result
@@ -83,7 +84,7 @@ def main():
                 # Wait for the prompt while the terminal has no input queued.
                 # Reading line-buffered input first would block the handshake.
                 with subprocess.Popen(
-                    [binary, "exec", "--interactive", str(source)], stdin=slave,
+                    [binary, "exec", str(source)], stdin=slave,
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0,
                 ) as child:
                     try:
