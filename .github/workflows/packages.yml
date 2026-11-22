@@ -64,3 +64,38 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+
+  verify_release:
+    name: Release candidate / archives and source
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Check out the exact package source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Download the three packages from this workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p target/release-verification
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --dir target/release-verification
+      - name: Independently verify exact source and all packaged archives
+        shell: bash
+        env:
+          SCARP_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$SCARP_SOURCE_SHA"
+          version="$(sed -n 's/^version = "\([^"]*\)"$/\1/p' Cargo.toml | head -n 1)"
+          test -n "$version"
+          python3 scripts/verify-release.py target/release-verification \
+            --version "$version" --commit "$SCARP_SOURCE_SHA" \
+            --source-directory . --write-manifest
+          test "$(wc -l < target/release-verification/SHA256SUMS)" -eq 3
+          cat target/release-verification/SHA256SUMS

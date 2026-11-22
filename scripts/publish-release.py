@@ -24,6 +24,7 @@ WORKFLOWS = {
     ".github/workflows/packages.yml": {
         "Package / x86_64-pc-windows-msvc", "Package / x86_64-unknown-linux-gnu",
         "Package / aarch64-apple-darwin",
+        "Release candidate / archives and source",
     },
 }
 
