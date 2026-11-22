@@ -62,6 +62,23 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(count, 2)
         self.assertFalse(same_archive)
 
+    def test_strict_mode_rejects_metadata_only_changes(self):
+        target = "x86_64-pc-windows-msvc"
+        self.archive(self.first, target, {"scarp.exe": b"same"}, timestamp=0)
+        self.archive(self.second, target, {"scarp.exe": b"same"}, timestamp=1)
+        with self.assertRaisesRegex(ValueError, "archive bytes are not reproducible"):
+            verify.compare(self.first, self.second, target, require_archive_identity=True)
+
+    def test_strict_mode_accepts_exact_archive_bytes(self):
+        target = "aarch64-apple-darwin"
+        self.archive(self.first, target, {"scarp": b"same"}, timestamp=0)
+        self.archive(self.second, target, {"scarp": b"same"}, timestamp=0)
+        count, same_archive = verify.compare(
+            self.first, self.second, target, require_archive_identity=True,
+        )
+        self.assertEqual(count, 1)
+        self.assertTrue(same_archive)
+
     def test_detects_byte_change(self):
         target = "aarch64-apple-darwin"
         self.archive(self.first, target, {"scarp": b"native-a"}, timestamp=0)

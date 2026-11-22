@@ -2,6 +2,10 @@
 
 ## 0.0.6-alpha.18 — source release candidate, not published
 
+- Canonicalize Windows ZIP and Unix tar.gz archives with stable file ordering,
+  ownership, permissions, and timestamps. A clean second release build must
+  reproduce the complete archive SHA-256 bytes on the same OS/toolchain runner.
+
 - Make `scarp exec` resolve the current project's manifest entrypoint or a predictable
   `src/main.srp`/`main.srp` fallback, while still accepting explicit source paths.
   Enable bounded console and typed prompts by default for `exec` only; retain

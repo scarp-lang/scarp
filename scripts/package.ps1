@@ -98,15 +98,15 @@ try {
     $buildInfo = "version=$version`ntarget=$Target`ncommit=$revision`nworking_tree=$treeState`ncompiler=$compiler`n"
     [System.IO.File]::WriteAllText((Join-Path $packageRoot 'BUILD-INFO.txt'), $buildInfo, [System.Text.UTF8Encoding]::new($false))
 
-    if ($isWindowsTarget) {
-        Compress-Archive -LiteralPath $packageRoot -DestinationPath $archive
-    }
-    else {
+    if (-not $isWindowsTarget) {
         & chmod +x (Join-Path $packageRoot $binaryName)
         if ($LASTEXITCODE -ne 0) { throw 'Could not set executable permissions' }
-        & tar -czf $archive -C $stagingRoot $packageName
-        if ($LASTEXITCODE -ne 0) { throw 'Archive creation failed' }
     }
+    # Fixed archive metadata and canonical member order are required for
+    # byte-identical archives across clean builds on the same native runner.
+    $python = if ($IsWindows) { 'python' } else { 'python3' }
+    & $python (Join-Path $PSScriptRoot 'build-release-archive.py') $packageRoot $archive
+    if ($LASTEXITCODE -ne 0) { throw 'Deterministic archive creation failed' }
 
     # Verify the extracted deliverable, including its executable permissions.
     $extractedRoot = Join-Path $stagingRoot 'extracted'

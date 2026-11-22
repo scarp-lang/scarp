@@ -88,7 +88,7 @@ def find_archive(directory, target):
     return matches[0]
 
 
-def compare(original_dir, rebuilt_dir, target):
+def compare(original_dir, rebuilt_dir, target, *, require_archive_identity=False):
     original = find_archive(original_dir, target)
     rebuilt = find_archive(rebuilt_dir, target)
     if original.name != rebuilt.name:
@@ -102,7 +102,10 @@ def compare(original_dir, rebuilt_dir, target):
         added = sorted(second.keys() - first.keys())
         changed = sorted(name for name in first.keys() & second.keys() if first[name] != second[name])
         raise ValueError(f"payload is not reproducible: missing={missing[:5]}, added={added[:5]}, changed={changed[:5]}")
-    return len(first), original_hash == rebuilt_hash
+    same_archive = original_hash == rebuilt_hash
+    if require_archive_identity and not same_archive:
+        raise ValueError("archive bytes are not reproducible despite matching file payloads")
+    return len(first), same_archive
 
 
 def main():
@@ -110,8 +113,12 @@ def main():
     parser.add_argument("original_dir", type=Path)
     parser.add_argument("rebuilt_dir", type=Path)
     parser.add_argument("target", choices=sorted(TARGETS))
+    parser.add_argument("--require-byte-identical-archives", action="store_true")
     args = parser.parse_args()
-    count, archive_identical = compare(args.original_dir, args.rebuilt_dir, args.target)
+    count, archive_identical = compare(
+        args.original_dir, args.rebuilt_dir, args.target,
+        require_archive_identity=args.require_byte_identical_archives,
+    )
     print(f"Reproducible package payload: {count} files, target={args.target}")
     print(f"Byte-identical archives (including metadata): {archive_identical}")
 
