@@ -1,6 +1,6 @@
 # Command-line reference
 
-## Unified execution (development branch; not yet published)
+## Unified execution (published in v0.0.6-alpha.18)
 
 Use `scarp exec` as the standard one-command entry point for applications.
 It works with or without console input, and accepts an optional source path:
@@ -112,9 +112,11 @@ Published v0.0.6-alpha.1 adds static `inspect symbols` and `inspect references`
 commands, which are absent from older alpha.5 packages.
 
 The latest published prerelease is
-[v0.0.6-alpha.17](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.17).
-`scarp exec --interactive` supports `input_boolean(prompt)` for lowercase
-`true` and `false` input.
+[v0.0.6-alpha.18](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.18).
+`scarp exec` enables bounded input calls automatically, including
+`input_integer(prompt)` and `input_boolean(prompt)`; the latter accepts
+lowercase `true` and `false`. Legacy `run` keeps its explicit
+`--interactive` opt-in.
 The interpreter provides bounded statistics, Unicode text and signed 64-bit
 integer utilities. Token and AST inspection apply the 1 MiB source file cap.
 The editor cache

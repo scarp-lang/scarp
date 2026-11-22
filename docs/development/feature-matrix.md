@@ -1,5 +1,12 @@
 # Feature completeness and development roadmap
 
+Published `0.0.6-alpha.18` adds unified zero-argument `scarp exec`,
+automatic bounded typed input, fixed-array updates and early Lifetime
+empty-view storage-retention hardening. Three native archives pass strict
+clean-build reproducibility and exact-source release verification.
+[Public notes](../releases/v0.0.6-alpha.18-publication.md) ·
+[Exact-source verification](../releases/v0.0.6-alpha.18-validation.md)
+
 Published `0.0.6-alpha.17` adds `array_len`, `array_get_or`, and `input_boolean`
 to the interpreter and improves nested array type diagnostics.
 [Public notes](../releases/v0.0.6-alpha.17-publication.md) ·
