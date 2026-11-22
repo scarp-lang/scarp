@@ -128,7 +128,6 @@ fn callable_arguments_obey_registry_arity_and_depth_limits() {
     let leaf = builder
         .intern(signature(&[P::Integer.id()], P::Boolean.id(), Effect::Pure))
         .unwrap();
-    assert_eq!(builder.depth(leaf), Some(2));
     assert!(builder.intern(signature(&[leaf], P::Boolean.id(), Effect::Pure)).is_err());
     assert!(builder
         .intern(signature(
@@ -138,4 +137,6 @@ fn callable_arguments_obey_registry_arity_and_depth_limits() {
         ))
         .is_err());
     assert_eq!(builder.len(), P::ALL.len() + 1);
+    let registry = builder.finish();
+    assert_eq!(registry.depth(leaf), Some(2));
 }
