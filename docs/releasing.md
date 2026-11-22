@@ -1,12 +1,15 @@
 # Preparing a prerelease
 
 The latest published prerelease is
-[v0.0.6-alpha.17](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.17),
-published from exact source `7831a37939965f557ce746e1d86bf82d3d629f74`.
-The [publication verification record](releases/v0.0.6-alpha.17-validation.md)
+[v0.0.6-alpha.18](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.18),
+published from exact source `84d8de05968a488773e7c5b6eda1376d8957553c`.
+The [publication verification record](releases/v0.0.6-alpha.18-validation.md)
 lists the annotated tag, passing workflow runs, and all seven verified assets.
 The completed request was retired after public verification. A future
 publication requires separate maintainer approval for its full source SHA.
+
+The [alpha.17 publication record](releases/v0.0.6-alpha.17-validation.md)
+preserves the previous approved source, tag and public checksums.
 
 See the [alpha.16 publication record](releases/v0.0.6-alpha.16-validation.md)
 for the previous source and package digests.
@@ -36,7 +39,7 @@ The earlier v0.0.6-alpha.4 was published on 8 November 2026 from
 See its [public release](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.4)
 and [verification record](releases/v0.0.6-alpha.4-validation.md).
 Any future version requires its **own** separately approved full source SHA,
-seven-job CI evidence and one-time control request. Version changes and
+required Rust and native-package/preflight CI evidence and one-time control request. Version changes and
 development plans alone never grant publication authorization.
 
 The package workflow builds and verifies archives. It has read-only repository
@@ -209,7 +212,7 @@ window closes. If none succeeds, inspect the logs and obtain a new dated request
 See GitHub's [schedule documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
 
 Without a request the publisher exits before any Git/API action. A request PR
-changes main and must pass all seven fresh checks and package verification for
+changes main and must pass all eight required checks and package verification for
 its control revision and the approved source. The offline documentation test
 allows a **well-formed** reviewed request so the authorization-control CI gate
 is reachable; it validates version, full source SHA (or exact draft recovery
@@ -221,8 +224,11 @@ An already published release is left unchanged. A draft requires an explicit
 tag or unmatched draft stops the job for inspection.
 
 `scripts/publish-release.py` requires both latest push workflows on the exact
-current main SHA to succeed, with all four Rust jobs and three native jobs. A
-missing, pending, failed, cancelled, skipped, or incomplete matrix cannot pass.
+current main SHA to succeed, with four required Rust jobs, three native
+package jobs and the independent release-archive preflight. The conditional
+Lifetime comparison may be listed as one completed/skipped PR-only job in
+main's Rust workflow; no other extra jobs are accepted. A missing, pending,
+failed, cancelled, skipped, or incomplete **required** job cannot pass.
 It downloads artifacts from that exact package run and verifies archives, clean
 BUILD-INFO, source Git blobs, checksum files, and combined SHA256SUMS. Only then
 does it create an annotated tag with the request's maintainer email, create a
