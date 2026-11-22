@@ -33,5 +33,9 @@ harness = false
 name = "bigint"
 harness = false
 
+[[bench]]
+name = "lifetime"
+harness = false
+
 [lints.rust]
 unsafe_code = "forbid"

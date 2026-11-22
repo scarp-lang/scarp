@@ -2,6 +2,11 @@
 
 ## 0.0.6-alpha.18 — source release candidate, not published
 
+- Start **Scarp Lifetime** storage-retention hardening: empty finite/integer
+  vector windows use shared empty allocations instead of retaining the original
+  backing buffers. Nonempty windows remain zero-copy. Add weak-reference release
+  tests, source-level quota regressions, and a repeatable microbenchmark.
+
 - Add pure, quota-bounded persistent `array_set` for fixed-size arrays, with
   exact replacement types, index diagnostics, and source-level examples.
 - Retry interrupted interactive prompt flushes while preserving execution
