@@ -12,8 +12,14 @@ fn fails_atomically(source: &str) {
             ..ExecutionOptions::default()
         },
     );
-    assert!(result.is_err(), "expected aggregate allocation to exhaust quota: {source}");
-    assert!(stdout.is_empty(), "failed execution must not publish output: {source}");
+    assert!(
+        result.is_err(),
+        "expected aggregate allocation to exhaust quota: {source}"
+    );
+    assert!(
+        stdout.is_empty(),
+        "failed execution must not publish output: {source}"
+    );
 }
 
 #[test]
