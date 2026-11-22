@@ -2,6 +2,10 @@
 
 ## 0.0.6-alpha.18 — source release candidate, not published
 
+- Run an independent read-only candidate preflight after all three package
+  targets pass, verifying the combined archives against the exact source commit
+  before any publication authorization.
+
 - Validate the exact release archive member inventory and reject path
   traversal, duplicates, symlinks, and unapproved bundled files.
 

@@ -19,6 +19,15 @@ COMMIT = "a" * 40
 
 
 class PublicationGates(unittest.TestCase):
+    def test_releases_require_independent_source_and_archive_preflight(self):
+        jobs = publisher.WORKFLOWS[".github/workflows/packages.yml"]
+        self.assertIn("Release candidate / archives and source", jobs)
+        completed = [dict(name=name, status="completed", conclusion="success") for name in jobs]
+        publisher.validate_jobs(".github/workflows/packages.yml", completed)
+        missing = [job for job in completed if job["name"] != "Release candidate / archives and source"]
+        with self.assertRaisesRegex(ValueError, "unexpected job matrix"):
+            publisher.validate_jobs(".github/workflows/packages.yml", missing)
+
     def test_release_metadata_requires_exact_schema_version_and_official_repository(self):
         valid = dict(schema_version=1, version="0.0.5-alpha.2", documentation_repository="https://github.com/scarp-lang/scarp-docs")
         self.assertEqual(publisher.verifier.validate_release_metadata(json.dumps(valid), valid["version"]), valid)
