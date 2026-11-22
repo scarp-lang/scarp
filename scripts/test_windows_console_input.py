@@ -94,14 +94,14 @@ def main():
                 assert api.GetConsoleMode(handle, c.byref(mode)), c.get_last_error()
                 assert mode.value & 0x0002, "expected line input mode"
                 rejected = subprocess.run(
-                    [binary, "exec", source], stdin=console,
+                    [binary, "run", source], stdin=console,
                     capture_output=True, timeout=10,
                 )
                 assert rejected.returncode == 1 and rejected.stdout == b"", rejected
                 assert b"E0054" in rejected.stderr, rejected.stderr
 
                 with subprocess.Popen(
-                    [binary, "exec", "--interactive", source], stdin=console,
+                    [binary, "exec", source], stdin=console,
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0,
                 ) as child:
                     try:
@@ -119,7 +119,7 @@ def main():
                             child.kill()
         finally:
             api.FreeConsole()
-    print("Windows console input passed: opt-in, prompt flush, UTF-8 and CRLF")
+    print("Windows console input passed: legacy opt-in, automatic exec input, prompt flush, UTF-8 and CRLF")
 
 
 if __name__ == "__main__":
