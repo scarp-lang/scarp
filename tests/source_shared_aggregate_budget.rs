@@ -2,10 +2,7 @@
 //! Check the exact error kind so unrelated parse or type errors cannot pass.
 use scarp::{diagnostics::DiagnosticKind, ExecutionOptions, RunError};
 
-fn execute_with_budget(
-    source: &str,
-    max_array_bytes: usize,
-) -> (Result<(), RunError>, Vec<u8>) {
+fn execute_with_budget(source: &str, max_array_bytes: usize) -> (Result<(), RunError>, Vec<u8>) {
     let mut stdout = Vec::new();
     let result = scarp::run_with_options(
         source,
