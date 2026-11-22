@@ -158,7 +158,7 @@ Execution-limit options: --max-steps, --max-prints, --max-call-depth, --max-call
 --interactive is accepted for compatibility but not required for exec.
 Prompts are flushed before reading stdin or --input-file.
 Options precede the source path. -- permits filenames beginning with a dash.
-Program-argument forwarding and project entrypoint execution are not supported.
+Program-argument forwarding is not supported.
 read_line reads redirected UTF-8 stdin, terminal input or --input-file PATH.
 Legacy run and library execution retain their explicit interactive-mode contract.
 Input-file paths are relative to the working directory and are read under input quotas.
