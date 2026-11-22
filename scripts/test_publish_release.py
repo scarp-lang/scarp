@@ -182,6 +182,37 @@ class PublicationGates(unittest.TestCase):
                 newer = dict(runs[0], id=10, status=status, conclusion=conclusion)
                 self.assertIsNone(publisher.selected_runs([newer, *runs], COMMIT))
 
+    def test_optional_skipped_lifetime_comparison_matches_real_main_ci(self):
+        path = ".github/workflows/ci.yml"
+        required = [
+            dict(name=name, status="completed", conclusion="success")
+            for name in publisher.WORKFLOWS[path]
+        ]
+        conditional = dict(name="Lifetime / baseline comparison",
+                           status="completed", conclusion="skipped")
+        # Main branch intentionally skips the PR-only Lifetime comparison.
+        publisher.validate_jobs(path, [*required, conditional])
+        # The old matrix without the optional comparison remains valid too.
+        publisher.validate_jobs(path, required)
+        for changed in (
+            [*required[:-1], conditional],  # missing required stable job
+            [*required, conditional, conditional],  # duplicate skipped job
+            [*required, dict(conditional, conclusion="success")],
+            [*required, dict(conditional, conclusion="failure")],
+            [*required, dict(conditional, status="in_progress")],
+            [*required, dict(conditional, name="unknown skipped job")],
+        ):
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                publisher.validate_jobs(path, changed)
+        # No optional skip is permitted in the release-package workflow.
+        package = ".github/workflows/packages.yml"
+        packages = [
+            dict(name=name, status="completed", conclusion="success")
+            for name in publisher.WORKFLOWS[package]
+        ]
+        with self.assertRaises(ValueError):
+            publisher.validate_jobs(package, [*packages, conditional])
+
     def test_every_required_native_and_rust_job_must_succeed(self):
         for path, names in publisher.WORKFLOWS.items():
             jobs = [dict(name=name, status="completed", conclusion="success") for name in names]

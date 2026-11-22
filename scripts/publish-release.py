@@ -65,10 +65,25 @@ def selected_runs(runs, commit):
 
 
 def validate_jobs(path, jobs):
-    if {job["name"] for job in jobs} != WORKFLOWS[path] or len(jobs) != len(WORKFLOWS[path]):
+    required = WORKFLOWS[path]
+    # CI creates the conditional Lifetime baseline job on every push, but
+    # intentionally skips it on protected main (its comparison only applies
+    # to matching pull requests). It is not a required publication gate.
+    optional_skipped = (
+        {"Lifetime / baseline comparison"}
+        if path == ".github/workflows/ci.yml" else set()
+    )
+    names = [job["name"] for job in jobs]
+    if (len(names) != len(set(names))
+            or not required.issubset(names)
+            or not set(names).issubset(required | optional_skipped)):
         raise ValueError(f"unexpected job matrix for {path}")
-    if any(job.get("status") != "completed" or job.get("conclusion") != "success" for job in jobs):
-        raise ValueError(f"not all required jobs succeeded for {path}")
+    for job in jobs:
+        if job.get("status") != "completed":
+            raise ValueError(f"not all required jobs succeeded for {path}")
+        expected_conclusion = "success" if job["name"] in required else "skipped"
+        if job.get("conclusion") != expected_conclusion:
+            raise ValueError(f"not all required jobs succeeded for {path}")
 
 
 def digest(path):
