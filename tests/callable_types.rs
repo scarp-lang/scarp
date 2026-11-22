@@ -1,6 +1,6 @@
 use scarp::types::{
-    FunctionEffect as Effect, PrimitiveType as P, TypeId, TypeKind as T,
-    TypeLimits, TypeRegistryBuilder as Builder, TypeRegistryError as Error,
+    FunctionEffect as Effect, PrimitiveType as P, TypeId, TypeKind as T, TypeLimits,
+    TypeRegistryBuilder as Builder, TypeRegistryError as Error,
 };
 
 fn signature(parameters: &[TypeId], result: TypeId, effect: Effect) -> T {
@@ -43,7 +43,9 @@ fn callable_signatures_are_invariant_in_parameters_and_results() {
     for candidate in [reordered, result_changed, shorter, P::Integer.id()] {
         assert!(!registry.accepts_callable(expected, candidate).unwrap());
     }
-    assert!(!registry.accepts_callable(P::Boolean.id(), expected).unwrap());
+    assert!(!registry
+        .accepts_callable(P::Boolean.id(), expected)
+        .unwrap());
 }
 
 #[test]
@@ -98,11 +100,17 @@ fn resolved_named_functions_expose_checked_semantic_callable_signatures() {
     let registry = program.type_registry();
     assert!(matches!(
         registry.get(pure),
-        Some(T::Function { effect: Effect::Pure, .. })
+        Some(T::Function {
+            effect: Effect::Pure,
+            ..
+        })
     ));
     assert!(matches!(
         registry.get(impure),
-        Some(T::Function { effect: Effect::Impure, .. })
+        Some(T::Function {
+            effect: Effect::Impure,
+            ..
+        })
     ));
     assert!(registry.accepts_callable(impure, pure).unwrap());
     assert!(!registry.accepts_callable(pure, impure).unwrap());
@@ -128,7 +136,9 @@ fn callable_arguments_obey_registry_arity_and_depth_limits() {
     let leaf = builder
         .intern(signature(&[P::Integer.id()], P::Boolean.id(), Effect::Pure))
         .unwrap();
-    assert!(builder.intern(signature(&[leaf], P::Boolean.id(), Effect::Pure)).is_err());
+    assert!(builder
+        .intern(signature(&[leaf], P::Boolean.id(), Effect::Pure))
+        .is_err());
     assert!(builder
         .intern(signature(
             &[P::Integer.id(), P::String.id()],
