@@ -1,5 +1,37 @@
 # Command-line reference
 
+## Unified execution (development branch; not yet published)
+
+Use `scarp exec` as the standard one-command entry point for applications.
+It works with or without console input, and accepts an optional source path:
+
+```sh
+scarp exec
+scarp exec calculator.srp
+scarp exec src/calculator.srp
+scarp exec --max-steps 2000000
+```
+
+Without a path, the CLI selects the current directory's valid
+`scarp.project` or legacy `Scarp.project` entrypoint. Without a project
+manifest, it uses `src/main.srp`, then `main.srp`. It does **not** search
+parent directories or execute an arbitrary `.srp` file. A present but invalid
+manifest is an error; it is never bypassed via source-file fallback.
+
+`exec` enables the existing interactive input runtime automatically. Input
+functions, including `input()`, `input_integer()` and `input_float()`,
+prompt when reached, and otherwise the program runs without waiting for input.
+In a console, a selected input call may block until a line is provided.
+Redirected stdin also works. No new input syntax or runtime reader is added.
+
+The standard way to select an explicit file is `scarp exec path/to/file.srp`,
+**not** `scarp exec --filename.srp`: options begin with dashes. Use
+`scarp exec -- --dash-prefixed.srp` if a filename literally begins with `--`.
+Existing `run`, `launch`, explicit interactive flags, and file-backed input
+remain available for compatibility. This development change is not yet part of
+a published prerelease.
+
+
 ## Project commands in v0.0.6-alpha.8
 
 | Command | Behavior |

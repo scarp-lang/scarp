@@ -60,21 +60,27 @@ fn cli(
 }
 
 #[test]
-fn interactive_flag_is_required_and_forwards_through_exec_and_run() {
+fn exec_enables_prompts_by_default_while_legacy_run_requires_opt_in() {
     let dir = Fixture::new();
     let path = dir.file(
         "greeting with space.srp",
         r#"bind name = ask("Name: "); print("Hello", name);"#,
     );
     for verb in ["exec", "run"] {
-        let result = cli(verb, &path, b"Ada\n", true);
-        assert!(result.status.success(), "{result:?}");
-        assert_eq!(result.stdout, b"Name: Hello Ada\n");
-        assert!(result.stderr.is_empty());
-        let rejected = cli(verb, &path, b"Ada\n", false);
-        assert_eq!(rejected.status.code(), Some(1));
-        assert!(rejected.stdout.is_empty());
-        assert!(String::from_utf8_lossy(&rejected.stderr).contains("E0054"));
+        let enabled = cli(verb, &path, b"Ada\n", true);
+        assert!(enabled.status.success(), "{enabled:?}");
+        assert_eq!(enabled.stdout, b"Name: Hello Ada\n");
+        assert!(enabled.stderr.is_empty());
+        let default = cli(verb, &path, b"Ada\n", false);
+        if verb == "exec" {
+            assert!(default.status.success(), "{default:?}");
+            assert_eq!(default.stdout, b"Name: Hello Ada\n");
+            assert!(default.stderr.is_empty());
+        } else {
+            assert_eq!(default.status.code(), Some(1));
+            assert!(default.stdout.is_empty());
+            assert!(String::from_utf8_lossy(&default.stderr).contains("E0054"));
+        }
     }
 }
 

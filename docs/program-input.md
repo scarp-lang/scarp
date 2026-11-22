@@ -1,5 +1,14 @@
 # Bounded program input contract
 
+> **Development-only CLI refinement:** `scarp exec` now enables interactive
+> prompt capability automatically and discovers the current project's
+> entrypoint when no source path is provided. The original `run` and
+> `launch` options and Rust embedding APIs continue to require explicit
+> interactive capability. Existing input-size, work, UTF-8, EOF, and prompt
+> flushing rules are unchanged. This refinement is not part of the already
+> published alpha.17 binary; see [the CLI reference](reference/cli.md).
+
+
 Status: **published in v0.0.6-alpha.6**, 10 November 2026.
 The older alpha.5 does not support input. See [publication verification](releases/v0.0.6-alpha.6-validation.md).
 This is the compiler-owned contract and regression-fixture reference. Public

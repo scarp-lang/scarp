@@ -2,6 +2,10 @@
 
 ## 0.0.6-alpha.18 — source release candidate, not published
 
+- Make `scarp exec` resolve the current project's manifest entrypoint or a predictable
+  `src/main.srp`/`main.srp` fallback, while still accepting explicit source paths.
+  Enable bounded console and typed prompts by default for `exec` only; retain
+  legacy `run` opt-in and the existing input quotas and failure diagnostics.
 - Start **Scarp Lifetime** storage-retention hardening: empty finite/integer
   vector windows use shared empty allocations instead of retaining the original
   backing buffers. Nonempty windows remain zero-copy. Add weak-reference release
