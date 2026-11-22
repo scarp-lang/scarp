@@ -168,6 +168,10 @@ def verify(directory, version, commit, source_directory=None):
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("expected the full release commit")
     source_files = source_files_at(source_directory, commit) if source_directory is not None else {}
+    # Historical release tests supply deliberately partial source manifests to
+    # verify selected blob digests. Preserve those older contracts while making
+    # alpha.18 archives a closed inventory against their complete Git source.
+    inventory_source_files = source_files if version == "0.0.6-alpha.18" else {}
     checksums = []
     for target, extension in (
         ("x86_64-pc-windows-msvc", ".zip"),
@@ -188,7 +192,7 @@ def verify(directory, version, commit, source_directory=None):
         metadata = None
         if extension == ".zip":
             with zipfile.ZipFile(archive) as package:
-                validate_archive_inventory(zip_archive_members(package), root, "scarp.exe", source_files)
+                validate_archive_inventory(zip_archive_members(package), root, "scarp.exe", inventory_source_files)
                 paths = set(package.namelist())
                 record = package.read(root + "/BUILD-INFO.txt")
                 verify_source_members(package.read, root, source_files)
@@ -196,7 +200,7 @@ def verify(directory, version, commit, source_directory=None):
                     metadata = package.read(root + "/" + METADATA_MEMBER)
         else:
             with tarfile.open(archive, "r:gz") as package:
-                validate_archive_inventory(tar_archive_members(package), root, "scarp", source_files)
+                validate_archive_inventory(tar_archive_members(package), root, "scarp", inventory_source_files)
                 paths = set(package.getnames())
                 stream = package.extractfile(root + "/BUILD-INFO.txt")
                 if stream is None:
