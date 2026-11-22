@@ -2,6 +2,10 @@
 
 ## 0.0.6-alpha.18 — source release candidate, not published
 
+- Make `scarp exec` resolve the current project's manifest entrypoint or a predictable
+  `src/main.srp`/`main.srp` fallback, while still accepting explicit source paths.
+  Enable bounded console and typed prompts by default for `exec` only; retain
+  legacy `run` opt-in and the existing input quotas and failure diagnostics.
 - Add pure, quota-bounded persistent `array_set` for fixed-size arrays, with
   exact replacement types, index diagnostics, and source-level examples.
 - Retry interrupted interactive prompt flushes while preserving execution
