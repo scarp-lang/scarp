@@ -204,10 +204,10 @@ impl Parser<'_> {
             Some(TokenKind::LeftBrace) => true,
             Some(TokenKind::Identifier(name)) => match name.as_str() {
                 "funcra" | "pure" | "if" | "while" => true,
-                "repeat" => !self
-                    .tokens
-                    .get(self.cursor + 1)
-                    .is_some_and(|token| assignment_operator(&token.kind).is_some()),
+                "repeat" => !self.tokens.get(self.cursor + 1).is_some_and(|token| {
+                    assignment_operator(&token.kind).is_some()
+                        || token.kind == TokenKind::LeftBracket
+                }),
                 _ => false,
             },
             _ => false,
@@ -218,6 +218,7 @@ impl Parser<'_> {
         (self.keyword("import") || self.keyword("pub"))
             && !self.tokens.get(self.cursor + 1).is_some_and(|token| {
                 matches!(token.kind, TokenKind::LeftParen | TokenKind::Dot)
+                    || token.kind == TokenKind::LeftBracket
                     || assignment_operator(&token.kind).is_some()
             })
     }

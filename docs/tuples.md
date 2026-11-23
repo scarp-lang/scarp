@@ -17,8 +17,10 @@ print((42,), (42));
 ```
 
 Tuples are fixed-arity ordered heterogeneous values. `(42,)` is a singleton;
-`(42)` remains grouping. Empty `()` / `tuple<>`, unit members, destructuring,
-element mutation, dynamic/computed indices and tuple iteration are unsupported.
+`(42)` remains grouping. Empty `()` / `tuple<>`, unit members, dynamic/computed
+indices and tuple iteration are unsupported. Tuple storage remains immutable;
+published alpha.18 rejects element assignment, while the unreleased development
+branch adds persistent element replacement on `var` bindings (see below).
 The contextual type word `tuple` remains a legal ordinary binding/function name.
 
 Types are inferred or annotated structurally: same ordered member types and

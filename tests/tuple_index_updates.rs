@@ -146,3 +146,19 @@ fn replacing_member_consumes_new_tuple_quota_and_is_atomic() {
         Span::new(source.find('0').unwrap(), source.find('0').unwrap() + 1)
     );
 }
+
+#[test]
+fn contextual_keyword_names_remain_valid_indexed_assignment_targets() {
+    assert_eq!(
+        output("var repeat=(1,2); repeat[0]=5; print(repeat);"),
+        "(5, 2)\n"
+    );
+    assert_eq!(
+        output("var import=(1,2); import[1]=6; print(import);"),
+        "(1, 6)\n"
+    );
+    assert_eq!(
+        output("var pub=(1,2); pub[0]=7; print(pub);"),
+        "(7, 2)\n"
+    );
+}
