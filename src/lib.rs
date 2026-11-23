@@ -17,6 +17,8 @@ pub mod c_backend;
 /// Experimental bounded exact decimal arithmetic shared by the Rust API and source-level development.
 pub mod decimal;
 pub mod diagnostics;
+/// Optional cumulative host quotas for repeated Rust embedding calls.
+pub mod embedding;
 pub mod evaluator;
 pub mod input;
 pub mod interpreter;
