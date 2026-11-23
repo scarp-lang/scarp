@@ -12,7 +12,10 @@ pub(crate) use variants::MatchTarget;
 mod type_info;
 
 use crate::types::{SourceType, TypeId, TypeLimits, TypeRegistryBuilder};
-pub use callable::{CallableBindError, CallableCatalog, HostArguments, NamedCallableRef};
+pub use callable::{
+    CallableBindError, CallableCatalog, CallableSlot, CallableSlotError, CallableSlotInvokeError,
+    HostArguments, NamedCallableRef,
+};
 pub use type_info::{ExpressionContext, TypedExpression, TypedNode};
 #[cfg(test)]
 mod retirement_audit;
