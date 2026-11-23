@@ -248,10 +248,13 @@ fn run_plan<'a>(
         })?;
         let span = program.functions()[id].span;
         if arguments.len() > function.defaults.len()
-            || function.defaults.iter().enumerate().any(|(index, default)| {
-                default.is_none()
-                    && arguments.get(index).and_then(Option::as_ref).is_none()
-            })
+            || function
+                .defaults
+                .iter()
+                .enumerate()
+                .any(|(index, default)| {
+                    default.is_none() && arguments.get(index).and_then(Option::as_ref).is_none()
+                })
         {
             return Err(Diagnostic::new(
                 DiagnosticKind::CallArguments,
