@@ -175,7 +175,12 @@ impl ExportedNamedCallable {
     ) -> Result<Value, ModuleRunError> {
         self.target
             .invoke_bound_with_input_and_options(
-                arguments, input, stdout, stderr, options, input_limits,
+                arguments,
+                input,
+                stdout,
+                stderr,
+                options,
+                input_limits,
             )
             .map_err(|error| self.wrap(error))
     }

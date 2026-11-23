@@ -3,8 +3,8 @@ use std::{io, sync::Arc};
 use scarp::{
     diagnostics::DiagnosticKind,
     modules::{
-        self, MemorySourceLoader, ModuleCallableBindError as BindError,
-        ModuleCallableCatalog, ModuleLimits, ModuleRunError,
+        self, MemorySourceLoader, ModuleCallableBindError as BindError, ModuleCallableCatalog,
+        ModuleLimits, ModuleRunError,
     },
     resolver::HostArguments,
     value::Value,
@@ -115,7 +115,9 @@ fn private_symbols_constants_and_unknown_modules_cannot_be_bound() {
         BindError::UnknownSymbol
     );
     assert_eq!(
-        catalog.bind_exported(usize::MAX, "calculation").unwrap_err(),
+        catalog
+            .bind_exported(usize::MAX, "calculation")
+            .unwrap_err(),
         BindError::UnknownSource(usize::MAX)
     );
     assert_eq!(
@@ -233,7 +235,10 @@ fn exported_host_execution_respects_quotas_with_original_diagnostics() {
             HostArguments::positional(vec![Value::Integer(5)]),
             &mut Vec::new(),
             &mut Vec::new(),
-            ExecutionOptions { max_calls: 0, ..ExecutionOptions::default() },
+            ExecutionOptions {
+                max_calls: 0,
+                ..ExecutionOptions::default()
+            },
         )
         .unwrap_err()
     {
