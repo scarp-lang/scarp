@@ -12,6 +12,8 @@ pub enum TokenKind {
     String(String),
     Integer(String),
     Float(String),
+    /// Exact base-10 scalar (`0.1d`), never a binary64 float.
+    Decimal(String),
     Plus,
     Minus,
     Star,
@@ -64,6 +66,7 @@ impl fmt::Display for TokenKind {
             Self::String(value) => write!(f, "string({value:?})"),
             Self::Integer(digits) => write!(f, "integer({digits})"),
             Self::Float(digits) => write!(f, "float({digits})"),
+            Self::Decimal(digits) => write!(f, "decimal({digits})"),
             Self::Plus => f.write_str("+"),
             Self::Minus => f.write_str("-"),
             Self::Star => f.write_str("*"),
@@ -357,6 +360,7 @@ impl Lexer<'_> {
             self.bump();
         }
         let mut float = false;
+        let mut exponent = false;
         if self.peek() == Some('.') {
             float = true;
             self.bump();
@@ -364,11 +368,30 @@ impl Lexer<'_> {
         }
         if matches!(self.peek(), Some('e' | 'E')) {
             float = true;
+            exponent = true;
             self.bump();
             if matches!(self.peek(), Some('+' | '-')) {
                 self.bump();
             }
             self.decimal_digits(start)?;
+        }
+        // The `d` suffix explicitly chooses exact decimal arithmetic.
+        // Exponents remain binary-float-only; never silently convert f64.
+        if !exponent && self.peek() == Some('d') {
+            let digits = self.source[start..self.cursor].to_string();
+            self.bump();
+            if self.peek().is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '_') {
+                while self.peek().is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '_') {
+                    self.bump();
+                }
+                return Err(Diagnostic::new(
+                    DiagnosticKind::InvalidDecimal,
+                    Span::new(start, self.cursor),
+                    "invalid suffix after exact decimal literal",
+                )
+                .with_help("write an exact decimal as 0.1d or 42d"));
+            }
+            return Ok(TokenKind::Decimal(digits));
         }
         if float
             && self

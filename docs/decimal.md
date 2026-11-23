@@ -9,15 +9,26 @@ Source expressions do not silently convert or combine these numeric types.
 
 ## Creating exact values
 
-Use an explicit textual constructor instead of writing a binary float literal:
+Use an exact decimal literal ending in lowercase `d`, or the explicit text
+constructor `decimal("...")`, instead of using a binary float literal:
 
 ```scarp
+bind exact = 0.1d + 0.2d; // 0.3, with exact base-10 arithmetic
 bind price: decimal = decimal("199.99");
 bind tax: decimal = decimal("0.18");
 bind count = decimal_from_integer(3);
 print(price + price * tax); // 235.9882
 print(count);               // 3
 ```
+
+The `d` suffix accepts whole and fractional decimal numbers (`42d`, `0.1d`,
+`1.20d`) subject to the same 28-digit coefficient and 18-place limits.
+Exponent notation is not supported for exact decimal literals. An unsuffixed
+number like `0.1` remains an IEEE-754 `float`: `0.1 + 0.2` still produces
+`0.30000000000000004`. Decimal values do not silently mix with floats or
+integers; use explicit conversion functions. The source literal is validated
+at compile time and can initialize a scalar module constant. The `d` literal
+is a development-branch addition and is not in an approved published release.
 
 The constructor accepts only optional ASCII sign, ASCII integer digits and
 an optional dot followed by fractional digits (including digits before the dot).
@@ -90,7 +101,8 @@ bind values: array<decimal, 2> =
 print(add(values[0], values[1])); // 0.3
 ```
 
-Module constant initializers currently forbid all function calls, including
+Module constants can use exact `d` literals; their initializers still
+forbid all function calls, including
 the text-based `decimal(...)` constructor; use a function or entry script.
 Native C11 and freestanding ELF64 scalar backends deliberately reject decimal
 programs with E0049 rather than emit a lossy binary64 conversion.
