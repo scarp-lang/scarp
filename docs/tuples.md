@@ -185,7 +185,7 @@ created by tuple development.
 ## Persistent indexed assignment (implemented on main, unreleased)
 
 Compiler `main` now accepts `tuple[index] = value;` for a mutable `var`
-binding. This syntax is **not available in published alpha.18** and requires
+binding. This syntax is **not available in published alpha.19** and requires
 separate publication approval before becoming part of a released version. The feature replaces the entire immutable tuple snapshot rather
 than mutating shared tuple backing storage:
 

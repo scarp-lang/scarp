@@ -1,18 +1,33 @@
 # Changelog
 
-## 0.0.6-alpha.19 — development candidate (not published)
+## Unreleased — after v0.0.6-alpha.19
 
 - Implement `tuple[index] = value;` on mutable tuples as a type-checked,
   persistent snapshot replacement. Literal indices retain compile-time arity
   checks, aliases remain unchanged, and new tuple allocations consume existing
   work and tuple-byte quotas. Add module-source and cross-platform regressions.
-  Not available in the published alpha.18 release.
+  Not available in the published alpha.19 release.
+
+- Implement lexicographic numeric tuple ordering with `<`, `<=`, `>` and `>=`
+  for identical structural tuple types, including nested numeric tuples.
+  Reject unordered elements and mismatched types statically; preserve `==`
+  and `!=` behavior. Add compiler tests and a runnable exact-output example
+  (PR #353, merge commit `fde0e374b445fb573dfd980bde36f83e9d76e729`).
+  **Not included in the published v0.0.6-alpha.19 binaries.**
+
+## 0.0.6-alpha.19 — published GitHub prerelease, 2026-11-23
+
+Published from approved source commit
+[`e534e73a81c9500e3aef9f3d51cafa0bc7bbcf75`](https://github.com/scarp-lang/scarp/commit/e534e73a81c9500e3aef9f3d51cafa0bc7bbcf75).
+Post-publication tuple ordering and indexed tuple assignment are not included
+in this immutable release.
+
 - Introduce a checked callable-signature compatibility query with invariant parameter and result types and one-way pure-to-impure effect compatibility. This is Rust semantic groundwork, **not** source-level first-class functions.
 - Add immutable, snapshot-bound Rust host callable handles, sparse named/default arguments and safe dynamic rebinding under explicit type/effect checks.
 - Support module export-constrained host callable lookup with linked diagnostics and existing source-map boundaries.
 - Record deterministic host execution resource usage, including failed invocations, and enforce cumulative interpreter, input and host-argument quotas across repeated embedded calls.
 - Charge completed interpreter work even when a caller-owned output writer panics during replay; arbitrary input-reader panics during evaluation and process aborts remain outside this guarantee.
-- Expand integration tests and host embedding examples. This development candidate remains subject to exact-source release CI and explicit publication approval.
+- Expand integration tests and host embedding examples. The release required exact-source CI and explicit publication approval.
 
 
 ## 0.0.6-alpha.18 — published GitHub prerelease, 2026-11-22
