@@ -2058,6 +2058,23 @@ fn resolve_expression(
                     BinaryOperator::Equal | BinaryOperator::NotEqual => {
                         require_value(&types[*left], *operator_span)?;
                     }
+                    BinaryOperator::Less
+                    | BinaryOperator::LessEqual
+                    | BinaryOperator::Greater
+                    | BinaryOperator::GreaterEqual
+                        if types[*left].tuple_elements().is_some() =>
+                    {
+                        if !numeric_tuple_members(&types[*left]) {
+                            return Err(Diagnostic::new(
+                                DiagnosticKind::TypeMismatch,
+                                *operator_span,
+                                "tuple ordering requires numeric elements, including within nested tuples",
+                            )
+                            .with_help(
+                                "use integer, float, bigint or decimal tuple members; string, boolean and collection members are not ordered",
+                            ));
+                        }
+                    }
                     operator
                         if operator.is_integer_only()
                             && !(*operator == BinaryOperator::Remainder
@@ -2313,4 +2330,14 @@ mod retirement_plan_tests {
             .iter()
             .all(|(_, slots)| !slots.contains(&0) && !slots.contains(&2)));
     }
+}
+
+/// Tuple order is defined only when every leaf has existing scalar numeric
+/// ordering. Keep boolean/text and collection ordering out of this feature.
+fn numeric_tuple_members(ty: &SourceType) -> bool {
+    ty.tuple_elements().is_some_and(|members| {
+        members
+            .iter()
+            .all(|member| member.is_numeric() || numeric_tuple_members(member))
+    })
 }
