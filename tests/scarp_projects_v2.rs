@@ -262,7 +262,13 @@ fn create_matches_init_lowercase_v2_scaffolding() {
     let manifest = fs::read_to_string(project.join("scarp.project")).unwrap();
     assert!(manifest.starts_with("project \"created\" {"), "{manifest}");
     assert!(manifest.contains("version: \"0.1.0\""));
-    for file in ["src/main.srp", "tests", "examples", "README.md", ".gitignore"] {
+    for file in [
+        "src/main.srp",
+        "tests",
+        "examples",
+        "README.md",
+        ".gitignore",
+    ] {
         assert!(project.join(file).exists(), "missing {file}");
     }
     assert!(execute(&["verify"], &project).status.success());

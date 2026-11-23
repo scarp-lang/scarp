@@ -141,6 +141,8 @@ fn absent_test_directory_behaves_like_an_empty_suite() {
     let legacy = ws.child("legacy-empty");
     let created = command(&["create", "legacy-empty"], &ws.0);
     assert!(created.status.success(), "{created:?}");
+    // Both scaffold commands now create tests/; test the absent-path case.
+    fs::remove_dir(legacy.join("tests")).unwrap();
     let modern = project(&ws, "modern-empty");
     fs::remove_dir(modern.join("tests")).unwrap();
 
@@ -209,7 +211,13 @@ fn legacy_project_can_run_project_tests_without_migration() {
         .output()
         .unwrap();
     assert!(output.status.success(), "{output:?}");
-    fs::create_dir(root.join("tests")).unwrap();
+    // Recreate a real pre-v2 uppercase manifest for backwards compatibility.
+    fs::remove_file(root.join("scarp.project")).unwrap();
+    fs::write(
+        root.join("Scarp.project"),
+        "scarp-project: 1\nname: legacy\nentry: src/main.srp\n",
+    )
+    .unwrap();
     fs::write(root.join("tests/test.srp"), "print(42);").unwrap();
     let result = command(&["test"], &root);
     assert!(result.status.success(), "{result:?}");
