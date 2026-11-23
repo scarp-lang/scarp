@@ -191,7 +191,7 @@ pub fn execute_with_input_and_options(
 pub(crate) fn invoke_named_with_io_and_options(
     program: &ResolvedProgram,
     function: usize,
-    arguments: Vec<Value>,
+    arguments: Vec<Option<Value>>,
     stdout: &mut impl Write,
     stderr: &mut impl Write,
     options: ExecutionOptions,
@@ -214,7 +214,7 @@ pub(crate) fn invoke_named_with_io_and_options(
 pub(crate) fn invoke_named_with_input_and_options(
     program: &ResolvedProgram,
     function: usize,
-    arguments: Vec<Value>,
+    arguments: Vec<Option<Value>>,
     input: &mut impl io::BufRead,
     writers: (&mut impl Write, &mut impl Write),
     options: ExecutionOptions,

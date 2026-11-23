@@ -19,6 +19,26 @@ pub struct CallableCatalog {
     program: Arc<ResolvedProgram>,
 }
 
+/// Host-provided positional and explicitly named arguments for a single
+/// checked invocation. The host already evaluated these Rust values; Scarp
+/// evaluates only omitted defaults, then needs/body/ensures in declaration
+/// order. Names match a function's original parameters, not a semantic TypeId.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HostArguments {
+    pub positional: Vec<Value>,
+    pub named: Vec<(String, Value)>,
+}
+
+impl HostArguments {
+    pub fn new(positional: Vec<Value>, named: Vec<(String, Value)>) -> Self {
+        Self { positional, named }
+    }
+
+    pub fn positional(values: Vec<Value>) -> Self {
+        Self::new(values, Vec::new())
+    }
+}
+
 /// A named declaration in one retained compiled program. This is inspection
 /// metadata, not a source-language callable Value or an indirect-call API.
 #[derive(Debug, Clone)]
@@ -141,13 +161,8 @@ impl NamedCallableRef {
         Arc::ptr_eq(&self.program, &catalog.program)
     }
 
-    /// Execute a checked named target with supplied positional scalar values,
-    /// returning the function result. Omitted trailing defaults are evaluated
-    /// by the existing call machine. Does not run entry-script statements.
-    ///
-    /// Accepted host parameters are integer, boolean, finite float and bounded
-    /// string. Composite values, including nominal types from other program
-    /// snapshots, are deliberately unsupported in this first executable slice.
+    /// Invoke with the existing positional-only API. This remains source- and
+    /// signature-compatible with alpha.19's original Rust embedding method.
     pub fn invoke_with_io_and_options(
         &self,
         arguments: Vec<Value>,
@@ -155,20 +170,40 @@ impl NamedCallableRef {
         stderr: &mut impl io::Write,
         options: ExecutionOptions,
     ) -> Result<Value, RunError> {
-        self.check_arguments(&arguments)?;
-        crate::interpreter::invoke_named_with_io_and_options(
-            &self.program,
-            self.declaration,
-            arguments,
+        self.invoke_bound_with_io_and_options(
+            HostArguments::positional(arguments),
             stdout,
             stderr,
             options,
         )
     }
 
-    /// Invoke with an explicit buffered input reader and independent input
-    /// limits. Evaluation failures publish no ordinary print events; input
-    /// bytes already consumed from the host reader cannot be rolled back.
+    /// Invoke with optional positional arguments followed by named arguments.
+    /// Named labels are checked before any Scarp code, read, or output.
+    ///
+    /// A named binding may target an earlier required parameter or a later
+    /// optional parameter. A supplied value suppresses its default. Unknown
+    /// names, duplicates and omissions of required parameters are errors.
+    pub fn invoke_bound_with_io_and_options(
+        &self,
+        arguments: HostArguments,
+        stdout: &mut impl io::Write,
+        stderr: &mut impl io::Write,
+        options: ExecutionOptions,
+    ) -> Result<Value, RunError> {
+        let bound = self.bind_arguments(arguments)?;
+        crate::interpreter::invoke_named_with_io_and_options(
+            &self.program,
+            self.declaration,
+            bound,
+            stdout,
+            stderr,
+            options,
+        )
+    }
+
+    /// Positional-only reader-enabled invocation. Input consumption remains
+    /// irreversible; evaluated output is buffered until successful completion.
     pub fn invoke_with_input_and_options(
         &self,
         arguments: Vec<Value>,
@@ -178,11 +213,31 @@ impl NamedCallableRef {
         options: ExecutionOptions,
         input_limits: InputLimits,
     ) -> Result<Value, RunError> {
-        self.check_arguments(&arguments)?;
+        self.invoke_bound_with_input_and_options(
+            HostArguments::positional(arguments),
+            input,
+            stdout,
+            stderr,
+            options,
+            input_limits,
+        )
+    }
+
+    /// Reader-enabled invocation accepting positional and named host values.
+    pub fn invoke_bound_with_input_and_options(
+        &self,
+        arguments: HostArguments,
+        input: &mut impl io::BufRead,
+        stdout: &mut impl io::Write,
+        stderr: &mut impl io::Write,
+        options: ExecutionOptions,
+        input_limits: InputLimits,
+    ) -> Result<Value, RunError> {
+        let bound = self.bind_arguments(arguments)?;
         crate::interpreter::invoke_named_with_input_and_options(
             &self.program,
             self.declaration,
-            arguments,
+            bound,
             input,
             (stdout, stderr),
             options,
@@ -190,59 +245,96 @@ impl NamedCallableRef {
         )
     }
 
-    fn check_arguments(&self, arguments: &[Value]) -> Result<(), RunError> {
+    /// Resolve host labels into sparse, declaration-indexed argument slots.
+    /// The interpreter itself resolves holes using its existing default stage.
+    /// Preflight is side-effect-free and bounded by the function signature.
+    fn bind_arguments(&self, arguments: HostArguments) -> Result<Vec<Option<Value>>, RunError> {
         let info = self.metadata();
-        if arguments.len() > info.parameters.len()
-            || info.parameters[arguments.len()..]
-                .iter()
-                .any(|parameter| parameter.default.is_none())
-        {
+        let HostArguments { positional, named } = arguments;
+        let len = info.parameters.len();
+        if positional.len() > len || named.len() > len.saturating_sub(positional.len()) {
             return Err(RunError::Diagnostic(Diagnostic::new(
                 DiagnosticKind::CallArguments,
                 info.span,
+                "too many supplied host arguments for the named function",
+            )));
+        }
+        let mut slots = vec![None; len];
+        for (index, value) in positional.into_iter().enumerate() {
+            let parameter = &info.parameters[index];
+            Self::check_value(parameter, &value)?;
+            slots[index] = Some(value);
+        }
+        for (name, value) in named {
+            let index = info
+                .parameters
+                .iter()
+                .position(|parameter| parameter.name == name)
+                .ok_or_else(|| {
+                    RunError::Diagnostic(Diagnostic::new(
+                        DiagnosticKind::CallArguments,
+                        info.span,
+                        "unknown named parameter in host callable invocation",
+                    ))
+                })?;
+            let parameter = &info.parameters[index];
+            if slots[index].is_some() {
+                return Err(RunError::Diagnostic(Diagnostic::new(
+                    DiagnosticKind::CallArguments,
+                    parameter.span,
+                    "duplicate host argument for a named parameter",
+                )));
+            }
+            Self::check_value(parameter, &value)?;
+            slots[index] = Some(value);
+        }
+        for (parameter, value) in info.parameters.iter().zip(&slots) {
+            if value.is_none() && parameter.default.is_none() {
+                return Err(RunError::Diagnostic(Diagnostic::new(
+                    DiagnosticKind::CallArguments,
+                    parameter.span,
+                    "missing required host function argument",
+                )));
+            }
+        }
+        Ok(slots)
+    }
+
+    fn check_value(parameter: &super::ParameterInfo, value: &Value) -> Result<(), RunError> {
+        if !matches!(
+            &parameter.kind,
+            SourceType::Primitive(
+                PrimitiveType::Integer
+                    | PrimitiveType::Boolean
+                    | PrimitiveType::Float
+                    | PrimitiveType::String
+            )
+        ) {
+            return Err(RunError::Diagnostic(Diagnostic::new(
+                DiagnosticKind::FunctionUnsupported,
+                parameter.span,
+                "host callable invocation currently supports only scalar integer, boolean, float and string parameters",
+            )));
+        }
+        if value.kind() != parameter.kind {
+            return Err(RunError::Diagnostic(Diagnostic::new(
+                DiagnosticKind::TypeMismatch,
+                parameter.span,
                 format!(
-                    "funcra {} expects at most {} positional arguments and all required arguments",
-                    info.name,
-                    info.parameters.len()
+                    "host argument {} expects {}, found {}",
+                    parameter.name,
+                    parameter.kind,
+                    value.kind()
                 ),
             )));
         }
-        for (parameter, value) in info.parameters.iter().zip(arguments) {
-            if !matches!(
-                &parameter.kind,
-                SourceType::Primitive(
-                    PrimitiveType::Integer
-                        | PrimitiveType::Boolean
-                        | PrimitiveType::Float
-                        | PrimitiveType::String
-                )
-            ) {
+        if let Value::String(text) = value {
+            if text.len() > MAX_TEXT_BYTES {
                 return Err(RunError::Diagnostic(Diagnostic::new(
-                    DiagnosticKind::FunctionUnsupported,
+                    DiagnosticKind::TextConstruction,
                     parameter.span,
-                    "host callable invocation currently supports only scalar integer, boolean, float and string parameters",
+                    format!("host string parameter exceeds {MAX_TEXT_BYTES} UTF-8 bytes"),
                 )));
-            }
-            if value.kind() != parameter.kind {
-                return Err(RunError::Diagnostic(Diagnostic::new(
-                    DiagnosticKind::TypeMismatch,
-                    parameter.span,
-                    format!(
-                        "host argument {} expects {}, found {}",
-                        parameter.name,
-                        parameter.kind,
-                        value.kind()
-                    ),
-                )));
-            }
-            if let Value::String(text) = value {
-                if text.len() > MAX_TEXT_BYTES {
-                    return Err(RunError::Diagnostic(Diagnostic::new(
-                        DiagnosticKind::TextConstruction,
-                        parameter.span,
-                        format!("host string parameter exceeds {MAX_TEXT_BYTES} UTF-8 bytes"),
-                    )));
-                }
             }
         }
         Ok(())

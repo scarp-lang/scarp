@@ -210,7 +210,7 @@ pub(super) fn prepare<'a>(
 pub(super) fn prepare_named_call<'a>(
     program: &'a ResolvedProgram,
     function: usize,
-    arguments: Vec<Value>,
+    arguments: Vec<Option<Value>>,
     capture: bool,
     options: ExecutionOptions,
     input: &mut InputState<'_>,
@@ -226,7 +226,7 @@ pub(super) fn prepare_named_call<'a>(
 
 fn run_plan<'a>(
     program: &'a ResolvedProgram,
-    entry: Option<(usize, Vec<Value>)>,
+    entry: Option<(usize, Vec<Option<Value>>)>,
     capture: bool,
     options: ExecutionOptions,
     input: &mut InputState<'_>,
@@ -248,9 +248,10 @@ fn run_plan<'a>(
         })?;
         let span = program.functions()[id].span;
         if arguments.len() > function.defaults.len()
-            || function.defaults[arguments.len()..]
-                .iter()
-                .any(Option::is_none)
+            || function.defaults.iter().enumerate().any(|(index, default)| {
+                default.is_none()
+                    && arguments.get(index).and_then(Option::as_ref).is_none()
+            })
         {
             return Err(Diagnostic::new(
                 DiagnosticKind::CallArguments,
@@ -288,8 +289,10 @@ fn run_plan<'a>(
         let mut environment = vec![Value::Unit; function.slots];
         let mut supplied = vec![false; function.defaults.len()];
         for (index, argument) in arguments.into_iter().enumerate() {
-            environment[index] = argument;
-            supplied[index] = true;
+            if let Some(argument) = argument {
+                environment[index] = argument;
+                supplied[index] = true;
+            }
         }
         Frame {
             function: Some(id),
