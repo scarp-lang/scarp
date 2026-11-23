@@ -848,9 +848,7 @@ impl Rewriter<'_> {
                     .rev()
                     .find_map(|scope| scope.get(name))
                     .copied();
-                let kind = if index.is_none()
-                    && *operator == crate::ast::AssignmentOperator::Set
-                {
+                let kind = if index.is_none() && *operator == crate::ast::AssignmentOperator::Set {
                     symbols::ReferenceKind::Write
                 } else {
                     symbols::ReferenceKind::ReadWrite

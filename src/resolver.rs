@@ -970,7 +970,9 @@ impl<'a> Resolver<'a> {
                             index_span,
                             "indexed assignment currently supports tuple bindings only",
                         )
-                        .with_help("use var tuple = (...); or replace a non-tuple collection as a whole")
+                        .with_help(
+                            "use var tuple = (...); or replace a non-tuple collection as a whole",
+                        )
                     })?;
                     let mut literal = index_expression.root();
                     while let ExpressionKind::Group { expression } =
@@ -994,12 +996,15 @@ impl<'a> Resolver<'a> {
                         return Err(type_mismatch(span, element.1, value.kind)
                             .with_related(declaration, "the tuple's type is established here"));
                     }
-                    self.emit(ResolvedStatement::TupleSet {
-                        slot,
-                        index: element.0,
-                        value,
-                        index_span,
-                    }, span);
+                    self.emit(
+                        ResolvedStatement::TupleSet {
+                            slot,
+                            index: element.0,
+                            value,
+                            index_span,
+                        },
+                        span,
+                    );
                     return Ok(());
                 }
                 let value = self.expression(value)?;

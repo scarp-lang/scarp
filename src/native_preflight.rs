@@ -47,9 +47,7 @@ fn verify_plan_shape(program: &ResolvedProgram) -> Result<(), Diagnostic> {
         let valid = match &operation.kind {
             ResolvedStatement::Store { slot, .. }
             | ResolvedStatement::Update { slot, .. }
-            | ResolvedStatement::TupleSet { slot, .. } => {
-                *slot < slot_count
-            }
+            | ResolvedStatement::TupleSet { slot, .. } => *slot < slot_count,
             ResolvedStatement::RepeatInit {
                 count_slot,
                 index_slot,

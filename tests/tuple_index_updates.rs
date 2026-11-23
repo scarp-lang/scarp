@@ -12,7 +12,9 @@ fn output(source: &str) -> String {
 fn failed(source: &str, options: ExecutionOptions, kind: Kind) -> scarp::diagnostics::Diagnostic {
     let mut out = Vec::new();
     let error = scarp::run_with_options(source, &mut out, options).unwrap_err();
-    let RunError::Diagnostic(diagnostic) = error else { panic!("expected a source diagnostic") };
+    let RunError::Diagnostic(diagnostic) = error else {
+        panic!("expected a source diagnostic")
+    };
     assert_eq!(diagnostic.kind, kind, "{source}: {diagnostic:?}");
     assert!(out.is_empty(), "failure must not emit buffered output");
     diagnostic
@@ -64,7 +66,11 @@ fn replacement_expression_evaluates_exactly_once() {
 #[test]
 fn immutable_target_reports_the_original_declaration() {
     let source = "bind pair=(1,2); pair[0]=9;";
-    let diagnostic = failed(source, ExecutionOptions::default(), Kind::ImmutableAssignment);
+    let diagnostic = failed(
+        source,
+        ExecutionOptions::default(),
+        Kind::ImmutableAssignment,
+    );
     assert_eq!(&source[diagnostic.span.start..diagnostic.span.end], "pair");
     assert_eq!(diagnostic.related.len(), 1);
 }
@@ -86,10 +92,26 @@ fn indices_remain_literal_and_checked_at_compile_time() {
 
 #[test]
 fn member_types_and_target_collections_are_validated() {
-    failed("var t=(1, \"hi\"); t[0]=false;", ExecutionOptions::default(), Kind::TypeMismatch);
-    failed("var t=(1, \"hi\"); t[1]=3;", ExecutionOptions::default(), Kind::TypeMismatch);
-    failed("var t=[array: 1, 2]; t[0]=3;", ExecutionOptions::default(), Kind::TypeMismatch);
-    failed("var t=1; t[0]=3;", ExecutionOptions::default(), Kind::TypeMismatch);
+    failed(
+        "var t=(1, \"hi\"); t[0]=false;",
+        ExecutionOptions::default(),
+        Kind::TypeMismatch,
+    );
+    failed(
+        "var t=(1, \"hi\"); t[1]=3;",
+        ExecutionOptions::default(),
+        Kind::TypeMismatch,
+    );
+    failed(
+        "var t=[array: 1, 2]; t[0]=3;",
+        ExecutionOptions::default(),
+        Kind::TypeMismatch,
+    );
+    failed(
+        "var t=1; t[0]=3;",
+        ExecutionOptions::default(),
+        Kind::TypeMismatch,
+    );
     let err = scarp::parse("var t=(1,2); t[0]+=1;").unwrap_err();
     assert_eq!(err.kind, Kind::UnexpectedToken);
 }
@@ -101,7 +123,10 @@ fn replacing_member_consumes_new_tuple_quota_and_is_atomic() {
     let mut high = 4096usize;
     while low < high {
         let mid = low + (high - low) / 2;
-        let options = ExecutionOptions { max_tuple_bytes: mid, ..Default::default() };
+        let options = ExecutionOptions {
+            max_tuple_bytes: mid,
+            ..Default::default()
+        };
         if scarp::check_with_options(original, options).is_ok() {
             high = mid;
         } else {
@@ -109,9 +134,15 @@ fn replacing_member_consumes_new_tuple_quota_and_is_atomic() {
         }
     }
     assert!(low < 4096);
-    let options = ExecutionOptions { max_tuple_bytes: low, ..Default::default() };
+    let options = ExecutionOptions {
+        max_tuple_bytes: low,
+        ..Default::default()
+    };
     scarp::check_with_options(original, options).unwrap();
     let source = "print(\"before\"); var t=(1,2); t[0]=3; print(t);";
     let diagnostic = failed(source, options, Kind::TupleAllocation);
-    assert_eq!(diagnostic.span, Span::new(source.find('0').unwrap(), source.find('0').unwrap() + 1));
+    assert_eq!(
+        diagnostic.span,
+        Span::new(source.find('0').unwrap(), source.find('0').unwrap() + 1)
+    );
 }

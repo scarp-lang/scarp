@@ -954,8 +954,7 @@ impl Parser<'_> {
             let expression = self.expression()?;
             // Preserve literal provenance even after module constant folding.
             let mut literal = expression.root();
-            while let ExpressionKind::Group { expression: inner } =
-                expression.nodes()[literal].kind
+            while let ExpressionKind::Group { expression: inner } = expression.nodes()[literal].kind
             {
                 literal = inner;
             }
@@ -977,7 +976,8 @@ impl Parser<'_> {
             None
         };
         let operator_span = self.current().ok_or_else(|| self.expected("'='"))?.span;
-        let operator = self.current()
+        let operator = self
+            .current()
             .and_then(|token| assignment_operator(&token.kind))
             .ok_or_else(|| self.expected("an assignment operator"))?;
         if index.is_some() && operator != AssignmentOperator::Set {
@@ -985,7 +985,8 @@ impl Parser<'_> {
                 DiagnosticKind::UnexpectedToken,
                 operator_span,
                 "indexed tuple assignment currently supports '=' only",
-            ).with_help("use tuple[index] = expression;"));
+            )
+            .with_help("use tuple[index] = expression;"));
         }
         self.advance();
         let mut nodes = Vec::new();

@@ -425,13 +425,14 @@ pub(super) fn prepare<'a>(
                                 let members = original.elements();
                                 // Charge the full new payload before constructing a replacement.
                                 budget.charge(members.len() as u64, span)?;
-                                let bytes = TupleValue::allocation_bytes(members).ok_or_else(|| {
-                                    Diagnostic::new(
-                                        DiagnosticKind::TupleAllocation,
-                                        span,
-                                        "tuple replacement allocation size overflow",
-                                    )
-                                })?;
+                                let bytes =
+                                    TupleValue::allocation_bytes(members).ok_or_else(|| {
+                                        Diagnostic::new(
+                                            DiagnosticKind::TupleAllocation,
+                                            span,
+                                            "tuple replacement allocation size overflow",
+                                        )
+                                    })?;
                                 budget.charge_tuple_allocation(bytes, span)?;
                                 let mut replacement = Vec::new();
                                 replacement.try_reserve_exact(members.len()).map_err(|_| {
@@ -793,9 +794,12 @@ pub(super) fn prepare<'a>(
                         ResolvedStatement::Store { slot, value } => {
                             frame.start(value, Completion::Store(*slot))
                         }
-                        ResolvedStatement::TupleSet { slot, index, value, index_span } => {
-                            frame.start(value, Completion::TupleSet(*slot, *index, *index_span))
-                        }
+                        ResolvedStatement::TupleSet {
+                            slot,
+                            index,
+                            value,
+                            index_span,
+                        } => frame.start(value, Completion::TupleSet(*slot, *index, *index_span)),
                         ResolvedStatement::Propagate { slot, value, plan } => {
                             frame.start(value, Completion::Propagate(*slot, plan))
                         }
