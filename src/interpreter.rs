@@ -216,8 +216,7 @@ pub(crate) fn invoke_named_with_input_and_options(
     function: usize,
     arguments: Vec<Value>,
     input: &mut impl io::BufRead,
-    stdout: &mut impl Write,
-    stderr: &mut impl Write,
+    writers: (&mut impl Write, &mut impl Write),
     options: ExecutionOptions,
     input_limits: InputLimits,
 ) -> Result<Value, RunError> {
@@ -230,7 +229,7 @@ pub(crate) fn invoke_named_with_input_and_options(
         &mut InputState::new(Some(input), input_limits),
     )
     .map_err(RunError::Diagnostic)?;
-    replay(events, stdout, stderr)?;
+    replay(events, writers.0, writers.1)?;
     Ok(value)
 }
 

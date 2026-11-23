@@ -184,8 +184,7 @@ impl NamedCallableRef {
             self.declaration,
             arguments,
             input,
-            stdout,
-            stderr,
+            (stdout, stderr),
             options,
             input_limits,
         )
