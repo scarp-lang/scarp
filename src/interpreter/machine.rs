@@ -443,7 +443,14 @@ pub(super) fn prepare<'a>(
                                     )
                                 })?;
                                 replacement.extend(members.iter().cloned());
-                                replacement[index] = value;
+                                let member = replacement.get_mut(index).ok_or_else(|| {
+                                    Diagnostic::new(
+                                        DiagnosticKind::TupleIndex,
+                                        span,
+                                        "resolved tuple assignment index is out of bounds",
+                                    )
+                                })?;
+                                *member = value;
                                 let updated = TupleValue::new(replacement).ok_or_else(|| {
                                     Diagnostic::new(
                                         DiagnosticKind::TupleLimit,
