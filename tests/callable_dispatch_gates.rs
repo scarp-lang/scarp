@@ -24,7 +24,9 @@ fn callable_compatibility_matches_the_complete_small_signature_matrix() {
     for &arguments in parameters {
         for result in [P::Unit.id(), P::Integer.id()] {
             for effect in [Effect::Pure, Effect::Impure] {
-                let id = builder.intern(signature(arguments, result, effect)).unwrap();
+                let id = builder
+                    .intern(signature(arguments, result, effect))
+                    .unwrap();
                 cases.push((arguments.to_vec(), result, effect, id));
             }
         }
@@ -35,8 +37,7 @@ fn callable_compatibility_matches_the_complete_small_signature_matrix() {
             let compatible = expected_params == candidate_params
                 && expected_result == candidate_result
                 && (*expected_effect == *candidate_effect
-                    || (*expected_effect == Effect::Impure
-                        && *candidate_effect == Effect::Pure));
+                    || (*expected_effect == Effect::Impure && *candidate_effect == Effect::Pure));
             assert_eq!(
                 registry.accepts_callable(*expected, *candidate).unwrap(),
                 compatible,
@@ -44,9 +45,7 @@ fn callable_compatibility_matches_the_complete_small_signature_matrix() {
             );
         }
     }
-    assert!(!registry
-        .accepts_callable(P::Unit.id(), cases[0].3)
-        .unwrap());
+    assert!(!registry.accepts_callable(P::Unit.id(), cases[0].3).unwrap());
     assert!(!registry
         .accepts_callable(cases[0].3, P::Integer.id())
         .unwrap());
@@ -97,8 +96,7 @@ fn zero_argument_callable_limits_do_not_partially_register_types() {
 
 #[test]
 fn named_callable_signature_snapshot_outlives_the_compiled_program() {
-    let program =
-        scarp::compile("pure funcra keep(n: integer) -> integer { return n; }").unwrap();
+    let program = scarp::compile("pure funcra keep(n: integer) -> integer { return n; }").unwrap();
     let id = program.function_type_id(0).unwrap();
     let registry = program.type_registry().clone();
     drop(program);
@@ -157,8 +155,14 @@ fn imported_named_calls_preserve_effect_types_and_unicode_source_spans() {
     }
     let pure = pure.expect("pure declaration");
     let impure = impure.expect("impure declaration");
-    assert!(program.type_registry().accepts_callable(impure, pure).unwrap());
-    assert!(!program.type_registry().accepts_callable(pure, impure).unwrap());
+    assert!(program
+        .type_registry()
+        .accepts_callable(impure, pure)
+        .unwrap());
+    assert!(!program
+        .type_registry()
+        .accepts_callable(pure, impure)
+        .unwrap());
     let mut calls = 0;
     for expression in program.typed_expressions() {
         for node in expression.nodes() {
