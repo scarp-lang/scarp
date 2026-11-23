@@ -160,14 +160,7 @@ impl ExportedCallableSlot {
         input_limits: InputLimits,
     ) -> Result<Value, ExportedSlotInvokeError> {
         self.slot
-            .invoke_with_input_and_options(
-                arguments,
-                input,
-                stdout,
-                stderr,
-                options,
-                input_limits,
-            )
+            .invoke_with_input_and_options(arguments, input, stdout, stderr, options, input_limits)
             .map_err(|error| self.translate(error))
     }
 

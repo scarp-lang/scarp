@@ -29,7 +29,8 @@ fn host_can_switch_same_signature_targets_without_source_level_function_values()
         "pure funcra increment(n: integer) -> integer { return n + 1; }\n\
          pure funcra triple(n: integer) -> integer { return n * 3; }\n\
          print(increment(4));",
-    ).unwrap();
+    )
+    .unwrap();
     let required = program.function_type_id(0).unwrap();
     let catalog = CallableCatalog::from_program(program);
     let mut slot = catalog.slot_bound(required, 0).unwrap();
@@ -66,7 +67,8 @@ fn selected_target_controls_parameter_names_even_with_identical_signatures() {
     let program = scarp::compile(
         "pure funcra start(value: integer) -> integer { return value; }\n\
          pure funcra finish(answer: integer) -> integer { return answer + 10; }",
-    ).unwrap();
+    )
+    .unwrap();
     let required = program.function_type_id(0).unwrap();
     let catalog = CallableCatalog::from_program(program);
     let mut slot = catalog.slot_bound(required, 0).unwrap();
@@ -74,7 +76,8 @@ fn selected_target_controls_parameter_names_even_with_identical_signatures() {
         run(
             &slot,
             HostArguments::new(vec![], vec![("value".into(), Value::Integer(2))]),
-        ).unwrap(),
+        )
+        .unwrap(),
         Value::Integer(2),
     );
     slot.select(1).unwrap();
@@ -82,7 +85,8 @@ fn selected_target_controls_parameter_names_even_with_identical_signatures() {
         run(
             &slot,
             HostArguments::new(vec![], vec![("answer".into(), Value::Integer(2))]),
-        ).unwrap(),
+        )
+        .unwrap(),
         Value::Integer(12),
     );
     assert!(matches!(
@@ -101,7 +105,8 @@ fn pure_can_fill_impure_but_impure_never_fills_pure_slot() {
         "pure funcra quiet(n: integer) -> integer { return n; }\n\
          funcra loud(n: integer) -> integer { print(\"effect\"); return n; }\n\
          pure funcra text(s: string) -> string { return s; }",
-    ).unwrap();
+    )
+    .unwrap();
     let pure_signature = program.function_type_id(0).unwrap();
     let impure_signature = program.function_type_id(1).unwrap();
     let catalog = CallableCatalog::from_program(program);
@@ -125,7 +130,14 @@ fn pure_can_fill_impure_but_impure_never_fills_pure_slot() {
     assert_eq!(pure_slot.current().unwrap().declaration_index(), 0);
     let mut impure_slot = catalog.slot(impure_signature).unwrap();
     impure_slot.set(pure_slot.current().unwrap()).unwrap();
-    assert_eq!(run(&impure_slot, HostArguments::positional(vec![Value::Integer(7)])).unwrap(), Value::Integer(7));
+    assert_eq!(
+        run(
+            &impure_slot,
+            HostArguments::positional(vec![Value::Integer(7)])
+        )
+        .unwrap(),
+        Value::Integer(7)
+    );
     impure_slot.set(&loud).unwrap();
     let (mut out, mut err) = (Vec::new(), Vec::new());
     assert_eq!(
@@ -194,9 +206,9 @@ fn constructor_rejects_missing_declarations_and_keeps_explicit_type_errors() {
 
 #[test]
 fn unbound_slot_never_executes_and_never_consumes_host_input() {
-    let program = scarp::compile(
-        "funcra read(n: integer) -> string { print(n); return read_line(); }",
-    ).unwrap();
+    let program =
+        scarp::compile("funcra read(n: integer) -> string { print(n); return read_line(); }")
+            .unwrap();
     let required = program.function_type_id(0).unwrap();
     let catalog = CallableCatalog::from_program(program);
     let slot = catalog.slot(required).unwrap();
@@ -223,7 +235,8 @@ fn selected_host_target_preserves_input_defaults_and_output_transactions() {
         "funcra read(n: integer, suffix: string = \"!\") -> string {\n\
              print(suffix); return read_line();\n\
          }",
-    ).unwrap();
+    )
+    .unwrap();
     let signature = program.function_type_id(0).unwrap();
     let catalog = CallableCatalog::from_program(program);
     let slot = catalog.slot_bound(signature, 0).unwrap();
@@ -237,7 +250,8 @@ fn selected_host_target_preserves_input_defaults_and_output_transactions() {
             &mut err,
             ExecutionOptions::default(),
             InputLimits::default(),
-        ).unwrap(),
+        )
+        .unwrap(),
         Value::from("नमस्ते")
     );
     assert_eq!(out, b"!\n");
@@ -250,14 +264,33 @@ fn contract_failures_and_quotas_remain_runtime_errors_without_output_leak() {
         "funcra checked(n: integer) -> integer\n\
              ensures result > 0;\n\
          { print(\"pending\"); return n; }",
-    ).unwrap();
+    )
+    .unwrap();
     let signature = program.function_type_id(0).unwrap();
     let catalog = CallableCatalog::from_program(program);
     let slot = catalog.slot_bound(signature, 0).unwrap();
     for (n, options, kind) in [
-        (0, ExecutionOptions::default(), DiagnosticKind::ContractViolation),
-        (1, ExecutionOptions { max_calls: 0, ..ExecutionOptions::default() }, DiagnosticKind::CallLimit),
-        (1, ExecutionOptions { max_capture_bytes: 0, ..ExecutionOptions::default() }, DiagnosticKind::CaptureLimit),
+        (
+            0,
+            ExecutionOptions::default(),
+            DiagnosticKind::ContractViolation,
+        ),
+        (
+            1,
+            ExecutionOptions {
+                max_calls: 0,
+                ..ExecutionOptions::default()
+            },
+            DiagnosticKind::CallLimit,
+        ),
+        (
+            1,
+            ExecutionOptions {
+                max_capture_bytes: 0,
+                ..ExecutionOptions::default()
+            },
+            DiagnosticKind::CaptureLimit,
+        ),
     ] {
         let (mut out, mut err) = (Vec::new(), Vec::new());
         assert!(matches!(
@@ -277,9 +310,8 @@ fn contract_failures_and_quotas_remain_runtime_errors_without_output_leak() {
 
 #[test]
 fn slot_and_clone_retain_one_program_until_final_owner_drops() {
-    let program = Arc::new(scarp::compile(
-        "pure funcra id(n: integer) -> integer { return n; }",
-    ).unwrap());
+    let program =
+        Arc::new(scarp::compile("pure funcra id(n: integer) -> integer { return n; }").unwrap());
     let weak = Arc::downgrade(&program);
     let required = program.function_type_id(0).unwrap();
     let catalog = CallableCatalog::new(Arc::clone(&program));

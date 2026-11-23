@@ -13,13 +13,16 @@ use scarp::{
 
 fn linked() -> modules::ModuleProgram {
     let mut loader = MemorySourceLoader::new();
-    loader.insert(
-        "main.srp",
-        "import \"lib.srp\" as lib; import \"extra.srp\" as extra; print(lib.first(3));",
-    ).unwrap();
-    loader.insert(
-        "lib.srp",
-        "// café 🌍\r\n\
+    loader
+        .insert(
+            "main.srp",
+            "import \"lib.srp\" as lib; import \"extra.srp\" as extra; print(lib.first(3));",
+        )
+        .unwrap();
+    loader
+        .insert(
+            "lib.srp",
+            "// café 🌍\r\n\
          pure funcra hidden(n: integer, extra: integer = 0) -> integer { return n; }\r\n\
          pub bind magic = 42;\r\n\
          pub pure funcra first(n: integer, extra: integer = 2) -> integer {\r\n\
@@ -32,13 +35,16 @@ fn linked() -> modules::ModuleProgram {
              print(\"pending\"); return 10 / n;\r\n\
          }\r\n\
          pub funcra ask(n: integer) -> string { return read_line(); }\r\n",
-    ).unwrap();
-    loader.insert(
-        "extra.srp",
-        "pub pure funcra second(value: integer, extra: integer = 4) -> integer {\n\
+        )
+        .unwrap();
+    loader
+        .insert(
+            "extra.srp",
+            "pub pure funcra second(value: integer, extra: integer = 4) -> integer {\n\
              return value * extra + 100;\n\
          }",
-    ).unwrap();
+        )
+        .unwrap();
     modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap()
 }
 
@@ -77,11 +83,9 @@ fn public_rebinding_selects_correct_function_in_same_and_other_modules() {
     assert_eq!(
         call(
             &slot,
-            HostArguments::new(
-                vec![],
-                vec![("value".into(), Value::Integer(3))],
-            ),
-        ).unwrap(),
+            HostArguments::new(vec![], vec![("value".into(), Value::Integer(3))],),
+        )
+        .unwrap(),
         Value::Integer(12)
     );
     slot.select_exported(extra, "second").unwrap();
@@ -104,7 +108,11 @@ fn private_and_nonfunction_selection_cannot_replace_existing_public_target() {
         (lib, "magic", ModuleCallableBindError::NotFunction),
         (lib, "missing", ModuleCallableBindError::UnknownSymbol),
         (extra, "missing", ModuleCallableBindError::UnknownSymbol),
-        (usize::MAX, "first", ModuleCallableBindError::UnknownSource(usize::MAX)),
+        (
+            usize::MAX,
+            "first",
+            ModuleCallableBindError::UnknownSource(usize::MAX),
+        ),
     ] {
         assert_eq!(
             slot.select_exported(source, name),
@@ -132,12 +140,18 @@ fn rejected_purity_rebinding_preserves_old_target_and_effects_are_bounded() {
     let mut pure_slot = catalog.slot_exported(lib, "first", pure_sig).unwrap();
     assert!(matches!(
         pure_slot.select_exported(lib, "effects"),
-        Err(ExportedSlotBindError::Export(ModuleCallableBindError::Callable(_)))
+        Err(ExportedSlotBindError::Export(
+            ModuleCallableBindError::Callable(_)
+        ))
     ));
     assert_eq!(pure_slot.selected(), Some((lib, "first")));
     let mut impure_slot = catalog.slot_exported(lib, "first", impure_sig).unwrap();
     assert_eq!(
-        call(&impure_slot, HostArguments::positional(vec![Value::Integer(7)])).unwrap(),
+        call(
+            &impure_slot,
+            HostArguments::positional(vec![Value::Integer(7)])
+        )
+        .unwrap(),
         Value::Integer(9)
     );
     impure_slot.select_exported(lib, "effects").unwrap();
@@ -154,12 +168,14 @@ fn rejected_purity_rebinding_preserves_old_target_and_effects_are_bounded() {
     ));
     assert!(out.is_empty() && err.is_empty());
     assert_eq!(
-        impure_slot.invoke_with_io_and_options(
-            HostArguments::positional(vec![Value::Integer(2)]),
-            &mut out,
-            &mut err,
-            ExecutionOptions::default(),
-        ).unwrap(),
+        impure_slot
+            .invoke_with_io_and_options(
+                HostArguments::positional(vec![Value::Integer(2)]),
+                &mut out,
+                &mut err,
+                ExecutionOptions::default(),
+            )
+            .unwrap(),
         Value::Integer(5)
     );
     assert_eq!(out, b"pending\n");
@@ -176,7 +192,8 @@ fn currently_selected_parameter_names_change_with_the_actual_exported_target() {
         call(
             &slot,
             HostArguments::new(vec![], vec![("n".into(), Value::Integer(3))]),
-        ).unwrap(),
+        )
+        .unwrap(),
         Value::Integer(5)
     );
     slot.select_exported(lib, "second").unwrap();
@@ -192,7 +209,8 @@ fn currently_selected_parameter_names_change_with_the_actual_exported_target() {
         call(
             &slot,
             HostArguments::new(vec![], vec![("value".into(), Value::Integer(3))]),
-        ).unwrap(),
+        )
+        .unwrap(),
         Value::Integer(12)
     );
 }
@@ -231,7 +249,8 @@ fn cleared_slot_does_not_consume_input_and_can_be_rebound_to_public_name() {
             &mut err,
             ExecutionOptions::default(),
             InputLimits::default(),
-        ).unwrap(),
+        )
+        .unwrap(),
         Value::from("answer")
     );
 }
@@ -248,12 +267,15 @@ fn source_aware_diagnostic_survives_original_module_catalog_drop() {
     drop(linked);
     assert!(weak.upgrade().is_some());
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    match slot.invoke_with_io_and_options(
-        HostArguments::positional(vec![Value::Integer(0)]),
-        &mut out,
-        &mut err,
-        ExecutionOptions::default(),
-    ).unwrap_err() {
+    match slot
+        .invoke_with_io_and_options(
+            HostArguments::positional(vec![Value::Integer(0)]),
+            &mut out,
+            &mut err,
+            ExecutionOptions::default(),
+        )
+        .unwrap_err()
+    {
         ExportedSlotInvokeError::Runtime(ModuleRunError::Diagnostic(diag)) => {
             assert_eq!(diag.diagnostic.kind, DiagnosticKind::DivisionByZero);
             assert!(diag.render().contains("lib.srp"));
