@@ -18,6 +18,8 @@ pub mod c_backend;
 pub mod decimal;
 pub mod diagnostics;
 pub mod evaluator;
+/// Optional cumulative host quotas for repeated Rust embedding calls.
+pub mod embedding;
 pub mod input;
 pub mod interpreter;
 mod json;
