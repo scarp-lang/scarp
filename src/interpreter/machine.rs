@@ -201,43 +201,142 @@ pub(super) fn prepare<'a>(
     options: ExecutionOptions,
     input: &mut InputState<'_>,
 ) -> Result<Vec<OutputEvent<'a>>, Diagnostic> {
-    if program.binding_count() > options.max_live_slots {
-        return Err(limit(
-            Span::default(),
-            "live binding slot",
-            options.max_live_slots,
-            "max_live_slots",
-        ));
-    }
-    let mut frames = vec![Frame {
-        function: None,
-        call_span: Span::default(),
-        tail_sites: Vec::new(),
-        operations: &program.statements,
-        environment: vec![Value::Unit; program.binding_count()],
-        supplied: Vec::new(),
-        pc: 0,
-        stage: Stage::Body,
-        expression: None,
-        completion: Completion::Discard,
-        workspace: Workspace::default(),
-        output: None,
-        result: Value::Unit,
-    }];
+    run_plan(program, None, capture, options, input).map(|(_, events)| events)
+}
+
+/// Enter the same resumable frame machine from a checked Rust host reference.
+/// The supplied arguments were validated by NamedCallableRef; no separate
+/// expression evaluator, contract engine or function-dispatch path is added.
+pub(super) fn prepare_named_call<'a>(
+    program: &'a ResolvedProgram,
+    function: usize,
+    arguments: Vec<Value>,
+    capture: bool,
+    options: ExecutionOptions,
+    input: &mut InputState<'_>,
+) -> Result<(Value, Vec<OutputEvent<'a>>), Diagnostic> {
+    run_plan(program, Some((function, arguments)), capture, options, input)
+}
+
+fn run_plan<'a>(
+    program: &'a ResolvedProgram,
+    entry: Option<(usize, Vec<Value>)>,
+    capture: bool,
+    options: ExecutionOptions,
+    input: &mut InputState<'_>,
+) -> Result<(Value, Vec<OutputEvent<'a>>), Diagnostic> {
+    let is_host_call = entry.is_some();
     let mut budget = Budget::new(options.limits.max_steps)
         .with_vector_bytes(options.max_vector_bytes)
         .with_text_bytes(options.max_text_bytes)
         .with_tuple_bytes(options.max_tuple_bytes)
         .with_array_bytes(options.max_array_bytes)
         .with_bigint_limits(options.max_bigint_digits, options.max_bigint_bytes);
+    let initial = if let Some((id, arguments)) = entry {
+        let function = program.functions.get(id).ok_or_else(|| {
+            Diagnostic::new(
+                DiagnosticKind::UnknownFunction,
+                Span::default(),
+                "host callable target is missing from its compiled snapshot",
+            )
+        })?;
+        let span = program.functions()[id].span;
+        if arguments.len() > function.defaults.len()
+            || function.defaults[arguments.len()..]
+                .iter()
+                .any(Option::is_none)
+        {
+            return Err(Diagnostic::new(
+                DiagnosticKind::CallArguments,
+                span,
+                "host invocation has missing or excessive positional arguments",
+            ));
+        }
+        if options.max_call_depth == 0 {
+            return Err(limit(
+                span,
+                "function call depth",
+                options.max_call_depth,
+                "max_call_depth",
+            ));
+        }
+        if options.max_calls == 0 {
+            return Err(limit(
+                span,
+                "total function call",
+                options.max_calls,
+                "max_calls",
+            ));
+        }
+        if function.slots > options.max_live_slots {
+            return Err(limit(
+                span,
+                "live binding slot",
+                options.max_live_slots,
+                "max_live_slots",
+            ));
+        }
+        // Match the normal direct-call initialization charge. Host-owned
+        // argument payloads already exist; creating them is not billed here.
+        budget.charge(1 + function.slots as u64, span)?;
+        let mut environment = vec![Value::Unit; function.slots];
+        let mut supplied = vec![false; function.defaults.len()];
+        for (index, argument) in arguments.into_iter().enumerate() {
+            environment[index] = argument;
+            supplied[index] = true;
+        }
+        Frame {
+            function: Some(id),
+            call_span: span,
+            tail_sites: Vec::new(),
+            operations: &function.statements,
+            environment,
+            supplied,
+            pc: 0,
+            stage: Stage::Defaults(0),
+            expression: None,
+            completion: Completion::Discard,
+            workspace: Workspace::default(),
+            output: None,
+            result: Value::Unit,
+        }
+    } else {
+        if program.binding_count() > options.max_live_slots {
+            return Err(limit(
+                Span::default(),
+                "live binding slot",
+                options.max_live_slots,
+                "max_live_slots",
+            ));
+        }
+        Frame {
+            function: None,
+            call_span: Span::default(),
+            tail_sites: Vec::new(),
+            operations: &program.statements,
+            environment: vec![Value::Unit; program.binding_count()],
+            supplied: Vec::new(),
+            pc: 0,
+            stage: Stage::Body,
+            expression: None,
+            completion: Completion::Discard,
+            workspace: Workspace::default(),
+            output: None,
+            result: Value::Unit,
+        }
+    };
+    let mut live_slots = initial.environment.len();
+    let mut frames = vec![initial];
     let mut events: Vec<OutputEvent> = Vec::new();
-    let mut calls = 0_u64;
+    let mut calls = u64::from(is_host_call);
     let mut prints = 0;
-    let mut live_slots = program.binding_count();
     let mut captured = 0_usize;
+    let mut final_result = Value::Unit;
     let outcome = (|| -> Result<(), Diagnostic> {
         while !frames.is_empty() {
-            let depth = frames.len();
+            // A host-initiated call logically has a file-frame parent for
+            // the existing max_call_depth comparison, but allocates no file slots.
+            let depth = frames.len() + usize::from(is_host_call);
             let frame = frames.last_mut().unwrap();
             if let Some(expression) = frame.expression {
                 match frame
@@ -830,6 +929,8 @@ pub(super) fn prepare<'a>(
                     live_slots -= finished.environment.len();
                     if let Some(caller) = frames.last_mut() {
                         caller.workspace.accept(finished.result);
+                    } else {
+                        final_result = finished.result;
                     }
                 }
             }
@@ -856,7 +957,7 @@ pub(super) fn prepare<'a>(
         }
         error
     })?;
-    Ok(events)
+    Ok((final_result, events))
 }
 
 fn limit(

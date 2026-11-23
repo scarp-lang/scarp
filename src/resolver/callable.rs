@@ -1,10 +1,17 @@
 //! Checked, host-only identities for named functions in one resolved program.
 //! These handles do not implement indirect execution or closure capture.
 
-use std::{error::Error, fmt, sync::Arc};
+use std::{error::Error, fmt, io, sync::Arc};
 
 use super::{FunctionInfo, ResolvedProgram};
-use crate::types::{TypeId, TypeRegistryError};
+use crate::{
+    diagnostics::{Diagnostic, DiagnosticKind},
+    input::InputLimits,
+    limits::ExecutionOptions,
+    types::{PrimitiveType, SourceType, TypeId, TypeRegistryError},
+    value::{Value, MAX_TEXT_BYTES},
+    RunError,
+};
 
 /// An immutable, caller-owned compiled-program snapshot.
 #[derive(Debug, Clone)]
@@ -132,5 +139,113 @@ impl NamedCallableRef {
 
     pub fn belongs_to(&self, catalog: &CallableCatalog) -> bool {
         Arc::ptr_eq(&self.program, &catalog.program)
+    }
+
+    /// Execute a checked named target with supplied positional scalar values,
+    /// returning the function result. Omitted trailing defaults are evaluated
+    /// by the existing call machine. Does not run entry-script statements.
+    ///
+    /// Accepted host parameters are integer, boolean, finite float and bounded
+    /// string. Composite values, including nominal types from other program
+    /// snapshots, are deliberately unsupported in this first executable slice.
+    pub fn invoke_with_io_and_options(
+        &self,
+        arguments: Vec<Value>,
+        stdout: &mut impl io::Write,
+        stderr: &mut impl io::Write,
+        options: ExecutionOptions,
+    ) -> Result<Value, RunError> {
+        self.check_arguments(&arguments)?;
+        crate::interpreter::invoke_named_with_io_and_options(
+            &self.program,
+            self.declaration,
+            arguments,
+            stdout,
+            stderr,
+            options,
+        )
+    }
+
+    /// Invoke with an explicit buffered input reader and independent input
+    /// limits. Evaluation failures publish no ordinary print events; input
+    /// bytes already consumed from the host reader cannot be rolled back.
+    pub fn invoke_with_input_and_options(
+        &self,
+        arguments: Vec<Value>,
+        input: &mut impl io::BufRead,
+        stdout: &mut impl io::Write,
+        stderr: &mut impl io::Write,
+        options: ExecutionOptions,
+        input_limits: InputLimits,
+    ) -> Result<Value, RunError> {
+        self.check_arguments(&arguments)?;
+        crate::interpreter::invoke_named_with_input_and_options(
+            &self.program,
+            self.declaration,
+            arguments,
+            input,
+            stdout,
+            stderr,
+            options,
+            input_limits,
+        )
+    }
+
+    fn check_arguments(&self, arguments: &[Value]) -> Result<(), RunError> {
+        let info = self.metadata();
+        if arguments.len() > info.parameters.len()
+            || info.parameters[arguments.len()..]
+                .iter()
+                .any(|parameter| parameter.default.is_none())
+        {
+            return Err(RunError::Diagnostic(Diagnostic::new(
+                DiagnosticKind::CallArguments,
+                info.span,
+                format!(
+                    "funcra {} expects at most {} positional arguments and all required arguments",
+                    info.name,
+                    info.parameters.len()
+                ),
+            )));
+        }
+        for (parameter, value) in info.parameters.iter().zip(arguments) {
+            if !matches!(
+                parameter.kind,
+                SourceType::Primitive(
+                    PrimitiveType::Integer
+                        | PrimitiveType::Boolean
+                        | PrimitiveType::Float
+                        | PrimitiveType::String
+                )
+            ) {
+                return Err(RunError::Diagnostic(Diagnostic::new(
+                    DiagnosticKind::FunctionUnsupported,
+                    parameter.span,
+                    "host callable invocation currently supports only scalar integer, boolean, float and string parameters",
+                )));
+            }
+            if value.kind() != parameter.kind {
+                return Err(RunError::Diagnostic(Diagnostic::new(
+                    DiagnosticKind::TypeMismatch,
+                    parameter.span,
+                    format!(
+                        "host argument {} expects {}, found {}",
+                        parameter.name,
+                        parameter.kind,
+                        value.kind()
+                    ),
+                )));
+            }
+            if let Value::String(text) = value {
+                if text.len() > MAX_TEXT_BYTES {
+                    return Err(RunError::Diagnostic(Diagnostic::new(
+                        DiagnosticKind::TextConstruction,
+                        parameter.span,
+                        format!("host string parameter exceeds {MAX_TEXT_BYTES} UTF-8 bytes"),
+                    )));
+                }
+            }
+        }
+        Ok(())
     }
 }
