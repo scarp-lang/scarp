@@ -17,10 +17,10 @@ print((42,), (42));
 ```
 
 Tuples are fixed-arity ordered heterogeneous values. `(42,)` is a singleton;
-`(42)` remains grouping. Empty `()` / `tuple<>`, unit members, element mutation,
-dynamic/computed indices and tuple iteration are unsupported. The original alpha.6
-release did not support destructuring; `bind (first, second) = value;` and nested
-patterns have been supported since alpha.12.
+`(42)` remains grouping. Empty `()` / `tuple<>`, unit members, dynamic/computed
+indices and tuple iteration are unsupported. Tuple storage remains immutable.
+Published alpha.18 rejects element assignment; the post-alpha.18 `main` branch
+implements persistent indexed replacement on `var` bindings (unreleased).
 The contextual type word `tuple` remains a legal ordinary binding/function name.
 
 Types are inferred or annotated structurally: same ordered member types and
@@ -38,8 +38,9 @@ module constant folding, so `value[lib.zero]` does not become a literal index.
 Numerical vector/integer indexing retains its existing dynamic rules. Projections
 chain and can select tuples, primitives, numerical values or function results.
 
-`bind` retains an immutable value. `var` may replace the whole tuple only with
-the exact same structural type. Arguments, returns, defaults, recursion and
+`bind` retains an immutable value. `var` may replace the whole tuple with
+the exact same structural type; the unreleased indexed assignment form also
+preserves the tuple's original structural type. Arguments, returns, defaults, recursion and
 contracts use the same representation; pure functions keep all existing effect
 restrictions. Public/private module function interfaces support tuples. Module
 constant initializers deliberately keep the published scalar subset and reject
@@ -180,3 +181,26 @@ belongs in Scarp Docs and teaching lessons in Scarp by Example after compiler
 review/version qualification. VS Code grammar and Playground adoption remain
 separate and release-gated. No prerelease, version bump or release request is
 created by tuple development.
+
+## Persistent indexed assignment (implemented on main, unreleased)
+
+Compiler `main` now accepts `tuple[index] = value;` for a mutable `var`
+binding. This syntax is **not available in published alpha.18** and requires
+separate publication approval before becoming part of a released version. The feature replaces the entire immutable tuple snapshot rather
+than mutating shared tuple backing storage:
+
+```scarp
+var position = (10, 20);
+bind before = position;
+position[0] = 50;
+print(position, before); // (50, 20) (10, 20)
+```
+
+Only a compile-time nonnegative integer literal index (optionally grouped)
+inside the tuple's arity is accepted. The new value must match that member's
+exact structural type. Immutable `bind` assignments, computed indices,
+compound indexed assignments and indexed writes to non-tuple types are rejected.
+A successful replacement constructs and charges a new tuple payload under
+`--max-tuple-bytes`. The original value and its aliases remain unchanged.
+The interpreter executes this form; scalar native emitters still reject
+tuple operations with E0049.

@@ -107,6 +107,9 @@ pub enum Statement {
     Assign {
         name: String,
         name_span: Span,
+        /// A source index expression for persistent tuple element replacement.
+        /// Only compile-time nonnegative integer literals are currently accepted.
+        index: Option<Expression>,
         operator: AssignmentOperator,
         operator_span: Span,
         value: Expression,
