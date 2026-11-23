@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.6-alpha.19 — development candidate (not published)
+
+- Introduce a checked callable-signature compatibility query with invariant parameter and result types and one-way pure-to-impure effect compatibility. This is Rust semantic groundwork, **not** source-level first-class functions.
+- Add immutable, snapshot-bound Rust host callable handles, sparse named/default arguments and safe dynamic rebinding under explicit type/effect checks.
+- Support module export-constrained host callable lookup with linked diagnostics and existing source-map boundaries.
+- Record deterministic host execution resource usage, including failed invocations, and enforce cumulative interpreter, input and host-argument quotas across repeated embedded calls.
+- Charge completed interpreter work even when a caller-owned output writer panics during replay; arbitrary input-reader panics during evaluation and process aborts remain outside this guarantee.
+- Expand integration tests and host embedding examples. This development candidate remains subject to exact-source release CI and explicit publication approval.
+
+
 ## 0.0.6-alpha.18 — published GitHub prerelease, 2026-11-22
 
 - Run an independent read-only candidate preflight after all three package

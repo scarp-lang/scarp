@@ -81,6 +81,23 @@ class ArchiveInventoryTests(unittest.TestCase):
                     ROOT, "scarp", SOURCES,
                 )
 
+    def test_alpha19_closed_inventory_contract_rejects_extra_and_missing_files(self):
+        # The full source inventory is enforced at verify() for alpha.19.
+        # A loose inventory would silently permit extra files in release archives.
+        alpha19_root = ROOT.replace("alpha.18", "alpha.19")
+        entries = [(name.replace(ROOT, alpha19_root), kind) for name, kind in valid_entries()]
+        release.validate_archive_inventory(entries, alpha19_root, "scarp", SOURCES)
+        with self.assertRaisesRegex(ValueError, "unexpected"):
+            release.validate_archive_inventory(
+                entries + [(alpha19_root + "/payload.txt", "file")],
+                alpha19_root, "scarp", SOURCES,
+            )
+        with self.assertRaisesRegex(ValueError, "missing="):
+            release.validate_archive_inventory(
+                [entry for entry in entries if entry[0] != alpha19_root + "/scarp"],
+                alpha19_root, "scarp", SOURCES,
+            )
+
     def test_standalone_verifier_without_source_manifest_still_rejects_unsafe_members(self):
         release.validate_archive_inventory(
             valid_entries() + [(ROOT + "/extra.txt", "file")], ROOT, "scarp", {},
