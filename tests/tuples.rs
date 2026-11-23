@@ -71,7 +71,6 @@ fn exact_structural_types_govern_annotations_assignments_arguments_and_returns()
         "var x=(1,); x=(1,2);",
         "funcra f(x:tuple<integer>)->unit {} f((1.0,));",
         "print((1,)==(1.0,));",
-        "print((1,)<(2,));",
         "print((1,)+(2,));",
         "var x=(1,); x+=(2,);",
     ] {
@@ -122,6 +121,36 @@ fn structural_equality_handles_nested_text_numerical_collections_and_signed_zero
         run("bind values=([1.0,2.0],[integer:4,5]); print(values[0][1],values[1][0]);").0,
         b"2.0 4\n"
     );
+}
+
+#[test]
+fn numeric_tuple_ordering_is_lexicographic_and_handles_nested_members() {
+    let source = r#"
+        print((10, 20) < (30, 40), (10, 20) < (10, 21), (10, 20) < (10, 20));
+        print((1, 2) <= (1, 2), (1, 2) >= (1, 2), (2, 1) > (1, 99), (2, 1) <= (1, 99));
+        print((1, (2, 3)) < (1, (2, 4)), (1, (2, 4)) > (1, (2, 3)));
+        print((0.0, -0.0) <= (-0.0, 0.0), (-0.0,) < (0.0,), (-0.0,) >= (0.0,));
+        print((bigint("999999999999999999999"),) > (bigint("999999999999999999998"),));
+        print((decimal("1.20"), 2) < (decimal("1.21"), 0));
+    "#;
+    assert_eq!(
+        run(source).0,
+        b"true true false\ntrue true true false\ntrue true\ntrue false true\ntrue\ntrue\n"
+    );
+}
+
+#[test]
+fn numeric_tuple_ordering_rejects_non_orderable_and_mismatched_members() {
+    for source in [
+        r#"print(("a",) < ("b",));"#,
+        "print((true,) > (false,));",
+        r#"print((1, ("a",)) < (1, ("b",)));"#,
+        "print(([array: 1],) < ([array: 2],));",
+        "print((1,) < (1.0,));",
+        "print((1, 2) >= (1,));",
+    ] {
+        failure(source, Default::default(), Kind::TypeMismatch);
+    }
 }
 
 #[test]
