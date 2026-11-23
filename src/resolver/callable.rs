@@ -210,7 +210,7 @@ impl NamedCallableRef {
         }
         for (parameter, value) in info.parameters.iter().zip(arguments) {
             if !matches!(
-                parameter.kind,
+                &parameter.kind,
                 SourceType::Primitive(
                     PrimitiveType::Integer
                         | PrimitiveType::Boolean
