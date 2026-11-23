@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+mod callable;
 mod functions;
 mod nominal;
 mod patterns;
@@ -11,6 +12,7 @@ pub(crate) use variants::MatchTarget;
 mod type_info;
 
 use crate::types::{SourceType, TypeId, TypeLimits, TypeRegistryBuilder};
+pub use callable::{CallableBindError, CallableCatalog, NamedCallableRef};
 pub use type_info::{ExpressionContext, TypedExpression, TypedNode};
 #[cfg(test)]
 mod retirement_audit;
