@@ -159,7 +159,7 @@ impl CallableSlot {
     }
 
     /// Select an existing verified handle only if it belongs to the exact
-    /// same Arc<ResolvedProgram>. A structurally equivalent recompilation
+    /// same `Arc<ResolvedProgram>`. A structurally equivalent recompilation
     /// remains foreign, and pure can fill impure but not the converse.
     pub fn set(&mut self, target: &NamedCallableRef) -> Result<(), CallableSlotError> {
         if !Arc::ptr_eq(&self.program, &target.program) {
