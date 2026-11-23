@@ -10,7 +10,7 @@ fn output(source: &str) -> String {
 fn ordered_projections_are_sorted_and_snapshot_isolated() {
     let source = include_str!("../examples/ordered_map_projection_boundaries.srp");
     scarp::check(source).unwrap();
-    assert_eq!(output(source), "true\\ntrue\\ntrue\\ntrue\\ntrue\\n".replace("\\\\n", "\\n"));
+    assert_eq!(output(source), "true\ntrue\ntrue\ntrue\ntrue\n");
 }
 
 #[test]
@@ -22,7 +22,7 @@ fn empty_projections_retain_distinct_element_types() {
         print(keys == [list: <boolean>]);
         print(values == [list: <string>]);
     "#;
-    assert_eq!(output(source), "true\\ntrue\\n".replace("\\\\n", "\\n"));
+    assert_eq!(output(source), "true\ntrue\n");
 }
 
 #[test]
