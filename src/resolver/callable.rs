@@ -291,8 +291,7 @@ impl NamedCallableRef {
             input,
             writers,
             options,
-            input_limits,
-            usage,
+            (input_limits, usage),
         )
     }
 

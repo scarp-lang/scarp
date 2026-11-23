@@ -266,8 +266,7 @@ pub(crate) fn invoke_named_with_input_and_usage_and_options(
     input: &mut impl io::BufRead,
     writers: (&mut impl Write, &mut impl Write),
     options: ExecutionOptions,
-    input_limits: InputLimits,
-    usage: &mut ExecutionUsage,
+    metering: (InputLimits, &mut ExecutionUsage),
 ) -> Result<Value, RunError> {
     let (value, events) = machine::prepare_named_call_with_usage(
         program,
@@ -275,8 +274,8 @@ pub(crate) fn invoke_named_with_input_and_usage_and_options(
         arguments,
         true,
         options,
-        &mut InputState::new(Some(input), input_limits),
-        usage,
+        &mut InputState::new(Some(input), metering.0),
+        metering.1,
     )
     .map_err(RunError::Diagnostic)?;
     replay(events, writers.0, writers.1)?;
