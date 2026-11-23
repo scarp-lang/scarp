@@ -123,7 +123,7 @@ fn flush_panic_after_stdout_event_still_charges_both_selected_stream_operations(
     );
     let mut ledger = HostInvocationLedger::new(HostInvocationCaps::default());
     let mut stdout = PanickingFlushWriter { contents: Vec::new() };
-    let (mut stderr) = Vec::new();
+    let mut stderr = Vec::new();
     assert!(catch_unwind(AssertUnwindSafe(|| {
         let _ = ledger.invoke_slot(
             &callable, one(8), (&mut stdout, &mut stderr),
