@@ -185,7 +185,6 @@ pub fn execute_with_input_and_options(
     replay(events, stdout, stderr)
 }
 
-
 /// Execute a previously checked named-callable target through the ordinary
 /// frame machine, returning its owned value and transactionally replaying
 /// any program output. This is an internal entry point for Rust embeddings.

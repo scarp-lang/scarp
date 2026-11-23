@@ -32,8 +32,14 @@ fn host_invoke_runs_named_targets_not_entry_script() {
     let triple = catalog.bind_exact(1).unwrap();
     assert_eq!(add.signature(), triple.signature());
     assert!(!add.same_target(&triple));
-    assert_eq!(call(&add, vec![Value::Integer(4)]).unwrap(), Value::Integer(7));
-    assert_eq!(call(&triple, vec![Value::Integer(4)]).unwrap(), Value::Integer(12));
+    assert_eq!(
+        call(&add, vec![Value::Integer(4)]).unwrap(),
+        Value::Integer(7)
+    );
+    assert_eq!(
+        call(&triple, vec![Value::Integer(4)]).unwrap(),
+        Value::Integer(12)
+    );
     let (mut out, mut err) = (Vec::new(), Vec::new());
     scarp::interpreter::execute_with_io(&program, &mut out, &mut err).unwrap();
     assert_eq!(out, b"7 12\n");
@@ -49,7 +55,10 @@ fn host_invoke_executes_defaults_needs_ensures_and_implicit_unit() {
                   pure funcra noop() -> unit {}";
     let catalog = CallableCatalog::from_program(scarp::compile(source).unwrap());
     let scale = catalog.bind_exact(0).unwrap();
-    assert_eq!(call(&scale, vec![Value::Integer(4)]).unwrap(), Value::Integer(12));
+    assert_eq!(
+        call(&scale, vec![Value::Integer(4)]).unwrap(),
+        Value::Integer(12)
+    );
     assert_eq!(
         call(&scale, vec![Value::Integer(4), Value::Integer(2)]).unwrap(),
         Value::Integer(8)
@@ -58,7 +67,10 @@ fn host_invoke_executes_defaults_needs_ensures_and_implicit_unit() {
         kind(call(&scale, vec![Value::Integer(4), Value::Integer(0)]).unwrap_err()),
         Kind::ContractViolation
     );
-    assert_eq!(call(&catalog.bind_exact(1).unwrap(), vec![]).unwrap(), Value::Unit);
+    assert_eq!(
+        call(&catalog.bind_exact(1).unwrap(), vec![]).unwrap(),
+        Value::Unit
+    );
 }
 
 #[test]
@@ -72,27 +84,35 @@ fn host_invocation_preserves_dual_streams_and_atomic_failure() {
     let catalog = CallableCatalog::from_program(scarp::compile(source).unwrap());
     let (mut out, mut err) = (Vec::new(), Vec::new());
     assert_eq!(
-        catalog.bind_exact(0).unwrap()
+        catalog
+            .bind_exact(0)
+            .unwrap()
             .invoke_with_io_and_options(
                 vec![Value::Integer(5)],
                 &mut out,
                 &mut err,
                 ExecutionOptions::default(),
-            ).unwrap(),
+            )
+            .unwrap(),
         Value::Unit
     );
     assert_eq!(out, b"5\n");
     assert_eq!(err, b"!\n");
-    out.clear(); err.clear();
+    out.clear();
+    err.clear();
     let failed = catalog.bind_exact(1).unwrap();
     for (arg, diagnostic) in [(1, Kind::ContractViolation), (0, Kind::DivisionByZero)] {
         assert_eq!(
-            kind(failed.invoke_with_io_and_options(
-                vec![Value::Integer(arg)],
-                &mut out,
-                &mut err,
-                ExecutionOptions::default(),
-            ).unwrap_err()),
+            kind(
+                failed
+                    .invoke_with_io_and_options(
+                        vec![Value::Integer(arg)],
+                        &mut out,
+                        &mut err,
+                        ExecutionOptions::default(),
+                    )
+                    .unwrap_err()
+            ),
             diagnostic
         );
         assert!(out.is_empty());
@@ -106,14 +126,18 @@ fn invalid_positional_args_and_types_fail_before_program_output() {
                       print(\"called\"); return x + y;\n\
                   }";
     let handle = CallableCatalog::from_program(scarp::compile(source).unwrap())
-        .bind_exact(0).unwrap();
+        .bind_exact(0)
+        .unwrap();
     for args in [
         vec![],
         vec![Value::Integer(1), Value::Integer(2), Value::Integer(3)],
     ] {
         assert_eq!(kind(call(&handle, args).unwrap_err()), Kind::CallArguments);
     }
-    assert_eq!(kind(call(&handle, vec![Value::Boolean(true)]).unwrap_err()), Kind::TypeMismatch);
+    assert_eq!(
+        kind(call(&handle, vec![Value::Boolean(true)]).unwrap_err()),
+        Kind::TypeMismatch
+    );
 }
 
 #[test]
@@ -122,15 +146,21 @@ fn floats_and_unicode_are_accepted_but_excessive_host_text_is_rejected() {
                       if x > 0.0 { return text; } return \"no\";\n\
                   }";
     let handle = CallableCatalog::from_program(scarp::compile(source).unwrap())
-        .bind_exact(0).unwrap();
+        .bind_exact(0)
+        .unwrap();
     let positive = Value::Float(FiniteFloat::new(1.0).unwrap());
     assert_eq!(
         call(&handle, vec![Value::from("नमस्ते"), positive.clone()]).unwrap(),
         Value::from("नमस्ते")
     );
     assert_eq!(
-        kind(call(&handle, vec![Value::from("a".repeat(MAX_TEXT_BYTES + 1)), positive])
-            .unwrap_err()),
+        kind(
+            call(
+                &handle,
+                vec![Value::from("a".repeat(MAX_TEXT_BYTES + 1)), positive]
+            )
+            .unwrap_err()
+        ),
         Kind::TextConstruction
     );
     assert!(FiniteFloat::new(f64::NAN).is_none());
@@ -140,7 +170,8 @@ fn floats_and_unicode_are_accepted_but_excessive_host_text_is_rejected() {
 fn host_supplied_numeric_vectors_remain_explicitly_unsupported() {
     let source = "pure funcra identity(v: vector) -> vector { return v; }";
     let handle = CallableCatalog::from_program(scarp::compile(source).unwrap())
-        .bind_exact(0).unwrap();
+        .bind_exact(0)
+        .unwrap();
     let vector = scarp::value::NumericVector::new(&[1.0]).unwrap();
     assert_eq!(
         kind(call(&handle, vec![Value::Vector(vector)]).unwrap_err()),

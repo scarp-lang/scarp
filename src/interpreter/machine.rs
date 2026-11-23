@@ -215,7 +215,13 @@ pub(super) fn prepare_named_call<'a>(
     options: ExecutionOptions,
     input: &mut InputState<'_>,
 ) -> Result<(Value, Vec<OutputEvent<'a>>), Diagnostic> {
-    run_plan(program, Some((function, arguments)), capture, options, input)
+    run_plan(
+        program,
+        Some((function, arguments)),
+        capture,
+        options,
+        input,
+    )
 }
 
 fn run_plan<'a>(

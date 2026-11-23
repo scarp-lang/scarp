@@ -1,12 +1,10 @@
 //! Demonstrate Rust-only named callable invocation:
- //! cargo run --example host_callable_invocation
+//! cargo run --example host_callable_invocation
 
 use scarp::{resolver::CallableCatalog, value::Value, ExecutionOptions};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let program = scarp::compile(
-        "pure funcra triple(n: integer) -> integer { return n * 3; }",
-    )?;
+    let program = scarp::compile("pure funcra triple(n: integer) -> integer { return n * 3; }")?;
     let handle = CallableCatalog::from_program(program).bind_exact(0)?;
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let result = handle.invoke_with_io_and_options(
