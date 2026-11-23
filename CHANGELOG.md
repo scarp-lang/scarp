@@ -2,6 +2,11 @@
 
 ## 0.0.6-alpha.19 — development candidate (not published)
 
+- Implement `tuple[index] = value;` on mutable tuples as a type-checked,
+  persistent snapshot replacement. Literal indices retain compile-time arity
+  checks, aliases remain unchanged, and new tuple allocations consume existing
+  work and tuple-byte quotas. Add module-source and cross-platform regressions.
+  Not available in the published alpha.18 release.
 - Introduce a checked callable-signature compatibility query with invariant parameter and result types and one-way pure-to-impure effect compatibility. This is Rust semantic groundwork, **not** source-level first-class functions.
 - Add immutable, snapshot-bound Rust host callable handles, sparse named/default arguments and safe dynamic rebinding under explicit type/effect checks.
 - Support module export-constrained host callable lookup with linked diagnostics and existing source-map boundaries.
