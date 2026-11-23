@@ -178,6 +178,7 @@ pub(super) fn build_call_graph(program: &mut ResolvedProgram) {
                 | ResolvedStatement::Match { value, .. }
                 | ResolvedStatement::MatchLiteral { value, .. }
                 | ResolvedStatement::Update { value, .. }
+                | ResolvedStatement::TupleSet { value, .. }
                 | ResolvedStatement::Return { value: Some(value) } => expressions.push(value),
                 ResolvedStatement::Call { expression } => expressions.push(expression),
                 ResolvedStatement::Assert { condition, .. }

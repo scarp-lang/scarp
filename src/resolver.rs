@@ -141,6 +141,13 @@ pub(crate) enum ResolvedStatement {
         value: ResolvedExpression,
         operator_span: Span,
     },
+    /// Replace one member of a var tuple by constructing a new immutable tuple.
+    TupleSet {
+        slot: usize,
+        index: usize,
+        value: ResolvedExpression,
+        index_span: Span,
+    },
     Output {
         arguments: Vec<ResolvedArgument>,
         target: OutputTarget,
@@ -920,6 +927,7 @@ impl<'a> Resolver<'a> {
             Statement::Assign {
                 name,
                 name_span,
+                index,
                 operator,
                 operator_span,
                 value,
@@ -954,6 +962,46 @@ impl<'a> Resolver<'a> {
                 let slot = binding.slot;
                 let expected_type = binding.kind.clone();
                 let declaration = binding.declaration;
+                if let Some(index_expression) = index {
+                    let index_span = index_expression.nodes()[index_expression.root()].span;
+                    let members = expected_type.tuple_elements().ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::TypeMismatch,
+                            index_span,
+                            "indexed assignment currently supports tuple bindings only",
+                        )
+                        .with_help("use var tuple = (...); or replace a non-tuple collection as a whole")
+                    })?;
+                    let mut literal = index_expression.root();
+                    while let ExpressionKind::Group { expression } =
+                        index_expression.nodes()[literal].kind
+                    {
+                        literal = expression;
+                    }
+                    let element = match &index_expression.nodes()[literal].kind {
+                        ExpressionKind::Integer(n) if *n >= 0 => {
+                            usize::try_from(*n).ok().and_then(|n| members.get(n).map(|member| (n, member.clone())))
+                        }
+                        _ => None,
+                    }.ok_or_else(|| Diagnostic::new(
+                        DiagnosticKind::TupleIndex,
+                        index_span,
+                        "tuple assignment index must be a nonnegative integer literal within its arity",
+                    ).with_help("use tuple[0] = value; dynamic and computed indices are not supported"))?;
+                    let value = self.expression(value)?;
+                    if value.kind != element.1 {
+                        let span = value.syntax.nodes()[value.syntax.root()].span;
+                        return Err(type_mismatch(span, element.1, value.kind)
+                            .with_related(declaration, "the tuple's type is established here"));
+                    }
+                    self.emit(ResolvedStatement::TupleSet {
+                        slot,
+                        index: element.0,
+                        value,
+                        index_span,
+                    }, span);
+                    return Ok(());
+                }
                 let value = self.expression(value)?;
                 match operator {
                     AssignmentOperator::Compound(operator)

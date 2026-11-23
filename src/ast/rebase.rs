@@ -293,6 +293,7 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                 }
                 Statement::Assign {
                     name_span,
+                    index,
                     operator_span,
                     value,
                     span: whole,
@@ -301,6 +302,9 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                     span(name_span, base, to_local);
                     span(operator_span, base, to_local);
                     span(whole, base, to_local);
+                    if let Some(index) = index {
+                        expr(index, base, to_local, nodes);
+                    }
                     expr(value, base, to_local, nodes);
                 }
             }

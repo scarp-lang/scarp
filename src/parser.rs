@@ -786,12 +786,21 @@ impl Parser<'_> {
                         continue;
                     }
 
-                    if let Some(operator) = self
+                    if self
+                        .tokens
+                        .get(self.cursor + 1)
+                        .is_some_and(|token| token.kind == TokenKind::LeftBracket)
+                    {
+                        statements.push(self.assignment()?);
+                        continue;
+                    }
+                    if self
                         .tokens
                         .get(self.cursor + 1)
                         .and_then(|token| assignment_operator(&token.kind))
+                        .is_some()
                     {
-                        statements.push(self.assignment(operator)?);
+                        statements.push(self.assignment()?);
                         continue;
                     }
                     return Err(ParseError::new(
@@ -932,15 +941,52 @@ impl Parser<'_> {
         })
     }
 
-    fn assignment(&mut self, operator: AssignmentOperator) -> Result<Statement, ParseError> {
+    fn assignment(&mut self) -> Result<Statement, ParseError> {
         let token = self.current().expect("assignment name is present");
         let TokenKind::Identifier(name) = &token.kind else {
             unreachable!()
         };
         let name = name.clone();
         let name_span = token.span;
-        let operator_span = self.tokens[self.cursor + 1].span;
         self.advance();
+        let index = if self.at(&TokenKind::LeftBracket) {
+            self.advance();
+            let expression = self.expression()?;
+            // Preserve literal provenance even after module constant folding.
+            let mut literal = expression.root();
+            while let ExpressionKind::Group { expression: inner } =
+                expression.nodes()[literal].kind
+            {
+                literal = inner;
+            }
+            if !matches!(
+                expression.nodes()[literal].kind,
+                ExpressionKind::Integer(n) if n >= 0
+            ) {
+                let span = expression.nodes()[expression.root()].span;
+                return Err(ParseError::new(
+                    DiagnosticKind::TupleIndex,
+                    span,
+                    "tuple assignment index must be a nonnegative integer literal",
+                )
+                .with_help("use tuple[0] = value; computed indices are not supported"));
+            }
+            self.punctuation(TokenKind::RightBracket, "']' after tuple index")?;
+            Some(expression)
+        } else {
+            None
+        };
+        let operator_span = self.current().ok_or_else(|| self.expected("'='"))?.span;
+        let operator = self.current()
+            .and_then(|token| assignment_operator(&token.kind))
+            .ok_or_else(|| self.expected("an assignment operator"))?;
+        if index.is_some() && operator != AssignmentOperator::Set {
+            return Err(ParseError::new(
+                DiagnosticKind::UnexpectedToken,
+                operator_span,
+                "indexed tuple assignment currently supports '=' only",
+            ).with_help("use tuple[index] = expression;"));
+        }
         self.advance();
         let mut nodes = Vec::new();
         let root = self.logical_or(&mut nodes, 0).map_err(|error| {
@@ -957,6 +1003,7 @@ impl Parser<'_> {
         Ok(Statement::Assign {
             name,
             name_span,
+            index,
             operator,
             operator_span,
             value: Expression { nodes, root },

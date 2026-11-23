@@ -157,7 +157,8 @@ fn audit_frame(
                 initialize_pattern(&mut state_out, steps)?;
                 successors.push(pc + 1);
             }
-            ResolvedStatement::Update { slot, value, .. } => {
+            ResolvedStatement::Update { slot, value, .. }
+            | ResolvedStatement::TupleSet { slot, value, .. } => {
                 if !state.get(*slot).copied().unwrap_or(false) {
                     return Err(format!("update reads uninitialized or retired slot {slot}"));
                 }
