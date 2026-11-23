@@ -1,0 +1,11 @@
+// Named function calls are executable; first-class aliases remain unsupported.
+pure funcra twice(n: integer) -> integer {
+    return n * 2;
+}
+
+funcra report(n: integer) -> integer {
+    print(twice(n));
+    return n + 1;
+}
+
+print(report(6));
