@@ -6,7 +6,7 @@ use crate::{
     ast::OutputTarget,
     diagnostics::Diagnostic,
     input::{InputLimits, InputState},
-    limits::{ExecutionLimits, ExecutionOptions},
+    limits::{ExecutionLimits, ExecutionOptions, ExecutionUsage},
     resolver::ResolvedProgram,
     value::Value,
     RunError,
@@ -183,6 +183,103 @@ pub fn execute_with_input_and_options(
     )
     .map_err(RunError::Diagnostic)?;
     replay(events, stdout, stderr)
+}
+
+/// Execute a previously checked named-callable target through the ordinary
+/// frame machine, returning its owned value and transactionally replaying
+/// any program output. This is an internal entry point for Rust embeddings.
+pub(crate) fn invoke_named_with_io_and_options(
+    program: &ResolvedProgram,
+    function: usize,
+    arguments: Vec<Option<Value>>,
+    stdout: &mut impl Write,
+    stderr: &mut impl Write,
+    options: ExecutionOptions,
+) -> Result<Value, RunError> {
+    let (value, events) = machine::prepare_named_call(
+        program,
+        function,
+        arguments,
+        true,
+        options,
+        &mut InputState::new(None, InputLimits::default()),
+    )
+    .map_err(RunError::Diagnostic)?;
+    replay(events, stdout, stderr)?;
+    Ok(value)
+}
+
+/// Reader-enabled variant of the checked Rust host callable entry point.
+/// Input consumption is irreversible, but ordinary print events remain atomic.
+pub(crate) fn invoke_named_with_input_and_options(
+    program: &ResolvedProgram,
+    function: usize,
+    arguments: Vec<Option<Value>>,
+    input: &mut impl io::BufRead,
+    writers: (&mut impl Write, &mut impl Write),
+    options: ExecutionOptions,
+    input_limits: InputLimits,
+) -> Result<Value, RunError> {
+    let (value, events) = machine::prepare_named_call(
+        program,
+        function,
+        arguments,
+        true,
+        options,
+        &mut InputState::new(Some(input), input_limits),
+    )
+    .map_err(RunError::Diagnostic)?;
+    replay(events, writers.0, writers.1)?;
+    Ok(value)
+}
+
+/// Checked named host dispatch with exact interpreter usage even on failure.
+/// A subsequent host writer failure does not erase the completed evaluation.
+pub(crate) fn invoke_named_with_usage_and_options(
+    program: &ResolvedProgram,
+    function: usize,
+    arguments: Vec<Option<Value>>,
+    stdout: &mut impl Write,
+    stderr: &mut impl Write,
+    options: ExecutionOptions,
+    usage: &mut ExecutionUsage,
+) -> Result<Value, RunError> {
+    let (value, events) = machine::prepare_named_call_with_usage(
+        program,
+        function,
+        arguments,
+        true,
+        options,
+        &mut InputState::new(None, InputLimits::default()),
+        usage,
+    )
+    .map_err(RunError::Diagnostic)?;
+    replay(events, stdout, stderr)?;
+    Ok(value)
+}
+
+/// Input-enabled host dispatch with measured read attempts and raw bytes.
+pub(crate) fn invoke_named_with_input_and_usage_and_options(
+    program: &ResolvedProgram,
+    function: usize,
+    arguments: Vec<Option<Value>>,
+    input: &mut impl io::BufRead,
+    writers: (&mut impl Write, &mut impl Write),
+    options: ExecutionOptions,
+    metering: (InputLimits, &mut ExecutionUsage),
+) -> Result<Value, RunError> {
+    let (value, events) = machine::prepare_named_call_with_usage(
+        program,
+        function,
+        arguments,
+        true,
+        options,
+        &mut InputState::new(Some(input), metering.0),
+        metering.1,
+    )
+    .map_err(RunError::Diagnostic)?;
+    replay(events, writers.0, writers.1)?;
+    Ok(value)
 }
 
 /// Explicit interactive capability. Prompts are written and flushed to stdout

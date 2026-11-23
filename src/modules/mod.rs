@@ -22,11 +22,16 @@ use crate::{
 use std::{collections::HashMap, fmt, io, path::Path, sync::Arc};
 
 pub mod cache;
+mod callable;
 mod constants;
 mod inspection;
 pub mod invalidation;
 mod json;
 pub mod symbols;
+pub use callable::{
+    ExportedCallableSlot, ExportedNamedCallable, ExportedSlotBindError, ExportedSlotInvokeError,
+    ModuleCallableBindError, ModuleCallableCatalog,
+};
 pub use constants::{ConstantDependency, ConstantLimits};
 mod spelling;
 use spelling::spelling_hint;
