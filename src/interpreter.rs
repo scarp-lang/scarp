@@ -6,7 +6,7 @@ use crate::{
     ast::OutputTarget,
     diagnostics::Diagnostic,
     input::{InputLimits, InputState},
-    limits::{ExecutionLimits, ExecutionOptions},
+    limits::{ExecutionLimits, ExecutionOptions, ExecutionUsage},
     resolver::ResolvedProgram,
     value::Value,
     RunError,
@@ -227,6 +227,56 @@ pub(crate) fn invoke_named_with_input_and_options(
         true,
         options,
         &mut InputState::new(Some(input), input_limits),
+    )
+    .map_err(RunError::Diagnostic)?;
+    replay(events, writers.0, writers.1)?;
+    Ok(value)
+}
+
+/// Checked named host dispatch with exact interpreter usage even on failure.
+/// A subsequent host writer failure does not erase the completed evaluation.
+pub(crate) fn invoke_named_with_usage_and_options(
+    program: &ResolvedProgram,
+    function: usize,
+    arguments: Vec<Option<Value>>,
+    stdout: &mut impl Write,
+    stderr: &mut impl Write,
+    options: ExecutionOptions,
+    usage: &mut ExecutionUsage,
+) -> Result<Value, RunError> {
+    let (value, events) = machine::prepare_named_call_with_usage(
+        program,
+        function,
+        arguments,
+        true,
+        options,
+        &mut InputState::new(None, InputLimits::default()),
+        usage,
+    )
+    .map_err(RunError::Diagnostic)?;
+    replay(events, stdout, stderr)?;
+    Ok(value)
+}
+
+/// Input-enabled host dispatch with measured read attempts and raw bytes.
+pub(crate) fn invoke_named_with_input_and_usage_and_options(
+    program: &ResolvedProgram,
+    function: usize,
+    arguments: Vec<Option<Value>>,
+    input: &mut impl io::BufRead,
+    writers: (&mut impl Write, &mut impl Write),
+    options: ExecutionOptions,
+    input_limits: InputLimits,
+    usage: &mut ExecutionUsage,
+) -> Result<Value, RunError> {
+    let (value, events) = machine::prepare_named_call_with_usage(
+        program,
+        function,
+        arguments,
+        true,
+        options,
+        &mut InputState::new(Some(input), input_limits),
+        usage,
     )
     .map_err(RunError::Diagnostic)?;
     replay(events, writers.0, writers.1)?;
