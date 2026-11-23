@@ -58,9 +58,28 @@ text rendering. This is deterministic value display, not a serialization API.
 
 `==` / `!=` require equal structural types and compare all selected member values
 using existing primitive/numerical equality, including signed-zero float equality.
-Ordering and arithmetic on tuples are rejected. Equality prepays conservative
-nested value work even if pointer sharing or an early mismatch would make the
-host comparison faster. No implicit heterogeneous numeric equality is added.
+No implicit heterogeneous numeric equality is added.
+
+**Development-source extension (not part of the original alpha.6 tuple release):**
+`<`, `<=`, `>` and `>=` perform lexicographic ordering on equal-typed tuples
+whose elements are all ordered numeric scalars (`integer`, `float`, `bigint`,
+`decimal`) or recursively nested tuples satisfying the same rule.
+Comparison starts at element zero and stops at the first unequal element;
+identical tuples compare equal, including `-0.0` and `0.0`.
+Mixed member types across the operands, text, booleans, arrays, records and
+other unordered tuple members are rejected statically. For example:
+
+```scarp
+print((10, 20) < (30, 40));      // true
+print((10, 20) < (10, 20));      // false
+print((10, (2, 3)) < (10, (2, 4))); // true
+```
+
+The comparison reuses the existing conservative composite-work precharge,
+so early first-element differences cannot bypass nested-work limits.
+Arithmetic on tuples remains unsupported. Equality and ordering prepay
+conservative nested value work even when an early mismatch would make
+the host comparison faster.
 
 All five output spellings retain newline/stream semantics. Source/runtime/budget
 failure discards buffered program output; host output failures may leave earlier

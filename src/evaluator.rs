@@ -1152,6 +1152,33 @@ pub(crate) fn apply_binary(
     right: &Value,
     span: Span,
 ) -> Result<Value, Diagnostic> {
+    if matches!(
+        operator,
+        BinaryOperator::Less
+            | BinaryOperator::LessEqual
+            | BinaryOperator::Greater
+            | BinaryOperator::GreaterEqual
+    ) {
+        if let (Some(left_tuple), Some(right_tuple)) = (left.as_tuple(), right.as_tuple()) {
+            if left_tuple.kind() != right_tuple.kind() {
+                return Err(type_mismatch(span, left.kind(), right.kind()));
+            }
+            let order = numeric_tuple_cmp(left_tuple, right_tuple).ok_or_else(|| {
+                Diagnostic::new(
+                    DiagnosticKind::TypeMismatch,
+                    span,
+                    "tuple ordering requires numeric elements, including within nested tuples",
+                )
+            })?;
+            return Ok(Value::Boolean(match operator {
+                BinaryOperator::Less => order.is_lt(),
+                BinaryOperator::LessEqual => order.is_le(),
+                BinaryOperator::Greater => order.is_gt(),
+                BinaryOperator::GreaterEqual => order.is_ge(),
+                _ => unreachable!("only ordering operators reach tuple comparison"),
+            }));
+        }
+    }
     if matches!(operator, BinaryOperator::Equal | BinaryOperator::NotEqual) {
         if left.kind() != right.kind() {
             return Err(type_mismatch(span, left.kind(), right.kind()));
@@ -1313,4 +1340,25 @@ fn overflow(span: Span) -> Diagnostic {
 
 pub(crate) fn finite(value: f64, span: Span) -> Result<Value, Diagnostic> {
     finite_number(value, span).map(Value::Float)
+}
+
+/// Compare numeric tuples from left to right without constructing new values.
+/// The resolver checks all leaf types; the finite-float invariant excludes NaN.
+/// Tuple nesting is bounded by the source type limit (32).
+fn numeric_tuple_cmp(left: &TupleValue, right: &TupleValue) -> Option<std::cmp::Ordering> {
+    use std::cmp::Ordering;
+    for (a, b) in left.elements().iter().zip(right.elements()) {
+        let order = match (a, b) {
+            (Value::Integer(a), Value::Integer(b)) => a.cmp(b),
+            (Value::Float(a), Value::Float(b)) => a.get().partial_cmp(&b.get())?,
+            (Value::BigInt(a), Value::BigInt(b)) => a.cmp(b),
+            (Value::Decimal(a), Value::Decimal(b)) => a.cmp(b),
+            (Value::Tuple(a), Value::Tuple(b)) => numeric_tuple_cmp(a, b)?,
+            _ => return None,
+        };
+        if order != Ordering::Equal {
+            return Some(order);
+        }
+    }
+    Some(left.len().cmp(&right.len()))
 }
