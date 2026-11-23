@@ -5,7 +5,7 @@ use crate::{
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     evaluator::{self, Evaluation, Workspace},
     input::{InputState, IoBuiltin},
-    limits::{Budget, ExecutionOptions},
+    limits::{Budget, ExecutionOptions, ExecutionUsage},
     resolver::{
         DestructureStep, MatchTarget, PropagationPlan, ResolvedArgument, ResolvedCall,
         ResolvedExpression, ResolvedOperation, ResolvedProgram, ResolvedStatement,
@@ -201,7 +201,8 @@ pub(super) fn prepare<'a>(
     options: ExecutionOptions,
     input: &mut InputState<'_>,
 ) -> Result<Vec<OutputEvent<'a>>, Diagnostic> {
-    run_plan(program, None, capture, options, input).map(|(_, events)| events)
+    let mut unused = ExecutionUsage::default();
+    run_plan(program, None, capture, options, input, &mut unused).map(|(_, events)| events)
 }
 
 /// Enter the same resumable frame machine from a checked Rust host reference.
@@ -215,12 +216,35 @@ pub(super) fn prepare_named_call<'a>(
     options: ExecutionOptions,
     input: &mut InputState<'_>,
 ) -> Result<(Value, Vec<OutputEvent<'a>>), Diagnostic> {
+    let mut unused = ExecutionUsage::default();
+    prepare_named_call_with_usage(
+        program,
+        function,
+        arguments,
+        capture,
+        options,
+        input,
+        &mut unused,
+    )
+}
+
+/// Measure successful budget charges even on the evaluator's failure path.
+pub(super) fn prepare_named_call_with_usage<'a>(
+    program: &'a ResolvedProgram,
+    function: usize,
+    arguments: Vec<Option<Value>>,
+    capture: bool,
+    options: ExecutionOptions,
+    input: &mut InputState<'_>,
+    usage: &mut ExecutionUsage,
+) -> Result<(Value, Vec<OutputEvent<'a>>), Diagnostic> {
     run_plan(
         program,
         Some((function, arguments)),
         capture,
         options,
         input,
+        usage,
     )
 }
 
@@ -230,7 +254,9 @@ fn run_plan<'a>(
     capture: bool,
     options: ExecutionOptions,
     input: &mut InputState<'_>,
+    usage: &mut ExecutionUsage,
 ) -> Result<(Value, Vec<OutputEvent<'a>>), Diagnostic> {
+    *usage = ExecutionUsage::default();
     let is_host_call = entry.is_some();
     let mut budget = Budget::new(options.limits.max_steps)
         .with_vector_bytes(options.max_vector_bytes)
@@ -949,6 +975,13 @@ fn run_plan<'a>(
         }
         Ok(())
     })();
+    // Meter actual spent work before attaching traces. Failed calls cannot
+    // reset a host's cumulative accounting; unspent quotas are not charged.
+    *usage = budget.usage();
+    usage.calls = calls;
+    usage.prints = prints;
+    usage.capture_bytes = captured;
+    (usage.input_reads, usage.input_bytes) = input.usage();
     outcome.map_err(|mut error| {
         let mut remaining = 16;
         for frame in frames.iter().rev().filter(|f| f.function.is_some()) {
