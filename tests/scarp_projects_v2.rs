@@ -280,6 +280,12 @@ fn lowercase_manifest_precedes_legacy_when_both_are_present() {
     let workspace = Workspace::new();
     let project = workspace.child("priority");
     init(&project);
+    // On macOS and other case-insensitive filesystems both spellings refer
+    // to the same file, so there is no two-manifest precedence to test.
+    if project.join("Scarp.project").exists() {
+        assert!(execute(&["verify"], &project).status.success());
+        return;
+    }
     fs::write(
         project.join("Scarp.project"),
         "scarp-project: 1\nname: legacy\nentry: ../outside.srp\n",
