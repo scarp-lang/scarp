@@ -36,7 +36,10 @@ impl fmt::Display for CallableBindError {
             }
             Self::Registry(error) => error.fmt(f),
             Self::IncompatibleSignature { expected, actual } => {
-                write!(f, "callable signature {actual} is incompatible with required {expected}")
+                write!(
+                    f,
+                    "callable signature {actual} is incompatible with required {expected}"
+                )
             }
         }
     }

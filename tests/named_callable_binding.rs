@@ -4,8 +4,8 @@ use scarp::{
     modules::{self, MemorySourceLoader, ModuleLimits},
     resolver::{CallableBindError as BindError, CallableCatalog},
     types::{
-        FunctionEffect as Effect, PrimitiveType as P, TypeKind, TypeRegistryBuilder,
-        TypeRegistryError, TypeLimits,
+        FunctionEffect as Effect, PrimitiveType as P, TypeKind, TypeLimits, TypeRegistryBuilder,
+        TypeRegistryError,
     },
     ExecutionOptions,
 };
@@ -29,13 +29,20 @@ fn same_signature_does_not_collapse_distinct_named_declarations() {
     assert!(!first.same_target(&second));
     assert!(first.same_target(&first.clone()));
     assert!(first.belongs_to(&catalog));
-    let other_catalog =
-        CallableCatalog::from_program(scarp::compile("pure funcra first(n: integer) -> integer { return n; }").unwrap());
+    let other_catalog = CallableCatalog::from_program(
+        scarp::compile("pure funcra first(n: integer) -> integer { return n; }").unwrap(),
+    );
     assert!(!first.belongs_to(&other_catalog));
     let catalog_copy = catalog.clone();
     assert!(first.belongs_to(&catalog_copy));
-    assert!(catalog_copy.bind(0, second.signature()).unwrap().same_target(&first));
-    assert_eq!(catalog.bind_exact(2).unwrap_err(), BindError::UnknownFunction(2));
+    assert!(catalog_copy
+        .bind(0, second.signature())
+        .unwrap()
+        .same_target(&first));
+    assert_eq!(
+        catalog.bind_exact(2).unwrap_err(),
+        BindError::UnknownFunction(2)
+    );
 }
 
 #[test]
@@ -56,15 +63,24 @@ fn binding_respects_effects_shapes_and_foreign_type_arena_ids() {
     assert!(catalog.bind(0, pure).is_ok());
     assert_eq!(
         catalog.bind(1, pure).unwrap_err(),
-        BindError::IncompatibleSignature { expected: pure, actual: impure }
+        BindError::IncompatibleSignature {
+            expected: pure,
+            actual: impure
+        }
     );
     assert_eq!(
         catalog.bind(0, zero).unwrap_err(),
-        BindError::IncompatibleSignature { expected: zero, actual: pure }
+        BindError::IncompatibleSignature {
+            expected: zero,
+            actual: pure
+        }
     );
     assert_eq!(
         catalog.bind(0, P::Integer.id()).unwrap_err(),
-        BindError::IncompatibleSignature { expected: P::Integer.id(), actual: pure }
+        BindError::IncompatibleSignature {
+            expected: P::Integer.id(),
+            actual: pure
+        }
     );
     let mut foreign = TypeRegistryBuilder::new(TypeLimits::default()).unwrap();
     let foreign_id = foreign
@@ -87,9 +103,8 @@ fn binding_respects_effects_shapes_and_foreign_type_arena_ids() {
 
 #[test]
 fn snapshot_survives_catalog_and_original_drop_then_reclaims_after_last_handle() {
-    let original = Arc::new(
-        scarp::compile("pure funcra keep(x: string) -> string { return x; }").unwrap(),
-    );
+    let original =
+        Arc::new(scarp::compile("pure funcra keep(x: string) -> string { return x; }").unwrap());
     let weak = Arc::downgrade(&original);
     let catalog = CallableCatalog::new(Arc::clone(&original));
     let handle = catalog.bind_exact(0).unwrap();
@@ -160,11 +175,17 @@ fn linked_same_signature_exports_bind_distinctly_without_changing_named_executio
 fn empty_catalog_preserves_existing_type_budget_limits() {
     let program = scarp::compile_with_type_limits(
         "print(1);",
-        TypeLimits { max_types: P::ALL.len(), ..TypeLimits::default() },
+        TypeLimits {
+            max_types: P::ALL.len(),
+            ..TypeLimits::default()
+        },
     )
     .unwrap();
     let catalog = CallableCatalog::from_program(program);
     assert!(catalog.is_empty());
     assert_eq!(catalog.len(), 0);
-    assert_eq!(catalog.bind_exact(0).unwrap_err(), BindError::UnknownFunction(0));
+    assert_eq!(
+        catalog.bind_exact(0).unwrap_err(),
+        BindError::UnknownFunction(0)
+    );
 }
