@@ -166,7 +166,10 @@ fn indexed_updates_in_imported_modules_preserve_snapshots_and_source_spans() {
 
     let mut loader = MemorySourceLoader::new();
     loader
-        .insert("main.srp", "// 🌍\nimport \"lib.srp\" as lib; print(lib.replace());")
+        .insert(
+            "main.srp",
+            "// 🌍\nimport \"lib.srp\" as lib; print(lib.replace());",
+        )
         .unwrap();
     loader
         .insert(
@@ -178,13 +181,18 @@ fn indexed_updates_in_imported_modules_preserve_snapshots_and_source_spans() {
         modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap();
     program.check(Default::default()).unwrap();
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    program.execute(&mut out, &mut err, Default::default()).unwrap();
+    program
+        .execute(&mut out, &mut err, Default::default())
+        .unwrap();
     assert_eq!(out, b"((9, \"old\"), (1, \"old\"))\n");
     assert!(err.is_empty());
 
     let mut invalid = MemorySourceLoader::new();
     invalid
-        .insert("main.srp", "import \"lib.srp\" as lib; print(lib.replace());")
+        .insert(
+            "main.srp",
+            "import \"lib.srp\" as lib; print(lib.replace());",
+        )
         .unwrap();
     invalid
         .insert(
