@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — after v0.0.6-alpha.19
+
+- Implement lexicographic numeric tuple ordering with `<`, `<=`, `>` and `>=`
+  for identical structural tuple types, including nested numeric tuples.
+  Reject unordered elements and mismatched types statically; preserve `==`
+  and `!=` behavior. Add compiler tests and a runnable exact-output example
+  (PR #353, merge commit `fde0e374b445fb573dfd980bde36f83e9d76e729`).
+  **Not included in the published v0.0.6-alpha.19 binaries.**
+
 ## 0.0.6-alpha.19 — development candidate (not published)
 
 - Implement `tuple[index] = value;` on mutable tuples as a type-checked,
