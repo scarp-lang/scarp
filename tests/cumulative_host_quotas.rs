@@ -2,13 +2,11 @@ use std::io::{self, Cursor, Write};
 
 use scarp::{
     diagnostics::DiagnosticKind,
-    embedding::{
-        HostInvocationCaps, HostInvocationError, HostInvocationLedger, HostQuotaResource,
-    },
+    embedding::{HostInvocationCaps, HostInvocationError, HostInvocationLedger, HostQuotaResource},
     limits::ExecutionUsage,
     modules::{
-        self, ExportedSlotInvokeError, MemorySourceLoader, ModuleCallableCatalog,
-        ModuleLimits, ModuleRunError,
+        self, ExportedSlotInvokeError, MemorySourceLoader, ModuleCallableCatalog, ModuleLimits,
+        ModuleRunError,
     },
     resolver::{CallableCatalog, CallableSlot, CallableSlotInvokeError, HostArguments},
     value::Value,
@@ -18,7 +16,9 @@ use scarp::{
 fn slot(source: &str) -> CallableSlot {
     let program = scarp::compile(source).unwrap();
     let required = program.function_type_id(0).unwrap();
-    CallableCatalog::from_program(program).slot_bound(required, 0).unwrap()
+    CallableCatalog::from_program(program)
+        .slot_bound(required, 0)
+        .unwrap()
 }
 
 fn one(n: i64) -> HostArguments {
@@ -41,7 +41,10 @@ fn invoke(
 #[test]
 fn attempts_are_bounded_across_successful_calls() {
     let target = slot("pure funcra id(n: integer) -> integer { return n; }");
-    let caps = HostInvocationCaps { max_attempts: 2, ..HostInvocationCaps::default() };
+    let caps = HostInvocationCaps {
+        max_attempts: 2,
+        ..HostInvocationCaps::default()
+    };
     let mut ledger = HostInvocationLedger::new(caps);
     assert_eq!(ledger.caps(), caps);
     assert_eq!(invoke(&mut ledger, &target, 3).unwrap(), Value::Integer(3));
@@ -63,10 +66,15 @@ fn exact_spent_work_exhausts_shared_steps_even_after_valid_result() {
     let target = slot("pure funcra calc(n: integer) -> integer { return n * 3; }");
     let mut measured = ExecutionUsage::default();
     assert_eq!(
-        target.invoke_with_usage_and_options(
-            one(2), &mut Vec::new(), &mut Vec::new(),
-            ExecutionOptions::default(), &mut measured,
-        ).unwrap(),
+        target
+            .invoke_with_usage_and_options(
+                one(2),
+                &mut Vec::new(),
+                &mut Vec::new(),
+                ExecutionOptions::default(),
+                &mut measured,
+            )
+            .unwrap(),
         Value::Integer(6)
     );
     assert!(measured.steps > 0);
@@ -147,7 +155,14 @@ fn second_print_is_rejected_without_publishing_failed_output_but_bills_work() {
     let mut ledger = HostInvocationLedger::new(caps);
     let (mut out, mut err) = (Vec::new(), Vec::new());
     assert_eq!(
-        ledger.invoke_slot(&target, one(1), (&mut out, &mut err), ExecutionOptions::default()).unwrap(),
+        ledger
+            .invoke_slot(
+                &target,
+                one(1),
+                (&mut out, &mut err),
+                ExecutionOptions::default()
+            )
+            .unwrap(),
         Value::Integer(1)
     );
     assert_eq!(out, b"1\n");
@@ -175,11 +190,16 @@ fn input_quota_tracks_actual_crlf_bytes_without_consuming_the_next_line() {
     let mut ledger = HostInvocationLedger::new(caps);
     let mut input = Cursor::new(b"first\nsecond\n");
     assert_eq!(
-        ledger.invoke_slot_with_input(
-            &target, one(1), &mut input,
-            (&mut Vec::new(), &mut Vec::new()),
-            ExecutionOptions::default(), InputLimits::default(),
-        ).unwrap(),
+        ledger
+            .invoke_slot_with_input(
+                &target,
+                one(1),
+                &mut input,
+                (&mut Vec::new(), &mut Vec::new()),
+                ExecutionOptions::default(),
+                InputLimits::default(),
+            )
+            .unwrap(),
         Value::from("first")
     );
     assert_eq!(ledger.spent().input_reads, 1);
@@ -209,14 +229,21 @@ fn invalid_and_unbound_attempts_consume_attempts_not_interpreter_budget() {
     let required = program.function_type_id(0).unwrap();
     let catalog = CallableCatalog::from_program(program);
     let mut unbound = catalog.slot(required).unwrap();
-    let caps = HostInvocationCaps { max_attempts: 2, ..HostInvocationCaps::default() };
+    let caps = HostInvocationCaps {
+        max_attempts: 2,
+        ..HostInvocationCaps::default()
+    };
     let mut ledger = HostInvocationLedger::new(caps);
     assert!(matches!(
         ledger.invoke_slot(
-            &unbound, one(1), (&mut Vec::new(), &mut Vec::new()),
+            &unbound,
+            one(1),
+            (&mut Vec::new(), &mut Vec::new()),
             ExecutionOptions::default(),
         ),
-        Err(HostInvocationError::Invocation(CallableSlotInvokeError::Unbound))
+        Err(HostInvocationError::Invocation(
+            CallableSlotInvokeError::Unbound
+        ))
     ));
     assert_eq!(ledger.spent(), ExecutionUsage::default());
     unbound.select(0).unwrap();
@@ -244,7 +271,9 @@ impl Write for BrokenWriter {
     fn write(&mut self, _: &[u8]) -> io::Result<usize> {
         Err(io::Error::other("host output broken"))
     }
-    fn flush(&mut self) -> io::Result<()> { Ok(()) }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 #[test]
@@ -252,14 +281,16 @@ fn failed_writer_replay_still_debits_selected_scarrp_print_and_steps() {
     let target = slot("funcra emit(n: integer) -> integer { print(n); return n; }");
     let mut ledger = HostInvocationLedger::new(HostInvocationCaps::default());
     let result = ledger.invoke_slot(
-        &target, one(7), (&mut BrokenWriter, &mut Vec::new()),
+        &target,
+        one(7),
+        (&mut BrokenWriter, &mut Vec::new()),
         ExecutionOptions::default(),
     );
     assert!(matches!(
         result,
-        Err(HostInvocationError::Invocation(CallableSlotInvokeError::Runtime(
-            RunError::Output(_)
-        )))
+        Err(HostInvocationError::Invocation(
+            CallableSlotInvokeError::Runtime(RunError::Output(_))
+        ))
     ));
     assert_eq!(ledger.spent().calls, 1);
     assert_eq!(ledger.spent().prints, 1);
@@ -269,12 +300,17 @@ fn failed_writer_replay_still_debits_selected_scarrp_print_and_steps() {
 #[test]
 fn exported_module_invocation_preserves_source_diagnostics_and_shared_calls() {
     let mut loader = MemorySourceLoader::new();
-    loader.insert("main.srp", "import \"ops.srp\" as ops; print(ops.f(3));").unwrap();
-    loader.insert(
-        "ops.srp",
-        "pub funcra f(n: integer) -> integer { print(\"pending\"); return 12 / n; }",
-    ).unwrap();
-    let module = modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap();
+    loader
+        .insert("main.srp", "import \"ops.srp\" as ops; print(ops.f(3));")
+        .unwrap();
+    loader
+        .insert(
+            "ops.srp",
+            "pub funcra f(n: integer) -> integer { print(\"pending\"); return 12 / n; }",
+        )
+        .unwrap();
+    let module =
+        modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap();
     let source = module.imports_in(0).unwrap()[0].target;
     let required = module.program().function_type_id(0).unwrap();
     let exported = ModuleCallableCatalog::from_program(module)
@@ -289,7 +325,7 @@ fn exported_module_invocation_preserves_source_diagnostics_and_shared_calls() {
         ExecutionOptions::default(),
     ) {
         Err(HostInvocationError::Invocation(ExportedSlotInvokeError::Runtime(
-            ModuleRunError::Diagnostic(diag)
+            ModuleRunError::Diagnostic(diag),
         ))) => {
             assert_eq!(diag.diagnostic.kind, DiagnosticKind::DivisionByZero);
             assert!(diag.render().contains("ops.srp"));
@@ -301,9 +337,14 @@ fn exported_module_invocation_preserves_source_diagnostics_and_shared_calls() {
     assert_eq!(ledger.spent().prints, 1);
     assert_eq!(ledger.attempts(), 1);
     assert_eq!(
-        ledger.invoke_exported(
-            &exported, one(3), (&mut out, &mut err), ExecutionOptions::default(),
-        ).unwrap(),
+        ledger
+            .invoke_exported(
+                &exported,
+                one(3),
+                (&mut out, &mut err),
+                ExecutionOptions::default(),
+            )
+            .unwrap(),
         Value::Integer(4)
     );
     assert_eq!(ledger.spent().calls, 2);
@@ -313,9 +354,17 @@ fn exported_module_invocation_preserves_source_diagnostics_and_shared_calls() {
 #[test]
 fn exported_reader_uses_the_same_shared_input_and_attempt_allowances() {
     let mut loader = MemorySourceLoader::new();
-    loader.insert("main.srp", "import \"ops.srp\" as ops; print(ops.read(1));").unwrap();
-    loader.insert("ops.srp", "pub funcra read(n: integer) -> string { return read_line(); }").unwrap();
-    let linked = modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap();
+    loader
+        .insert("main.srp", "import \"ops.srp\" as ops; print(ops.read(1));")
+        .unwrap();
+    loader
+        .insert(
+            "ops.srp",
+            "pub funcra read(n: integer) -> string { return read_line(); }",
+        )
+        .unwrap();
+    let linked =
+        modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap();
     let source = linked.imports_in(0).unwrap()[0].target;
     let signature = linked.program().function_type_id(0).unwrap();
     let slot = ModuleCallableCatalog::from_program(linked)
@@ -326,12 +375,16 @@ fn exported_reader_uses_the_same_shared_input_and_attempt_allowances() {
     let mut ledger = HostInvocationLedger::new(caps);
     let mut input = Cursor::new(b"ok\nlater\n");
     assert_eq!(
-        ledger.invoke_exported_with_input(
-            &slot, one(1), &mut input,
-            (&mut Vec::new(), &mut Vec::new()),
-            ExecutionOptions::default(),
-            InputLimits::default(),
-        ).unwrap(),
+        ledger
+            .invoke_exported_with_input(
+                &slot,
+                one(1),
+                &mut input,
+                (&mut Vec::new(), &mut Vec::new()),
+                ExecutionOptions::default(),
+                InputLimits::default(),
+            )
+            .unwrap(),
         Value::from("ok")
     );
     assert!(matches!(

@@ -138,12 +138,22 @@ impl HostInvocationLedger {
         result.limits.max_steps = result.limits.max_steps.saturating_sub(self.spent.steps);
         result.limits.max_prints = result.limits.max_prints.saturating_sub(self.spent.prints);
         result.max_calls = result.max_calls.saturating_sub(self.spent.calls);
-        result.max_capture_bytes = result.max_capture_bytes.saturating_sub(self.spent.capture_bytes);
-        result.max_vector_bytes = result.max_vector_bytes.saturating_sub(self.spent.vector_bytes);
+        result.max_capture_bytes = result
+            .max_capture_bytes
+            .saturating_sub(self.spent.capture_bytes);
+        result.max_vector_bytes = result
+            .max_vector_bytes
+            .saturating_sub(self.spent.vector_bytes);
         result.max_text_bytes = result.max_text_bytes.saturating_sub(self.spent.text_bytes);
-        result.max_tuple_bytes = result.max_tuple_bytes.saturating_sub(self.spent.tuple_bytes);
-        result.max_bigint_bytes = result.max_bigint_bytes.saturating_sub(self.spent.bigint_bytes);
-        result.max_array_bytes = result.max_array_bytes.saturating_sub(self.spent.array_bytes);
+        result.max_tuple_bytes = result
+            .max_tuple_bytes
+            .saturating_sub(self.spent.tuple_bytes);
+        result.max_bigint_bytes = result
+            .max_bigint_bytes
+            .saturating_sub(self.spent.bigint_bytes);
+        result.max_array_bytes = result
+            .max_array_bytes
+            .saturating_sub(self.spent.array_bytes);
         result
     }
 
@@ -155,7 +165,11 @@ impl HostInvocationLedger {
                 .input
                 .max_total_bytes
                 .saturating_sub(self.spent.input_bytes),
-            max_reads: self.caps.input.max_reads.saturating_sub(self.spent.input_reads),
+            max_reads: self
+                .caps
+                .input
+                .max_reads
+                .saturating_sub(self.spent.input_reads),
         }
     }
 
@@ -230,13 +244,8 @@ impl HostInvocationLedger {
     ) -> Result<Value, HostInvocationError<CallableSlotInvokeError>> {
         let effective = self.begin(options).map_err(HostInvocationError::Quota)?;
         let mut usage = ExecutionUsage::default();
-        let result = slot.invoke_with_usage_and_options(
-            arguments,
-            writers.0,
-            writers.1,
-            effective,
-            &mut usage,
-        );
+        let result = slot
+            .invoke_with_usage_and_options(arguments, writers.0, writers.1, effective, &mut usage);
         self.charge(usage);
         result.map_err(HostInvocationError::Invocation)
     }
@@ -256,7 +265,12 @@ impl HostInvocationLedger {
         let effective_input = self.input_for(input_limits);
         let mut usage = ExecutionUsage::default();
         let result = slot.invoke_with_input_and_usage_and_options(
-            arguments, input, writers, effective, effective_input, &mut usage,
+            arguments,
+            input,
+            writers,
+            effective,
+            effective_input,
+            &mut usage,
         );
         self.charge(usage);
         result.map_err(HostInvocationError::Invocation)
@@ -273,13 +287,8 @@ impl HostInvocationLedger {
     ) -> Result<Value, HostInvocationError<ExportedSlotInvokeError>> {
         let effective = self.begin(options).map_err(HostInvocationError::Quota)?;
         let mut usage = ExecutionUsage::default();
-        let result = slot.invoke_with_usage_and_options(
-            arguments,
-            writers.0,
-            writers.1,
-            effective,
-            &mut usage,
-        );
+        let result = slot
+            .invoke_with_usage_and_options(arguments, writers.0, writers.1, effective, &mut usage);
         self.charge(usage);
         result.map_err(HostInvocationError::Invocation)
     }
@@ -297,7 +306,12 @@ impl HostInvocationLedger {
         let effective_input = self.input_for(input_limits);
         let mut usage = ExecutionUsage::default();
         let result = slot.invoke_with_input_and_usage_and_options(
-            arguments, input, writers, effective, effective_input, &mut usage,
+            arguments,
+            input,
+            writers,
+            effective,
+            effective_input,
+            &mut usage,
         );
         self.charge(usage);
         result.map_err(HostInvocationError::Invocation)
