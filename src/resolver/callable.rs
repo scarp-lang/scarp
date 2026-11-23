@@ -3,6 +3,9 @@
 
 use std::{error::Error, fmt, io, sync::Arc};
 
+mod slot;
+pub use slot::{CallableSlot, CallableSlotError, CallableSlotInvokeError};
+
 use super::{FunctionInfo, ResolvedProgram};
 use crate::{
     diagnostics::{Diagnostic, DiagnosticKind},
