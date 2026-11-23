@@ -15,6 +15,42 @@ use crate::{
     value::Value,
 };
 
+/// Limits for already-allocated arguments supplied by Rust callers.
+/// These measure logical UTF-8 bytes (string values and named labels), NOT
+/// process RSS or new interpreter allocations. Shared Arc strings count once
+/// per argument occurrence so callers cannot bypass admission by aliasing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HostArgumentLimits {
+    /// Total positional and named values in one invocation.
+    pub max_values_per_call: usize,
+    /// Cumulative supplied values admitted by this ledger, including calls
+    /// that the Scarp argument binder subsequently rejects.
+    pub max_total_values: usize,
+    /// String payload and named-label UTF-8 bytes in one invocation.
+    pub max_utf8_bytes_per_call: usize,
+    /// Cumulative UTF-8 bytes of admitted host argument payloads.
+    pub max_total_utf8_bytes: usize,
+}
+
+impl Default for HostArgumentLimits {
+    fn default() -> Self {
+        Self {
+            max_values_per_call: 64,
+            max_total_values: 16_384,
+            max_utf8_bytes_per_call: 1024 * 1024,
+            max_total_utf8_bytes: 8 * 1024 * 1024,
+        }
+    }
+}
+
+/// Distinct from ExecutionUsage: these values existed in Rust memory before
+/// the interpreter, and they are not interpreter materialization charges.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct HostArgumentUsage {
+    pub supplied_values: usize,
+    pub utf8_bytes: usize,
+}
+
 /// Application-owned cumulative quotas. The execution options are total
 /// allowances across all attempts, except depth, live-slot peaks and BigInt
 /// decimal-digit ceiling, which remain *per invocation*. For example,
@@ -24,6 +60,9 @@ pub struct HostInvocationCaps {
     /// Maximum attempted invocations, including preflight failures and
     /// unbound selections that charge no interpreter resources.
     pub max_attempts: u64,
+    /// Pre-admission limits on the Rust host's supplied argument values,
+    /// string bytes and parameter-label bytes.
+    pub arguments: HostArgumentLimits,
     /// Total work/allocations/calls/prints/capture charges; structural limits
     /// (max_call_depth, max_live_slots and max_bigint_digits) apply per call.
     pub execution: ExecutionOptions,
@@ -36,6 +75,7 @@ impl Default for HostInvocationCaps {
     fn default() -> Self {
         Self {
             max_attempts: 1024,
+            arguments: HostArgumentLimits::default(),
             execution: ExecutionOptions::default(),
             input: InputLimits::default(),
         }
@@ -50,6 +90,7 @@ pub struct HostInvocationLedger {
     caps: HostInvocationCaps,
     attempts: u64,
     spent: ExecutionUsage,
+    argument_usage: HostArgumentUsage,
 }
 
 /// A call was denied BEFORE interpreter execution, with no input/output
@@ -61,6 +102,8 @@ pub enum HostQuotaResource {
     Attempts,
     Steps,
     Calls,
+    ArgumentValues,
+    ArgumentBytes,
 }
 
 impl fmt::Display for HostQuotaResource {
@@ -69,6 +112,8 @@ impl fmt::Display for HostQuotaResource {
             Self::Attempts => f.write_str("host invocation attempts"),
             Self::Steps => f.write_str("cumulative interpreter steps"),
             Self::Calls => f.write_str("cumulative function calls"),
+            Self::ArgumentValues => f.write_str("host argument value count"),
+            Self::ArgumentBytes => f.write_str("host argument UTF-8 bytes"),
         }
     }
 }
@@ -114,6 +159,7 @@ impl HostInvocationLedger {
             caps,
             attempts: 0,
             spent: ExecutionUsage::default(),
+            argument_usage: HostArgumentUsage::default(),
         }
     }
 
@@ -129,6 +175,24 @@ impl HostInvocationLedger {
     /// charges zero runtime resources but still costs one host attempt.
     pub fn spent(&self) -> ExecutionUsage {
         self.spent
+    }
+
+    /// Previously admitted UTF-8 payload and argument-value occurrences.
+    /// Includes preflight-rejected Scarp calls, but not host quota denials.
+    pub fn argument_usage(&self) -> HostArgumentUsage {
+        self.argument_usage
+    }
+
+    /// Available cumulative argument quotas, retaining per-call caps.
+    pub fn remaining_arguments(&self) -> HostArgumentLimits {
+        let mut remaining = self.caps.arguments;
+        remaining.max_total_values = remaining
+            .max_total_values
+            .saturating_sub(self.argument_usage.supplied_values);
+        remaining.max_total_utf8_bytes = remaining
+            .max_total_utf8_bytes
+            .saturating_sub(self.argument_usage.utf8_bytes);
+        remaining
     }
 
     /// Return remaining quotas (not a prediction of how much work a call
@@ -233,6 +297,62 @@ impl HostInvocationLedger {
         charged.input_bytes = charged.input_bytes.saturating_add(usage.input_bytes);
     }
 
+    /// Inspect bounded lengths of already-constructed host values without
+    /// cloning, allocating, parsing source or invoking the interpreter.
+    /// Bytes include named label text and the full UTF-8 string payload,
+    /// counting the payload for every occurrence of a shared Arc.
+    fn inspect_arguments(
+        &self,
+        arguments: &HostArguments,
+    ) -> Result<HostArgumentUsage, HostQuotaExceeded> {
+        let exceeded = |resource| HostQuotaExceeded { resource };
+        let allowed = self.remaining_arguments();
+        let supplied_values = arguments
+            .positional
+            .len()
+            .checked_add(arguments.named.len())
+            .ok_or_else(|| exceeded(HostQuotaResource::ArgumentValues))?;
+        if supplied_values > allowed.max_values_per_call
+            || supplied_values > allowed.max_total_values
+        {
+            return Err(exceeded(HostQuotaResource::ArgumentValues));
+        }
+        let mut utf8_bytes = 0usize;
+        let mut add_bytes = |bytes: usize| {
+            utf8_bytes = utf8_bytes
+                .checked_add(bytes)
+                .ok_or_else(|| exceeded(HostQuotaResource::ArgumentBytes))?;
+            if utf8_bytes > allowed.max_utf8_bytes_per_call
+                || utf8_bytes > allowed.max_total_utf8_bytes
+            {
+                return Err(exceeded(HostQuotaResource::ArgumentBytes));
+            }
+            Ok(())
+        };
+        for value in &arguments.positional {
+            if let Value::String(text) = value {
+                add_bytes(text.len())?;
+            }
+        }
+        for (name, value) in &arguments.named {
+            add_bytes(name.len())?;
+            if let Value::String(text) = value {
+                add_bytes(text.len())?;
+            }
+        }
+        Ok(HostArgumentUsage {
+            supplied_values,
+            utf8_bytes,
+        })
+    }
+
+    /// Debit admitted Rust host payloads even if the *Scarp* name/type
+    /// preflight or interpreter subsequently rejects the invocation.
+    fn charge_arguments(&mut self, usage: HostArgumentUsage) {
+        self.argument_usage.supplied_values += usage.supplied_values;
+        self.argument_usage.utf8_bytes += usage.utf8_bytes;
+    }
+
     /// Invoke one trusted snapshot-bound host callable slot with the ledger's
     /// global budget. Every attempt counts; failures debit real execution.
     pub fn invoke_slot(
@@ -242,7 +362,9 @@ impl HostInvocationLedger {
         writers: (&mut impl io::Write, &mut impl io::Write),
         options: ExecutionOptions,
     ) -> Result<Value, HostInvocationError<CallableSlotInvokeError>> {
+        let admitted = self.inspect_arguments(&arguments).map_err(HostInvocationError::Quota)?;
         let effective = self.begin(options).map_err(HostInvocationError::Quota)?;
+        self.charge_arguments(admitted);
         let mut usage = ExecutionUsage::default();
         let result = slot
             .invoke_with_usage_and_options(arguments, writers.0, writers.1, effective, &mut usage);
@@ -261,7 +383,9 @@ impl HostInvocationLedger {
         options: ExecutionOptions,
         input_limits: InputLimits,
     ) -> Result<Value, HostInvocationError<CallableSlotInvokeError>> {
+        let admitted = self.inspect_arguments(&arguments).map_err(HostInvocationError::Quota)?;
         let effective = self.begin(options).map_err(HostInvocationError::Quota)?;
+        self.charge_arguments(admitted);
         let effective_input = self.input_for(input_limits);
         let mut usage = ExecutionUsage::default();
         let result = slot.invoke_with_input_and_usage_and_options(
@@ -285,7 +409,9 @@ impl HostInvocationLedger {
         writers: (&mut impl io::Write, &mut impl io::Write),
         options: ExecutionOptions,
     ) -> Result<Value, HostInvocationError<ExportedSlotInvokeError>> {
+        let admitted = self.inspect_arguments(&arguments).map_err(HostInvocationError::Quota)?;
         let effective = self.begin(options).map_err(HostInvocationError::Quota)?;
+        self.charge_arguments(admitted);
         let mut usage = ExecutionUsage::default();
         let result = slot
             .invoke_with_usage_and_options(arguments, writers.0, writers.1, effective, &mut usage);
@@ -302,7 +428,9 @@ impl HostInvocationLedger {
         options: ExecutionOptions,
         input_limits: InputLimits,
     ) -> Result<Value, HostInvocationError<ExportedSlotInvokeError>> {
+        let admitted = self.inspect_arguments(&arguments).map_err(HostInvocationError::Quota)?;
         let effective = self.begin(options).map_err(HostInvocationError::Quota)?;
+        self.charge_arguments(admitted);
         let effective_input = self.input_for(input_limits);
         let mut usage = ExecutionUsage::default();
         let result = slot.invoke_with_input_and_usage_and_options(
