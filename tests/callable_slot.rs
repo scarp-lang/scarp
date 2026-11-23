@@ -228,7 +228,7 @@ fn selected_host_target_preserves_input_defaults_and_output_transactions() {
     let catalog = CallableCatalog::from_program(program);
     let slot = catalog.slot_bound(signature, 0).unwrap();
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    let mut input = Cursor::new(b"नमस्ते\r\n");
+    let mut input = Cursor::new("नमस्ते\r\n".as_bytes());
     assert_eq!(
         slot.invoke_with_input_and_options(
             HostArguments::new(vec![], vec![("n".into(), Value::Integer(1))]),
