@@ -138,6 +138,12 @@ fn legacy_manifest_and_commands_remain_compatible() {
     let project = workspace.child("legacy");
     let created = execute(&["create"], &project);
     assert!(created.status.success(), "{created:?}");
+    fs::remove_file(project.join("scarp.project")).unwrap();
+    fs::write(
+        project.join("Scarp.project"),
+        "scarp-project: 1\nname: legacy\nentry: src/main.srp\n",
+    )
+    .unwrap();
     assert!(project.join("Scarp.project").is_file());
     let run = execute(&["run"], &project);
     assert!(run.status.success(), "{run:?}");
@@ -246,4 +252,46 @@ fn modern_manifest_entry_symlink_cannot_escape_project_root() {
     assert!(output.stdout.is_empty());
     let verified = execute(&["verify"], &project);
     assert_eq!(verified.status.code(), Some(1), "{verified:?}");
+}
+
+#[test]
+fn create_matches_init_lowercase_v2_scaffolding() {
+    let workspace = Workspace::new();
+    let project = workspace.child("created");
+    assert!(execute(&["create"], &project).status.success());
+    let manifest = fs::read_to_string(project.join("scarp.project")).unwrap();
+    assert!(manifest.starts_with("project \"created\" {"), "{manifest}");
+    assert!(manifest.contains("version: \"0.1.0\""));
+    for file in [
+        "src/main.srp",
+        "tests",
+        "examples",
+        "README.md",
+        ".gitignore",
+    ] {
+        assert!(project.join(file).exists(), "missing {file}");
+    }
+    assert!(execute(&["verify"], &project).status.success());
+}
+
+#[cfg(unix)]
+#[test]
+fn lowercase_manifest_precedes_legacy_when_both_are_present() {
+    let workspace = Workspace::new();
+    let project = workspace.child("priority");
+    init(&project);
+    // On macOS and other case-insensitive filesystems both spellings refer
+    // to the same file, so there is no two-manifest precedence to test.
+    if project.join("Scarp.project").exists() {
+        assert!(execute(&["verify"], &project).status.success());
+        return;
+    }
+    fs::write(
+        project.join("Scarp.project"),
+        "scarp-project: 1\nname: legacy\nentry: ../outside.srp\n",
+    )
+    .unwrap();
+    assert!(execute(&["verify"], &project).status.success());
+    fs::remove_file(project.join("scarp.project")).unwrap();
+    assert_eq!(execute(&["verify"], &project).status.code(), Some(1));
 }

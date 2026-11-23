@@ -31,78 +31,15 @@ fn valid_entry(value: &str) -> bool {
         && !Path::new(value).is_absolute()
 }
 
-/// Create only a previously nonexistent directory; never adopt/overwrite
-/// an existing directory, even an empty one.
+/// Create a project with the canonical lowercase `scarp.project` v2 manifest.
+/// Alias `init` to keep a single secure non-overwriting scaffolding path.
 pub fn create(directory: &Path) -> Result<(), String> {
-    let name = directory
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or("project directory must have a UTF-8 name")?;
-    if !valid_name(name) {
-        return Err(
-            "project name must be 1..96 UTF-8 bytes without control characters or path separators"
-                .into(),
-        );
-    }
-
-    fs::create_dir(directory).map_err(|error| {
-        format!(
-            "could not create project directory '{}': {error}",
-            directory.display()
-        )
-    })?;
-    let src = directory.join("src");
-    let entry = src.join("main.srp");
-    let manifest = directory.join(MANIFEST);
-    let mut created_src = false;
-    let mut created_entry = false;
-    let mut created_manifest = false;
-
-    let result = (|| -> Result<(), String> {
-        fs::create_dir(&src)
-            .map_err(|error| format!("could not create source directory: {error}"))?;
-        created_src = true;
-
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&entry)
-            .map_err(|error| format!("could not create Scarp source: {error}"))?;
-        created_entry = true;
-        file.write_all(STARTER)
-            .map_err(|error| format!("could not write Scarp source: {error}"))?;
-
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&manifest)
-            .map_err(|error| format!("could not create project manifest: {error}"))?;
-        created_manifest = true;
-        file.write_all(format!("scarp-project: 1\nname: {name}\nentry: src/main.srp\n").as_bytes())
-            .map_err(|error| format!("could not write project manifest: {error}"))?;
-        Ok(())
-    })();
-
-    if result.is_err() {
-        // Remove only files we created. rmdir is nonrecursive, so concurrent
-        // foreign content is never recursively deleted during cleanup.
-        if created_manifest {
-            let _ = fs::remove_file(&manifest);
-        }
-        if created_entry {
-            let _ = fs::remove_file(&entry);
-        }
-        if created_src {
-            let _ = fs::remove_dir(&src);
-        }
-        let _ = fs::remove_dir(directory);
-    }
-    result
+    init(directory)
 }
 
 /// Initialize a new project using the declarative `scarp.project` format.
 ///
-/// `create` remains the legacy v1 workflow and is intentionally unchanged.
+/// `create` now uses this same v2 workflow; old uppercase manifests remain readable.
 /// Refuse existing directories; clean up only paths created by this call.
 pub fn init(directory: &Path) -> Result<(), String> {
     let name = directory
@@ -200,7 +137,7 @@ pub fn info(directory: &Path) -> Result<ProjectInfo, String> {
         root.join(MANIFEST)
     };
     let link_meta = fs::symlink_metadata(&manifest_path)
-        .map_err(|error| format!("could not open {MANIFEST}: {error}"))?;
+        .map_err(|error| format!("could not open {MANIFEST_V2} or {MANIFEST}: {error}"))?;
     if link_meta.file_type().is_symlink() || !link_meta.file_type().is_file() {
         return Err("project manifest must be an ordinary file, not a symlink".into());
     }

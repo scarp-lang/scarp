@@ -335,7 +335,13 @@ fn explicit_path_and_legacy_projects_retain_report_compatibility() {
         .output()
         .unwrap();
     assert!(created.status.success(), "{created:?}");
-    fs::create_dir(root.join("tests")).unwrap();
+    // Test report behavior of the original uppercase v1 manifest.
+    fs::remove_file(root.join("scarp.project")).unwrap();
+    fs::write(
+        root.join("Scarp.project"),
+        "scarp-project: 1\nname: legacy\nentry: src/main.srp\n",
+    )
+    .unwrap();
     fs::write(root.join("tests/test.srp"), "print(42);").unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_scarp"))
         .arg("test")

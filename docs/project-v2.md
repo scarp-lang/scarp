@@ -32,9 +32,9 @@ hello/
 └── .gitignore
 ```
 
-`init` requires a *new* directory, and refuses to overwrite even an empty
-existing directory. It cannot initialize the current directory in this
-initial implementation. The parent directory must already exist. Successful
+Both `init` and the updated `create` require a *new* directory and refuse to overwrite even an empty
+existing directory. Neither initializes the current directory in this
+implementation. The parent directory must already exist. Successful
 initialization produces a source file compiled by the actual interpreter,
 not example pseudocode.
 
@@ -108,7 +108,7 @@ schema-v1 JSON error envelope when requested with
 | `scarp test [DIRECTORY]` | Execute nonrecursive `tests/*.srp` test programs  |
 | `scarp project info [--json] [DIRECTORY]` | Display read-only, validated project metadata  |
 | `scarp launch DIRECTORY` | Existing explicit project command, now resolves both manifests |
-| `scarp create DIRECTORY` | Retained legacy v1 project initialization |
+| `scarp create DIRECTORY` | Development branch: same lowercase v2 scaffold as `init` |
 | `scarp run FILE.srp` | Retained single-file interpreter workflow |
 | `scarp exec FILE.srp` | Retained canonical explicit source execution |
 
@@ -128,8 +128,9 @@ entry: src/main.srp
 ```
 
 This legacy manifest is still read with its original strict field order.
-Both legacy `create`, `launch` and project-directory `verify` remain
-supported. On case-insensitive filesystems the two filenames may refer to
+Existing legacy manifests, `launch` and project-directory `verify` remain
+supported. Development-branch `create` now uses the same v2 scaffold as
+`init`; older published binaries retain their previous behavior. On case-insensitive filesystems the two filenames may refer to
 the same file; the reader identifies legacy format by its header rather
 than relying on filename capitalization.
 

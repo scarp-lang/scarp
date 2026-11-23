@@ -252,7 +252,7 @@ try {
         # Exercise the actual extracted distributable, not a development binary.
         $projectPath = Join-Path $stagingRoot 'alpha4-project-smoke'
         $created = Invoke-ScarpProcess -Executable $executable -Arguments @('create', $projectPath)
-        if ($created.ExitCode -ne 0 -or $created.Stderr.Length -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $projectPath 'Scarp.project'))) {
+        if ($created.ExitCode -ne 0 -or $created.Stderr.Length -ne 0 -or -not (Test-Path -LiteralPath (Join-Path $projectPath 'scarp.project'))) {
             throw 'Packaged Scarp project creation failed'
         }
         $projectVerify = Invoke-ScarpProcess -Executable $executable -Arguments @('verify', $projectPath)
@@ -280,7 +280,7 @@ try {
         if ($staticRuntime.ExitCode -ne 0 -or $staticRuntime.Stdout.Length -ne 0 -or $staticRuntime.Stderr.Length -ne 0 -or $executedRuntime.ExitCode -ne 1 -or $executedRuntime.Stdout.Length -ne 0) {
             throw 'Packaged project verify must not execute runtime arithmetic'
         }
-        [IO.File]::WriteAllText((Join-Path $projectPath 'Scarp.project'), "scarp-project: 1`nname: alpha4-project-smoke`nentry: ../outside.srp`n", [Text.UTF8Encoding]::new($false))
+        [IO.File]::WriteAllText((Join-Path $projectPath 'scarp.project'), "scarp-project: 1`nname: alpha4-project-smoke`nentry: ../outside.srp`n", [Text.UTF8Encoding]::new($false))
         $invalid = Invoke-ScarpProcess -Executable $executable -Arguments @('verify', '--diagnostic-format=json', $projectPath)
         if ($invalid.ExitCode -ne 1 -or $invalid.Stdout.Length -ne 0) { throw 'Packaged project traversal rejected incorrectly' }
         $failure = [Text.Encoding]::UTF8.GetString($invalid.Stderr) | ConvertFrom-Json -ErrorAction Stop

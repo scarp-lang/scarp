@@ -238,10 +238,12 @@ The `inspect ast` route prints the parser's development syntax tree
 without execution, import loading or type checking. Its readable debug layout
 is not a stable machine-readable schema.
 
-The [project workflow](docs/project-workflow.md) creates a bounded `Scarp.project`
-manifest and a runnable starter, verifies a project directory without running
-statements, then launches via the real interpreter. This is available in the published alpha.4 packages, not in alpha.3
-packages, and does not generate a native executable.
+The [project workflow](docs/project-workflow.md) uses lowercase
+`scarp.project` v2 manifests for new projects. On the development branch,
+`scarp create` and `scarp init` share one scaffold; older uppercase
+`Scarp.project` manifests remain readable. Published alpha.4 introduced
+the original legacy workflow; new scaffolding requires a future release.
+Neither command builds a native executable.
 
 **New in published alpha.5:** `scarp inspect modules --json DIRECTORY`
 resolves an explicit `Scarp.project` and inspects its checked module graph with
