@@ -1493,6 +1493,7 @@ impl Parser<'_> {
                         Some(
                             TokenKind::Integer(_)
                                 | TokenKind::Float(_)
+                                | TokenKind::Decimal(_)
                                 | TokenKind::String(_)
                                 | TokenKind::Identifier(_)
                                 | TokenKind::BitNot
@@ -2398,8 +2399,9 @@ impl Parser<'_> {
                 let value = digits.parse::<crate::decimal::Decimal>().map_err(|error| {
                     let kind = match error {
                         crate::decimal::DecimalError::ScaleExceeded
-                        | crate::decimal::DecimalError::PrecisionExceeded =>
-                            DiagnosticKind::DecimalLimit,
+                        | crate::decimal::DecimalError::PrecisionExceeded => {
+                            DiagnosticKind::DecimalLimit
+                        }
                         _ => DiagnosticKind::InvalidDecimal,
                     };
                     ParseError::new(kind, *span, error.to_string())

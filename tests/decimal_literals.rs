@@ -17,7 +17,10 @@ fn error(source: &str) -> (DiagnosticKind, Span) {
     let RunError::Diagnostic(problem) = scarp::run(source, &mut out).unwrap_err() else {
         panic!("expected typed diagnostic");
     };
-    assert!(out.is_empty(), "failed execution must not replay buffered output");
+    assert!(
+        out.is_empty(),
+        "failed execution must not replay buffered output"
+    );
     (problem.kind, problem.span)
 }
 
@@ -57,8 +60,14 @@ fn decimal_tokens_and_diagnostics_keep_source_spans() {
     assert_eq!(tokens[4].kind, TokenKind::Float("0.1".into()));
 
     for (source, expected) in [
-        ("print(0.1234567890123456789d);", DiagnosticKind::DecimalLimit),
-        ("print(12345678901234567890123456789d);", DiagnosticKind::DecimalLimit),
+        (
+            "print(0.1234567890123456789d);",
+            DiagnosticKind::DecimalLimit,
+        ),
+        (
+            "print(12345678901234567890123456789d);",
+            DiagnosticKind::DecimalLimit,
+        ),
         ("print(1.2d_more);", DiagnosticKind::InvalidDecimal),
         ("print(1e3d);", DiagnosticKind::InvalidFloat),
     ] {
@@ -73,7 +82,9 @@ fn decimal_tokens_and_diagnostics_keep_source_spans() {
 #[test]
 fn modules_can_export_exact_decimal_scalar_constants() {
     let mut loader = MemorySourceLoader::new();
-    loader.insert("rates.srp", "pub bind rate: decimal = 0.1d;").unwrap();
+    loader
+        .insert("rates.srp", "pub bind rate: decimal = 0.1d;")
+        .unwrap();
     loader
         .insert(
             "main.srp",

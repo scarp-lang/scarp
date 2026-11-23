@@ -380,8 +380,14 @@ impl Lexer<'_> {
         if !exponent && self.peek() == Some('d') {
             let digits = self.source[start..self.cursor].to_string();
             self.bump();
-            if self.peek().is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '_') {
-                while self.peek().is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '_') {
+            if self
+                .peek()
+                .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+            {
+                while self
+                    .peek()
+                    .is_some_and(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+                {
                     self.bump();
                 }
                 return Err(Diagnostic::new(
