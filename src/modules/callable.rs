@@ -1,5 +1,8 @@
 //! Checked Rust-host access to publicly exported functions of linked modules.
 
+mod slot;
+pub use slot::{ExportedCallableSlot, ExportedSlotBindError, ExportedSlotInvokeError};
+
 use super::{ModuleDiagnostic, ModuleProgram, ModuleRunError, SourceId, SourceMap, SymbolKind};
 use crate::{
     resolver::{CallableBindError, CallableCatalog, HostArguments, NamedCallableRef},
