@@ -23,6 +23,7 @@ cargo test --locked --release
 cargo build --locked
 cargo doc --locked --no-deps
 cargo run --locked --example interned_types
+cargo run --locked --example host_callable_invocation
 cargo run --locked --example symbol_index
 cargo run --locked -- run examples/hello.srp
 cargo run --locked -- tokens examples/hello.srp
