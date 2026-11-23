@@ -28,7 +28,10 @@ mod inspection;
 pub mod invalidation;
 mod json;
 pub mod symbols;
-pub use callable::{ExportedNamedCallable, ModuleCallableBindError, ModuleCallableCatalog};
+pub use callable::{
+    ExportedCallableSlot, ExportedNamedCallable, ExportedSlotBindError, ExportedSlotInvokeError,
+    ModuleCallableBindError, ModuleCallableCatalog,
+};
 pub use constants::{ConstantDependency, ConstantLimits};
 mod spelling;
 use spelling::spelling_hint;
