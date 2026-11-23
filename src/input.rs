@@ -215,6 +215,11 @@ impl<'a> InputState<'a> {
         self
     }
 
+    /// Per-execution read attempts and actual raw reader consumption.
+    pub(crate) fn usage(&self) -> (usize, usize) {
+        (self.reads, self.consumed)
+    }
+
     pub(crate) fn output_writer(&mut self, target: OutputTarget) -> Option<&mut (dyn Write + 'a)> {
         match target {
             OutputTarget::Stdout => self.prompt_writer.as_deref_mut(),

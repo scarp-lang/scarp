@@ -77,6 +77,25 @@ impl From<ExecutionLimits> for ExecutionOptions {
     }
 }
 
+/// Deterministic interpreter charges for one invocation, including failure.
+/// This is not elapsed time, process RSS, or a count of retained heap bytes.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ExecutionUsage {
+    pub steps: u64,
+    pub calls: u64,
+    pub prints: usize,
+    pub capture_bytes: usize,
+    pub vector_bytes: usize,
+    pub text_bytes: usize,
+    pub tuple_bytes: usize,
+    pub bigint_bytes: usize,
+    pub array_bytes: usize,
+    /// Reader attempts reaching input, including an EOF attempt.
+    pub input_reads: usize,
+    /// Raw input bytes consumed, including CR/LF bytes.
+    pub input_bytes: usize,
+}
+
 pub(crate) struct Budget {
     remaining: u64,
     limit: u64,
@@ -315,6 +334,20 @@ impl Budget {
         self.preflight_steps(amount, span)?;
         self.remaining -= amount;
         Ok(())
+    }
+
+    /// Exact charges through this point, including failures. All subtraction
+    /// is safe because the budgets decrease only after successful preflight.
+    pub(crate) fn usage(&self) -> ExecutionUsage {
+        ExecutionUsage {
+            steps: self.limit - self.remaining,
+            vector_bytes: self.vector_limit - self.vector_remaining,
+            text_bytes: self.text_limit - self.text_remaining,
+            tuple_bytes: self.tuple_limit - self.tuple_remaining,
+            bigint_bytes: self.bigint_limit - self.bigint_remaining,
+            array_bytes: self.array_limit - self.array_remaining,
+            ..ExecutionUsage::default()
+        }
     }
 
     pub fn remaining_amounts(&self) -> BudgetAmounts {

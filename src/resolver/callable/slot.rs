@@ -8,7 +8,7 @@ use std::{error::Error, fmt, io, sync::Arc};
 use super::{CallableBindError, CallableCatalog, HostArguments, NamedCallableRef};
 use crate::{
     input::InputLimits,
-    limits::ExecutionOptions,
+    limits::{ExecutionOptions, ExecutionUsage},
     resolver::ResolvedProgram,
     types::{TypeId, TypeKind, TypeRegistryError},
     value::Value,
@@ -229,6 +229,52 @@ impl CallableSlot {
                 stderr,
                 options,
                 input_limits,
+            )
+            .map_err(Into::into)
+    }
+    /// Exact interpreter charges for host-side indirect invocation.
+    /// An unbound slot resets the receipt and never performs I/O.
+    pub fn invoke_with_usage_and_options(
+        &self,
+        arguments: HostArguments,
+        stdout: &mut impl io::Write,
+        stderr: &mut impl io::Write,
+        options: ExecutionOptions,
+        usage: &mut ExecutionUsage,
+    ) -> Result<Value, CallableSlotInvokeError> {
+        *usage = ExecutionUsage::default();
+        let target = self
+            .current
+            .as_ref()
+            .ok_or(CallableSlotInvokeError::Unbound)?;
+        target
+            .invoke_bound_with_usage_and_options(arguments, stdout, stderr, options, usage)
+            .map_err(Into::into)
+    }
+
+    /// Reader-capable indirect invocation with measured input consumption.
+    pub fn invoke_with_input_and_usage_and_options(
+        &self,
+        arguments: HostArguments,
+        input: &mut impl io::BufRead,
+        writers: (&mut impl io::Write, &mut impl io::Write),
+        options: ExecutionOptions,
+        input_limits: InputLimits,
+        usage: &mut ExecutionUsage,
+    ) -> Result<Value, CallableSlotInvokeError> {
+        *usage = ExecutionUsage::default();
+        let target = self
+            .current
+            .as_ref()
+            .ok_or(CallableSlotInvokeError::Unbound)?;
+        target
+            .invoke_bound_with_input_and_usage_and_options(
+                arguments,
+                input,
+                writers,
+                options,
+                input_limits,
+                usage,
             )
             .map_err(Into::into)
     }

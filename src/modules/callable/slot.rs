@@ -7,6 +7,7 @@ use super::{
     ModuleCallableBindError, ModuleCallableCatalog, ModuleDiagnostic, ModuleRunError, SourceId,
 };
 use crate::{
+    limits::ExecutionUsage,
     resolver::{CallableSlot, CallableSlotError, CallableSlotInvokeError, HostArguments},
     types::TypeId,
     value::Value,
@@ -161,6 +162,42 @@ impl ExportedCallableSlot {
     ) -> Result<Value, ExportedSlotInvokeError> {
         self.slot
             .invoke_with_input_and_options(arguments, input, stdout, stderr, options, input_limits)
+            .map_err(|error| self.translate(error))
+    }
+
+    /// Public-name-only invocation with an interpreter usage receipt.
+    pub fn invoke_with_usage_and_options(
+        &self,
+        arguments: HostArguments,
+        stdout: &mut impl io::Write,
+        stderr: &mut impl io::Write,
+        options: ExecutionOptions,
+        usage: &mut ExecutionUsage,
+    ) -> Result<Value, ExportedSlotInvokeError> {
+        self.slot
+            .invoke_with_usage_and_options(arguments, stdout, stderr, options, usage)
+            .map_err(|error| self.translate(error))
+    }
+
+    /// Input-capable variant retaining original linked source diagnostics.
+    pub fn invoke_with_input_and_usage_and_options(
+        &self,
+        arguments: HostArguments,
+        input: &mut impl io::BufRead,
+        writers: (&mut impl io::Write, &mut impl io::Write),
+        options: ExecutionOptions,
+        input_limits: InputLimits,
+        usage: &mut ExecutionUsage,
+    ) -> Result<Value, ExportedSlotInvokeError> {
+        self.slot
+            .invoke_with_input_and_usage_and_options(
+                arguments,
+                input,
+                writers,
+                options,
+                input_limits,
+                usage,
+            )
             .map_err(|error| self.translate(error))
     }
 

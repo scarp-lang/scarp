@@ -10,7 +10,7 @@ use super::{FunctionInfo, ResolvedProgram};
 use crate::{
     diagnostics::{Diagnostic, DiagnosticKind},
     input::InputLimits,
-    limits::ExecutionOptions,
+    limits::{ExecutionOptions, ExecutionUsage},
     types::{PrimitiveType, SourceType, TypeId, TypeRegistryError},
     value::{Value, MAX_TEXT_BYTES},
     RunError,
@@ -245,6 +245,53 @@ impl NamedCallableRef {
             (stdout, stderr),
             options,
             input_limits,
+        )
+    }
+
+    /// Return exact work, allocation and input/output charges from this
+    /// invocation, even on runtime failure. Preflight argument errors reset
+    /// 'usage' to zero before any program or I/O operation begins.
+    pub fn invoke_bound_with_usage_and_options(
+        &self,
+        arguments: HostArguments,
+        stdout: &mut impl io::Write,
+        stderr: &mut impl io::Write,
+        options: ExecutionOptions,
+        usage: &mut ExecutionUsage,
+    ) -> Result<Value, RunError> {
+        *usage = ExecutionUsage::default();
+        let bound = self.bind_arguments(arguments)?;
+        crate::interpreter::invoke_named_with_usage_and_options(
+            &self.program,
+            self.declaration,
+            bound,
+            stdout,
+            stderr,
+            options,
+            usage,
+        )
+    }
+
+    /// Reader-capable dispatch with measured input attempts and raw bytes.
+    pub fn invoke_bound_with_input_and_usage_and_options(
+        &self,
+        arguments: HostArguments,
+        input: &mut impl io::BufRead,
+        writers: (&mut impl io::Write, &mut impl io::Write),
+        options: ExecutionOptions,
+        input_limits: InputLimits,
+        usage: &mut ExecutionUsage,
+    ) -> Result<Value, RunError> {
+        *usage = ExecutionUsage::default();
+        let bound = self.bind_arguments(arguments)?;
+        crate::interpreter::invoke_named_with_input_and_usage_and_options(
+            &self.program,
+            self.declaration,
+            bound,
+            input,
+            writers,
+            options,
+            (input_limits, usage),
         )
     }
 
