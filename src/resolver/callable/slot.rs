@@ -29,6 +29,7 @@ pub struct CallableSlot {
 pub enum CallableSlotError {
     Registry(TypeRegistryError),
     NotCallable(TypeId),
+    UnknownFunction(usize),
     ForeignProgram,
     IncompatibleSignature { required: TypeId, actual: TypeId },
 }
@@ -38,6 +39,7 @@ impl fmt::Display for CallableSlotError {
         match self {
             Self::Registry(error) => error.fmt(f),
             Self::NotCallable(_) => f.write_str("required callable slot type is not a function"),
+            Self::UnknownFunction(index) => write!(f, "no named function at declaration index {index}"),
             Self::ForeignProgram => {
                 f.write_str("callable target belongs to a different compiled snapshot")
             }
@@ -121,9 +123,7 @@ impl CallableCatalog {
         let mut slot = self.slot(required)?;
         let target = self.bind_exact(declaration).map_err(|error| match error {
             CallableBindError::UnknownFunction(index) => {
-                CallableSlotError::Registry(TypeRegistryError::UnknownType(
-                    self.program.function_type_id(index).unwrap_or(required),
-                ))
+                CallableSlotError::UnknownFunction(index)
             }
             CallableBindError::Registry(error) => CallableSlotError::Registry(error),
             CallableBindError::IncompatibleSignature { expected, actual } => {
