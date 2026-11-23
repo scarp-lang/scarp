@@ -159,3 +159,42 @@ fn contextual_keyword_names_remain_valid_indexed_assignment_targets() {
     );
     assert_eq!(output("var pub=(1,2); pub[0]=7; print(pub);"), "(7, 2)\n");
 }
+
+#[test]
+fn indexed_updates_in_imported_modules_preserve_snapshots_and_source_spans() {
+    use scarp::modules::{self, MemorySourceLoader, ModuleLimits};
+
+    let mut loader = MemorySourceLoader::new();
+    loader
+        .insert("main.srp", "// 🌍\nimport \"lib.srp\" as lib; print(lib.replace());")
+        .unwrap();
+    loader
+        .insert(
+            "lib.srp",
+            "pub pure funcra replace()->tuple<tuple<integer,string>,tuple<integer,string>> { var pair=(1,\"old\"); bind saved=pair; pair[0]=9; return (pair,saved); }",
+        )
+        .unwrap();
+    let program =
+        modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap();
+    program.check(Default::default()).unwrap();
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    program.execute(&mut out, &mut err, Default::default()).unwrap();
+    assert_eq!(out, b"((9, \"old\"), (1, \"old\"))\n");
+    assert!(err.is_empty());
+
+    let mut invalid = MemorySourceLoader::new();
+    invalid
+        .insert("main.srp", "import \"lib.srp\" as lib; print(lib.replace());")
+        .unwrap();
+    invalid
+        .insert(
+            "lib.srp",
+            "// 🌍\npub pure funcra replace()->tuple<integer> { var pair=(1,); pair[2]=9; return pair; }",
+        )
+        .unwrap();
+    let diagnostic =
+        modules::compile_with_loader("main.srp", &invalid, ModuleLimits::default()).unwrap_err();
+    assert_eq!(diagnostic.diagnostic.kind, Kind::TupleIndex);
+    let rendered = diagnostic.render();
+    assert!(rendered.contains("lib.srp:2:"), "{rendered}");
+}
