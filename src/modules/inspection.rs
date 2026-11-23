@@ -74,6 +74,11 @@ impl Inspection {
         }
         result
     }
+    /// Linked function indices, excluding non-function module symbols.
+    pub(super) fn function_range(&self, source: SourceId) -> Option<Range<usize>> {
+        self.function_ranges.get(source).cloned()
+    }
+
     pub(super) fn function_count(&self) -> usize {
         self.function_ranges.last().map_or(0, |range| range.end)
     }
