@@ -52,7 +52,8 @@ fn named_pure_and_impure_calls_execute_without_first_class_aliases() {
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
     scarp::run_with_io(source, &mut stdout, &mut stderr).unwrap();
-    assert_eq!(stdout, b"12\n13\n");
+    assert_eq!(stdout, b"12\n7\n");
+    assert_eq!(stdout.as_slice(), include_bytes!("../examples/callable_effect_boundaries.stdout"));
     assert!(stderr.is_empty());
     scarp::check(source).unwrap();
     let alias = scarp::compile(
