@@ -157,8 +157,5 @@ fn contextual_keyword_names_remain_valid_indexed_assignment_targets() {
         output("var import=(1,2); import[1]=6; print(import);"),
         "(1, 6)\n"
     );
-    assert_eq!(
-        output("var pub=(1,2); pub[0]=7; print(pub);"),
-        "(7, 2)\n"
-    );
+    assert_eq!(output("var pub=(1,2); pub[0]=7; print(pub);"), "(7, 2)\n");
 }
