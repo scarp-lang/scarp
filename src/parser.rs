@@ -1493,6 +1493,7 @@ impl Parser<'_> {
                         Some(
                             TokenKind::Integer(_)
                                 | TokenKind::Float(_)
+                                | TokenKind::Decimal(_)
                                 | TokenKind::String(_)
                                 | TokenKind::Identifier(_)
                                 | TokenKind::BitNot
@@ -2390,6 +2391,25 @@ impl Parser<'_> {
 
     fn atom(&mut self, nodes: &mut Vec<ExpressionNode>) -> Result<usize, ParseError> {
         match self.current() {
+            Some(Token {
+                kind: TokenKind::Decimal(digits),
+                span,
+            }) => {
+                // Parse the exact base-10 source spelling, without binary64.
+                let value = digits.parse::<crate::decimal::Decimal>().map_err(|error| {
+                    let kind = match error {
+                        crate::decimal::DecimalError::ScaleExceeded
+                        | crate::decimal::DecimalError::PrecisionExceeded => {
+                            DiagnosticKind::DecimalLimit
+                        }
+                        _ => DiagnosticKind::InvalidDecimal,
+                    };
+                    ParseError::new(kind, *span, error.to_string())
+                })?;
+                let span = *span;
+                self.advance();
+                Ok(push(nodes, ExpressionKind::Decimal(value), span))
+            }
             Some(Token {
                 kind: TokenKind::Float(digits),
                 span,

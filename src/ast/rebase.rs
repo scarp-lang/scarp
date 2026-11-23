@@ -73,6 +73,7 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                 | ExpressionKind::Vector { .. }
                 | ExpressionKind::Integer(_)
                 | ExpressionKind::Float(_)
+                | ExpressionKind::Decimal(_)
                 | ExpressionKind::Boolean(_)
                 | ExpressionKind::String(_)
                 | ExpressionKind::Name(_)

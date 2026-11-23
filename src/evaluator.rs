@@ -271,6 +271,7 @@ impl Workspace {
                         }
                         ExpressionKind::Integer(value) => values.push(Value::Integer(*value)),
                         ExpressionKind::Float(value) => values.push(Value::Float(*value)),
+                        ExpressionKind::Decimal(value) => values.push(Value::Decimal(*value)),
                         ExpressionKind::Boolean(value) => values.push(Value::Boolean(*value)),
                         ExpressionKind::String(value) => {
                             budget.charge_text_allocation(value.len(), node.span)?;

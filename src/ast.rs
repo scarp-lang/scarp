@@ -1,5 +1,6 @@
 //! The syntax tree for the currently supported language slice.
 
+use crate::decimal::Decimal;
 use crate::diagnostics::Span;
 use crate::types::SourceType;
 use crate::value::FiniteFloat;
@@ -400,6 +401,7 @@ pub enum ExpressionKind {
     },
     Integer(i64),
     Float(FiniteFloat),
+    Decimal(Decimal),
     Boolean(bool),
     String(String),
     Name(String),

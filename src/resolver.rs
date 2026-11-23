@@ -2020,6 +2020,7 @@ fn resolve_expression(
 
             ExpressionKind::Integer(_) => (SourceType::from(ValueType::Integer), None),
             ExpressionKind::Float(_) => (SourceType::from(ValueType::Float), None),
+            ExpressionKind::Decimal(_) => (SourceType::from(ValueType::Decimal), None),
             ExpressionKind::Boolean(_) => (SourceType::from(ValueType::Boolean), None),
             ExpressionKind::String(_) => (SourceType::from(ValueType::String), None),
             ExpressionKind::Name(name) => {

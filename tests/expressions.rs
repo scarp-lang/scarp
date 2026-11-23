@@ -272,6 +272,7 @@ fn expression_nodes_preserve_spans_and_postorder_invariants() {
             ExpressionKind::Index { vector, index, .. } => assert!(*vector < id && *index < id),
             ExpressionKind::Integer(_) => {}
             ExpressionKind::Float(_)
+            | ExpressionKind::Decimal(_)
             | ExpressionKind::Name(_)
             | ExpressionKind::String(_)
             | ExpressionKind::Boolean(_)

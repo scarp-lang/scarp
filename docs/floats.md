@@ -64,7 +64,11 @@ Nonfinite results report E0031 at the operator, including a compound-assignment
 operator. Division by either signed zero reports E0008 before the operation.
 Such failures discard both pending output streams, including earlier prints.
 
-Binary rounding is visible: `0.1 + 0.2` displays `0.30000000000000004`. Equal
+Binary rounding is visible: `0.1 + 0.2` displays `0.30000000000000004`.
+For exact base-10 results, the development branch introduces `0.1d + 0.2d`
+(which evaluates to `0.3`), while the published compiler already supports
+`decimal("0.1") + decimal("0.2")`. The `d` suffix is an explicit opt-in;
+existing unsuffixed floats retain IEEE-754 semantics. Equal
 decimal-looking expressions need not have equal binary results. Choose a
 domain-appropriate tolerance when comparing approximations; this feature does
 not provide exact decimal, arbitrary precision, or rounding-mode controls.

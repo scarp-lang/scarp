@@ -48,6 +48,7 @@ pub(super) fn literal(value: &Value) -> ExpressionKind {
     match value {
         Value::Integer(value) => ExpressionKind::Integer(*value),
         Value::Float(value) => ExpressionKind::Float(*value),
+        Value::Decimal(value) => ExpressionKind::Decimal(*value),
         Value::Boolean(value) => ExpressionKind::Boolean(*value),
         Value::String(value) => ExpressionKind::String(value.to_string()),
         _ => unreachable!("validated scalar constant"),
@@ -172,6 +173,7 @@ impl Work {
                     }
                     ExpressionKind::Integer(_)
                     | ExpressionKind::Float(_)
+                    | ExpressionKind::Decimal(_)
                     | ExpressionKind::Boolean(_)
                     | ExpressionKind::String(_)
                     | ExpressionKind::Negate { .. }
