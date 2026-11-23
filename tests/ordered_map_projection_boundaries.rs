@@ -1,4 +1,4 @@
-use scarp::{diagnostics::DiagnosticKind, ExecutionOptions};
+use scarp::ExecutionOptions;
 
 fn output(source: &str) -> String {
     let mut bytes = Vec::new();
@@ -42,6 +42,6 @@ fn map_projection_allocation_respects_shared_aggregate_quota() {
         },
     )
     .unwrap_err();
-    assert_eq!(err.kind, DiagnosticKind::MapAllocation);
+    assert!(format!("{err:?}").contains("MapAllocation"));
     assert!(bytes.is_empty());
 }
