@@ -2280,6 +2280,16 @@ fn loop_control(span: Span) -> Diagnostic {
     .with_help("put break; or continue; inside the while or repeat loop it should control")
 }
 
+/// Tuple order is defined only when every leaf has existing scalar numeric
+/// ordering. Keep boolean/text and collection ordering out of this feature.
+fn numeric_tuple_members(ty: &SourceType) -> bool {
+    ty.tuple_elements().is_some_and(|members| {
+        members
+            .iter()
+            .all(|member| member.is_numeric() || numeric_tuple_members(member))
+    })
+}
+
 #[cfg(test)]
 mod retirement_plan_tests {
     use super::{ResolvedProgram, ResolvedStatement};
@@ -2330,14 +2340,4 @@ mod retirement_plan_tests {
             .iter()
             .all(|(_, slots)| !slots.contains(&0) && !slots.contains(&2)));
     }
-}
-
-/// Tuple order is defined only when every leaf has existing scalar numeric
-/// ordering. Keep boolean/text and collection ordering out of this feature.
-fn numeric_tuple_members(ty: &SourceType) -> bool {
-    ty.tuple_elements().is_some_and(|members| {
-        members
-            .iter()
-            .all(|member| member.is_numeric() || numeric_tuple_members(member))
-    })
 }
