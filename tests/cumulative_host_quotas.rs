@@ -78,8 +78,10 @@ fn exact_spent_work_exhausts_shared_steps_even_after_valid_result() {
         Value::Integer(6)
     );
     assert!(measured.steps > 0);
-    let mut caps = HostInvocationCaps::default();
-    caps.max_attempts = 5;
+    let mut caps = HostInvocationCaps {
+        max_attempts: 5,
+        ..HostInvocationCaps::default()
+    };
     caps.execution.limits.max_steps = measured.steps;
     let mut ledger = HostInvocationLedger::new(caps);
     assert_eq!(invoke(&mut ledger, &target, 2).unwrap(), Value::Integer(6));
