@@ -93,6 +93,30 @@ pub struct HostInvocationLedger {
     argument_usage: HostArgumentUsage,
 }
 
+/// Guarantees that work already published by the interpreter is debited
+/// when a host writer panics during output replay. The interpreter fills
+/// the receipt *before* replay, so unwinding cannot skip the normal charge.
+/// No unsafe code, panic catching, or writer assumptions are involved.
+struct PendingUsage<'a> {
+    ledger: &'a mut HostInvocationLedger,
+    usage: ExecutionUsage,
+}
+
+impl<'a> PendingUsage<'a> {
+    fn new(ledger: &'a mut HostInvocationLedger) -> Self {
+        Self {
+            ledger,
+            usage: ExecutionUsage::default(),
+        }
+    }
+}
+
+impl Drop for PendingUsage<'_> {
+    fn drop(&mut self) {
+        self.ledger.charge(self.usage);
+    }
+}
+
 /// A call was denied BEFORE interpreter execution, with no input/output
 /// effects. Only initial-call work, call and attempt caps can definitively
 /// prevent any valid invocation; zero output or input quotas still permit a
@@ -367,10 +391,14 @@ impl HostInvocationLedger {
             .map_err(HostInvocationError::Quota)?;
         let effective = self.begin(options).map_err(HostInvocationError::Quota)?;
         self.charge_arguments(admitted);
-        let mut usage = ExecutionUsage::default();
-        let result = slot
-            .invoke_with_usage_and_options(arguments, writers.0, writers.1, effective, &mut usage);
-        self.charge(usage);
+        let mut pending = PendingUsage::new(self);
+        let result = slot.invoke_with_usage_and_options(
+            arguments,
+            writers.0,
+            writers.1,
+            effective,
+            &mut pending.usage,
+        );
         result.map_err(HostInvocationError::Invocation)
     }
 
@@ -391,16 +419,15 @@ impl HostInvocationLedger {
         let effective = self.begin(options).map_err(HostInvocationError::Quota)?;
         self.charge_arguments(admitted);
         let effective_input = self.input_for(input_limits);
-        let mut usage = ExecutionUsage::default();
+        let mut pending = PendingUsage::new(self);
         let result = slot.invoke_with_input_and_usage_and_options(
             arguments,
             input,
             writers,
             effective,
             effective_input,
-            &mut usage,
+            &mut pending.usage,
         );
-        self.charge(usage);
         result.map_err(HostInvocationError::Invocation)
     }
 
@@ -418,10 +445,14 @@ impl HostInvocationLedger {
             .map_err(HostInvocationError::Quota)?;
         let effective = self.begin(options).map_err(HostInvocationError::Quota)?;
         self.charge_arguments(admitted);
-        let mut usage = ExecutionUsage::default();
-        let result = slot
-            .invoke_with_usage_and_options(arguments, writers.0, writers.1, effective, &mut usage);
-        self.charge(usage);
+        let mut pending = PendingUsage::new(self);
+        let result = slot.invoke_with_usage_and_options(
+            arguments,
+            writers.0,
+            writers.1,
+            effective,
+            &mut pending.usage,
+        );
         result.map_err(HostInvocationError::Invocation)
     }
 
@@ -440,16 +471,15 @@ impl HostInvocationLedger {
         let effective = self.begin(options).map_err(HostInvocationError::Quota)?;
         self.charge_arguments(admitted);
         let effective_input = self.input_for(input_limits);
-        let mut usage = ExecutionUsage::default();
+        let mut pending = PendingUsage::new(self);
         let result = slot.invoke_with_input_and_usage_and_options(
             arguments,
             input,
             writers,
             effective,
             effective_input,
-            &mut usage,
+            &mut pending.usage,
         );
-        self.charge(usage);
         result.map_err(HostInvocationError::Invocation)
     }
 }
