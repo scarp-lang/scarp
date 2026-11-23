@@ -93,6 +93,13 @@ fn legacy_v1_manifest_has_unspecified_version_and_same_entry() {
         .output()
         .unwrap();
     assert!(created.status.success(), "{created:?}");
+    // Restore an original v1 manifest to exercise legacy read compatibility.
+    fs::remove_file(path.join("scarp.project")).unwrap();
+    fs::write(
+        path.join("Scarp.project"),
+        "scarp-project: 1\nname: legacy\nentry: src/main.srp\n",
+    )
+    .unwrap();
     let result = cli(&["project", "info", "--json"], &path);
     assert!(result.status.success(), "{result:?}");
     assert_eq!(

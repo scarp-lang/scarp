@@ -29,7 +29,7 @@ Commands:
   exec [file.srp|project-directory]  Execute current project or selected source
   verify [file.srp|directory]      Perform static source or project validation
   inspect tokens <file.srp>        Inspect lexer tokens and source locations
-  create <directory>               Create a legacy Scarp.project app
+  create <directory>               Create a new scarp.project app (same as init)
   init <directory>                 Initialize a new scarp.project app
   project info [--json] [directory]  Display validated project metadata
   launch <directory>               Execute a Scarp project entrypoint
@@ -171,7 +171,8 @@ and flush_stderr() calls publish the selected stream immediately with
 
 const CREATE_HELP: &str = "Usage: scarp create [--] <new-directory>
 
-Create one new Scarp project with Scarp.project and src/main.srp.
+Create one new project with the lowercase scarp.project v2 manifest.
+Equivalent to init: scaffold src/main.srp, tests/, examples/, README.md and .gitignore.
 Reject existing directories (even empty ones); never overwrite existing files.
 No network access, package installation, or native build occurs.
 ";

@@ -52,11 +52,15 @@ fn create_verify_and_launch_use_a_real_compiler_entrypoint() {
     let result = with_path(&["create"], &project);
     assert!(result.status.success(), "{result:?}");
     assert!(result.stderr.is_empty());
-    let manifest = fs::read_to_string(project.join("Scarp.project")).unwrap();
+    let manifest = fs::read_to_string(project.join("scarp.project")).unwrap();
     assert_eq!(
         manifest,
-        "scarp-project: 1\nname: Hello नमस्ते\nentry: src/main.srp\n"
+        "project \"Hello नमस्ते\" {\n    version: \"0.1.0\"\n    entry: \"src/main.srp\"\n    type: \"application\"\n    dependencies {}\n}\n"
     );
+    let info = with_path(&["project", "info", "--json"], &project);
+    assert!(info.status.success(), "{info:?}");
+    assert!(String::from_utf8_lossy(&info.stdout).contains("\"manifest\":\"scarp.project\""));
+    assert!(String::from_utf8_lossy(&info.stdout).contains("\"format\":\"v2\""));
     let entry = project.join("src/main.srp");
     assert_eq!(
         fs::read_to_string(&entry).unwrap(),
@@ -86,7 +90,7 @@ fn verify_project_directory_is_static_and_uses_declared_entry() {
     let entry = project.join("src/other.srp");
     fs::write(&entry, "print(1 / 0);").unwrap();
     fs::write(
-        project.join("Scarp.project"),
+        project.join("scarp.project"),
         "scarp-project: 1\nname: verified project नमस्ते\nentry: src/other.srp\n",
     )
     .unwrap();
@@ -126,7 +130,7 @@ fn verify_project_directory_rejects_invalid_manifests_with_json_errors() {
         "scarp-project: 1\nname: guarded\nentry: ../outside.srp\n",
         "scarp-project: 1\nname: guarded\nentry: src/main.srp\nunknown: value\n",
     ] {
-        fs::write(project.join("Scarp.project"), manifest).unwrap();
+        fs::write(project.join("scarp.project"), manifest).unwrap();
         let verified = with_path(&["verify", "--diagnostic-format=json"], &project);
         assert_eq!(verified.status.code(), Some(1), "{verified:?}");
         assert!(verified.stdout.is_empty());
@@ -135,7 +139,7 @@ fn verify_project_directory_rejects_invalid_manifests_with_json_errors() {
             "{verified:?}"
         );
     }
-    fs::remove_file(project.join("Scarp.project")).unwrap();
+    fs::remove_file(project.join("scarp.project")).unwrap();
     let missing = with_path(&["verify"], &project);
     assert_eq!(missing.status.code(), Some(1), "{missing:?}");
     assert!(missing.stdout.is_empty());
@@ -154,7 +158,7 @@ fn existing_destinations_are_never_overwritten() {
         fs::read(project.join("sentinel.txt")).unwrap(),
         b"do not touch"
     );
-    assert!(!project.join("Scarp.project").exists());
+    assert!(!project.join("scarp.project").exists());
     let missing_parent = with_path(&["create"], &project.join("nested").join("app"));
     assert_eq!(missing_parent.status.code(), Some(1), "{missing_parent:?}");
     assert!(!project.join("nested").exists());
@@ -167,7 +171,7 @@ fn launch_uses_declared_entry_and_preserves_compiler_diagnostics_and_limits() {
     assert!(with_path(&["create"], &project).status.success());
     fs::write(project.join("src/other.srp"), "print(6 * 7);").unwrap();
     fs::write(
-        project.join("Scarp.project"),
+        project.join("scarp.project"),
         "scarp-project: 1\nname: calculator\nentry: src/other.srp\n",
     )
     .unwrap();
@@ -197,7 +201,7 @@ fn manifest_validation_rejects_bad_version_unknown_keys_traversal_and_size() {
     let workspace = Workspace::new();
     let project = workspace.child("invalid");
     assert!(with_path(&["create"], &project).status.success());
-    let manifest = project.join("Scarp.project");
+    let manifest = project.join("scarp.project");
     for contents in [
         "scarp-project: 2\nname: invalid\nentry: src/main.srp\n".to_owned(),
         "scarp-project: 1\nname: invalid\nentry: src/main.srp\nextra: ignored\n".to_owned(),
@@ -324,7 +328,7 @@ fn project_module_inspection_rejects_invalid_manifests_before_output() {
     let workspace = Workspace::new();
     let project = workspace.child("inspect-guard");
     assert!(with_path(&["create"], &project).status.success());
-    let manifest = project.join("Scarp.project");
+    let manifest = project.join("scarp.project");
     for contents in [
         "scarp-project: 2\nname: inspect-guard\nentry: src/main.srp\n",
         "scarp-project: 1\nname: inspect-guard\nentry: ../escape.srp\n",

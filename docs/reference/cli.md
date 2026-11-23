@@ -36,7 +36,8 @@ a published prerelease.
 
 | Command | Behavior |
 | --- | --- |
-| `scarp init DIRECTORY` | Scaffold a new project with a declarative manifest and starter source |
+| `scarp init DIRECTORY` | Scaffold a new project with lowercase `scarp.project` v2 |
+| `scarp create DIRECTORY` | Development branch: same v2 scaffold as `init`; older binaries used `Scarp.project` |
 | `scarp run [DIRECTORY]` | Execute the project entrypoint with the interpreter |
 | `scarp verify [DIRECTORY]` | Type-check the entrypoint and imports without executing runtime statements |
 | `scarp project info [--json] [DIRECTORY]` | Inspect the validated manifest and entrypoint |
@@ -135,7 +136,7 @@ not alpha.3 packages. Confirm the exact release tag/commit and use
 | --- | --- |
 | `scarp`, `scarp guide` | Print current supported command guidance |
 | `scarp guide exec` | Show contextual execution help |
-| `scarp create DIRECTORY` | From alpha.4: create a fresh offline project, refusing existing paths |
+| `scarp create DIRECTORY` | From alpha.4: create a fresh offline project; development branch now writes `scarp.project` v2 |
 | `scarp launch [budgets] DIRECTORY` | From alpha.4: run the contained manifest entrypoint via the interpreter |
 | `scarp diagnose [--json]` | Show actual running compiler version, host OS/architecture and supported capability inventory without network access |
 | `scarp guide inspect tokens` | Show lexer inspection help |

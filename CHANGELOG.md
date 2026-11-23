@@ -2,6 +2,8 @@
 
 ## Unreleased — after v0.0.6-alpha.19
 
+- Canonicalize new projects on lowercase `scarp.project`: `create` now reuses `init`'s v2 scaffolding, while older uppercase `Scarp.project` v1 projects remain readable. Not in published alpha.19 binaries.
+
 - Implement `tuple[index] = value;` on mutable tuples as a type-checked,
   persistent snapshot replacement. Literal indices retain compile-time arity
   checks, aliases remain unchanged, and new tuple allocations consume existing
