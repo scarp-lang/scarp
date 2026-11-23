@@ -7,8 +7,8 @@ use super::{
     ModuleCallableBindError, ModuleCallableCatalog, ModuleDiagnostic, ModuleRunError, SourceId,
 };
 use crate::{
-    resolver::{CallableSlot, CallableSlotError, CallableSlotInvokeError, HostArguments},
     limits::ExecutionUsage,
+    resolver::{CallableSlot, CallableSlotError, CallableSlotInvokeError, HostArguments},
     types::TypeId,
     value::Value,
     ExecutionOptions, InputLimits, RunError,

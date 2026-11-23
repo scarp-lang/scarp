@@ -278,5 +278,4 @@ impl CallableSlot {
             )
             .map_err(Into::into)
     }
-
 }
