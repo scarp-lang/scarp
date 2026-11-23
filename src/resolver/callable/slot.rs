@@ -39,7 +39,9 @@ impl fmt::Display for CallableSlotError {
         match self {
             Self::Registry(error) => error.fmt(f),
             Self::NotCallable(_) => f.write_str("required callable slot type is not a function"),
-            Self::UnknownFunction(index) => write!(f, "no named function at declaration index {index}"),
+            Self::UnknownFunction(index) => {
+                write!(f, "no named function at declaration index {index}")
+            }
             Self::ForeignProgram => {
                 f.write_str("callable target belongs to a different compiled snapshot")
             }
@@ -101,9 +103,9 @@ impl CallableCatalog {
     /// cannot acquire a slot; no type is interned or allocated.
     pub fn slot(&self, required: TypeId) -> Result<CallableSlot, CallableSlotError> {
         match self.program.type_registry().get(required) {
-            None => Err(CallableSlotError::Registry(
-                TypeRegistryError::UnknownType(required),
-            )),
+            None => Err(CallableSlotError::Registry(TypeRegistryError::UnknownType(
+                required,
+            ))),
             Some(TypeKind::Function { .. }) => Ok(CallableSlot {
                 program: Arc::clone(&self.program),
                 required,
@@ -122,9 +124,7 @@ impl CallableCatalog {
     ) -> Result<CallableSlot, CallableSlotError> {
         let mut slot = self.slot(required)?;
         let target = self.bind_exact(declaration).map_err(|error| match error {
-            CallableBindError::UnknownFunction(index) => {
-                CallableSlotError::UnknownFunction(index)
-            }
+            CallableBindError::UnknownFunction(index) => CallableSlotError::UnknownFunction(index),
             CallableBindError::Registry(error) => CallableSlotError::Registry(error),
             CallableBindError::IncompatibleSignature { expected, actual } => {
                 CallableSlotError::IncompatibleSignature {
@@ -182,8 +182,8 @@ impl CallableSlot {
     /// Rebind from a declaration index without ever exposing unchecked
     /// function identity. Failed bounds/type checks keep the prior target.
     pub fn select(&mut self, declaration: usize) -> Result<(), CallableBindError> {
-        let selected = CallableCatalog::new(Arc::clone(&self.program))
-            .bind(declaration, self.required)?;
+        let selected =
+            CallableCatalog::new(Arc::clone(&self.program)).bind(declaration, self.required)?;
         self.current = Some(selected);
         Ok(())
     }
@@ -198,7 +198,10 @@ impl CallableSlot {
         stderr: &mut impl io::Write,
         options: ExecutionOptions,
     ) -> Result<Value, CallableSlotInvokeError> {
-        let target = self.current.as_ref().ok_or(CallableSlotInvokeError::Unbound)?;
+        let target = self
+            .current
+            .as_ref()
+            .ok_or(CallableSlotInvokeError::Unbound)?;
         target
             .invoke_bound_with_io_and_options(arguments, stdout, stderr, options)
             .map_err(Into::into)
@@ -214,7 +217,10 @@ impl CallableSlot {
         options: ExecutionOptions,
         input_limits: InputLimits,
     ) -> Result<Value, CallableSlotInvokeError> {
-        let target = self.current.as_ref().ok_or(CallableSlotInvokeError::Unbound)?;
+        let target = self
+            .current
+            .as_ref()
+            .ok_or(CallableSlotInvokeError::Unbound)?;
         target
             .invoke_bound_with_input_and_options(
                 arguments,
