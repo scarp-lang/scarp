@@ -1,0 +1,7 @@
+// Experimental lexicographic ordering of numeric tuples (development source).
+bind origin = (10, 20);
+bind target = (30, 40);
+print(origin < target); // true
+print(origin >= target); // false
+print((1, (2, 3)) < (1, (2, 4))); // true
+print((0.0,) <= (-0.0,)); // true
