@@ -10,7 +10,7 @@ use crate::{
         DestructureStep, MatchTarget, PropagationPlan, ResolvedArgument, ResolvedCall,
         ResolvedExpression, ResolvedOperation, ResolvedProgram, ResolvedStatement,
     },
-    value::Value,
+    value::{TupleValue, Value},
 };
 
 enum Stage {
@@ -22,6 +22,7 @@ enum Stage {
 }
 enum Completion<'a> {
     Store(usize),
+    TupleSet(usize, usize, Span),
     Propagate(usize, &'a PropagationPlan),
     Destructure(&'a [DestructureStep], Span),
     Match(&'a [MatchTarget]),
@@ -554,6 +555,48 @@ fn run_plan<'a>(
                         frame.expression = None;
                         match std::mem::replace(&mut frame.completion, Completion::Discard) {
                             Completion::Store(slot) => frame.environment[slot] = value,
+                            Completion::TupleSet(slot, index, span) => {
+                                let original = frame.environment[slot]
+                                    .as_tuple()
+                                    .expect("tuple assignment was type checked");
+                                let members = original.elements();
+                                // Charge the full new payload before constructing a replacement.
+                                budget.charge(members.len() as u64, span)?;
+                                let bytes =
+                                    TupleValue::allocation_bytes(members).ok_or_else(|| {
+                                        Diagnostic::new(
+                                            DiagnosticKind::TupleAllocation,
+                                            span,
+                                            "tuple replacement allocation size overflow",
+                                        )
+                                    })?;
+                                budget.charge_tuple_allocation(bytes, span)?;
+                                let mut replacement = Vec::new();
+                                replacement.try_reserve_exact(members.len()).map_err(|_| {
+                                    Diagnostic::new(
+                                        DiagnosticKind::TupleAllocation,
+                                        span,
+                                        "could not reserve tuple replacement storage",
+                                    )
+                                })?;
+                                replacement.extend(members.iter().cloned());
+                                let member = replacement.get_mut(index).ok_or_else(|| {
+                                    Diagnostic::new(
+                                        DiagnosticKind::TupleIndex,
+                                        span,
+                                        "resolved tuple assignment index is out of bounds",
+                                    )
+                                })?;
+                                *member = value;
+                                let updated = TupleValue::new(replacement).ok_or_else(|| {
+                                    Diagnostic::new(
+                                        DiagnosticKind::TupleLimit,
+                                        span,
+                                        "tuple replacement violates its structural type limits",
+                                    )
+                                })?;
+                                frame.environment[slot] = Value::Tuple(updated);
+                            }
                             Completion::Propagate(slot, plan) => {
                                 let Value::Variant(value) = value else {
                                     unreachable!("propagation operand has checked variant type");
@@ -895,6 +938,12 @@ fn run_plan<'a>(
                         ResolvedStatement::Store { slot, value } => {
                             frame.start(value, Completion::Store(*slot))
                         }
+                        ResolvedStatement::TupleSet {
+                            slot,
+                            index,
+                            value,
+                            index_span,
+                        } => frame.start(value, Completion::TupleSet(*slot, *index, *index_span)),
                         ResolvedStatement::Propagate { slot, value, plan } => {
                             frame.start(value, Completion::Propagate(*slot, plan))
                         }

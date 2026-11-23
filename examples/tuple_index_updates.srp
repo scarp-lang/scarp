@@ -1,0 +1,8 @@
+// Development-only example: persistent tuple indexed assignment.
+// Run with a compiler build containing the tuple assignment feature.
+var position = (10, 20);
+bind old = position;
+position[0] = 50;
+position[1] = 100;
+print(position); // (50, 100)
+print(old);      // (10, 20)

@@ -824,6 +824,7 @@ impl Rewriter<'_> {
             Statement::Assign {
                 name,
                 name_span,
+                index,
                 value,
                 operator,
                 ..
@@ -847,7 +848,7 @@ impl Rewriter<'_> {
                     .rev()
                     .find_map(|scope| scope.get(name))
                     .copied();
-                let kind = if *operator == crate::ast::AssignmentOperator::Set {
+                let kind = if index.is_none() && *operator == crate::ast::AssignmentOperator::Set {
                     symbols::ReferenceKind::Write
                 } else {
                     symbols::ReferenceKind::ReadWrite
@@ -858,6 +859,9 @@ impl Rewriter<'_> {
                     }
                     Ok(())
                 });
+                if let Some(index) = index {
+                    self.expression(index)?;
+                }
                 self.expression(value)?;
             }
             Statement::Call { expression, .. }
