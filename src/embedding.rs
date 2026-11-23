@@ -362,7 +362,9 @@ impl HostInvocationLedger {
         writers: (&mut impl io::Write, &mut impl io::Write),
         options: ExecutionOptions,
     ) -> Result<Value, HostInvocationError<CallableSlotInvokeError>> {
-        let admitted = self.inspect_arguments(&arguments).map_err(HostInvocationError::Quota)?;
+        let admitted = self
+            .inspect_arguments(&arguments)
+            .map_err(HostInvocationError::Quota)?;
         let effective = self.begin(options).map_err(HostInvocationError::Quota)?;
         self.charge_arguments(admitted);
         let mut usage = ExecutionUsage::default();
@@ -383,7 +385,9 @@ impl HostInvocationLedger {
         options: ExecutionOptions,
         input_limits: InputLimits,
     ) -> Result<Value, HostInvocationError<CallableSlotInvokeError>> {
-        let admitted = self.inspect_arguments(&arguments).map_err(HostInvocationError::Quota)?;
+        let admitted = self
+            .inspect_arguments(&arguments)
+            .map_err(HostInvocationError::Quota)?;
         let effective = self.begin(options).map_err(HostInvocationError::Quota)?;
         self.charge_arguments(admitted);
         let effective_input = self.input_for(input_limits);
@@ -409,7 +413,9 @@ impl HostInvocationLedger {
         writers: (&mut impl io::Write, &mut impl io::Write),
         options: ExecutionOptions,
     ) -> Result<Value, HostInvocationError<ExportedSlotInvokeError>> {
-        let admitted = self.inspect_arguments(&arguments).map_err(HostInvocationError::Quota)?;
+        let admitted = self
+            .inspect_arguments(&arguments)
+            .map_err(HostInvocationError::Quota)?;
         let effective = self.begin(options).map_err(HostInvocationError::Quota)?;
         self.charge_arguments(admitted);
         let mut usage = ExecutionUsage::default();
@@ -428,7 +434,9 @@ impl HostInvocationLedger {
         options: ExecutionOptions,
         input_limits: InputLimits,
     ) -> Result<Value, HostInvocationError<ExportedSlotInvokeError>> {
-        let admitted = self.inspect_arguments(&arguments).map_err(HostInvocationError::Quota)?;
+        let admitted = self
+            .inspect_arguments(&arguments)
+            .map_err(HostInvocationError::Quota)?;
         let effective = self.begin(options).map_err(HostInvocationError::Quota)?;
         self.charge_arguments(admitted);
         let effective_input = self.input_for(input_limits);

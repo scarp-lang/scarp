@@ -37,9 +37,8 @@ fn text_arg(s: &str) -> HostArguments {
 
 #[test]
 fn multibyte_unicode_and_named_labels_are_billed_as_raw_utf8() {
-    let callable = slot(
-        "pure funcra keep(message: string, number: integer) -> string { return message; }",
-    );
+    let callable =
+        slot("pure funcra keep(message: string, number: integer) -> string { return message; }");
     let mut ledger = HostInvocationLedger::new(HostInvocationCaps::default());
     let args = HostArguments::new(
         vec![],
@@ -54,7 +53,10 @@ fn multibyte_unicode_and_named_labels_are_billed_as_raw_utf8() {
     );
     assert_eq!(
         ledger.argument_usage(),
-        HostArgumentUsage { supplied_values: 2, utf8_bytes: 19 }
+        HostArgumentUsage {
+            supplied_values: 2,
+            utf8_bytes: 19
+        }
     );
     assert_eq!(ledger.spent().calls, 1);
     assert_eq!(ledger.spent().text_bytes, 0);
@@ -101,8 +103,12 @@ fn cumulative_value_count_is_not_reset_between_calls() {
     let mut ledger = HostInvocationLedger::new(caps);
     for n in [1, 2] {
         assert_eq!(
-            invoke(&mut ledger, &callable,
-                HostArguments::positional(vec![Value::Integer(n)])).unwrap(),
+            invoke(
+                &mut ledger,
+                &callable,
+                HostArguments::positional(vec![Value::Integer(n)])
+            )
+            .unwrap(),
             Value::Integer(n)
         );
     }
@@ -155,7 +161,10 @@ fn cumulative_utf8_quota_is_exact_and_denied_calls_do_not_spend_it() {
         ..HostInvocationCaps::default()
     };
     let mut ledger = HostInvocationLedger::new(caps);
-    assert_eq!(invoke(&mut ledger, &callable, text_arg("ok")).unwrap(), Value::from("ok"));
+    assert_eq!(
+        invoke(&mut ledger, &callable, text_arg("ok")).unwrap(),
+        Value::from("ok")
+    );
     assert_eq!(ledger.remaining_arguments().max_total_utf8_bytes, 1);
     assert!(matches!(
         invoke(&mut ledger, &callable, text_arg("no")),
@@ -164,7 +173,10 @@ fn cumulative_utf8_quota_is_exact_and_denied_calls_do_not_spend_it() {
     ));
     assert_eq!(ledger.attempts(), 1);
     assert_eq!(ledger.argument_usage().utf8_bytes, 2);
-    assert_eq!(invoke(&mut ledger, &callable, text_arg("x")).unwrap(), Value::from("x"));
+    assert_eq!(
+        invoke(&mut ledger, &callable, text_arg("x")).unwrap(),
+        Value::from("x")
+    );
     assert_eq!(ledger.argument_usage().utf8_bytes, 3);
     assert_eq!(ledger.spent().calls, 2);
 }
@@ -174,17 +186,22 @@ fn invalid_labels_and_types_consume_admitted_argument_quota() {
     let callable = slot("pure funcra id(s: string) -> string { return s; }");
     let mut ledger = HostInvocationLedger::new(HostInvocationCaps::default());
     assert!(matches!(
-        invoke(&mut ledger, &callable, HostArguments::new(
-            vec![], vec![("not_a_parameter".into(), Value::from("abc"))]
-        )),
+        invoke(
+            &mut ledger,
+            &callable,
+            HostArguments::new(vec![], vec![("not_a_parameter".into(), Value::from("abc"))])
+        ),
         Err(HostInvocationError::Invocation(_))
     ));
     assert_eq!(ledger.argument_usage().supplied_values, 1);
     assert_eq!(ledger.argument_usage().utf8_bytes, 18);
     assert_eq!(ledger.spent().calls, 0);
     assert!(matches!(
-        invoke(&mut ledger, &callable,
-            HostArguments::positional(vec![Value::Integer(1)])),
+        invoke(
+            &mut ledger,
+            &callable,
+            HostArguments::positional(vec![Value::Integer(1)])
+        ),
         Err(HostInvocationError::Invocation(_))
     ));
     assert_eq!(ledger.argument_usage().supplied_values, 2);
@@ -213,15 +230,22 @@ fn shared_arc_string_counted_on_every_argument_occurrence() {
 fn unbound_slots_charge_admitted_host_values_but_no_scarp_work() {
     let program = scarp::compile("funcra id(s: string) -> string { return s; }").unwrap();
     let signature = program.function_type_id(0).unwrap();
-    let unbound = CallableCatalog::from_program(program).slot(signature).unwrap();
+    let unbound = CallableCatalog::from_program(program)
+        .slot(signature)
+        .unwrap();
     let mut ledger = HostInvocationLedger::new(HostInvocationCaps::default());
     assert!(matches!(
         invoke(&mut ledger, &unbound, text_arg("hello")),
-        Err(HostInvocationError::Invocation(CallableSlotInvokeError::Unbound))
+        Err(HostInvocationError::Invocation(
+            CallableSlotInvokeError::Unbound
+        ))
     ));
     assert_eq!(
         ledger.argument_usage(),
-        HostArgumentUsage { supplied_values: 1, utf8_bytes: 5 }
+        HostArgumentUsage {
+            supplied_values: 1,
+            utf8_bytes: 5
+        }
     );
     assert_eq!(ledger.spent().steps, 0);
     assert_eq!(ledger.attempts(), 1);
@@ -239,10 +263,20 @@ fn zero_byte_budget_allows_only_scalar_or_empty_string_payloads() {
     };
     let mut ledger = HostInvocationLedger::new(caps);
     let scalar = slot("pure funcra id(n: integer) -> integer { return n; }");
-    assert_eq!(invoke(&mut ledger, &scalar, HostArguments::positional(
-        vec![Value::Integer(2)])).unwrap(), Value::Integer(2));
+    assert_eq!(
+        invoke(
+            &mut ledger,
+            &scalar,
+            HostArguments::positional(vec![Value::Integer(2)])
+        )
+        .unwrap(),
+        Value::Integer(2)
+    );
     let echo = slot("pure funcra echo(s: string) -> string { return s; }");
-    assert_eq!(invoke(&mut ledger, &echo, text_arg("")).unwrap(), Value::from(""));
+    assert_eq!(
+        invoke(&mut ledger, &echo, text_arg("")).unwrap(),
+        Value::from("")
+    );
     assert_eq!(ledger.argument_usage().utf8_bytes, 0);
     assert_eq!(ledger.spent().calls, 2);
 }
@@ -250,15 +284,25 @@ fn zero_byte_budget_allows_only_scalar_or_empty_string_payloads() {
 #[test]
 fn exported_reader_quota_denial_cannot_consume_input_or_output() {
     let mut loader = MemorySourceLoader::new();
-    loader.insert("main.srp",
-        "import \"lib.srp\" as lib; print(lib.ask(\"seed\"));").unwrap();
-    loader.insert("lib.srp",
-        "pub funcra ask(s: string) -> string { print(s); return read_line(); }").unwrap();
-    let linked = modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap();
+    loader
+        .insert(
+            "main.srp",
+            "import \"lib.srp\" as lib; print(lib.ask(\"seed\"));",
+        )
+        .unwrap();
+    loader
+        .insert(
+            "lib.srp",
+            "pub funcra ask(s: string) -> string { print(s); return read_line(); }",
+        )
+        .unwrap();
+    let linked =
+        modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap();
     let source = linked.imports_in(0).unwrap()[0].target;
     let required = linked.program().function_type_id(0).unwrap();
     let callable = ModuleCallableCatalog::from_program(linked)
-        .slot_exported(source, "ask", required).unwrap();
+        .slot_exported(source, "ask", required)
+        .unwrap();
     let caps = HostInvocationCaps {
         arguments: HostArgumentLimits {
             max_utf8_bytes_per_call: 1,
@@ -287,23 +331,35 @@ fn exported_reader_quota_denial_cannot_consume_input_or_output() {
 #[test]
 fn exported_named_call_accounts_for_both_label_and_string_payload() {
     let mut loader = MemorySourceLoader::new();
-    loader.insert("main.srp",
-        "import \"lib.srp\" as lib; print(lib.echo(\"ok\"));").unwrap();
-    loader.insert("lib.srp",
-        "pub pure funcra echo(value: string) -> string { return value; }").unwrap();
-    let linked = modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap();
+    loader
+        .insert(
+            "main.srp",
+            "import \"lib.srp\" as lib; print(lib.echo(\"ok\"));",
+        )
+        .unwrap();
+    loader
+        .insert(
+            "lib.srp",
+            "pub pure funcra echo(value: string) -> string { return value; }",
+        )
+        .unwrap();
+    let linked =
+        modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap();
     let source = linked.imports_in(0).unwrap()[0].target;
     let required = linked.program().function_type_id(0).unwrap();
     let callable = ModuleCallableCatalog::from_program(linked)
-        .slot_exported(source, "echo", required).unwrap();
+        .slot_exported(source, "echo", required)
+        .unwrap();
     let mut ledger = HostInvocationLedger::new(HostInvocationCaps::default());
     assert_eq!(
-        ledger.invoke_exported(
-            &callable,
-            HostArguments::new(vec![], vec![("value".into(), Value::from("hi"))]),
-            (&mut Vec::new(), &mut Vec::new()),
-            ExecutionOptions::default(),
-        ).unwrap(),
+        ledger
+            .invoke_exported(
+                &callable,
+                HostArguments::new(vec![], vec![("value".into(), Value::from("hi"))]),
+                (&mut Vec::new(), &mut Vec::new()),
+                ExecutionOptions::default(),
+            )
+            .unwrap(),
         Value::from("hi")
     );
     assert_eq!(ledger.argument_usage().utf8_bytes, 7);
