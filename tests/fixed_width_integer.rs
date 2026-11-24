@@ -22,6 +22,7 @@ fn exact_integer_builtins_have_pure_typed_signatures() {
         ("integer_abs", B::IntegerAbs, 1),
         ("integer_sign", B::IntegerSign, 1),
         ("integer_gcd", B::IntegerGcd, 2),
+        ("integer_hcf", B::IntegerGcd, 2),
         ("integer_lcm", B::IntegerLcm, 2),
     ] {
         assert_eq!(B::from_name(name), Some(builtin));
@@ -43,7 +44,12 @@ fn exact_integer_builtins_have_pure_typed_signatures() {
         "print(integer_lcm(false, 2));",
         "print(integer_abs());",
         "print(integer_gcd(2));",
-        "print(integer_lcm(1, 2, 3));",
+        "print(integer_lcm(1));",
+        "print(integer_hcf());",
+        "print(integer_hcf(1, 2, false));",
+        "print(integer_gcd(1, 2, 3.0));",
+        "print(integer_lcm(1, 2, \"3\"));",
+        "print(integer_hcf(a: 1, 2));",
         "bind a: boolean=integer_sign(0);",
     ] {
         let kind = scarp::compile(source).unwrap_err().kind;
@@ -226,6 +232,8 @@ fn incompatible_host_types_and_unsupported_native_emitters_are_rejected() {
         "print(integer_abs(-2));",
         "print(integer_gcd(12,8));",
         "print(integer_lcm(12,8));",
+        "print(integer_hcf(12,8,4));",
+        "print(integer_lcm(12,8,4));",
     ] {
         assert_eq!(
             scarp::c_backend::emit_c(source).unwrap_err().kind,
@@ -238,4 +246,130 @@ fn incompatible_host_types_and_unsupported_native_emitters_are_rejected() {
             Kind::NativeUnsupported,
         );
     }
+}
+
+#[test]
+fn variadic_integer_reductions_and_hcf_alias() {
+    assert_eq!(
+        output("print(integer_hcf(12,18),integer_hcf(12,18,24),integer_gcd(24,36,48,60),integer_lcm(4,6,8,12));"),
+        "6 6 12 24\n"
+    );
+    assert_eq!(
+        output("pure funcra common(a:integer,b:integer=integer_hcf(12,18,24))->integer{return integer_gcd(a,b,18);} print(common(30));"),
+        "6\n"
+    );
+    assert_eq!(
+        output("pure funcra integer_hcf(a:integer,b:integer)->integer{return a+b;} print(integer_hcf(2,3),integer_gcd(2,3,4));"),
+        "5 1\n"
+    );
+    for (values, expected_gcd, expected_lcm) in [
+        (vec![0, 0, 0], 0, 0),
+        (vec![-12, 18, -24], 6, 72),
+        (vec![25, 0, 15], 5, 0),
+        (vec![7, 11, 13], 1, 1001),
+        (vec![9, 9, 9, 9], 9, 9),
+    ] {
+        assert_eq!(host(B::IntegerGcd, &values, 256).unwrap(), expected_gcd);
+        assert_eq!(host(B::IntegerLcm, &values, 256).unwrap(), expected_lcm);
+        let reversed: Vec<_> = values.iter().rev().copied().collect();
+        assert_eq!(host(B::IntegerGcd, &reversed, 256).unwrap(), expected_gcd);
+        assert_eq!(host(B::IntegerLcm, &reversed, 256).unwrap(), expected_lcm);
+    }
+}
+
+#[test]
+fn variadic_integer_extremes_and_zero_are_order_independent() {
+    assert_eq!(host(B::IntegerGcd, &[i64::MIN, 0, 2], 256).unwrap(), 2);
+    assert_eq!(
+        host(B::IntegerGcd, &[i64::MIN, i64::MIN, 0], 256)
+            .unwrap_err()
+            .kind,
+        Kind::ArithmeticOverflow
+    );
+    for values in [
+        [i64::MAX, 2, 0],
+        [0, i64::MAX, 2],
+        [i64::MIN, 0, i64::MAX],
+    ] {
+        assert_eq!(host(B::IntegerLcm, &values, 256).unwrap(), 0);
+    }
+    assert_eq!(
+        host(B::IntegerLcm, &[i64::MAX, 2, 3], 256)
+            .unwrap_err()
+            .kind,
+        Kind::ArithmeticOverflow
+    );
+    assert_eq!(
+        numeric::evaluate(
+            B::IntegerLcm,
+            &[Value::Integer(0), Value::Integer(1), Value::Boolean(false)],
+            256,
+        )
+        .unwrap_err()
+        .kind,
+        Kind::TypeMismatch
+    );
+}
+
+#[test]
+fn variadic_arity_and_work_limits_are_enforced() {
+    for function in [B::IntegerGcd, B::IntegerLcm] {
+        assert!(function.is_variadic());
+        assert!(!function.accepts_arity(1));
+        assert!(function.accepts_arity(1024));
+        assert!(!function.accepts_arity(1025));
+        assert_eq!(function.parameter_type_at(1023), Some(ValueType::Integer));
+        assert_eq!(function.parameter_type_at(1024), None);
+        assert_eq!(host(function, &[0; 1024], 1023).unwrap(), 0);
+        assert_eq!(
+            host(function, &[0; 1024], 1022).unwrap_err().kind,
+            Kind::ExecutionLimit
+        );
+        assert_eq!(
+            host(function, &[0; 1025], 4096).unwrap_err().kind,
+            Kind::CallArguments
+        );
+    }
+    assert!(!B::IntegerAbs.is_variadic());
+    assert!(!B::IntegerAbs.accepts_arity(2));
+    let args = vec!["0"; 1024].join(",");
+    assert_eq!(output(&format!("print(integer_hcf({args}));")), "0\n");
+    let args = vec!["0"; 1025].join(",");
+    assert!(scarp::compile(&format!("print(integer_lcm({args}));")).is_err());
+}
+
+#[test]
+fn variadic_typed_metadata_tracks_each_concrete_call_signature() {
+    use scarp::ast::ExpressionKind;
+    use scarp::types::{FunctionEffect, TypeKind};
+    let program = scarp::compile(
+        "print(integer_hcf(12,18,24),integer_gcd(12,18),integer_lcm(4,6,8,12));",
+    )
+    .unwrap();
+    let mut arities = Vec::new();
+    for expression in program.typed_expressions() {
+        for node in expression.nodes() {
+            if let ExpressionKind::UserCall { arguments, .. } = node.syntax {
+                let signature = node.call_signature.unwrap();
+                assert!(matches!(
+                    program.type_registry().get(signature),
+                    Some(TypeKind::Function { parameters, result, effect: FunctionEffect::Pure })
+                        if parameters.len() == arguments.len()
+                            && parameters.iter().all(|kind| *kind == ValueType::Integer.id())
+                            && *result == ValueType::Integer.id()
+                ));
+                arities.push(arguments.len());
+            }
+        }
+    }
+    assert_eq!(arities, vec![3, 2, 4]);
+    assert_ne!(
+        program.builtin_type_id_for_arity(B::IntegerGcd, 2),
+        program.builtin_type_id_for_arity(B::IntegerGcd, 3)
+    );
+    assert_eq!(
+        program.builtin_type_id(B::IntegerGcd),
+        program.builtin_type_id_for_arity(B::IntegerGcd, 2)
+    );
+    assert_eq!(program.builtin_type_id_for_arity(B::IntegerGcd, 4), None);
 }

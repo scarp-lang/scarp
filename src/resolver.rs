@@ -1890,19 +1890,20 @@ fn resolve_expression(
                 if let Some(builtin) =
                     Builtin::from_name(name).filter(|_| !names.contains_key(name))
                 {
-                    let parameters = builtin.parameter_types();
-                    if arguments.len() != parameters.len()
+                    if !builtin.accepts_arity(arguments.len())
                         || arguments.iter().any(|a| a.label.is_some())
                     {
                         return Err(Diagnostic::new(
                             DiagnosticKind::CallArguments,
                             *function_span,
-                            format!("{name} requires {} positional arguments", parameters.len()),
+                            format!(
+                                "{name} requires {} positional arguments",
+                                builtin.arity_description()
+                            ),
                         ));
                     }
-                    for (position, (argument, &expected)) in
-                        arguments.iter().zip(parameters).enumerate()
-                    {
+                    for (position, argument) in arguments.iter().enumerate() {
+                        let expected = builtin.parameter_type_at(position).expect("validated arity");
                         require_type(
                             &types[argument.expression],
                             expected,
