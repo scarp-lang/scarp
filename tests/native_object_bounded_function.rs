@@ -52,7 +52,10 @@ fn bounded_native_rejects_unsupported_effects_and_calls() {
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[test]
 fn native_loops_match_interpreter_and_exhaust_budget_per_invocation() {
-    use scarp::native_object::CHECKED_KERNEL_WORK_LIMIT;
+    use scarp::{
+        native_object::{CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_WORK_LIMIT},
+        RunError,
+    };
     use std::{fs, process::Command};
 
     let cc = std::env::var_os("SCARP_CC").unwrap_or_else(|| "cc".into());
@@ -119,7 +122,14 @@ int main(int argc, char **argv) {
         }
         return i;
     }";
+    let constant = "pure funcra f(n: integer) -> integer { return 42; }";
+    let failure = "pure funcra f(n: integer) -> integer { return n / 0; }";
     let cases = [
+        (constant, 0, 0, true),
+        (constant, 1, 0, true),
+        (constant, 2, 0, false),
+        (failure, 0, 8, true),
+        (failure, 100, 8, false),
         (SUM, 1000, 10, false),
         (SUM, 1000, 0, false),
         (SUM, 1000, -3, false),
@@ -166,9 +176,27 @@ int main(int argc, char **argv) {
             assert!(source.get(span.start..span.end).is_some());
         } else {
             let mut expected = Vec::new();
-            scarp::run(&format!("{source} print(f({argument}));"), &mut expected).unwrap();
-            let expected = std::str::from_utf8(&expected).unwrap().trim();
-            assert_eq!(values, [expected, "0", "0"]);
+            match scarp::run(&format!("{source} print(f({argument}));"), &mut expected) {
+                Ok(()) => {
+                    let expected = std::str::from_utf8(&expected).unwrap().trim();
+                    assert_eq!(values, [expected, "0", "0"]);
+                }
+                Err(RunError::Diagnostic(error)) => {
+                    assert_eq!(
+                        error.kind,
+                        scarp::diagnostics::DiagnosticKind::DivisionByZero
+                    );
+                    assert_eq!(values[0], "0");
+                    assert_eq!(
+                        values[1].parse::<u32>().unwrap(),
+                        CHECKED_KERNEL_DIVISION_BY_ZERO
+                    );
+                    let id = values[2].parse::<usize>().unwrap();
+                    assert_eq!(artifact.failure_spans[id], error.span);
+                    assert!(expected.is_empty());
+                }
+                Err(error) => panic!("{error:?}"),
+            }
         }
     }
     fs::remove_dir_all(directory).unwrap();
