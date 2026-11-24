@@ -16,7 +16,7 @@ use crate::{
     diagnostics::{Diagnostic, Span},
     native_object::{
         CheckedElf64Kernel, CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_INTEGER_OVERFLOW,
-        CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_WORK_LIMIT,
+        CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_REPEAT_COUNT, CHECKED_KERNEL_WORK_LIMIT,
     },
 };
 
@@ -46,6 +46,8 @@ enum Condition {
     Equal = 0x84,
     NotEqual = 0x85,
     Above = 0x87,
+    Sign = 0x88,
+    GreaterEqual = 0x8d,
 }
 
 impl Code {
@@ -200,6 +202,12 @@ impl Code {
         self.push(&[0x4d, 0x85, 0xd2])?; // test r10, r10
         self.branch_to_failure(Condition::Equal, CHECKED_KERNEL_WORK_LIMIT, id)?;
         self.push(&[0x49, 0xff, 0xca]) // dec r10
+    }
+
+    fn guard_repeat_count(&mut self, span: Span) -> Result<(), Diagnostic> {
+        let span_id = self.record_failure_span(span)?;
+        self.push(&[0x48, 0x85, 0xc0])?; // test rax, rax
+        self.branch_to_failure(Condition::Sign, CHECKED_KERNEL_REPEAT_COUNT, span_id)
     }
 
     fn guard_overflow(&mut self, span: Span) -> Result<(), Diagnostic> {
@@ -516,6 +524,7 @@ fn function_text(program: &ScalarProgramIr, budget: Option<u32>) -> Result<Code,
             ProgramOp::Return { value }
             | ProgramOp::Store { value, .. }
             | ProgramOp::Update { value, .. }
+            | ProgramOp::RepeatInit { count: value, .. }
             | ProgramOp::JumpIfFalse {
                 condition: value, ..
             } => value,
@@ -580,6 +589,33 @@ fn function_text(program: &ScalarProgramIr, budget: Option<u32>) -> Result<Code,
                 branches.push((code.near_branch(Condition::Equal)?, *target));
             }
             ProgramOp::Jump { target } => branches.push((code.jump()?, *target)),
+            ProgramOp::RepeatInit {
+                count,
+                count_slot,
+                index_slot,
+            } if code.metered => {
+                expression(&mut code, count, slot_count, true, true)?;
+                code.guard_repeat_count(step.span)?;
+                code.store_rax(*count_slot)?;
+                code.integer_rax(0)?;
+                code.store_rax(*index_slot)?;
+            }
+            ProgramOp::RepeatGuard {
+                count_slot,
+                index_slot,
+                target,
+            } if code.metered => {
+                code.load_rax(*index_slot)?;
+                code.load_rcx(*count_slot)?;
+                code.push(&[0x48, 0x39, 0xc8])?; // cmp rax, rcx
+                branches.push((code.near_branch(Condition::GreaterEqual)?, *target));
+            }
+            ProgramOp::RepeatNext { index_slot } if code.metered => {
+                code.load_rax(*index_slot)?;
+                code.push(&[0x48, 0x83, 0xc0, 0x01])?; // add rax, 1
+                code.guard_overflow(step.span)?;
+                code.store_rax(*index_slot)?;
+            }
             ProgramOp::LoopControl { target, .. } if code.metered => {
                 branches.push((code.jump()?, *target));
             }
