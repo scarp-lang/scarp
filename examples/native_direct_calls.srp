@@ -1,0 +1,17 @@
+pure funcra weighted(a: integer, b: integer, c: integer, d: integer, e: integer, f: integer) -> integer {
+    return a + 2 * b + 3 * c + 4 * d + 5 * e + 6 * f;
+}
+
+pure funcra quotient(numerator: integer, denominator: integer) -> integer {
+    return numerator / denominator;
+}
+
+pure funcra evaluate(n: integer) -> integer {
+    var total = if n == 0 { 9 } else { quotient(60, n) };
+    repeat 2 as index {
+        total += weighted(f: index, b: 2, c: 3, a: 1, d: 4, e: 5);
+    }
+    return total;
+}
+
+print(evaluate(0), evaluate(3), evaluate(-3));

@@ -320,3 +320,41 @@ with `scarp exec examples/native_conditional_function.srp`. Pass its function
 definition alone to either native function API. The C11 emitter and both
 binding-only ELF64 kernels still reject conditional expressions. The function
 ABI, accepted primitive types and target stay the same.
+
+## Experimental bounded direct calls
+
+`native_object::emit_elf64_bounded_integer_entry(source, name, max_work)`
+selects a pure function by name from an input containing only function
+declarations. Each function takes zero to six required integer parameters
+and returns an integer. The accepted scalar bodies include counted loops
+and conditional expressions. The resolver maps positional and named
+arguments to parameters. Native execution evaluates all supplied argument
+expressions in written order and then loads the parameter registers.
+
+The object exports `scarp_bounded_integer_entry`. The entry uses the selected
+function's arity and returns the same value/status/span structure as the
+bounded single-function API. Helper bodies are private and called at verified
+offsets in the same `.text` section. The object has no external references
+or relocation entries. Helper calls use SysV register placement, keep caller
+temporaries in the caller's frame, preserve the 16-byte call-site alignment,
+and return a checked result in RAX/RDX.
+
+The external entry initializes the R10 work counter. Every helper shares
+that counter. Visiting a call expression and dispatching it each cost one
+unit, in addition to work in the evaluated arguments and the executed
+callee. Charged events use the original byte spans. A callee failure
+unwinds each frame immediately and preserves the status and span ID.
+The allowance is initialized again for each external invocation.
+
+A static call graph rejects cycles. It limits the object to 32 functions
+and a maximum chain of 16 active frames, with at most 64 KiB of combined
+frame bytes including return addresses. It also bounds aggregate IR and
+machine-code size. Host callbacks, stack-passed helper arguments, recursive
+calls, defaults, contracts, heap-backed values, and arbitrary external
+symbols are outside this entry API.
+
+See [the direct-call example](../examples/native_direct_calls.srp).
+`scarp exec examples/native_direct_calls.srp` runs the script through the
+interpreter. For native emission, pass just its definitions with
+`"evaluate"` as the selected entry. This experimental API is development
+work beyond the published v0.0.6-alpha.20.
