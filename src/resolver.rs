@@ -1903,7 +1903,9 @@ fn resolve_expression(
                         ));
                     }
                     for (position, argument) in arguments.iter().enumerate() {
-                        let expected = builtin.parameter_type_at(position).expect("validated arity");
+                        let expected = builtin
+                            .parameter_type_at(position)
+                            .expect("validated arity");
                         require_type(
                             &types[argument.expression],
                             expected,

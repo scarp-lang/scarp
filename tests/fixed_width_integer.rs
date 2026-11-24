@@ -286,11 +286,7 @@ fn variadic_integer_extremes_and_zero_are_order_independent() {
             .kind,
         Kind::ArithmeticOverflow
     );
-    for values in [
-        [i64::MAX, 2, 0],
-        [0, i64::MAX, 2],
-        [i64::MIN, 0, i64::MAX],
-    ] {
+    for values in [[i64::MAX, 2, 0], [0, i64::MAX, 2], [i64::MIN, 0, i64::MAX]] {
         assert_eq!(host(B::IntegerLcm, &values, 256).unwrap(), 0);
     }
     assert_eq!(
@@ -342,10 +338,9 @@ fn variadic_arity_and_work_limits_are_enforced() {
 fn variadic_typed_metadata_tracks_each_concrete_call_signature() {
     use scarp::ast::ExpressionKind;
     use scarp::types::{FunctionEffect, TypeKind};
-    let program = scarp::compile(
-        "print(integer_hcf(12,18,24),integer_gcd(12,18),integer_lcm(4,6,8,12));",
-    )
-    .unwrap();
+    let program =
+        scarp::compile("print(integer_hcf(12,18,24),integer_gcd(12,18),integer_lcm(4,6,8,12));")
+            .unwrap();
     let mut arities = Vec::new();
     for expression in program.typed_expressions() {
         for node in expression.nodes() {

@@ -70,7 +70,10 @@ impl TypedExpression<'_> {
                         let ExpressionKind::UserCall { arguments, .. } = &node.kind else {
                             unreachable!("resolved builtin must be a call");
                         };
-                        self.types.builtins.get(&(builtin, arguments.len())).copied()
+                        self.types
+                            .builtins
+                            .get(&(builtin, arguments.len()))
+                            .copied()
                     }
                     Some(ResolvedCall::Io(input)) => self.types.input.get(&input).copied(),
                     Some(ResolvedCall::BigIntDivMod) => self.types.divmod,
