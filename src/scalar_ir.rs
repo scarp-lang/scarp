@@ -490,22 +490,36 @@ pub(crate) fn emit_checked_integer_kernel(
 pub(crate) fn emit_checked_integer_function(
     source: &str,
 ) -> Result<crate::native_object::CheckedElf64Kernel, Diagnostic> {
-    let resolved = crate::compile(source)?;
-    let ir =
-        program::ScalarProgramIr::lower_integer_function(&resolved, elf64::MAX_INTEGER_ARGUMENTS)?;
-    elf64::emit_function(&ir)
+    emit_integer_function_with_layout(source, None).map(|(kernel, _)| kernel)
 }
 
 pub(crate) fn emit_bounded_integer_function(
     source: &str,
     max_work: u32,
 ) -> Result<crate::native_object::CheckedElf64Kernel, Diagnostic> {
+    emit_integer_function_with_layout(source, Some(max_work)).map(|(kernel, _)| kernel)
+}
+
+pub(crate) fn emit_integer_function_with_layout(
+    source: &str,
+    budget: Option<u32>,
+) -> Result<
+    (
+        crate::native_object::CheckedElf64Kernel,
+        crate::native_object::FreestandingCallLayout,
+    ),
+    Diagnostic,
+> {
     let resolved = crate::compile(source)?;
-    let ir = program::ScalarProgramIr::lower_bounded_integer_function(
-        &resolved,
-        elf64::MAX_INTEGER_ARGUMENTS,
-    )?;
-    elf64::emit_bounded_function(&ir, max_work)
+    let ir = if budget.is_some() {
+        program::ScalarProgramIr::lower_bounded_integer_function(
+            &resolved,
+            elf64::MAX_INTEGER_ARGUMENTS,
+        )?
+    } else {
+        program::ScalarProgramIr::lower_integer_function(&resolved, elf64::MAX_INTEGER_ARGUMENTS)?
+    };
+    elf64::emit_function_with_layout(&ir, budget)
 }
 
 fn lower_integer_kernel(source: &str) -> Result<program::ScalarProgramIr, Diagnostic> {

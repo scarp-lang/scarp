@@ -64,7 +64,7 @@ let object = scarp::native_object::emit_elf64_integer_kernel(
 The returned byte buffer has no filesystem side effects. Hosts may explicitly
 save the object under a *new* path and link it with their own test harnesses.
 The target is always ELF64 x86-64 even when encoding on Windows or macOS; the
-current API has no cross-platform executable linking or target-selector flag.
+current CLI has no cross-platform executable linking or target-selector flag.
 
 ## Resource and correctness limits
 
@@ -243,3 +243,40 @@ assert!(!artifact.object.is_empty());
 The public alpha.20 release does not include this API. A C host must use the
 exact arity and symbol documented above. Tests link and execute emitted ELF
 objects on Linux x86-64 using an independent C compiler.
+
+
+## Experimental explicit freestanding object target
+
+The Rust API accepts the exact target identifier `x86_64-none` via
+`FreestandingTarget::from_str` (or the enum directly). Unknown identifiers
+are errors, never a request to compile for the host. The checked and bounded
+function modes select the existing byte-compatible ELF64 backends.
+
+```rust
+use scarp::native_object::{
+    emit_freestanding_function, FreestandingFunctionMode, FreestandingTarget,
+};
+
+let target: FreestandingTarget = "x86_64-none".parse()?;
+let mode = FreestandingFunctionMode::Checked;
+let artifact = emit_freestanding_function(
+    "pure funcra f(n: integer) -> integer { return n + 1; }",
+    target,
+    mode,
+)?;
+assert_eq!(artifact.mode.symbol(), "scarp_checked_integer_function");
+assert_eq!(artifact.target.call_stack_alignment(), 16);
+assert!(artifact.kernel.object.starts_with(b"\x7fELF"));
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+Each artifact also reports its exact callee frame bytes and integer argument
+count from the encoder, along with caller-owned stack argument bytes and
+callee stack consumption including the return address. Alignment padding and
+interrupt frames remain the caller's responsibility. The callee frame bound
+is 16 KiB, enforced by the same constant in the encoder. It is not a complete stack requirement: caller-owned argument slots,
+return addresses and surrounding kernel/interrupt frames need additional space.
+The target is an experimental relocatable object contract, not a general
+kernel compilation target, and provides no memory I/O, interrupts, linker,
+bootloader or native CLI flag. The verified QEMU integration experiment is
+described in [bare-metal smoke harness](../experiments/bare-metal/README.md).
