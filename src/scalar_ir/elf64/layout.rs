@@ -7,7 +7,7 @@ pub(super) const INTEGER_ARGUMENT_REGISTERS: [u8; 6] = [7, 6, 2, 1, 8, 9];
 const SLOT_BYTES: usize = 8;
 const STACK_ALIGNMENT: usize = 16;
 // The IR permits 256 bindings and 1024 temporaries, plus frame padding.
-const MAX_FRAME_BYTES: usize = 16 * 1024;
+const MAX_FRAME_BYTES: usize = crate::native_object::FREESTANDING_X86_64_MAX_FRAME_BYTES;
 
 pub(super) fn align_up(value: usize, alignment: usize) -> Result<usize, Diagnostic> {
     if !alignment.is_power_of_two() {
