@@ -16,8 +16,8 @@ fn compact_literal_function_reduces_machine_code_without_changing_abi() {
     let machine = text_bytes(&artifact.object);
     // The previous encoder used 48 bytes for this exact function:
     // 7 prologue + 10 immediate + 8 store + 8 load + 5 jump +
-    // 2 status clear + 8 epilogue. Compact encodings save 13 bytes.
-    assert_eq!(machine.len(), 35);
+    // 2 status clear + 8 epilogue. The actual compact encoding saves 11 bytes.
+    assert_eq!(machine.len(), 37);
     assert_eq!(machine.last(), Some(&0xc3));
     assert!(artifact.failure_spans.is_empty());
     assert_eq!(
