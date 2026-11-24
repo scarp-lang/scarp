@@ -84,6 +84,35 @@ impl TokenCache {
         }
     }
 
+    /// Set the retention limits and evict oldest entries until all four limits fit.
+    /// Historical hit/miss counters and previously returned snapshots are preserved.
+    pub fn set_limits(&mut self, limits: TokenCacheLimits) {
+        self.limits = limits;
+        self.trim_to(limits);
+    }
+
+    /// Current limits on cached source-relative tokens.
+    pub fn limits(&self) -> TokenCacheLimits {
+        self.limits
+    }
+
+    fn trim_to(&mut self, limits: TokenCacheLimits) {
+        while self.entries.len() > limits.max_entries
+            || self.bytes > limits.max_source_bytes
+            || self.identity_bytes > limits.max_identity_bytes
+            || self.tokens > limits.max_tokens
+        {
+            let old = self
+                .entries
+                .pop_front()
+                .expect("excess retention implies a nonempty cache");
+            self.bytes -= old.source.len();
+            self.identity_bytes -= old.identity.len();
+            self.tokens -= old.tokens.len();
+            self.evictions = self.evictions.saturating_add(1);
+        }
+    }
+
     pub fn stats(&self) -> TokenCacheStats {
         TokenCacheStats {
             entries: self.entries.len(),
@@ -168,20 +197,13 @@ impl TokenCache {
             return Ok(tokens);
         }
 
-        while self.entries.len() >= self.limits.max_entries
-            || self.bytes > self.limits.max_source_bytes - source.len()
-            || self.identity_bytes > self.limits.max_identity_bytes - identity.len()
-            || self.tokens > self.limits.max_tokens - tokens.len()
-        {
-            let old = self
-                .entries
-                .pop_front()
-                .expect("nonzero limits and fitting source imply a removable entry");
-            self.bytes -= old.source.len();
-            self.identity_bytes -= old.identity.len();
-            self.tokens -= old.tokens.len();
-            self.evictions = self.evictions.saturating_add(1);
-        }
+        // An individually admissible entry leaves this much room for older snapshots.
+        self.trim_to(TokenCacheLimits {
+            max_entries: self.limits.max_entries - 1,
+            max_source_bytes: self.limits.max_source_bytes - source.len(),
+            max_identity_bytes: self.limits.max_identity_bytes - identity.len(),
+            max_tokens: self.limits.max_tokens - tokens.len(),
+        });
 
         self.bytes += source.len();
         self.identity_bytes += identity.len();
