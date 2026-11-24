@@ -179,9 +179,8 @@ mod tests {
 
     #[test]
     fn distinct_binary_operands_and_destination_do_not_alias() {
-        let expression = expression(
-            "pure funcra f(x: integer) -> integer { return (x + 2) * (x - 3); }",
-        );
+        let expression =
+            expression("pure funcra f(x: integer) -> integer { return (x + 2) * (x - 3); }");
         let layout = TemporaryLayout::plan(&expression).unwrap();
         for step in expression.steps {
             if let Operation::Binary {
