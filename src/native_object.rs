@@ -8,6 +8,12 @@
 
 use crate::diagnostics::{Diagnostic, Span};
 
+mod value_layout;
+
+pub use value_layout::{
+    plan_x86_64_value_layout, NativeLayoutError, NativeLayoutShape, NativeValueLayout,
+};
+
 /// Emit a deterministic ELF64 relocatable object from integer bindings.
 ///
 /// Every source operation must be a scalar integer binding initialized by

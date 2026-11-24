@@ -10,6 +10,9 @@ statement and expression IR, then encodes a **freestanding x86-64 ELF64 ET_REL
 relocatable object** using only safe Rust. No C compiler, linker or network
 request is performed during production emission.
 
+The separate [value layout planner](native-value-layout.md) describes
+experimental target value shapes for future aggregate lowering.
+
 ## Exact accepted source
 
 The bitwise kernel accepts a bounded linear sequence of immutable integer
