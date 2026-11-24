@@ -1,7 +1,14 @@
 # Changelog
 
-## Unreleased — after v0.0.6-alpha.19
+## 0.0.6-alpha.20 — release candidate
 
+- Emit compiler-owned x86-64 ELF64 objects for pure Scarp functions with up
+  to six required integer parameters, integer and Boolean locals, checked
+  arithmetic, and forward conditionals. The experimental Rust API returns
+  object bytes and source spans for arithmetic failures.
+- Include strings inside immutable aggregates in Rust host argument UTF-8
+  accounting, while preserving top-level argument counts and atomic admission.
+- Support exact base-ten `d` literals such as `0.1d` for the decimal type.
 - Canonicalize new projects on lowercase `scarp.project`: `create` now reuses `init`'s v2 scaffolding, while older uppercase `Scarp.project` v1 projects remain readable. Not in published alpha.19 binaries.
 
 - Implement `tuple[index] = value;` on mutable tuples as a type-checked,

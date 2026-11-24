@@ -28,7 +28,7 @@ number like `0.1` remains an IEEE-754 `float`: `0.1 + 0.2` still produces
 `0.30000000000000004`. Decimal values do not silently mix with floats or
 integers; use explicit conversion functions. The source literal is validated
 at compile time and can initialize a scalar module constant. The `d` literal
-is a development-branch addition and is not in an approved published release.
+is available in the Alpha.20 candidate.
 
 The constructor accepts only optional ASCII sign, ASCII integer digits and
 an optional dot followed by fractional digits (including digits before the dot).
