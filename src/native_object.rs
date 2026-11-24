@@ -71,3 +71,23 @@ pub fn emit_elf64_checked_integer_kernel(source: &str) -> Result<CheckedElf64Ker
 pub fn emit_elf64_checked_integer_function(source: &str) -> Result<CheckedElf64Kernel, Diagnostic> {
     crate::scalar_ir::emit_checked_integer_function(source)
 }
+
+/// Native work allowance exhausted before executing the indicated IR event.
+pub const CHECKED_KERNEL_WORK_LIMIT: u32 = 4;
+
+/// Emit one pure integer function with a fixed native work allowance per call.
+///
+/// The distinct experimental Linux x86-64 SysV symbol
+/// `scarp_bounded_integer_function` uses the checked integer-function calling
+/// convention and supports while loops, break and continue. It charges one
+/// unit per visited non-retirement statement and per expression IR Work
+/// event. This is a native IR allowance, not interpreter execution accounting.
+/// A zero allowance is valid and rejects the first charged event. On
+/// exhaustion, status 4 and the event's source span ID are returned.
+/// Calls, counted repeat, contracts and heap-backed values remain unsupported.
+pub fn emit_elf64_bounded_integer_function(
+    source: &str,
+    max_work: u32,
+) -> Result<CheckedElf64Kernel, Diagnostic> {
+    crate::scalar_ir::emit_bounded_integer_function(source, max_work)
+}
