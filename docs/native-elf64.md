@@ -196,3 +196,47 @@ verifies 37 bytes of machine code rather than the previous 48 bytes for
 `pure funcra f() -> integer { return 42; }`. This is a static size target,
 not a measured runtime speedup. Independent native execution tests cover
 signed and unsigned immediate boundaries.
+
+## Experimental bounded native loops
+
+The development-only Rust API
+`native_object::emit_elf64_bounded_integer_function(source, max_work)`
+emits the distinct Linux x86-64 SysV symbol
+`scarp_bounded_integer_function`. It accepts the checked scalar function
+subset plus while, break and continue, including nested loops. Required
+integer parameters use the same register/stack calling convention and
+the same checked result structure.
+
+The caller selects a fixed unsigned 32-bit native IR work allowance when
+emitting the object. It is initialized anew on each invocation, not shared
+between calls. Every visited non-retirement statement and each executed
+expression Work event consumes one unit. A zero balance rejects the next
+charged event before its work, returning value zero, status 4, and the
+index of that event's UTF-8 source span. Unselected short-circuit branches
+consume no expression events. This native metric is distinct from interpreter
+execution accounting and does not claim wall-clock or process-memory limits.
+
+Backward statement edges are accepted only in the bounded mode. The
+existing verifier checks definite slot initialization and retirement at
+control-flow joins and rejects reachable fallthrough. Expression branches,
+arithmetic failure branches and unmetered function branches retain the
+forward-only rule. Counted repeat, calls, default arguments, contracts,
+heap-backed values, and general CLI native compilation remain unsupported.
+
+```rust
+let source = "pure funcra sum(n: integer) -> integer {
+    var i = n;
+    var total = 0;
+    while i > 0 { total += i; i -= 1; }
+    return total;
+}";
+let artifact = scarp::native_object::emit_elf64_bounded_integer_function(
+    source, 1000,
+)?;
+assert!(!artifact.object.is_empty());
+# Ok::<(), scarp::diagnostics::Diagnostic>(())
+```
+
+The public alpha.20 release does not include this API. A C host must use the
+exact arity and symbol documented above. Tests link and execute emitted ELF
+objects on Linux x86-64 using an independent C compiler.
