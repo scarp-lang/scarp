@@ -166,7 +166,11 @@ int main(void) {
         .arg(&binary)
         .output()
         .unwrap();
-    assert!(link.status.success(), "{}", String::from_utf8_lossy(&link.stderr));
+    assert!(
+        link.status.success(),
+        "{}",
+        String::from_utf8_lossy(&link.stderr)
+    );
     let output = Command::new(&binary).output().unwrap();
     assert!(output.status.success());
     let stdout = std::str::from_utf8(&output.stdout).unwrap();
@@ -175,7 +179,10 @@ int main(void) {
     for (row, input) in rows.iter().zip([0i64, -200, 72, i64::MIN, i64::MAX - 200]) {
         let mut expected = Vec::new();
         scarp::run(&format!("{source} print(f({input}));"), &mut expected).unwrap();
-        assert_eq!(*row, format!("{} 0 0", String::from_utf8(expected).unwrap().trim()));
+        assert_eq!(
+            *row,
+            format!("{} 0 0", String::from_utf8(expected).unwrap().trim())
+        );
     }
     let last: Vec<_> = rows[5].split_whitespace().collect();
     assert_eq!(last.len(), 3);
