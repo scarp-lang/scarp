@@ -271,3 +271,22 @@ The native host regression suite compares zero, one and multiple iterations,
 nested loops, early returns, break/continue, count snapshots and negative-count
 diagnostics against interpreter execution; it also tests exhaustion before
 negative-count evaluation and with a maximum signed 64-bit iteration count.
+
+## Experimental temporary lifetime reuse
+
+Function emission plans a deterministic stack layout for straight-line scalar
+expressions. A temporary is live from its first definition or access through
+its last access; the returned expression root remains live through the final
+load. Non-overlapping lifetimes can reuse physical slots. Both operands and
+the destination of a binary operation remain distinct at that instruction.
+
+Expressions containing conditional IR branches conservatively retain their
+original register-to-slot identity. Binding-only kernel encodings remain
+unchanged. The optimization does not reorder operations, remove work charges,
+or alter arithmetic failure-span indexing.
+
+A regression fixture with 200 successive additions uses three simultaneous
+temporary slots and one parameter slot, with a target aligned frame of 40
+bytes instead of over 3 KiB. This is a stack-footprint target verified by the
+native object tests, not a measured execution-speed claim. Independent host
+execution checks successful values and checked overflow.
