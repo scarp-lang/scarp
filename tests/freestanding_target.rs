@@ -105,12 +105,45 @@ fn reported_stack_layout_matches_emitted_small_frame_and_argument_count() {
             let bytes = &artifact.kernel.object;
             let shoff = u64::from_le_bytes(bytes[40..48].try_into().unwrap()) as usize;
             let offset = shoff + 64 + 24;
-            let text =
-                u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap()) as usize;
+            let text = u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap()) as usize;
             assert_eq!(&bytes[text..text + 3], &[0x48, 0x81, 0xec]);
-            let emitted =
-                u32::from_le_bytes(bytes[text + 3..text + 7].try_into().unwrap());
+            let emitted = u32::from_le_bytes(bytes[text + 3..text + 7].try_into().unwrap());
             assert_eq!(layout.frame_bytes, emitted);
         }
+    }
+}
+
+#[test]
+fn reported_large_frame_includes_every_page_probe_and_tail() {
+    let source = format!(
+        "pure funcra sum(n:integer)->integer {{ return n{}; }}",
+        " + n".repeat(320)
+    );
+    for mode in [
+        FreestandingFunctionMode::Checked,
+        FreestandingFunctionMode::Bounded { max_work: 5000 },
+    ] {
+        let artifact =
+            emit_freestanding_function(&source, FreestandingTarget::X86_64None, mode).unwrap();
+        let elf = &artifact.kernel.object;
+        let sections = u64::from_le_bytes(elf[40..48].try_into().unwrap()) as usize;
+        let field = sections + 64 + 24;
+        let mut at = u64::from_le_bytes(elf[field..field + 8].try_into().unwrap()) as usize;
+        let mut allocated = 0;
+        while elf[at..].starts_with(&[0x48, 0x81, 0xec]) {
+            let bytes = u32::from_le_bytes(elf[at + 3..at + 7].try_into().unwrap());
+            allocated += bytes;
+            at += 7;
+            if bytes == 4096 {
+                assert_eq!(&elf[at..at + 4], &[0xc6, 0x04, 0x24, 0]);
+                at += 4;
+            }
+        }
+        assert!(allocated > 4096);
+        assert_eq!(artifact.layout.frame_bytes, allocated);
+        assert_eq!(
+            artifact.layout.callee_stack_bytes(),
+            u64::from(allocated) + 8
+        );
     }
 }

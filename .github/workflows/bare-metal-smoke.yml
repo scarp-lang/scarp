@@ -1,11 +1,22 @@
 name: Experimental bare-metal smoke
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/bare-metal/**'
+      - 'src/**'
+      - 'examples/checked_elf64_function.*'
+      - 'examples/bare_metal_bounded.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/bare-metal-smoke.yml'
   pull_request:
     paths:
       - 'experiments/bare-metal/**'
       - 'src/**'
       - 'examples/checked_elf64_function.*'
+      - 'examples/bare_metal_bounded.rs'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/bare-metal-smoke.yml'
@@ -33,3 +44,4 @@ jobs:
           sudo apt-get install -y --no-install-recommends grub-pc-bin grub-common xorriso mtools qemu-system-x86
       - name: Boot Scarp-generated machine code
         run: bash experiments/bare-metal/smoke.sh
+

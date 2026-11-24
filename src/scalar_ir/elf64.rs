@@ -398,13 +398,7 @@ fn text(program: &ScalarProgramIr, checked_arithmetic: bool) -> Result<Code, Dia
         code.finish_checked_return()?;
     }
     code.restore_stack_and_return(stack_size)?;
-    Ok((
-        code,
-        FreestandingCallLayout {
-            frame_bytes: stack_size,
-            integer_arguments: parameters,
-        },
-    ))
+    Ok(code)
 }
 
 fn expression(
@@ -614,7 +608,13 @@ fn function_text(
     }
     code.finish_checked_return()?;
     code.restore_stack_and_return(stack_size)?;
-    Ok(code)
+    Ok((
+        code,
+        FreestandingCallLayout {
+            frame_bytes: stack_size,
+            integer_arguments: parameters,
+        },
+    ))
 }
 
 fn put(target: &mut [u8], at: usize, bytes: &[u8]) -> Result<(), Diagnostic> {

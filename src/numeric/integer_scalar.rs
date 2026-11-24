@@ -14,6 +14,15 @@ fn overflow(span: Span, operation: &str) -> Diagnostic {
     )
 }
 
+// Euclid's algorithm is bounded on u64 magnitudes; charge each remainder.
+fn gcd(mut a: u64, mut b: u64, budget: &mut Budget, span: Span) -> Result<u64, Diagnostic> {
+    while b != 0 {
+        budget.charge(1, span)?;
+        (a, b) = (b, a % b);
+    }
+    Ok(a)
+}
+
 pub(super) fn evaluate(
     function: Builtin,
     args: &[Value],
@@ -30,29 +39,39 @@ pub(super) fn evaluate(
             .ok_or_else(|| overflow(at(0), "integer_abs"))?,
         Builtin::IntegerSign => left.signum(),
         Builtin::IntegerGcd | Builtin::IntegerLcm => {
-            let right = args[1].require_integer(at(1))?;
-            let (mut a, mut b) = (left.unsigned_abs(), right.unsigned_abs());
-
-            // Euclid's algorithm has a logarithmic bound on u64 magnitudes.
-            // Charge each remainder before performing it; no allocation occurs.
-            while b != 0 {
-                budget.charge(1, span)?;
-                let remainder = a % b;
-                a = b;
-                b = remainder;
-            }
-
+            // Preserve the binary work contract and charge every additional operand,
+            // including zero inputs that need no remainder operations.
+            budget.charge((args.len() - 2) as u64, span)?;
+            let mut accumulator = left.unsigned_abs();
             if function == Builtin::IntegerGcd {
-                i64::try_from(a).map_err(|_| overflow(span, "integer_gcd"))?
+                // Intermediate magnitudes may be 2^63 even if the final GCD fits.
+                for (index, value) in args.iter().enumerate().skip(1) {
+                    let right = value.require_integer(at(index))?.unsigned_abs();
+                    accumulator = gcd(accumulator, right, budget, span)?;
+                }
+                i64::try_from(accumulator).map_err(|_| overflow(span, "integer_gcd"))?
             } else {
-                // Dividing first avoids intermediate signed overflow. A zero
-                // GCD means both inputs are zero, so their LCM is also zero.
-                // Magnitudes are at most 2^63: the product fits in u128.
-                let multiple = match left.unsigned_abs().checked_div(a) {
-                    Some(quotient) => u128::from(quotient) * u128::from(right.unsigned_abs()),
-                    None => 0,
-                };
-                i64::try_from(multiple).map_err(|_| overflow(span, "integer_lcm"))?
+                // A zero anywhere makes the exact LCM zero. Check before folding:
+                // an overflowing prefix must not reject a valid final zero result.
+                // Binary calls keep their historical remainder accounting.
+                if args.len() > 2 && args.iter().any(|v| matches!(v, Value::Integer(0))) {
+                    return Ok(Value::Integer(0));
+                }
+                for (index, value) in args.iter().enumerate().skip(1) {
+                    let right = value.require_integer(at(index))?.unsigned_abs();
+                    let divisor = gcd(accumulator, right, budget, span)?;
+                    let multiple = match accumulator.checked_div(divisor) {
+                        Some(quotient) => u128::from(quotient) * u128::from(right),
+                        None => 0,
+                    };
+                    // With no zero remaining, LCM cannot decrease. Reject an
+                    // unrepresentable prefix before multiplying again.
+                    if multiple > i64::MAX as u128 {
+                        return Err(overflow(span, "integer_lcm"));
+                    }
+                    accumulator = multiple as u64;
+                }
+                i64::try_from(accumulator).map_err(|_| overflow(span, "integer_lcm"))?
             }
         }
         _ => unreachable!("checked fixed-width integer scalar dispatch"),

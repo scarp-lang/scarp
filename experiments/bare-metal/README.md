@@ -4,6 +4,7 @@ This opt-in experiment exercises the compiler-owned ELF64 emitter without a
 host OS or libc **inside the guest**. It reuses the real Scarp
 [checked integer function](../../examples/checked_elf64_function.srp);
 the existing Rust example emits its standalone relocatable machine code.
+A second example emits a bounded integer loop from `bounded_sum.srp`.
 
 ## Run on a Linux development host
 
@@ -41,9 +42,12 @@ The QEMU debug console captures one character per completed stage:
 | 1 | Positive multiplication checked |
 | 2 | Negative-input return checked |
 | 3 | Checked overflow verified |
+| 4 | Bounded loop returns 55 for input 10 and restores the stack |
+| 5 | Work allowance exhaustion returns status 4 and restores the stack |
+| 6 | Subsequent invocation returns 6 with a fresh allowance and restored stack |
 | X / F | Invalid boot magic / failed function check |
 
-Success requires exactly `BGPEVLS123` and exit status 33.
+Success requires exactly `BGPEVLS123456` and exit status 33.
 On failure the runner prints the last 80 lines of QEMU exception and reset
 diagnostics. A CPU triple fault is not kept running by `-no-shutdown`.
 No marker means the assembly entry was not reached or the boot magic failed
@@ -61,6 +65,9 @@ additional evidence.
 - The emitted Scarp function is linked directly, with no libc or interpreter.
   Two normal calls must return 112 and -1 respectively, with zero status and
   span fields. A multiplication overflow must return value zero and status 1.
+- A second emitted function uses a 1000-event native IR work allowance. It
+  checks finite loop execution, controlled exhaustion for a large input, and
+  a successful fresh call after failure. No interpreter runs in the guest.
 - The emulator-specific debug-exit device reports pass/fail; it is not a
   portable hardware interface.
 
@@ -76,5 +83,6 @@ Before a general bare-metal target is declared supported, add verified
 cross-target code generation, explicit fixed-width/address types, controlled
 memory and volatile I/O operations, calling conventions, relocations and
 linking, stack/frame bounds, interrupt-safe code generation, and freestanding
-libraries. Add emulator CI and require a successful boot on every supported
+libraries. Maintain emulator CI and require a successful boot on every supported
 target before claiming bare-metal execution is verified.
+
