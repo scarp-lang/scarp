@@ -242,7 +242,10 @@ fn sysv_zero_argument_function_matches_interpreter_success_and_failure() {
 
     let cc = std::env::var_os("SCARP_CC").unwrap_or_else(|| "cc".into());
     if Command::new(&cc).arg("--version").output().is_err() {
-        assert!(std::env::var_os("SCARP_REQUIRE_C").is_none(), "C compiler required");
+        assert!(
+            std::env::var_os("SCARP_REQUIRE_C").is_none(),
+            "C compiler required"
+        );
         return;
     }
     let directory =
@@ -267,10 +270,7 @@ int main(void) {
     )
     .unwrap();
     for (index, (source, expected)) in [
-        (
-            "pure funcra f() -> integer { return 42; }",
-            "42 0 0\n",
-        ),
+        ("pure funcra f() -> integer { return 42; }", "42 0 0\n"),
         (
             "pure funcra f() -> integer { bind zero = 0; return 7 / zero; }",
             "0 2 0\n",
@@ -299,10 +299,17 @@ int main(void) {
             .arg(&binary)
             .output()
             .unwrap();
-        assert!(link.status.success(), "{}", String::from_utf8_lossy(&link.stderr));
+        assert!(
+            link.status.success(),
+            "{}",
+            String::from_utf8_lossy(&link.stderr)
+        );
         let result = Command::new(&binary).output().unwrap();
         assert!(result.status.success());
-        assert_eq!(String::from_utf8(result.stdout).unwrap(), expected.repeat(2));
+        assert_eq!(
+            String::from_utf8(result.stdout).unwrap(),
+            expected.repeat(2)
+        );
     }
     fs::remove_dir_all(directory).unwrap();
 }
