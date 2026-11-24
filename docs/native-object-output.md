@@ -39,3 +39,20 @@ paths left by process termination are separate concerns.
 
 The existing CLI commands keep their own contracts. This proposal does
 not add a command or an executable linker.
+
+### Experimental CLI
+
+`scarp native-object x86_64-none checked input.srp output.o` checks one
+standalone pure integer function and emits an ELF64 relocatable object.
+For a loop use `scarp native-object x86_64-none bounded 1000 input.srp output.o`.
+Checked and bounded modes use the corresponding [function ABI](native-elf64.md)
+and export one symbol. The bounded allowance is a decimal unsigned 32-bit
+integer. Source reads use the regular frontend file-size and UTF-8 limits.
+All compiler and output-size limits apply. Callers that need the failure-span
+table alongside the bytes can use the Rust object API.
+
+Success writes a new object and exits 0 with empty output streams. Invalid
+arguments or targets exit 2. Source, compilation and output errors exit 1
+with text diagnostics on stderr. The compiler finishes before the first file
+write. Publication uses the atomic, no-overwrite writer described above.
+The caller chooses the complete destination path. There is no linking step.

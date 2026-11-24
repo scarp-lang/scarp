@@ -61,7 +61,7 @@ let object = scarp::native_object::emit_elf64_integer_kernel(
 The returned byte buffer has no filesystem side effects. Hosts may explicitly
 save the object under a *new* path and link it with their own test harnesses.
 The target is always ELF64 x86-64 even when encoding on Windows or macOS; the
-current CLI has no cross-platform executable linking or target-selector flag.
+CLI supports an explicit experimental object target.
 
 ## Resource and correctness limits
 
@@ -275,5 +275,8 @@ is 16 KiB, enforced by the same constant in the encoder. It is not a complete st
 return addresses and surrounding kernel/interrupt frames need additional space.
 The target is an experimental relocatable object contract, not a general
 kernel compilation target, and provides no memory I/O, interrupts, linker,
-bootloader or native CLI flag. The verified QEMU integration experiment is
+or bootloader. The verified QEMU integration experiment is
 described in [bare-metal smoke harness](../experiments/bare-metal/README.md).
+
+The development CLI can save these relocatable objects through the explicit
+[`native-object` command](native-object-output.md#experimental-cli).
