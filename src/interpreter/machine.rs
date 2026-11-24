@@ -159,7 +159,7 @@ impl<'a> Frame<'a> {
         // binding/temporary before starting the next invocation's defaults.
         self.environment.fill(Value::Unit);
         self.supplied.fill(false);
-        self.workspace.clear();
+        self.workspace.retire_for_reuse(MAX_SPARE_BUFFER_ITEMS);
         (
             std::mem::take(&mut self.environment),
             std::mem::take(&mut self.supplied),

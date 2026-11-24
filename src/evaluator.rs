@@ -88,6 +88,16 @@ impl Workspace {
         self.tasks.clear();
     }
 
+    pub(crate) fn retire_for_reuse(&mut self, max_items: usize) {
+        self.clear();
+        if self.values.capacity() > max_items {
+            self.values = Vec::new();
+        }
+        if self.tasks.capacity() > max_items {
+            self.tasks = Vec::new();
+        }
+    }
+
     pub(crate) fn largest_buffer_capacity(&self) -> usize {
         self.values.capacity().max(self.tasks.capacity())
     }
@@ -1367,4 +1377,35 @@ fn numeric_tuple_cmp(left: &TupleValue, right: &TupleValue) -> Option<std::cmp::
         }
     }
     Some(left.len().cmp(&right.len()))
+}
+
+#[cfg(test)]
+mod workspace_retirement_tests {
+    use super::*;
+    use std::sync::Arc;
+
+    #[test]
+    fn retirement_drops_values_and_only_keeps_buffers_within_the_cap() {
+        let mut workspace = Workspace::default();
+        workspace.tasks.reserve_exact(256);
+        workspace.values.reserve_exact(8);
+        let text: Arc<str> = Arc::from("temporary owned only by the evaluator");
+        let weak = Arc::downgrade(&text);
+        workspace.values.push(Value::String(text));
+        let small = workspace.values.capacity();
+        workspace.retire_for_reuse(128);
+        assert!(weak.upgrade().is_none());
+        assert_eq!(workspace.tasks.capacity(), 0);
+        assert_eq!(workspace.values.capacity(), small);
+        assert!(workspace.values.is_empty());
+
+        workspace.values.reserve_exact(256);
+        workspace.tasks.reserve_exact(8);
+        workspace.tasks.push(Task::Visit(0));
+        let small = workspace.tasks.capacity();
+        workspace.retire_for_reuse(128);
+        assert_eq!(workspace.values.capacity(), 0);
+        assert_eq!(workspace.tasks.capacity(), small);
+        assert!(workspace.tasks.is_empty());
+    }
 }

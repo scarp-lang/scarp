@@ -145,3 +145,9 @@ conditionals and rejects a local read after retirement or before its first
 write. Locals and temporaries contain only immediate scalar values. Successful
 returns and arithmetic failures share the stack-restoring epilogue. Native
 heap values and ownership transfer are future extensions.
+
+On a terminal self-call the binding and supplied-argument buffers keep their
+fixed frame shape. The evaluator retires its value stack and task stack
+individually. A stack with capacity above 128 entries drops its backing
+allocation at the transfer, so a wide expression early in the recursion cannot
+hold that allocation through later, smaller calls.
