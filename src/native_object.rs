@@ -55,7 +55,8 @@ pub fn emit_elf64_checked_integer_kernel(source: &str) -> Result<CheckedElf64Ker
 /// Emit a freestanding Linux x86-64 ELF64 object for one pure Scarp function.
 ///
 /// The experimental SysV AMD64 symbol `scarp_checked_integer_function` takes
-/// one to six required `int64_t` arguments, in source parameter order. The
+/// zero to sixteen required `int64_t` arguments, in source parameter order.
+/// The first six use registers and the rest are passed on the caller stack. The
 /// caller must declare the exact arity. It returns a C struct
 /// `{ int64_t value; uint32_t status; uint32_t span_id; }`. Success sets both
 /// status fields to zero. On arithmetic failure, the result is zero and

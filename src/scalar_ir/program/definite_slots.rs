@@ -100,7 +100,7 @@ impl ScalarProgramIr {
         let mut queued = vec![false; len + 1];
         let mut pending = VecDeque::new();
         let mut entry = SlotSet::empty();
-        for slot in 0..self.parameters {
+        for slot in 0..self.parameters() {
             entry.insert(slot);
         }
         states[0] = Some(entry);
@@ -160,7 +160,7 @@ impl ScalarProgramIr {
             join(pc + 1, next, &mut states, &mut queued, &mut pending);
         }
 
-        if self.parameters != 0 && states[len].is_some() {
+        if self.is_function() && states[len].is_some() {
             return Err(invalid(Span::default()));
         }
 

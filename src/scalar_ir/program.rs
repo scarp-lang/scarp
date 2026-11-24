@@ -82,7 +82,8 @@ pub(in crate::scalar_ir) enum ProgramOp {
 pub(super) struct ScalarProgramIr {
     slots: Vec<ValueType>,
     steps: Vec<ProgramStep>,
-    parameters: usize,
+    // None is a script; Some(0) is a genuine zero-argument function.
+    function_parameters: Option<usize>,
 }
 
 impl ScalarProgramIr {
@@ -99,7 +100,7 @@ impl ScalarProgramIr {
             .iter()
             .map(|kind| kind.as_primitive().ok_or_else(|| invalid(Span::default())))
             .collect::<Result<Vec<_>, _>>()?;
-        Self::lower_operations(slots, &program.statements, 0)
+        Self::lower_operations(slots, &program.statements, None)
     }
 
     pub(super) fn lower_integer_function(
@@ -113,9 +114,7 @@ impl ScalarProgramIr {
             return Err(unsupported_function(Span::default()));
         };
         let parameters = signature.parameters.len();
-        if !signature.pure
-            || signature.result != ValueType::Integer
-            || !(1..=max_parameters).contains(&parameters)
+        if !signature.pure || signature.result != ValueType::Integer || parameters > max_parameters
         {
             return Err(unsupported_function(signature.span));
         }
@@ -148,13 +147,13 @@ impl ScalarProgramIr {
                 _ => Err(unsupported_function(signature.span)),
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Self::lower_operations(slots, &function.statements, parameters)
+        Self::lower_operations(slots, &function.statements, Some(parameters))
     }
 
     fn lower_operations(
         slots: Vec<ValueType>,
         operations: &[crate::resolver::ResolvedOperation],
-        parameters: usize,
+        function_parameters: Option<usize>,
     ) -> Result<Self, Diagnostic> {
         if slots.len() > MAX_PROGRAM_SLOTS || operations.len() > MAX_PROGRAM_STEPS {
             return Err(invalid(Span::default()));
@@ -164,7 +163,9 @@ impl ScalarProgramIr {
         let mut literal_bytes = 0usize;
         for statement in operations {
             let kind = match &statement.kind {
-                ResolvedStatement::Return { value: Some(value) } if parameters != 0 => {
+                ResolvedStatement::Return { value: Some(value) }
+                    if function_parameters.is_some() =>
+                {
                     ProgramOp::Return {
                         value: Self::expression(value, &slots)?,
                     }
@@ -264,7 +265,7 @@ impl ScalarProgramIr {
         let ir = Self {
             slots,
             steps,
-            parameters,
+            function_parameters,
         };
         ir.verify()?;
         Ok(ir)
@@ -274,7 +275,7 @@ impl ScalarProgramIr {
     /// object kernel. Only the LAST store's integer value is returned. This is
     /// not execution of general Scarp statements, I/O or runtime budgets.
     pub(super) fn integer_kernel(&self) -> Result<&Self, Diagnostic> {
-        if self.parameters != 0
+        if self.is_function()
             || self.steps.is_empty()
             || self.slots.is_empty()
             || self.slots.iter().any(|kind| *kind != ValueType::Integer)
@@ -293,7 +294,11 @@ impl ScalarProgramIr {
     }
 
     pub(super) fn parameters(&self) -> usize {
-        self.parameters
+        self.function_parameters.unwrap_or(0)
+    }
+
+    pub(super) fn is_function(&self) -> bool {
+        self.function_parameters.is_some()
     }
 
     pub(super) fn operations(&self) -> &[ProgramStep] {
@@ -338,10 +343,11 @@ impl ScalarProgramIr {
     /// Then walk possible statement edges without executing user expressions.
     pub(super) fn verify(&self) -> Result<(), Diagnostic> {
         let len = self.steps.len();
-        let function = self.parameters != 0;
+        let function = self.is_function();
+        let parameters = self.parameters();
         if len > MAX_PROGRAM_STEPS
             || self.slots.len() > MAX_PROGRAM_SLOTS
-            || self.slots.get(..self.parameters).map_or(true, |kinds| {
+            || self.slots.get(..parameters).map_or(true, |kinds| {
                 kinds.iter().any(|kind| *kind != ValueType::Integer)
             })
         {
@@ -359,10 +365,10 @@ impl ScalarProgramIr {
             if function {
                 match &instruction.kind {
                     ProgramOp::Store { slot, .. } | ProgramOp::Update { slot, .. }
-                        if *slot >= self.parameters => {}
+                        if *slot >= parameters => {}
                     ProgramOp::JumpIfFalse { target, .. } | ProgramOp::Jump { target }
                         if *target > pc => {}
-                    ProgramOp::Retire { slots } if slots.iter().all(|s| *s >= self.parameters) => {}
+                    ProgramOp::Retire { slots } if slots.iter().all(|s| *s >= parameters) => {}
                     ProgramOp::Return { .. } => {}
                     _ => return Err(invalid(span)),
                 }
@@ -496,6 +502,21 @@ mod tests {
 
     fn function_ir(source: &str) -> ScalarProgramIr {
         ScalarProgramIr::lower_integer_function(&compile(source).unwrap(), 6).unwrap()
+    }
+
+    #[test]
+    fn zero_argument_function_is_not_a_script_and_cannot_fall_through() {
+        let ir = function_ir("pure funcra answer() -> integer { return 42; }");
+        assert!(ir.is_function());
+        assert_eq!(ir.parameters(), 0);
+        assert!(ir.integer_kernel().is_err());
+        let mut malformed = ir.clone();
+        let end = malformed.steps.len();
+        malformed.steps[0].kind = ProgramOp::Jump { target: end };
+        assert!(malformed.verify().is_err());
+        let mut script = ir;
+        script.function_parameters = None;
+        assert!(script.verify().is_err());
     }
 
     #[test]

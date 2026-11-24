@@ -3,7 +3,9 @@
 
 mod layout;
 
-use self::layout::{align_up, frame_bytes, slot_offset, INTEGER_ARGUMENT_REGISTERS};
+use self::layout::{
+    align_up, frame_bytes, slot_offset, stack_argument_offset, INTEGER_ARGUMENT_REGISTERS,
+};
 use super::{
     invalid,
     program::{ProgramOp, ScalarProgramIr},
@@ -20,7 +22,8 @@ use crate::{
 
 const MAX_TEXT_BYTES: usize = 200_000;
 const MAX_OBJECT_BYTES: usize = 262_144;
-pub(super) const MAX_INTEGER_ARGUMENTS: usize = INTEGER_ARGUMENT_REGISTERS.len();
+// Bound both the public signature and the number of caller-stack loads.
+pub(super) const MAX_INTEGER_ARGUMENTS: usize = 16;
 const STACK_PROBE_INTERVAL: u32 = 4096; // Linux x86-64 base page size
 
 fn failure() -> Diagnostic {
@@ -95,6 +98,17 @@ impl Code {
         let mod_rm = 0x84 | ((register & 7) << 3);
         self.push(&[rex, 0x89, mod_rm, 0x24])?;
         self.push(&slot_offset(index)?)
+    }
+
+    fn copy_stack_argument(
+        &mut self,
+        index: usize,
+        stack_index: usize,
+        frame: u32,
+    ) -> Result<(), Diagnostic> {
+        self.push(&[0x48, 0x8b, 0x84, 0x24])?; // mov rax, [rsp + disp32]
+        self.push(&stack_argument_offset(frame, stack_index)?)?;
+        self.store_rax(index)
     }
 
     fn restore_stack_and_return(&mut self, bytes: u32) -> Result<(), Diagnostic> {
@@ -409,10 +423,15 @@ fn resolve_branches(
 
 fn function_text(program: &ScalarProgramIr) -> Result<Code, Diagnostic> {
     program.verify()?;
-    let registers = INTEGER_ARGUMENT_REGISTERS
-        .get(..program.parameters())
-        .filter(|registers| !registers.is_empty())
-        .ok_or_else(failure)?;
+    if !program.is_function() {
+        return Err(failure());
+    }
+    let parameters = program.parameters();
+    if parameters > MAX_INTEGER_ARGUMENTS {
+        return Err(failure());
+    }
+    let register_count = parameters.min(INTEGER_ARGUMENT_REGISTERS.len());
+    let registers = &INTEGER_ARGUMENT_REGISTERS[..register_count];
     let mut max_registers = 0;
     let mut estimated_steps = program.operations().len();
     for step in program.operations() {
@@ -436,6 +455,11 @@ fn function_text(program: &ScalarProgramIr) -> Result<Code, Diagnostic> {
     code.allocate_stack(stack_size)?;
     for (slot, register) in registers.iter().copied().enumerate() {
         code.store_argument(slot, register)?;
+    }
+    // Copy caller-owned arguments into ordinary verified local slots; never
+    // write into the caller's frame or consume its return address as a value.
+    for slot in register_count..parameters {
+        code.copy_stack_argument(slot, slot - register_count, stack_size)?;
     }
 
     let mut offsets = Vec::with_capacity(program.operations().len() + 1);
