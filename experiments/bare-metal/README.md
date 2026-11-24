@@ -8,7 +8,7 @@ the existing Rust example emits its standalone relocatable machine code.
 ## Run on a Linux development host
 
 Install a supported Rust toolchain and Cargo, GNU x86-64 binutils, GRUB
-utilities with the i386-pc BIOS modules, xorriso, QEMU system x86 and GNU
+utilities with the i386-pc BIOS modules, xorriso, mtools, QEMU system x86 and GNU
 coreutils. Run from the repository root:
 
 ```sh
@@ -16,7 +16,8 @@ bash experiments/bare-metal/smoke.sh
 ```
 
 The script uses a temporary directory, validates the Multiboot2 header,
-creates an ISO using GRUB, and boots only an emulated machine using TCG.
+creates a BIOS-only ISO using the GRUB i386-pc platform at
+`/usr/lib/grub/i386-pc`, reports GRUB messages over the serial console, and boots only an emulated machine using TCG.
 It needs no root privileges, does not write a physical disk, and removes the
 temporary outputs on exit. A successful guest reports QEMU debug-exit
 status 33, translated into host exit status zero. Guest failure, timeout,

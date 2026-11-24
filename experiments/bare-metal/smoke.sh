@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
-# Host dependencies: Cargo, GNU binutils, GRUB BIOS tools, xorriso and QEMU.
+# Host dependencies: Cargo, GNU binutils, GRUB BIOS tools, xorriso, mtools and QEMU.
 set -euo pipefail
 here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd -- "$here/../.." && pwd)"
-for tool in cargo as ld grub-file grub-mkrescue xorriso qemu-system-x86_64 timeout; do
+for tool in cargo as ld grub-file grub-mkrescue xorriso mformat qemu-system-x86_64 timeout; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         printf 'Missing dependency: %s\n' "$tool" >&2
         exit 2
     fi
 done
+grub_platform=/usr/lib/grub/i386-pc
+if [[ ! -f "$grub_platform/modinfo.sh" ]]; then
+    printf 'Missing GRUB BIOS platform: %s\n' "$grub_platform" >&2
+    exit 2
+fi
 work="$(mktemp -d)"
 trap 'rm -rf -- "$work"' EXIT
 mkdir -p "$work/iso/boot/grub"
@@ -20,6 +25,8 @@ ld -m elf_x86_64 -z max-page-size=0x1000 --fatal-warnings \
     "$work/boot.o" "$work/scarp.o"
 grub-file --is-x86-multiboot2 "$work/iso/boot/kernel.elf"
 cat > "$work/iso/boot/grub/grub.cfg" <<'GRUB'
+serial --unit=0 --speed=115200
+terminal_output serial
 set timeout=0
 set default=0
 menuentry "Scarp bare-metal smoke" {
@@ -27,10 +34,10 @@ menuentry "Scarp bare-metal smoke" {
     boot
 }
 GRUB
-grub-mkrescue -o "$work/scarp.iso" "$work/iso"
+grub-mkrescue -d "$grub_platform" -o "$work/scarp.iso" "$work/iso"
 status=0
 timeout 45s qemu-system-x86_64 -accel tcg -cpu qemu64 -m 128M \
-    -display none -serial none -monitor none -no-reboot -no-shutdown \
+    -display none -serial stdio -monitor none -no-reboot -no-shutdown \
     -device isa-debug-exit,iobase=0xf4,iosize=4 \
     -boot d -cdrom "$work/scarp.iso" || status=$?
 case "$status" in
