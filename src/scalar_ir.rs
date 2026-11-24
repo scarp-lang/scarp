@@ -716,7 +716,7 @@ pub(crate) fn emit_bounded_integer_entry(
     max_work: u32,
 ) -> Result<crate::native_object::CheckedElf64Kernel, Diagnostic> {
     let resolved = crate::compile(source)?;
-    let ir = program::ScalarCallGraph::lower(&resolved, entry, elf64::REGISTER_ARGUMENTS)?;
+    let ir = program::ScalarCallGraph::lower(&resolved, entry, elf64::MAX_INTEGER_ARGUMENTS)?;
     elf64::emit_bounded_entry(&ir, max_work)
 }
 

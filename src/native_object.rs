@@ -101,8 +101,9 @@ pub fn emit_elf64_bounded_integer_function(
 /// Emit a bounded Linux x86-64 ELF64 entry and its private direct-call bodies.
 ///
 /// Select a source function by its exact name. The only exported symbol is
-/// `scarp_bounded_integer_entry`. Each function is pure and takes zero to six
-/// required integer arguments, with an integer result. The external symbol
+/// `scarp_bounded_integer_entry`. Each function is pure and takes zero to
+/// sixteen required integer arguments, with an integer result. The first six
+/// use registers and the rest use the stack. The external symbol
 /// uses the selected function's arity and the checked integer result layout.
 /// Calls are statically resolved, nonrecursive, and confined to this object.
 /// Named argument expressions are evaluated in written order.

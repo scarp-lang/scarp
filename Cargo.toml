@@ -37,5 +37,9 @@ harness = false
 name = "lifetime"
 harness = false
 
+[[bench]]
+name = "native_calls"
+harness = false
+
 [lints.rust]
 unsafe_code = "forbid"

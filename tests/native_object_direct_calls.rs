@@ -9,6 +9,32 @@ fn definitions() -> &'static str {
     EXAMPLE.split_once("\nprint(").unwrap().0
 }
 
+fn wide_definitions(arity: usize) -> String {
+    let list =
+        |part: &dyn Fn(usize) -> String| (1..=arity).map(part).collect::<Vec<_>>().join(", ");
+    let params = list(&|index| format!("p{index}: integer"));
+    let args = list(&|index| format!("p{index}"));
+    let named = list(&|index| {
+        let parameter = arity + 1 - index;
+        format!("p{parameter}: p{parameter}")
+    });
+    let weighted = (1..=arity)
+        .map(|index| format!("p{index} * {index}"))
+        .collect::<Vec<_>>()
+        .join(" + ");
+    format!(
+        r#"pure funcra dispatch({params}) -> integer {{
+            var answer = p1 + 7;
+            repeat 2 as pass {{
+                answer += if pass == 0 {{ relay({args}) }} else {{ wide({args}) }};
+            }}
+            return answer + p{arity};
+        }}
+        pure funcra relay({params}) -> integer {{ return p1 + wide({named}); }}
+        pure funcra wide({params}) -> integer {{ return {weighted}; }}"#
+    )
+}
+
 #[test]
 fn direct_object_is_deterministic_and_exports_only_the_selected_entry() {
     let source = definitions();
@@ -44,24 +70,68 @@ fn direct_object_is_deterministic_and_exports_only_the_selected_entry() {
         output,
         include_bytes!("../examples/native_direct_calls.stdout")
     );
+    let wide = include_str!("../examples/native_wide_calls.srp");
+    output.clear();
+    scarp::run(wide, &mut output).unwrap();
+    assert_eq!(
+        output,
+        include_bytes!("../examples/native_wide_calls.stdout")
+    );
+    let wide = wide.split_once("\nprint(").unwrap().0;
+    assert!(emit_elf64_bounded_integer_entry(wide, "entry", 1000).is_ok());
 }
 
 #[test]
 fn direct_objects_reject_cycles_unknown_entries_and_unsupported_signatures() {
     for (source, entry, message) in [
-        ("pure funcra f() -> integer { return f(); }", "f", "nonrecursive"),
-        ("pure funcra f() -> integer { return g(); } pure funcra g() -> integer { return f(); }", "f", "nonrecursive"),
-        ("pure funcra f() -> integer { return 1; }", "missing", "was not declared"),
-        ("pure funcra f(n: integer = 3) -> integer { return n; }", "f", "private scalar IR"),
-        ("funcra f() -> integer { return 1; }", "f", "private scalar IR"),
-        ("pure funcra f(n: integer) -> integer { return integer_abs(n); }", "f", "private scalar IR"),
-        ("pure funcra f(a: integer, b: integer, c: integer, d: integer, e: integer, sixth: integer, g: integer) -> integer { return a; }", "f", "six integer"),
-        ("pure funcra f() -> integer { return 1; } print(f());", "f", "function declarations only"),
+        (
+            "pure funcra f() -> integer { return f(); }",
+            "f",
+            "nonrecursive",
+        ),
+        (
+            "pure funcra f() -> integer { return g(); } pure funcra g() -> integer { return f(); }",
+            "f",
+            "nonrecursive",
+        ),
+        (
+            "pure funcra f() -> integer { return 1; }",
+            "missing",
+            "was not declared",
+        ),
+        (
+            "pure funcra f(n: integer = 3) -> integer { return n; }",
+            "f",
+            "private scalar IR",
+        ),
+        (
+            "funcra f() -> integer { return 1; }",
+            "f",
+            "private scalar IR",
+        ),
+        (
+            "pure funcra f(n: integer) -> integer { return integer_abs(n); }",
+            "f",
+            "private scalar IR",
+        ),
+        (
+            "pure funcra f() -> integer { return 1; } print(f());",
+            "f",
+            "function declarations only",
+        ),
     ] {
         let error = emit_elf64_bounded_integer_entry(source, entry, 1000).unwrap_err();
-        assert_eq!(error.kind, DiagnosticKind::NativeUnsupported, "{source}: {error:?}");
+        assert_eq!(
+            error.kind,
+            DiagnosticKind::NativeUnsupported,
+            "{source}: {error:?}"
+        );
         assert!(error.message.contains(message), "{source}: {error:?}");
     }
+    let too_wide =
+        emit_elf64_bounded_integer_entry(&wide_definitions(17), "dispatch", 1000).unwrap_err();
+    assert_eq!(too_wide.kind, DiagnosticKind::NativeUnsupported);
+    assert!(too_wide.message.contains("sixteen integer"), "{too_wide:?}");
 }
 
 #[test]
@@ -203,6 +273,47 @@ int main(int argc, char **argv) {{
     }
     let external_six = emit_elf64_bounded_integer_entry(source, "weighted", 1000).unwrap();
     assert_eq!(invoke(&external_six, 6, &[1, 2, 3, 4, 5, 6]), [(91, 0, 0)]);
+    let sample = include_str!("../examples/native_wide_calls.srp");
+    let sample = sample.split_once("\nprint(").unwrap().0;
+    let artifact = emit_elf64_bounded_integer_entry(sample, "entry", 1000).unwrap();
+    assert_eq!(invoke(&artifact, 1, &[2, 4]), [(61, 0, 0), (75, 0, 0)]);
+
+    // Verify every mixed register/stack arity through three frames. The
+    // external caller and both Scarp callers independently lay out arguments.
+    for arity in 7..=16 {
+        let source = wide_definitions(arity);
+        let artifact = emit_elf64_bounded_integer_entry(&source, "dispatch", 2000).unwrap();
+        let mut cases = Vec::new();
+        for sign in [1, -1] {
+            cases.extend((1..=arity as i64).map(|index| sign * index));
+        }
+        cases.resize(3 * arity - 1, 0);
+        cases.push(i64::MAX);
+        let results = invoke(&artifact, arity, &cases);
+        for (inputs, (value, status, span)) in cases.chunks_exact(arity).zip(results) {
+            let args = inputs
+                .iter()
+                .map(i64::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            let mut expected = Vec::new();
+            match scarp::run(
+                &format!("{source}\nprint(dispatch({args}));"),
+                &mut expected,
+            ) {
+                Ok(()) => {
+                    assert_eq!(format!("{value}\n").as_bytes(), expected, "arity {arity}");
+                    assert_eq!((status, span), (0, 0));
+                }
+                Err(RunError::Diagnostic(error)) => {
+                    assert_eq!(error.kind, DiagnosticKind::ArithmeticOverflow);
+                    assert_eq!((value, status), (0, CHECKED_KERNEL_INTEGER_OVERFLOW));
+                    assert_eq!(artifact.failure_spans[span], error.span, "arity {arity}");
+                }
+                Err(error) => panic!("{error:?}"),
+            }
+        }
+    }
 
     let failures = "// गणना\npure funcra failure(n: integer) -> integer {
         return pair(second: 25 / n, first: 1 << -1) + 5;
