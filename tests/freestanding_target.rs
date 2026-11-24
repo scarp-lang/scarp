@@ -80,3 +80,37 @@ fn explicit_target_does_not_enable_host_effects() {
         }
     }
 }
+
+#[test]
+fn reported_stack_layout_matches_emitted_small_frame_and_argument_count() {
+    let target = FreestandingTarget::X86_64None;
+    for mode in [
+        FreestandingFunctionMode::Checked,
+        FreestandingFunctionMode::Bounded { max_work: 1000 },
+    ] {
+        for count in [0, 1, 6, 7, 16] {
+            let parameters = (0..count)
+                .map(|n| format!("a{n}: integer"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let source = format!("pure funcra f({parameters}) -> integer {{ return 42; }}");
+            let artifact = emit_freestanding_function(&source, target, mode).unwrap();
+            let layout = artifact.layout;
+            assert_eq!(layout.integer_arguments, count);
+            assert_eq!(layout.stack_argument_bytes(), count.saturating_sub(6) * 8);
+            assert_eq!(layout.callee_stack_bytes() % 16, 0);
+            assert!(layout.frame_bytes as usize <= target.max_frame_bytes());
+            // Read .text offset from the ELF section header, then independently
+            // inspect the actual sub rsp, imm32 instruction for these small frames.
+            let bytes = &artifact.kernel.object;
+            let shoff = u64::from_le_bytes(bytes[40..48].try_into().unwrap()) as usize;
+            let offset = shoff + 64 + 24;
+            let text =
+                u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap()) as usize;
+            assert_eq!(&bytes[text..text + 3], &[0x48, 0x81, 0xec]);
+            let emitted =
+                u32::from_le_bytes(bytes[text + 3..text + 7].try_into().unwrap());
+            assert_eq!(layout.frame_bytes, emitted);
+        }
+    }
+}

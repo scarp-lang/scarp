@@ -167,11 +167,34 @@ impl FreestandingFunctionMode {
     }
 }
 
+/// Exact stack and argument requirements computed by the native encoder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FreestandingCallLayout {
+    /// Bytes allocated by the callee, excluding the return address.
+    pub frame_bytes: u32,
+    /// Total required integer arguments in source order.
+    pub integer_arguments: usize,
+}
+
+impl FreestandingCallLayout {
+    /// Bytes of caller-owned argument slots, excluding alignment padding.
+    pub const fn stack_argument_bytes(self) -> usize {
+        self.integer_arguments.saturating_sub(6).saturating_mul(8)
+    }
+
+    /// Bytes consumed below the stack pointer at the CALL instruction.
+    /// Does not include caller-owned argument slots or interrupt frames.
+    pub const fn callee_stack_bytes(self) -> u64 {
+        self.frame_bytes as u64 + 8
+    }
+}
+
 /// Target and ABI metadata travel with the existing checked object bytes.
 #[derive(Debug, PartialEq, Eq)]
 pub struct FreestandingFunction {
     pub target: FreestandingTarget,
     pub mode: FreestandingFunctionMode,
+    pub layout: FreestandingCallLayout,
     pub kernel: CheckedElf64Kernel,
 }
 
@@ -186,17 +209,18 @@ pub fn emit_freestanding_function(
     target: FreestandingTarget,
     mode: FreestandingFunctionMode,
 ) -> Result<FreestandingFunction, Diagnostic> {
-    let kernel = match (target, mode) {
+    let (kernel, layout) = match (target, mode) {
         (FreestandingTarget::X86_64None, FreestandingFunctionMode::Checked) => {
-            emit_elf64_checked_integer_function(source)?
+            crate::scalar_ir::emit_integer_function_with_layout(source, None)?
         }
         (FreestandingTarget::X86_64None, FreestandingFunctionMode::Bounded { max_work }) => {
-            emit_elf64_bounded_integer_function(source, max_work)?
+            crate::scalar_ir::emit_integer_function_with_layout(source, Some(max_work))?
         }
     };
     Ok(FreestandingFunction {
         target,
         mode,
+        layout,
         kernel,
     })
 }

@@ -267,8 +267,11 @@ assert!(artifact.kernel.object.starts_with(b"\x7fELF"));
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-The callee frame bound is 16 KiB, enforced by the same constant in the
-encoder. It is not a complete stack requirement: caller-owned argument slots,
+Each artifact also reports its exact callee frame bytes and integer argument
+count from the encoder, along with caller-owned stack argument bytes and
+callee stack consumption including the return address. Alignment padding and
+interrupt frames remain the caller's responsibility. The callee frame bound
+is 16 KiB, enforced by the same constant in the encoder. It is not a complete stack requirement: caller-owned argument slots,
 return addresses and surrounding kernel/interrupt frames need additional space.
 The target is an experimental relocatable object contract, not a general
 kernel compilation target, and provides no memory I/O, interrupts, linker,
