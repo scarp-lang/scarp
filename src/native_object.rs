@@ -3,8 +3,8 @@
 //! A bounded sequence of pure integer binding initializers is compiled into a
 //! freestanding, side-effect-free SysV AMD64 `scarp_scalar_kernel() -> i64`
 //! symbol. The API returns complete bytes; it never opens or overwrites files.
-//! This is NOT Scarp's general program execution/printing semantics, a
-//! native executable compiler, or an available CLI command.
+//! The parameterized checked ABI also supports pure scalar functions from
+//! resolved Scarp source. All entry points return relocatable object bytes.
 
 use crate::diagnostics::{Diagnostic, Span};
 
@@ -50,4 +50,23 @@ pub const CHECKED_KERNEL_INVALID_SHIFT: u32 = 3;
 /// Configurable interpreter execution budgets are outside this experimental ABI.
 pub fn emit_elf64_checked_integer_kernel(source: &str) -> Result<CheckedElf64Kernel, Diagnostic> {
     crate::scalar_ir::emit_checked_integer_kernel(source)
+}
+
+/// Emit a freestanding Linux x86-64 ELF64 object for one pure Scarp function.
+///
+/// The experimental SysV AMD64 symbol `scarp_checked_integer_function` takes
+/// one to six required `int64_t` arguments, in source parameter order. The
+/// caller must declare the exact arity. It returns a C struct
+/// `{ int64_t value; uint32_t status; uint32_t span_id; }`. Success sets both
+/// status fields to zero. On arithmetic failure, the result is zero and
+/// `span_id` indexes the operator's source span in the returned table.
+///
+/// The function must return an integer on every path. The backend supports
+/// integer and Boolean locals, scalar assignments, integer compound
+/// assignments, checked arithmetic, bitwise operations, and forward
+/// conditionals. It rejects calls, loops, contracts, defaults, other scalar
+/// types, aggregates, and top-level execution. Interpreter budgets do not
+/// apply to the emitted object.
+pub fn emit_elf64_checked_integer_function(source: &str) -> Result<CheckedElf64Kernel, Diagnostic> {
+    crate::scalar_ir::emit_checked_integer_function(source)
 }

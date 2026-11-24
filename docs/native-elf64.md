@@ -141,3 +141,33 @@ cargo test --locked --offline --test native_object_checked
 
 See [Proposal 0037](proposals/0037-compiler-owned-native-ir.md) and
 [Issue #128](https://github.com/scarp-lang/scarp/issues/128).
+
+## Experimental parameterized integer function
+
+`native_object::emit_elf64_checked_integer_function` accepts one `pure funcra`
+with one to six required `integer` parameters and an `integer` return type.
+It supports scalar integer and Boolean binding storage, plain assignments,
+integer compound assignments, forward `if`/`elif`/`else`, short-circuit
+Boolean expressions and early returns. Source entry operations, loops, calls,
+contracts, optional parameters and heap-backed values are rejected.
+
+The new symbol is `scarp_checked_integer_function`. Declare exactly as many
+`int64_t` parameters as the Scarp function has. They arrive in RDI, RSI, RDX,
+RCX, R8 and R9 in order. The return uses the same 16-byte result layout as the
+checked zero-argument kernel. For the two-argument example:
+
+```c
+#include <stdint.h>
+struct scarp_result { int64_t value; uint32_t status; uint32_t span_id; };
+extern struct scarp_result scarp_checked_integer_function(int64_t lane, int64_t stride);
+```
+
+The bounded frame stores parameters before arithmetic can overwrite argument
+registers. Lexical retirement ends slot visibility in the verifier. The same
+frame is restored on success and on checked arithmetic failure. Source spans use
+UTF-8 byte offsets and each failure ID is local to the generated object.
+
+Run the [Rust object emission example](../examples/checked_elf64_function.rs)
+with `cargo run --locked --example checked_elf64_function`. The
+[Scarp implementation](../examples/checked_elf64_function.srp) is also runnable
+through the interpreter and has a checked output fixture.

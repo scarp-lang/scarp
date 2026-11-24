@@ -371,6 +371,28 @@ pub enum Value {
 }
 
 impl Value {
+    /// Logical string bytes count each contained occurrence, including shared
+    /// values. Immutable aggregate storage caches the fold at construction so
+    /// host admission does not traverse a potentially large shared value graph.
+    pub(crate) fn host_utf8_bytes(&self) -> usize {
+        let mut value = self;
+        while let Self::Variant(variant) = value {
+            match variant.payload() {
+                Some(payload) => value = payload,
+                None => return 0,
+            }
+        }
+        match value {
+            Self::String(text) => text.len(),
+            Self::Tuple(tuple) => tuple.host_utf8_bytes(),
+            Self::Array(array) => array.host_utf8_bytes(),
+            Self::List(list) => list.host_utf8_bytes(),
+            Self::Map(map) => map.host_utf8_bytes(),
+            Self::Record(record) => record.host_utf8_bytes(),
+            _ => 0,
+        }
+    }
+
     /// Exact structural value type; use as_primitive() for legacy primitive classification.
     pub fn kind(&self) -> SourceType {
         match self {

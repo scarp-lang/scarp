@@ -14,6 +14,7 @@ struct TupleStorage {
     kind: SourceType,
     work: u64,
     capture: usize,
+    utf8_bytes: usize,
 }
 impl PartialEq for TupleValue {
     fn eq(&self, other: &Self) -> bool {
@@ -40,18 +41,22 @@ impl TupleValue {
         } else {
             0
         };
-        let work = elements
-            .iter()
-            .fold(1 + metadata_work, |n, v| n.saturating_add(value_work(v)));
-        let capture = elements.iter().fold(16usize, |n, v| {
-            n.saturating_add(value_capture(v))
-                .saturating_add(std::mem::size_of::<Value>())
-        });
+        let mut work = 1 + metadata_work;
+        let mut capture = 16usize;
+        let mut utf8_bytes = 0usize;
+        for value in &elements {
+            work = work.saturating_add(value_work(value));
+            capture = capture
+                .saturating_add(value_capture(value))
+                .saturating_add(std::mem::size_of::<Value>());
+            utf8_bytes = utf8_bytes.saturating_add(value.host_utf8_bytes());
+        }
         Some(Self(Arc::new(TupleStorage {
             elements: elements.into_boxed_slice(),
             kind,
             work,
             capture,
+            utf8_bytes,
         })))
     }
     pub fn elements(&self) -> &[Value] {
@@ -69,6 +74,10 @@ impl TupleValue {
     pub(crate) fn work(&self) -> u64 {
         self.0.work
     }
+    pub(super) fn host_utf8_bytes(&self) -> usize {
+        self.0.utf8_bytes
+    }
+
     pub(crate) fn capture_bytes(&self) -> usize {
         self.0.capture
     }

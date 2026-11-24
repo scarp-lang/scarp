@@ -14,21 +14,25 @@ use crate::{
     value::ValueType,
 };
 
+const MAX_PROGRAM_SLOTS: usize = 256;
 const MAX_PROGRAM_STEPS: usize = 4096;
 const MAX_LITERAL_BYTES: usize = 65536;
 const MAX_EXPRESSION_NODES: usize = 16384;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct ProgramStep {
-    span: Span,
+pub(in crate::scalar_ir) struct ProgramStep {
+    pub(in crate::scalar_ir) span: Span,
     /// The interpreter charges one work step per resolved operation except
     /// retirement. This is an accounting event, not a loop-iteration bound.
     charge_work: bool,
-    kind: ProgramOp,
+    pub(in crate::scalar_ir) kind: ProgramOp,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum ProgramOp {
+pub(in crate::scalar_ir) enum ProgramOp {
+    Return {
+        value: ScalarExpressionIr,
+    },
     Store {
         slot: usize,
         value: ScalarExpressionIr,
@@ -78,6 +82,7 @@ enum ProgramOp {
 pub(super) struct ScalarProgramIr {
     slots: Vec<ValueType>,
     steps: Vec<ProgramStep>,
+    parameters: usize,
 }
 
 impl ScalarProgramIr {
@@ -94,14 +99,76 @@ impl ScalarProgramIr {
             .iter()
             .map(|kind| kind.as_primitive().ok_or_else(|| invalid(Span::default())))
             .collect::<Result<Vec<_>, _>>()?;
-        if slots.len() > 256 || program.statements.len() > MAX_PROGRAM_STEPS {
+        Self::lower_operations(slots, &program.statements, 0)
+    }
+
+    pub(super) fn lower_integer_function(
+        program: &ResolvedProgram,
+        max_parameters: usize,
+    ) -> Result<Self, Diagnostic> {
+        if let Some(statement) = program.statements.first() {
+            return Err(unsupported_function(statement.span));
+        }
+        let ([signature], [function]) = (program.functions(), program.functions.as_slice()) else {
+            return Err(unsupported_function(Span::default()));
+        };
+        let parameters = signature.parameters.len();
+        if !signature.pure
+            || signature.result != ValueType::Integer
+            || !(1..=max_parameters).contains(&parameters)
+        {
+            return Err(unsupported_function(signature.span));
+        }
+        for parameter in &signature.parameters {
+            if parameter.kind != ValueType::Integer || parameter.default.is_some() {
+                return Err(unsupported_function(parameter.span));
+            }
+        }
+        if let Some(contract) = signature.contracts.first() {
+            return Err(unsupported_function(contract.span));
+        }
+        let len = function.statements.len();
+        for (pc, step) in function.statements.iter().enumerate() {
+            match &step.kind {
+                ResolvedStatement::Store { .. }
+                | ResolvedStatement::Update { .. }
+                | ResolvedStatement::Return { value: Some(_) }
+                | ResolvedStatement::Retire { .. } => {}
+                ResolvedStatement::JumpIfFalse { target, .. }
+                | ResolvedStatement::Jump { target }
+                    if (pc + 1..=len).contains(target) => {}
+                _ => return Err(unsupported_function(step.span)),
+            }
+        }
+        let slots = function
+            .slot_types
+            .iter()
+            .map(|kind| match kind.primitive() {
+                Some(kind @ (ValueType::Integer | ValueType::Boolean)) => Ok(kind),
+                _ => Err(unsupported_function(signature.span)),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Self::lower_operations(slots, &function.statements, parameters)
+    }
+
+    fn lower_operations(
+        slots: Vec<ValueType>,
+        operations: &[crate::resolver::ResolvedOperation],
+        parameters: usize,
+    ) -> Result<Self, Diagnostic> {
+        if slots.len() > MAX_PROGRAM_SLOTS || operations.len() > MAX_PROGRAM_STEPS {
             return Err(invalid(Span::default()));
         }
-        let mut steps = Vec::with_capacity(program.statements.len());
+        let mut steps = Vec::with_capacity(operations.len());
         let mut total_nodes = 0usize;
         let mut literal_bytes = 0usize;
-        for statement in &program.statements {
+        for statement in operations {
             let kind = match &statement.kind {
+                ResolvedStatement::Return { value: Some(value) } if parameters != 0 => {
+                    ProgramOp::Return {
+                        value: Self::expression(value, &slots)?,
+                    }
+                }
                 ResolvedStatement::Store { slot, value } => ProgramOp::Store {
                     slot: *slot,
                     value: Self::expression(value, &slots)?,
@@ -173,7 +240,8 @@ impl ScalarProgramIr {
                 _ => return Err(invalid(statement.span)),
             };
             let expression_nodes = match &kind {
-                ProgramOp::Store { value, .. }
+                ProgramOp::Return { value }
+                | ProgramOp::Store { value, .. }
                 | ProgramOp::Update { value, .. }
                 | ProgramOp::RepeatInit { count: value, .. }
                 | ProgramOp::PrintValue { value } => value.registers.len(),
@@ -193,7 +261,11 @@ impl ScalarProgramIr {
                 kind,
             });
         }
-        let ir = Self { slots, steps };
+        let ir = Self {
+            slots,
+            steps,
+            parameters,
+        };
         ir.verify()?;
         Ok(ir)
     }
@@ -202,7 +274,8 @@ impl ScalarProgramIr {
     /// object kernel. Only the LAST store's integer value is returned. This is
     /// not execution of general Scarp statements, I/O or runtime budgets.
     pub(super) fn integer_kernel(&self) -> Result<&Self, Diagnostic> {
-        if self.steps.is_empty()
+        if self.parameters != 0
+            || self.steps.is_empty()
             || self.slots.is_empty()
             || self.slots.iter().any(|kind| *kind != ValueType::Integer)
         {
@@ -217,6 +290,14 @@ impl ScalarProgramIr {
             }
         }
         Ok(self)
+    }
+
+    pub(super) fn parameters(&self) -> usize {
+        self.parameters
+    }
+
+    pub(super) fn operations(&self) -> &[ProgramStep] {
+        &self.steps
     }
 
     pub(super) fn integer_slot_count(&self) -> usize {
@@ -257,19 +338,41 @@ impl ScalarProgramIr {
     /// Then walk possible statement edges without executing user expressions.
     pub(super) fn verify(&self) -> Result<(), Diagnostic> {
         let len = self.steps.len();
-        if len > MAX_PROGRAM_STEPS || self.slots.len() > 256 {
+        let function = self.parameters != 0;
+        if len > MAX_PROGRAM_STEPS
+            || self.slots.len() > MAX_PROGRAM_SLOTS
+            || self.slots.get(..self.parameters).map_or(true, |kinds| {
+                kinds.iter().any(|kind| *kind != ValueType::Integer)
+            })
+        {
             return Err(invalid(Span::default()));
         }
         let mut literal_bytes = 0usize;
         let mut total_nodes = 0usize;
-        for instruction in &self.steps {
+        for (pc, instruction) in self.steps.iter().enumerate() {
             let span = instruction.span;
             if span.start > span.end
                 || instruction.charge_work == matches!(instruction.kind, ProgramOp::Retire { .. })
             {
                 return Err(invalid(span));
             }
+            if function {
+                match &instruction.kind {
+                    ProgramOp::Store { slot, .. } | ProgramOp::Update { slot, .. }
+                        if *slot >= self.parameters => {}
+                    ProgramOp::JumpIfFalse { target, .. } | ProgramOp::Jump { target }
+                        if *target > pc => {}
+                    ProgramOp::Retire { slots } if slots.iter().all(|s| *s >= self.parameters) => {}
+                    ProgramOp::Return { .. } => {}
+                    _ => return Err(invalid(span)),
+                }
+            }
             let expression = match &instruction.kind {
+                ProgramOp::Return { value } if function => {
+                    self.check_expression(value, Some(ValueType::Integer), span)?;
+                    Some(value)
+                }
+                ProgramOp::Return { .. } => return Err(invalid(span)),
                 ProgramOp::Store { slot, value } => {
                     self.check_expression(value, None, span)?;
                     self.check_slot(*slot, value.registers[value.root], span)?;
@@ -374,6 +477,12 @@ impl ScalarProgramIr {
     }
 }
 
+fn unsupported_function(span: Span) -> Diagnostic {
+    invalid(span).with_help(
+        "use one pure integer function with required integer parameters, scalar locals, forward conditionals and integer returns",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -383,6 +492,67 @@ mod tests {
         let resolved = compile(source).unwrap();
         crate::native_preflight::inspect(&resolved).unwrap();
         ScalarProgramIr::lower(&resolved).unwrap()
+    }
+
+    fn function_ir(source: &str) -> ScalarProgramIr {
+        ScalarProgramIr::lower_integer_function(&compile(source).unwrap(), 6).unwrap()
+    }
+
+    #[test]
+    fn function_verifier_requires_typed_returns_and_forbids_fallthrough() {
+        let source = "pure funcra choose(x: integer) -> integer {
+            if x < 0 { return x; } return 0;
+        }";
+        let ir = function_ir(source);
+        let mut malformed = ir.clone();
+        let conditional = malformed
+            .steps
+            .iter_mut()
+            .find(|step| matches!(step.kind, ProgramOp::JumpIfFalse { .. }))
+            .unwrap();
+        let ProgramOp::JumpIfFalse { target, .. } = &mut conditional.kind else {
+            unreachable!()
+        };
+        *target = ir.steps.len();
+        assert!(malformed.verify().is_err());
+        *malformed
+            .steps
+            .iter_mut()
+            .find_map(|step| match &mut step.kind {
+                ProgramOp::JumpIfFalse { target, .. } => Some(target),
+                _ => None,
+            })
+            .unwrap() = 0;
+        assert!(malformed.verify().is_err());
+
+        let mut malformed = ir;
+        let ProgramOp::JumpIfFalse { condition, .. } = &malformed.steps[0].kind else {
+            unreachable!()
+        };
+        let condition = condition.clone();
+        malformed.steps[1].kind = ProgramOp::Return { value: condition };
+        assert!(malformed.verify().is_err());
+    }
+
+    #[test]
+    fn function_verifier_requires_local_initialization_and_protects_parameters() {
+        let source = "pure funcra f(x: integer) -> integer { bind local = x; return local; }";
+        let ir = function_ir(source);
+        let mut malformed = ir.clone();
+        malformed.steps[0].kind = ProgramOp::Jump { target: 1 };
+        assert!(malformed.verify().is_err());
+
+        let mut malformed = ir;
+        let ProgramOp::Store { slot, .. } = &mut malformed.steps[0].kind else {
+            unreachable!()
+        };
+        *slot = 0;
+        assert!(malformed.verify().is_err());
+        let ProgramOp::Store { slot, .. } = &mut malformed.steps[0].kind else {
+            unreachable!()
+        };
+        *slot = usize::MAX;
+        assert!(malformed.verify().is_err());
     }
 
     #[test]

@@ -1,0 +1,10 @@
+// The native Rust API emits the pure function by itself.
+// The source interpreter also accepts an ordinary call from the entry program.
+pure funcra lane_offset(lane: integer, stride: integer) -> integer {
+    if lane < 0 or stride <= 0 {
+        return -1;
+    }
+    return lane * stride;
+}
+print(lane_offset(7, 16));
+print(lane_offset(-1, 16));

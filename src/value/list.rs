@@ -18,6 +18,7 @@ struct ListStorage {
     kind: SourceType,
     work: u64,
     capture: usize,
+    utf8_bytes: usize,
 }
 
 impl ListValue {
@@ -61,20 +62,22 @@ impl ListValue {
         } else {
             "[list: ]".len() + 2 * (elements.len() - 1)
         };
-        let work = elements.iter().fold(
-            display_bytes as u64 + 2 * kind.node_count() as u64,
-            |total, value| total.saturating_add(value_work(value)),
-        );
-        let capture = elements.iter().fold(display_bytes, |total, value| {
-            total
+        let mut work = display_bytes as u64 + 2 * kind.node_count() as u64;
+        let mut capture = display_bytes;
+        let mut utf8_bytes = 0usize;
+        for value in &elements {
+            work = work.saturating_add(value_work(value));
+            capture = capture
                 .saturating_add(value_capture(value))
-                .saturating_add(size_of::<Value>())
-        });
+                .saturating_add(size_of::<Value>());
+            utf8_bytes = utf8_bytes.saturating_add(value.host_utf8_bytes());
+        }
         Self(Arc::new(ListStorage {
             elements,
             kind,
             work,
             capture,
+            utf8_bytes,
         }))
     }
 
@@ -92,6 +95,10 @@ impl ListValue {
 
     pub(crate) fn work(&self) -> u64 {
         self.0.work
+    }
+
+    pub(super) fn host_utf8_bytes(&self) -> usize {
+        self.0.utf8_bytes
     }
 
     pub(crate) fn capture_bytes(&self) -> usize {
