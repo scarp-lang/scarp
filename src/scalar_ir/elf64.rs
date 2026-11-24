@@ -7,7 +7,7 @@ mod temporaries;
 use self::layout::{
     align_up, frame_bytes, slot_offset, stack_argument_offset, INTEGER_ARGUMENT_REGISTERS,
 };
-use self::temporaries::TemporaryLayout;
+use self::temporaries::{TemporaryHome, TemporaryLayout};
 use super::{
     invalid,
     program::{ProgramOp, ScalarCallGraph, ScalarProgramIr},
@@ -29,6 +29,7 @@ const MAX_OBJECT_BYTES: usize = 262_144;
 pub(super) const MAX_INTEGER_ARGUMENTS: usize = 16;
 const REGISTER_ARGUMENTS: usize = INTEGER_ARGUMENT_REGISTERS.len();
 const STACK_PROBE_INTERVAL: u32 = 4096; // Linux x86-64 base page size
+const TEMPORARY_REGISTER: u8 = 11; // R11, caller-saved by x86-64 SysV
 
 fn failure() -> Diagnostic {
     invalid(Span::default())
@@ -124,6 +125,29 @@ impl Code {
 
     fn load_rcx(&mut self, src: usize) -> Result<(), Diagnostic> {
         self.stack_operand(0x8b, 1, slot_offset(src)?)
+    }
+
+    fn move_register(&mut self, destination: u8, source: u8) -> Result<(), Diagnostic> {
+        if destination >= 16 || source >= 16 {
+            return Err(failure());
+        }
+        let rex = 0x48 | ((source >> 3) << 2) | (destination >> 3);
+        let operand = 0xc0 | ((source & 7) << 3) | (destination & 7);
+        self.push(&[rex, 0x89, operand])
+    }
+
+    fn load_temporary(&mut self, home: TemporaryHome, register: u8) -> Result<(), Diagnostic> {
+        match home {
+            TemporaryHome::Stack(slot) => self.stack_operand(0x8b, register, slot_offset(slot)?),
+            TemporaryHome::R11 => self.move_register(register, TEMPORARY_REGISTER),
+        }
+    }
+
+    fn store_temporary(&mut self, home: TemporaryHome) -> Result<(), Diagnostic> {
+        match home {
+            TemporaryHome::Stack(slot) => self.store_rax(slot),
+            TemporaryHome::R11 => self.move_register(TEMPORARY_REGISTER, 0),
+        }
     }
 
     fn store_rax(&mut self, dst: usize) -> Result<(), Diagnostic> {
@@ -461,12 +485,15 @@ fn expression(
     // Binding-only kernels keep their original byte-for-byte layout. Only
     // the function backends opt in to verified temporary slot reuse.
     let control_flow = layout.is_some();
-    let register = |index| {
-        let index = match layout {
-            Some(layout) => layout.slot(index)?,
-            None => index,
+    let home = |index| {
+        let home = match layout {
+            Some(layout) => layout.home(index)?,
+            None => TemporaryHome::Stack(index),
         };
-        slots.temporary(index)
+        match home {
+            TemporaryHome::Stack(slot) => Ok(TemporaryHome::Stack(slots.temporary(slot)?)),
+            TemporaryHome::R11 => Ok(TemporaryHome::R11),
+        }
     };
     for step in &expr.steps {
         if control_flow {
@@ -476,22 +503,22 @@ fn expression(
             Operation::Work => code.charge_work(step.span)?,
             Operation::Integer { dst, value } => {
                 code.integer_rax(value)?;
-                code.store_rax(register(dst)?)?;
+                code.store_temporary(home(dst)?)?;
             }
             Operation::Boolean { dst, value } if control_flow => {
                 code.push(&[0xb8, u8::from(value), 0, 0, 0])?; // mov eax, imm32
-                code.store_rax(register(dst)?)?;
+                code.store_temporary(home(dst)?)?;
             }
             Operation::Load { dst, slot } => {
                 code.load_rax(slots.local(slot)?)?;
-                code.store_rax(register(dst)?)?;
+                code.store_temporary(home(dst)?)?;
             }
             Operation::Move { dst, src } => {
-                code.load_rax(register(src)?)?;
-                code.store_rax(register(dst)?)?;
+                code.load_temporary(home(src)?, 0)?;
+                code.store_temporary(home(dst)?)?;
             }
             Operation::Unary { dst, src, op } => {
-                code.load_rax(register(src)?)?;
+                code.load_temporary(home(src)?, 0)?;
                 match op {
                     Unary::BitNot => code.push(&[0x48, 0xf7, 0xd0])?, // not rax
                     Unary::Negate if checked => {
@@ -502,7 +529,7 @@ fn expression(
                     Unary::Not if control_flow => code.push(&[0x83, 0xf0, 0x01])?,
                     _ => return Err(invalid(step.span)),
                 }
-                code.store_rax(register(dst)?)?;
+                code.store_temporary(home(dst)?)?;
             }
             Operation::Binary {
                 dst,
@@ -510,21 +537,21 @@ fn expression(
                 right,
                 op,
             } => {
-                code.load_rax(register(left)?)?;
-                code.load_rcx(register(right)?)?;
+                code.load_temporary(home(left)?, 0)?;
+                code.load_temporary(home(right)?, 1)?;
                 if control_flow && op.is_comparison() {
                     code.compare(op, step.span)?;
                 } else {
                     code.binary(op, checked, step.span)?;
                 }
-                code.store_rax(register(dst)?)?;
+                code.store_temporary(home(dst)?)?;
             }
             Operation::Branch {
                 condition,
                 when_true,
                 target,
             } if control_flow => {
-                code.load_rax(register(condition)?)?;
+                code.load_temporary(home(condition)?, 0)?;
                 code.push(&[0x48, 0x85, 0xc0])?; // test rax, rax
                 let condition = if when_true {
                     Condition::NotEqual
@@ -550,14 +577,18 @@ fn expression(
                 for (stack_index, &argument) in
                     arguments.iter().skip(REGISTER_ARGUMENTS).enumerate()
                 {
-                    code.load_rax(register(argument)?)?;
+                    code.load_rax(home(argument)?.stack_slot()?)?;
                     code.store_rax(stack_index)?;
                 }
                 for (&argument, &hardware) in arguments.iter().zip(&INTEGER_ARGUMENT_REGISTERS) {
-                    code.stack_operand(0x8b, hardware, slot_offset(register(argument)?)?)?;
+                    code.stack_operand(
+                        0x8b,
+                        hardware,
+                        slot_offset(home(argument)?.stack_slot()?)?,
+                    )?;
                 }
                 code.call(callee)?;
-                code.store_rax(register(dst)?)?;
+                code.store_rax(home(dst)?.stack_slot()?)?;
             }
             _ => return Err(invalid(step.span)),
         }
@@ -566,7 +597,7 @@ fn expression(
         offsets.push(code.data.len());
         resolve_branches(&mut code.data, &offsets, branches)?;
     }
-    code.load_rax(register(expr.root)?)
+    code.load_temporary(home(expr.root)?, 0)
 }
 
 fn resolve_branches(
@@ -588,7 +619,10 @@ struct FunctionLayout<'a> {
     estimated_steps: usize,
 }
 
-fn plan_function(program: &ScalarProgramIr) -> Result<FunctionLayout<'_>, Diagnostic> {
+fn plan_function(
+    program: &ScalarProgramIr,
+    register_temporaries: bool,
+) -> Result<FunctionLayout<'_>, Diagnostic> {
     if !program.is_function() || program.parameters() > MAX_INTEGER_ARGUMENTS {
         return Err(failure());
     }
@@ -601,7 +635,10 @@ fn plan_function(program: &ScalarProgramIr) -> Result<FunctionLayout<'_>, Diagno
             expressions.push(None);
             continue;
         };
-        let layout = TemporaryLayout::plan_verified(value)?;
+        let mut layout = TemporaryLayout::plan_verified(value)?;
+        if register_temporaries {
+            layout.allocate_r11(value);
+        }
         max_registers = max_registers.max(layout.count());
         for instruction in &value.steps {
             if let Operation::Call { arguments, .. } = &instruction.kind {
@@ -752,7 +789,7 @@ fn function_text(
     budget: Option<u32>,
 ) -> Result<(Code, FreestandingCallLayout), Diagnostic> {
     program.verify()?;
-    let layout = plan_function(program)?;
+    let layout = plan_function(program, false)?;
     let mut code = Code::new(layout.estimated_steps, true)?;
     code.metered = budget.is_some();
     append_function(&mut code, program, &layout, budget)?;
@@ -859,21 +896,23 @@ pub(super) fn emit_bounded_entry(
     let entry = graph.entry();
     let layouts = bodies
         .iter()
-        .map(plan_function)
+        .map(|body| plan_function(body, true))
         .collect::<Result<Vec<_>, _>>()?;
     let frame_sizes = layouts
         .iter()
         .map(|layout| layout.frame_bytes)
         .collect::<Vec<_>>();
     graph.verify_stack(&frame_sizes)?;
-    let steps = layouts.iter().try_fold(0usize, |sum, layout| {
-        sum.checked_add(layout.estimated_steps).ok_or_else(failure)
+    let order = graph.emission_order();
+    let steps = order.iter().try_fold(0usize, |sum, &id| {
+        sum.checked_add(layouts[id].estimated_steps)
+            .ok_or_else(failure)
     })?;
     let mut code = Code::new(steps, true)?;
     code.metered = true;
-    let mut targets = vec![0; bodies.len()];
+    let mut targets = vec![None; bodies.len()];
     let mut entry_bytes = 0;
-    for id in std::iter::once(entry).chain((0..bodies.len()).filter(|&id| id != entry)) {
+    for id in order {
         let is_entry = id == entry;
         // Calls to the named entry from another source function must not reset
         // the shared meter. Its internal target starts after the external meter
@@ -881,14 +920,14 @@ pub(super) fn emit_bounded_entry(
         if is_entry {
             code.start_meter(max_work)?;
         }
-        targets[id] = code.data.len();
+        targets[id] = Some(code.data.len());
         append_function(&mut code, &bodies[id], &layouts[id], None)?;
         if is_entry {
             entry_bytes = code.data.len();
         }
     }
     for (displacement, callee) in code.call_fixups {
-        let target = *targets.get(callee).ok_or_else(failure)?;
+        let target = targets.get(callee).copied().flatten().ok_or_else(failure)?;
         patch_relative_branch(&mut code.data, displacement, target)?;
     }
     let object = object_with_entry(&code.data, b"\0scarp_bounded_integer_entry\0", entry_bytes)?;
