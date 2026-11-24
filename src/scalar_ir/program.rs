@@ -114,9 +114,7 @@ impl ScalarProgramIr {
             return Err(unsupported_function(Span::default()));
         };
         let parameters = signature.parameters.len();
-        if !signature.pure
-            || signature.result != ValueType::Integer
-            || parameters > max_parameters
+        if !signature.pure || signature.result != ValueType::Integer || parameters > max_parameters
         {
             return Err(unsupported_function(signature.span));
         }
@@ -165,7 +163,9 @@ impl ScalarProgramIr {
         let mut literal_bytes = 0usize;
         for statement in operations {
             let kind = match &statement.kind {
-                ResolvedStatement::Return { value: Some(value) } if function_parameters.is_some() => {
+                ResolvedStatement::Return { value: Some(value) }
+                    if function_parameters.is_some() =>
+                {
                     ProgramOp::Return {
                         value: Self::expression(value, &slots)?,
                     }
