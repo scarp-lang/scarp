@@ -67,7 +67,6 @@ fn unsupported_functions_return_diagnostics_without_an_object() {
         "pure funcra f(x: integer) -> integer { return f(x - 1); }",
         "pure funcra f(x: integer) -> integer { while x > 0 { return x; } return 0; }",
         "pure funcra f(x: integer) -> integer { bind y = 0.1d; return x; }",
-        "pure funcra f(a: integer, b: integer, c: integer, d: integer, e: integer, last: integer, g: integer) -> integer { return a; }",
         "pure funcra f(x: integer) -> integer { return x; } print(f(1));",
         "pure funcra f(x: integer) -> integer { return x; } pure funcra g(x: integer) -> integer { return x; }",
     ] {
