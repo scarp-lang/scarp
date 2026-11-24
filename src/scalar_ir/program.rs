@@ -84,6 +84,7 @@ pub(super) struct ScalarProgramIr {
     steps: Vec<ProgramStep>,
     // None is a script; Some(0) is a genuine zero-argument function.
     function_parameters: Option<usize>,
+    bounded: bool,
 }
 
 impl ScalarProgramIr {
@@ -100,12 +101,27 @@ impl ScalarProgramIr {
             .iter()
             .map(|kind| kind.as_primitive().ok_or_else(|| invalid(Span::default())))
             .collect::<Result<Vec<_>, _>>()?;
-        Self::lower_operations(slots, &program.statements, None)
+        Self::lower_operations(slots, &program.statements, None, false)
     }
 
     pub(super) fn lower_integer_function(
         program: &ResolvedProgram,
         max_parameters: usize,
+    ) -> Result<Self, Diagnostic> {
+        Self::lower_function(program, max_parameters, false)
+    }
+
+    pub(super) fn lower_bounded_integer_function(
+        program: &ResolvedProgram,
+        max_parameters: usize,
+    ) -> Result<Self, Diagnostic> {
+        Self::lower_function(program, max_parameters, true)
+    }
+
+    fn lower_function(
+        program: &ResolvedProgram,
+        max_parameters: usize,
+        bounded: bool,
     ) -> Result<Self, Diagnostic> {
         if let Some(statement) = program.statements.first() {
             return Err(unsupported_function(statement.span));
@@ -135,7 +151,8 @@ impl ScalarProgramIr {
                 | ResolvedStatement::Retire { .. } => {}
                 ResolvedStatement::JumpIfFalse { target, .. }
                 | ResolvedStatement::Jump { target }
-                    if (pc + 1..=len).contains(target) => {}
+                    if *target <= len && (bounded || *target > pc) => {}
+                ResolvedStatement::LoopControl { target, .. } if bounded && *target <= len => {}
                 _ => return Err(unsupported_function(step.span)),
             }
         }
@@ -147,13 +164,14 @@ impl ScalarProgramIr {
                 _ => Err(unsupported_function(signature.span)),
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Self::lower_operations(slots, &function.statements, Some(parameters))
+        Self::lower_operations(slots, &function.statements, Some(parameters), bounded)
     }
 
     fn lower_operations(
         slots: Vec<ValueType>,
         operations: &[crate::resolver::ResolvedOperation],
         function_parameters: Option<usize>,
+        bounded: bool,
     ) -> Result<Self, Diagnostic> {
         if slots.len() > MAX_PROGRAM_SLOTS || operations.len() > MAX_PROGRAM_STEPS {
             return Err(invalid(Span::default()));
@@ -266,6 +284,7 @@ impl ScalarProgramIr {
             slots,
             steps,
             function_parameters,
+            bounded,
         };
         ir.verify()?;
         Ok(ir)
@@ -299,6 +318,10 @@ impl ScalarProgramIr {
 
     pub(super) fn is_function(&self) -> bool {
         self.function_parameters.is_some()
+    }
+
+    pub(super) fn is_bounded(&self) -> bool {
+        self.bounded
     }
 
     pub(super) fn operations(&self) -> &[ProgramStep] {
@@ -345,7 +368,8 @@ impl ScalarProgramIr {
         let len = self.steps.len();
         let function = self.is_function();
         let parameters = self.parameters();
-        if len > MAX_PROGRAM_STEPS
+        if (self.bounded && !function)
+            || len > MAX_PROGRAM_STEPS
             || self.slots.len() > MAX_PROGRAM_SLOTS
             || self.slots.get(..parameters).map_or(true, |kinds| {
                 kinds.iter().any(|kind| *kind != ValueType::Integer)
@@ -367,7 +391,9 @@ impl ScalarProgramIr {
                     ProgramOp::Store { slot, .. } | ProgramOp::Update { slot, .. }
                         if *slot >= parameters => {}
                     ProgramOp::JumpIfFalse { target, .. } | ProgramOp::Jump { target }
-                        if *target > pc => {}
+                        if self.bounded || *target > pc => {}
+                    ProgramOp::LoopControl { retire, .. }
+                        if self.bounded && retire.iter().all(|s| *s >= parameters) => {}
                     ProgramOp::Retire { slots } if slots.iter().all(|s| *s >= parameters) => {}
                     ProgramOp::Return { .. } => {}
                     _ => return Err(invalid(span)),
@@ -502,6 +528,20 @@ mod tests {
 
     fn function_ir(source: &str) -> ScalarProgramIr {
         ScalarProgramIr::lower_integer_function(&compile(source).unwrap(), 6).unwrap()
+    }
+
+    #[test]
+    fn bounded_function_ir_accepts_cycles_only_in_explicit_mode() {
+        let source = "pure funcra f(n: integer) -> integer {
+            var i = n; while i > 0 { i -= 1; } return i;
+        }";
+        let resolved = compile(source).unwrap();
+        assert!(ScalarProgramIr::lower_integer_function(&resolved, 16).is_err());
+        let mut ir = ScalarProgramIr::lower_bounded_integer_function(&resolved, 16).unwrap();
+        assert!(ir.is_bounded());
+        assert!(ir.verify().is_ok());
+        ir.bounded = false;
+        assert!(ir.verify().is_err());
     }
 
     #[test]
