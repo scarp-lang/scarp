@@ -23,6 +23,14 @@ frames. Eligible terminal self-calls replace their invocation state only after
 outgoing arguments have been evaluated; defaults, preconditions and budgets
 apply again to the next invocation. Postconditions prevent this optimization.
 
+The interpreter can also reuse one completed ordinary function frame's
+buffers within an execution. It removes values, supplied-argument flags and
+expression state before retaining the buffers. Each retained buffer has a
+capacity of at most 128 items, and a later call uses it only if its frame
+fits. Returned values keep their own references. Calls still spend the same
+work and quota and count the same active slots. Retained buffer capacity is
+separate from active frame slots and process resident memory.
+
 Clones, returned values, immutable vector windows, tiles and queued output events
 retain their own references to shared backing storage. Retiring a source slot
 does not change those values. Shared storage is released when its final holder

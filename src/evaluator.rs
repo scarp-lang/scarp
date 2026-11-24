@@ -87,6 +87,11 @@ impl Workspace {
         self.values.clear();
         self.tasks.clear();
     }
+
+    pub(crate) fn largest_buffer_capacity(&self) -> usize {
+        self.values.capacity().max(self.tasks.capacity())
+    }
+
     pub(crate) fn evaluate(
         &mut self,
         expression: &ResolvedExpression,
