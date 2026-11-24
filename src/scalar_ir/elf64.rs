@@ -409,9 +409,11 @@ fn resolve_branches(
 
 fn function_text(program: &ScalarProgramIr) -> Result<Code, Diagnostic> {
     program.verify()?;
+    if !program.is_function() {
+        return Err(failure());
+    }
     let registers = INTEGER_ARGUMENT_REGISTERS
         .get(..program.parameters())
-        .filter(|registers| !registers.is_empty())
         .ok_or_else(failure)?;
     let mut max_registers = 0;
     let mut estimated_steps = program.operations().len();
