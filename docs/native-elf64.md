@@ -203,7 +203,7 @@ The development-only Rust API
 `native_object::emit_elf64_bounded_integer_function(source, max_work)`
 emits the distinct Linux x86-64 SysV symbol
 `scarp_bounded_integer_function`. It accepts the checked scalar function
-subset plus while, break and continue, including nested loops. Required
+subset plus while, counted repeat, break and continue, including nested loops. Required
 integer parameters use the same register/stack calling convention and
 the same checked result structure.
 
@@ -220,7 +220,7 @@ Backward statement edges are accepted only in the bounded mode. The
 existing verifier checks definite slot initialization and retirement at
 control-flow joins and rejects reachable fallthrough. Expression branches,
 arithmetic failure branches and unmetered function branches retain the
-forward-only rule. Counted repeat, calls, default arguments, contracts,
+forward-only rule. Calls, default arguments, contracts,
 heap-backed values, and general CLI native compilation remain unsupported.
 
 ```rust
@@ -240,3 +240,34 @@ assert!(!artifact.object.is_empty());
 The public alpha.20 release does not include this API. A C host must use the
 exact arity and symbol documented above. Tests link and execute emitted ELF
 objects on Linux x86-64 using an independent C compiler.
+
+### Counted native repeat
+
+The bounded API also accepts `repeat count as index { ... }`. It evaluates
+the count once before entering the loop, snapshots it in a compiler-owned
+integer slot, initializes the index to zero, and checks the signed index
+against the saved count before each iteration. Updating a source variable
+used to compute the count does not change the saved bound. Zero skips the
+body. Negative counts return status 5
+(`CHECKED_KERNEL_REPEAT_COUNT`) with the repeat initialization source span.
+Index progression is checked for integer overflow. Break and continue use
+the existing resolved control-flow targets and retirement verifier.
+
+The native work allowance applies to initialization, guard, index advancement
+and body operations. Huge positive counts do not bypass the allowance.
+The unmetered integer-function API still rejects loops.
+
+```scarp
+pure funcra triangular(n: integer) -> integer {
+    var total = 0;
+    repeat n as i {
+        total += i + 1;
+    }
+    return total;
+}
+```
+
+The native host regression suite compares zero, one and multiple iterations,
+nested loops, early returns, break/continue, count snapshots and negative-count
+diagnostics against interpreter execution; it also tests exhaustion before
+negative-count evaluation and with a maximum signed 64-bit iteration count.
