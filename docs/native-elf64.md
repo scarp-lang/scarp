@@ -145,7 +145,9 @@ See [Proposal 0037](proposals/0037-compiler-owned-native-ir.md) and
 ## Experimental parameterized integer function
 
 `native_object::emit_elf64_checked_integer_function` accepts one `pure funcra`
-with one to six required `integer` parameters and an `integer` return type.
+with zero to six required `integer` parameters and an `integer` return type.
+Zero-argument functions are supported on the development branch for the next
+pre-release, not in the v0.0.6-alpha.20 published ABI.
 It supports scalar integer and Boolean binding storage, plain assignments,
 integer compound assignments, forward `if`/`elif`/`else`, short-circuit
 Boolean expressions and early returns. Source entry operations, loops, calls,
@@ -154,7 +156,8 @@ contracts, optional parameters and heap-backed values are rejected.
 The new symbol is `scarp_checked_integer_function`. Declare exactly as many
 `int64_t` parameters as the Scarp function has. They arrive in RDI, RSI, RDX,
 RCX, R8 and R9 in order. The return uses the same 16-byte result layout as the
-checked zero-argument kernel. For the two-argument example:
+checked zero-argument kernel. For a zero-argument function, declare the parameter list as `(void)` in C.
+For the two-argument example:
 
 ```c
 #include <stdint.h>
