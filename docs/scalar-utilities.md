@@ -28,12 +28,33 @@ constructor reports an invalid value at the argument span.
 | `bits_reverse`, `bits_swap_bytes` | `integer → integer` | Reverse the order of bits or bytes in the 64-bit representation. |
 | `bits_rotate_left`, `bits_rotate_right` | `integer, integer → integer` | Rotate the full bit pattern by 0 through 63 positions. Invalid counts report E0046. |
 | `integer_abs`, `integer_sign` | `integer → integer` | Return the checked magnitude or the sign (-1, 0, or 1). |
-| `integer_gcd`, `integer_lcm` | `integer, integer → integer` | Use operand magnitudes and return the exact nonnegative result if it fits. Both return zero for `(0, 0)`, and LCM returns zero if either input is zero. |
+| `integer_gcd`, `integer_hcf` | 2–1024 positional integers → `integer` | Identical names for the greatest common divisor (highest common factor). Returns zero when all inputs are zero. |
+| `integer_lcm` | 2–1024 positional integers → `integer` | Least common multiple of all operand magnitudes; returns zero if any operand is zero. |
 
 `integer_abs(-9223372036854775808)` and any GCD or LCM above the signed
 maximum raise arithmetic overflow. Bit-pattern results are interpreted as
 signed two's-complement integers, so rotating 1 left by 63 yields
 `-9223372036854775808`. These operations perform no implicit conversions.
+
+For example:
+
+```scarp
+print(integer_hcf(12, 18));          // 6
+print(integer_hcf(12, 18, 24));      // 6
+print(integer_gcd(24, 36, 48, 60));  // 12
+print(integer_lcm(4, 6, 8, 12));     // 24
+print(integer_lcm(9223372036854775807, 2, 0)); // 0
+```
+
+All operands must be integers, with no implicit conversion or named arguments.
+Two-argument calls retain their original behavior. Additional operands are
+charged against the work budget, as is each Euclidean remainder. GCD permits
+unsigned intermediate magnitudes and checks the final signed result. LCM checks
+for zero before a multi-operand fold, so a zero after an otherwise overflowing
+prefix still produces zero. Call signatures are recorded for the concrete arity;
+embedding clients can use `Builtin::accepts_arity`, `Builtin::parameter_type_at`
+and `ResolvedProgram::builtin_type_id_for_arity` to inspect them. The existing
+`parameter_types` returns the required prefix for these two variadic builtins.
 
 The functions are pure and work in typed function bodies and defaults.
 The experimental C11 and ELF64 paths reject these calls. Rust hosts use
