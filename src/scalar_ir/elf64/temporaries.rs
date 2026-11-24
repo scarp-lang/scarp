@@ -59,19 +59,22 @@ impl RegisterSet {
     }
 }
 
-fn accesses(operation: &Operation) -> (Option<usize>, [Option<usize>; 2]) {
+fn accesses(operation: &Operation) -> (Option<usize>, [Option<usize>; 2], &[usize]) {
     match *operation {
-        Operation::Work | Operation::Jump { .. } => (None, [None, None]),
+        Operation::Work | Operation::Jump { .. } => (None, [None, None], &[]),
         Operation::Integer { dst, .. }
         | Operation::Boolean { dst, .. }
-        | Operation::Load { dst, .. } => (Some(dst), [None, None]),
+        | Operation::Load { dst, .. } => (Some(dst), [None, None], &[]),
         Operation::Move { dst, src } | Operation::Unary { dst, src, .. } => {
-            (Some(dst), [Some(src), None])
+            (Some(dst), [Some(src), None], &[])
         }
         Operation::Binary {
             dst, left, right, ..
-        } => (Some(dst), [Some(left), Some(right)]),
-        Operation::Branch { condition, .. } => (None, [Some(condition), None]),
+        } => (Some(dst), [Some(left), Some(right)], &[]),
+        Operation::Branch { condition, .. } => (None, [Some(condition), None], &[]),
+        Operation::Call {
+            dst, ref arguments, ..
+        } => (Some(dst), [None, None], arguments),
     }
 }
 
@@ -110,8 +113,13 @@ impl TemporaryLayout {
                 }
                 Ok(())
             };
-            let (write, reads) = accesses(&step.kind);
-            for register in reads.into_iter().flatten().chain(write) {
+            let (write, reads, arguments) = accesses(&step.kind);
+            for register in reads
+                .into_iter()
+                .flatten()
+                .chain(arguments.iter().copied())
+                .chain(write)
+            {
                 touch(register)?;
             }
         }
@@ -192,14 +200,15 @@ impl TemporaryLayout {
                 outgoing.union(live_at(target)?);
             }
 
-            let (write, reads) = accesses(&step.kind);
+            let (write, reads, arguments) = accesses(&step.kind);
+            let inputs = reads.into_iter().flatten().chain(arguments.iter().copied());
             if let Some(dst) = write {
                 written.insert(dst);
                 outgoing.remove(dst);
                 // A store cannot overwrite anything still live after it.
                 // Keep same-instruction operands separate even at last use.
                 let mut neighbors = outgoing;
-                for src in reads.into_iter().flatten() {
+                for src in inputs.clone() {
                     if src != dst {
                         neighbors.insert(src);
                     }
@@ -215,7 +224,17 @@ impl TemporaryLayout {
                     conflicts[right].insert(left);
                 }
             }
-            for src in reads.into_iter().flatten() {
+            // Every argument is live at dispatch, even when evaluated in
+            // separate short-circuit arms within its own subexpression.
+            for (index, &left) in arguments.iter().enumerate() {
+                for &right in &arguments[index + 1..] {
+                    if left != right {
+                        conflicts[left].insert(right);
+                        conflicts[right].insert(left);
+                    }
+                }
+            }
+            for src in inputs {
                 outgoing.insert(src);
             }
             fallthrough = outgoing;

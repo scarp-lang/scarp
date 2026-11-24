@@ -10,7 +10,7 @@ use self::layout::{
 use self::temporaries::TemporaryLayout;
 use super::{
     invalid,
-    program::{ProgramOp, ScalarProgramIr},
+    program::{ProgramOp, ScalarCallGraph, ScalarProgramIr},
     Operation, ScalarExpressionIr, Unary,
 };
 use crate::{
@@ -27,6 +27,7 @@ const MAX_TEXT_BYTES: usize = 200_000;
 const MAX_OBJECT_BYTES: usize = 262_144;
 // Bound both the public signature and the number of caller-stack loads.
 pub(super) const MAX_INTEGER_ARGUMENTS: usize = 16;
+pub(super) const REGISTER_ARGUMENTS: usize = INTEGER_ARGUMENT_REGISTERS.len();
 const STACK_PROBE_INTERVAL: u32 = 4096; // Linux x86-64 base page size
 
 fn failure() -> Diagnostic {
@@ -37,6 +38,7 @@ struct Code {
     data: Vec<u8>,
     branches_to_failure: Vec<usize>,
     failure_spans: Vec<Span>,
+    call_fixups: Vec<(usize, usize)>,
     // Keep the two existing kernel encodings byte-for-byte compatible.
     compact_function: bool,
     metered: bool,
@@ -67,6 +69,7 @@ impl Code {
             data,
             branches_to_failure: Vec::new(),
             failure_spans: Vec::new(),
+            call_fixups: Vec::new(),
             compact_function,
             metered: false,
         })
@@ -171,6 +174,23 @@ impl Code {
         Ok(displacement)
     }
 
+    fn call(&mut self, callee: usize) -> Result<(), Diagnostic> {
+        self.call_fixups.try_reserve(1).map_err(|_| failure())?;
+        self.branches_to_failure
+            .try_reserve(1)
+            .map_err(|_| failure())?;
+        self.push(&[0xe8])?; // call rel32
+        let displacement = self.data.len();
+        self.push(&[0; 4])?;
+        self.call_fixups.push((displacement, callee));
+        // Preserve the callee's packed RDX failure while unwinding. Only
+        // the low status word is tested, and this branch does not charge work.
+        self.push(&[0x85, 0xd2])?; // test edx, edx
+        let failure = self.near_branch(Condition::NotEqual)?;
+        self.branches_to_failure.push(failure);
+        Ok(())
+    }
+
     fn allocate_stack(&mut self, mut bytes: u32) -> Result<(), Diagnostic> {
         // Touch each full page crossed so a large frame cannot jump a guard
         // page. The final adjustment is less than one page and all slots are
@@ -188,8 +208,8 @@ impl Code {
         Ok(())
     }
 
-    /// R10 is caller-saved and unused by the scalar encoder. It is loaded
-    /// once per invocation and never exposed as an argument or result.
+    /// R10 is caller-saved and reserved as the shared native work meter.
+    /// Only external entries initialize it, and generated callees debit it.
     fn start_meter(&mut self, max_work: u32) -> Result<(), Diagnostic> {
         self.push(&[0x41, 0xba])?; // mov r10d, imm32 (zero extends)
         self.push(&max_work.to_le_bytes())?;
@@ -334,7 +354,7 @@ impl Code {
         self.push(&[0xeb, clear_failed_value.len() as u8])?; // success skips failure
         let failure_target = self.data.len();
         self.push(&clear_failed_value)?;
-        for &displacement in &self.branches_to_failure {
+        for displacement in self.branches_to_failure.drain(..) {
             patch_forward_branch(&mut self.data, displacement, failure_target)?;
         }
         Ok(())
@@ -499,6 +519,20 @@ fn expression(
             Operation::Jump { target } if control_flow => {
                 branches.push((code.jump()?, target));
             }
+            Operation::Call {
+                dst,
+                callee,
+                ref arguments,
+            } if control_flow && code.metered => {
+                if arguments.len() > REGISTER_ARGUMENTS {
+                    return Err(invalid(step.span));
+                }
+                for (&argument, &hardware) in arguments.iter().zip(&INTEGER_ARGUMENT_REGISTERS) {
+                    code.stack_operand(0x8b, hardware, slot_offset(register(argument)?)?)?;
+                }
+                code.call(callee)?;
+                code.store_rax(register(dst)?)?;
+            }
             _ => return Err(invalid(step.span)),
         }
     }
@@ -521,36 +555,23 @@ fn resolve_branches(
     Ok(())
 }
 
-fn function_text(
-    program: &ScalarProgramIr,
-    budget: Option<u32>,
-) -> Result<(Code, FreestandingCallLayout), Diagnostic> {
-    program.verify()?;
-    if !program.is_function() || program.is_bounded() != budget.is_some() {
+struct FunctionLayout<'a> {
+    expressions: Vec<Option<(&'a ScalarExpressionIr, TemporaryLayout)>>,
+    frame_bytes: u32,
+    estimated_steps: usize,
+}
+
+fn plan_function(program: &ScalarProgramIr) -> Result<FunctionLayout<'_>, Diagnostic> {
+    if !program.is_function() || program.parameters() > MAX_INTEGER_ARGUMENTS {
         return Err(failure());
     }
-    let parameters = program.parameters();
-    if parameters > MAX_INTEGER_ARGUMENTS {
-        return Err(failure());
-    }
-    let register_count = parameters.min(INTEGER_ARGUMENT_REGISTERS.len());
-    let registers = &INTEGER_ARGUMENT_REGISTERS[..register_count];
     let mut max_registers = 0;
     let mut estimated_steps = program.operations().len();
     let mut expressions = Vec::with_capacity(program.operations().len());
     for step in program.operations() {
-        let value = match &step.kind {
-            ProgramOp::Return { value }
-            | ProgramOp::Store { value, .. }
-            | ProgramOp::Update { value, .. }
-            | ProgramOp::RepeatInit { count: value, .. }
-            | ProgramOp::JumpIfFalse {
-                condition: value, ..
-            } => value,
-            _ => {
-                expressions.push(None);
-                continue;
-            }
+        let Some(value) = step.kind.expression() else {
+            expressions.push(None);
+            continue;
         };
         let layout = TemporaryLayout::plan_verified(value)?;
         max_registers = max_registers.max(layout.count());
@@ -559,9 +580,26 @@ fn function_text(
             .ok_or_else(failure)?;
         expressions.push(Some((value, layout)));
     }
-    let slot_count = program.integer_slot_count();
-    let stack_size = frame_bytes(slot_count, max_registers)?;
-    let mut code = Code::new(estimated_steps, true)?;
+    Ok(FunctionLayout {
+        expressions,
+        frame_bytes: frame_bytes(program.integer_slot_count(), max_registers)?,
+        estimated_steps,
+    })
+}
+
+fn append_function(
+    code: &mut Code,
+    program: &ScalarProgramIr,
+    layout: &FunctionLayout<'_>,
+    initial_budget: Option<u32>,
+) -> Result<(), Diagnostic> {
+    if program.is_bounded() != code.metered {
+        return Err(failure());
+    }
+    let parameters = program.parameters();
+    let register_count = parameters.min(REGISTER_ARGUMENTS);
+    let registers = &INTEGER_ARGUMENT_REGISTERS[..register_count];
+    let stack_size = layout.frame_bytes;
     code.allocate_stack(stack_size)?;
     for (slot, register) in registers.iter().copied().enumerate() {
         code.store_argument(slot, register)?;
@@ -572,20 +610,26 @@ fn function_text(
         code.copy_stack_argument(slot, slot - register_count, stack_size)?;
     }
 
-    if let Some(max_work) = budget {
+    if let Some(max_work) = initial_budget {
         code.start_meter(max_work)?;
     }
 
     let mut offsets = Vec::with_capacity(program.operations().len() + 1);
     let mut branches = Vec::new();
     let mut returns = Vec::new();
-    for (step, planned) in program.operations().iter().zip(&expressions) {
+    for (step, planned) in program.operations().iter().zip(&layout.expressions) {
         offsets.push(code.data.len());
         if step.charge_work {
             code.charge_work(step.span)?;
         }
         if let Some((value, layout)) = planned {
-            expression(&mut code, value, slot_count, true, Some(layout))?;
+            expression(
+                code,
+                value,
+                program.integer_slot_count(),
+                true,
+                Some(layout),
+            )?;
         }
         match &step.kind {
             ProgramOp::Store { slot, .. } => {
@@ -597,8 +641,8 @@ fn function_text(
                 operator_span,
                 ..
             } => {
-                // The RHS cannot call or write slots. Scarp snapshots the LHS
-                // first, which is equivalent to reading the same slot here.
+                // Pure calls cannot write their caller's slots. Reading the
+                // LHS here yields the same value as the interpreter snapshot.
                 code.push(&[0x48, 0x89, 0xc1])?; // mov rcx, rax
                 code.load_rax(*slot)?;
                 code.binary(*operator, true, *operator_span)?;
@@ -663,11 +707,23 @@ fn function_text(
     }
     code.finish_checked_return()?;
     code.restore_stack_and_return(stack_size)?;
+    Ok(())
+}
+
+fn function_text(
+    program: &ScalarProgramIr,
+    budget: Option<u32>,
+) -> Result<(Code, FreestandingCallLayout), Diagnostic> {
+    program.verify()?;
+    let layout = plan_function(program)?;
+    let mut code = Code::new(layout.estimated_steps, true)?;
+    code.metered = budget.is_some();
+    append_function(&mut code, program, &layout, budget)?;
     Ok((
         code,
         FreestandingCallLayout {
-            frame_bytes: stack_size,
-            integer_arguments: parameters,
+            frame_bytes: layout.frame_bytes,
+            integer_arguments: program.parameters(),
         },
     ))
 }
@@ -758,7 +814,65 @@ pub(super) fn emit_function_with_layout(
     ))
 }
 
+pub(super) fn emit_bounded_entry(
+    graph: &ScalarCallGraph,
+    max_work: u32,
+) -> Result<CheckedElf64Kernel, Diagnostic> {
+    let bodies = graph.bodies();
+    let entry = graph.entry();
+    let layouts = bodies
+        .iter()
+        .map(plan_function)
+        .collect::<Result<Vec<_>, _>>()?;
+    let frame_sizes = layouts
+        .iter()
+        .map(|layout| layout.frame_bytes)
+        .collect::<Vec<_>>();
+    graph.verify_stack(&frame_sizes)?;
+    let steps = layouts.iter().try_fold(0usize, |sum, layout| {
+        sum.checked_add(layout.estimated_steps).ok_or_else(failure)
+    })?;
+    let mut code = Code::new(steps, true)?;
+    code.metered = true;
+    let mut targets = vec![0; bodies.len()];
+    let mut entry_bytes = 0;
+    for id in std::iter::once(entry).chain((0..bodies.len()).filter(|&id| id != entry)) {
+        let is_entry = id == entry;
+        // Calls to the named entry from another source function must not reset
+        // the shared meter. Its internal target starts after the external meter
+        // setup, at the body's own prologue.
+        if is_entry {
+            code.start_meter(max_work)?;
+        }
+        targets[id] = code.data.len();
+        append_function(&mut code, &bodies[id], &layouts[id], None)?;
+        if is_entry {
+            entry_bytes = code.data.len();
+        }
+    }
+    for (displacement, callee) in code.call_fixups {
+        let target = *targets.get(callee).ok_or_else(failure)?;
+        patch_relative_branch(&mut code.data, displacement, target)?;
+    }
+    let object = object_with_entry(&code.data, b"\0scarp_bounded_integer_entry\0", entry_bytes)?;
+    Ok(CheckedElf64Kernel {
+        object,
+        failure_spans: code.failure_spans,
+    })
+}
+
 fn object(machine: &[u8], strings: &[u8]) -> Result<Vec<u8>, Diagnostic> {
+    object_with_entry(machine, strings, machine.len())
+}
+
+fn object_with_entry(
+    machine: &[u8],
+    strings: &[u8],
+    entry_bytes: usize,
+) -> Result<Vec<u8>, Diagnostic> {
+    if !(1..=machine.len()).contains(&entry_bytes) {
+        return Err(failure());
+    }
     // Offsets are into shstrtab, starting with the required NUL name.
     const SHSTR: &[u8] = b"\0.text\0.symtab\0.strtab\0.shstrtab\0.note.GNU-stack\0";
     let text_offset = align_up(64, 16)?;
@@ -796,7 +910,7 @@ fn object(machine: &[u8], strings: &[u8]) -> Result<Vec<u8>, Diagnostic> {
     u32at(&mut symbols, 24, 1)?; // name offset in .strtab
     symbols[28] = 0x12; // STB_GLOBAL | STT_FUNC
     u16at(&mut symbols, 30, 1)?; // .text section
-    u64at(&mut symbols, 40, machine.len() as u64)?;
+    u64at(&mut symbols, 40, entry_bytes as u64)?;
     put(&mut object, sym_offset, &symbols)?;
     put(&mut object, str_offset, strings)?;
     put(&mut object, shstr_offset, SHSTR)?;

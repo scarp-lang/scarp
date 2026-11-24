@@ -98,6 +98,27 @@ pub fn emit_elf64_bounded_integer_function(
     crate::scalar_ir::emit_bounded_integer_function(source, max_work)
 }
 
+/// Emit a bounded Linux x86-64 ELF64 entry and its private direct-call bodies.
+///
+/// Select a source function by its exact name. The only exported symbol is
+/// `scarp_bounded_integer_entry`. Each function is pure and takes zero to six
+/// required integer arguments, with an integer result. The external symbol
+/// uses the selected function's arity and the checked integer result layout.
+/// Calls are statically resolved, nonrecursive, and confined to this object.
+/// Named argument expressions are evaluated in written order.
+///
+/// One native work allowance is initialized at the external entry and debited
+/// by every active function. Callee errors return the original status and
+/// source span ID. Compilation rejects over 32 functions, a call chain deeper
+/// than 16 active frames, or a chain that needs more than 64 KiB of stack.
+pub fn emit_elf64_bounded_integer_entry(
+    source: &str,
+    entry: &str,
+    max_work: u32,
+) -> Result<CheckedElf64Kernel, Diagnostic> {
+    crate::scalar_ir::emit_bounded_integer_entry(source, entry, max_work)
+}
+
 /// Maximum callee frame size enforced by the experimental x86-64 encoder.
 /// The caller must additionally provide space for the return address,
 /// stack-passed arguments, and any surrounding kernel or interrupt frames.
