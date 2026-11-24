@@ -92,7 +92,6 @@ pub fn emit_elf64_bounded_integer_function(
     crate::scalar_ir::emit_bounded_integer_function(source, max_work)
 }
 
-
 /// Maximum callee frame size enforced by the experimental x86-64 encoder.
 /// The caller must additionally provide space for the return address,
 /// stack-passed arguments, and any surrounding kernel or interrupt frames.

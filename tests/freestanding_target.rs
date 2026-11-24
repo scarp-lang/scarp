@@ -18,7 +18,10 @@ fn target_identifier_is_exact_and_never_falls_back_to_host() {
     assert_eq!(target, FreestandingTarget::X86_64None);
     assert_eq!(target.name(), "x86_64-none");
     assert_eq!(target.call_stack_alignment(), 16);
-    assert_eq!(target.max_frame_bytes(), FREESTANDING_X86_64_MAX_FRAME_BYTES);
+    assert_eq!(
+        target.max_frame_bytes(),
+        FREESTANDING_X86_64_MAX_FRAME_BYTES
+    );
     for invalid in [
         "",
         "X86_64-none",
