@@ -1,7 +1,14 @@
 //! Self-contained x86-64 SysV integer-kernel code and ELF64 ET_REL encoding.
 //! Production emission uses only safe Rust, no external compiler or linker.
 
-use super::{invalid, program::ScalarProgramIr, Operation, Unary};
+mod layout;
+
+use self::layout::{align_up, frame_bytes, slot_offset, INTEGER_ARGUMENT_REGISTERS};
+use super::{
+    invalid,
+    program::{ProgramOp, ScalarProgramIr},
+    Operation, ScalarExpressionIr, Unary,
+};
 use crate::{
     ast::BinaryOperator,
     diagnostics::{Diagnostic, Span},
@@ -13,6 +20,7 @@ use crate::{
 
 const MAX_TEXT_BYTES: usize = 200_000;
 const MAX_OBJECT_BYTES: usize = 262_144;
+pub(super) const MAX_INTEGER_ARGUMENTS: usize = INTEGER_ARGUMENT_REGISTERS.len();
 const STACK_PROBE_INTERVAL: u32 = 4096; // Linux x86-64 base page size
 
 fn failure() -> Diagnostic {
@@ -67,27 +75,39 @@ impl Code {
         Ok(())
     }
 
-    fn slot(index: usize) -> Result<[u8; 4], Diagnostic> {
-        index
-            .checked_mul(8)
-            .and_then(|x| u32::try_from(x).ok())
-            .map(u32::to_le_bytes)
-            .ok_or_else(failure)
-    }
-
     fn load_rax(&mut self, src: usize) -> Result<(), Diagnostic> {
         self.push(&[0x48, 0x8b, 0x84, 0x24])?;
-        self.push(&Self::slot(src)?)
+        self.push(&slot_offset(src)?)
     }
 
     fn load_rcx(&mut self, src: usize) -> Result<(), Diagnostic> {
         self.push(&[0x48, 0x8b, 0x8c, 0x24])?;
-        self.push(&Self::slot(src)?)
+        self.push(&slot_offset(src)?)
     }
 
     fn store_rax(&mut self, dst: usize) -> Result<(), Diagnostic> {
         self.push(&[0x48, 0x89, 0x84, 0x24])?;
-        self.push(&Self::slot(dst)?)
+        self.push(&slot_offset(dst)?)
+    }
+
+    fn store_argument(&mut self, index: usize, register: u8) -> Result<(), Diagnostic> {
+        let rex = 0x48 | ((register >> 3) << 2);
+        let mod_rm = 0x84 | ((register & 7) << 3);
+        self.push(&[rex, 0x89, mod_rm, 0x24])?;
+        self.push(&slot_offset(index)?)
+    }
+
+    fn restore_stack_and_return(&mut self, bytes: u32) -> Result<(), Diagnostic> {
+        self.push(&[0x48, 0x81, 0xc4])?; // add rsp, imm32
+        self.push(&bytes.to_le_bytes())?;
+        self.push(&[0xc3])
+    }
+
+    fn jump(&mut self) -> Result<usize, Diagnostic> {
+        self.push(&[0xe9])?; // jmp rel32
+        let displacement = self.data.len();
+        self.push(&[0; 4])?;
+        Ok(displacement)
     }
 
     fn allocate_stack(&mut self, mut bytes: u32) -> Result<(), Diagnostic> {
@@ -204,6 +224,21 @@ impl Code {
         self.push(&[0x48, 0xd3, mod_rm])
     }
 
+    fn compare(&mut self, op: BinaryOperator, span: Span) -> Result<(), Diagnostic> {
+        let opcode = match op {
+            BinaryOperator::Equal => 0x94,
+            BinaryOperator::NotEqual => 0x95,
+            BinaryOperator::Less => 0x9c,
+            BinaryOperator::LessEqual => 0x9e,
+            BinaryOperator::Greater => 0x9f,
+            BinaryOperator::GreaterEqual => 0x9d,
+            _ => return Err(invalid(span)),
+        };
+        self.push(&[0x48, 0x39, 0xc8])?; // cmp rax, rcx
+        self.push(&[0x0f, opcode, 0xc0])?; // setcc al
+        self.push(&[0x0f, 0xb6, 0xc0]) // movzx eax, al
+    }
+
     fn finish_checked_return(&mut self) -> Result<(), Diagnostic> {
         self.push(&[0x31, 0xd2])?; // success: xor edx, edx
         if self.branches_to_failure.is_empty() {
@@ -263,75 +298,196 @@ fn text(program: &ScalarProgramIr, checked_arithmetic: bool) -> Result<Code, Dia
     code.allocate_stack(stack_size)?;
 
     for (slot, expr) in program.integer_stores() {
-        for step in &expr.steps {
-            match &step.kind {
-                Operation::Work => {}
-                Operation::Integer { dst, value } => {
-                    code.push(&[0x48, 0xb8])?; // movabs rax, imm64
-                    code.push(&value.to_le_bytes())?;
-                    code.store_rax(temporary(slot_count, *dst)?)?;
-                }
-                Operation::Load { dst, slot } => {
-                    code.load_rax(*slot)?;
-                    code.store_rax(temporary(slot_count, *dst)?)?;
-                }
-                Operation::Move { dst, src } => {
-                    code.load_rax(temporary(slot_count, *src)?)?;
-                    code.store_rax(temporary(slot_count, *dst)?)?;
-                }
-                Operation::Unary {
-                    dst,
-                    src,
-                    op: Unary::BitNot,
-                } => {
-                    code.load_rax(temporary(slot_count, *src)?)?;
-                    code.push(&[0x48, 0xf7, 0xd0])?; // not rax
-                    code.store_rax(temporary(slot_count, *dst)?)?;
-                }
-                Operation::Unary {
-                    dst,
-                    src,
-                    op: Unary::Negate,
-                } if checked_arithmetic => {
-                    code.load_rax(temporary(slot_count, *src)?)?;
-                    code.push(&[0x48, 0xf7, 0xd8])?; // neg rax
-                    code.guard_overflow(step.span)?;
-                    code.store_rax(temporary(slot_count, *dst)?)?;
-                }
-                Operation::Binary {
-                    dst,
-                    left,
-                    right,
-                    op,
-                } => {
-                    code.load_rax(temporary(slot_count, *left)?)?;
-                    code.load_rcx(temporary(slot_count, *right)?)?;
-                    code.binary(*op, checked_arithmetic, step.span)?;
-                    code.store_rax(temporary(slot_count, *dst)?)?;
-                }
-                _ => return Err(invalid(step.span)),
-            }
-        }
-        code.load_rax(temporary(slot_count, expr.root)?)?;
+        expression(&mut code, expr, slot_count, checked_arithmetic, false)?;
         code.store_rax(slot)?;
     }
 
     if checked_arithmetic {
         code.finish_checked_return()?;
     }
-    // Both return paths restore the same stack frame and leave callee-saved
-    // registers untouched. On success RAX still holds the final store value.
-    code.push(&[0x48, 0x81, 0xc4])?;
-    code.push(&stack_size.to_le_bytes())?;
-    code.push(&[0xc3])?;
+    code.restore_stack_and_return(stack_size)?;
     Ok(code)
 }
 
-fn aligned(value: usize, alignment: usize) -> Result<usize, Diagnostic> {
-    value
-        .checked_add(alignment - 1)
-        .map(|x| x & !(alignment - 1))
-        .ok_or_else(failure)
+fn expression(
+    code: &mut Code,
+    expr: &ScalarExpressionIr,
+    slot_count: usize,
+    checked: bool,
+    control_flow: bool,
+) -> Result<(), Diagnostic> {
+    let mut offsets = Vec::new();
+    let mut branches = Vec::new();
+    let register = |index| temporary(slot_count, index);
+    for step in &expr.steps {
+        if control_flow {
+            offsets.push(code.data.len());
+        }
+        match step.kind {
+            Operation::Work => {}
+            Operation::Integer { dst, value } => {
+                code.push(&[0x48, 0xb8])?; // movabs rax, imm64
+                code.push(&value.to_le_bytes())?;
+                code.store_rax(register(dst)?)?;
+            }
+            Operation::Boolean { dst, value } if control_flow => {
+                code.push(&[0xb8, u8::from(value), 0, 0, 0])?; // mov eax, imm32
+                code.store_rax(register(dst)?)?;
+            }
+            Operation::Load { dst, slot } => {
+                code.load_rax(slot)?;
+                code.store_rax(register(dst)?)?;
+            }
+            Operation::Move { dst, src } => {
+                code.load_rax(register(src)?)?;
+                code.store_rax(register(dst)?)?;
+            }
+            Operation::Unary { dst, src, op } => {
+                code.load_rax(register(src)?)?;
+                match op {
+                    Unary::BitNot => code.push(&[0x48, 0xf7, 0xd0])?, // not rax
+                    Unary::Negate if checked => {
+                        code.push(&[0x48, 0xf7, 0xd8])?; // neg rax
+                        code.guard_overflow(step.span)?;
+                    }
+                    // A verified Boolean is canonical zero or one.
+                    Unary::Not if control_flow => code.push(&[0x83, 0xf0, 0x01])?,
+                    _ => return Err(invalid(step.span)),
+                }
+                code.store_rax(register(dst)?)?;
+            }
+            Operation::Binary {
+                dst,
+                left,
+                right,
+                op,
+            } => {
+                code.load_rax(register(left)?)?;
+                code.load_rcx(register(right)?)?;
+                if control_flow && op.is_comparison() {
+                    code.compare(op, step.span)?;
+                } else {
+                    code.binary(op, checked, step.span)?;
+                }
+                code.store_rax(register(dst)?)?;
+            }
+            Operation::Branch {
+                condition,
+                when_true,
+                target,
+            } if control_flow => {
+                code.load_rax(register(condition)?)?;
+                code.push(&[0x48, 0x85, 0xc0])?; // test rax, rax
+                let condition = if when_true {
+                    Condition::NotEqual
+                } else {
+                    Condition::Equal
+                };
+                branches.push((code.near_branch(condition)?, target));
+            }
+            _ => return Err(invalid(step.span)),
+        }
+    }
+    if control_flow {
+        offsets.push(code.data.len());
+        resolve_branches(&mut code.data, &offsets, branches)?;
+    }
+    code.load_rax(register(expr.root)?)
+}
+
+fn resolve_branches(
+    data: &mut [u8],
+    offsets: &[usize],
+    branches: Vec<(usize, usize)>,
+) -> Result<(), Diagnostic> {
+    for (displacement, target) in branches {
+        let offset = offsets.get(target).ok_or_else(failure)?;
+        patch_forward_branch(data, displacement, *offset)?;
+    }
+    Ok(())
+}
+
+fn function_text(program: &ScalarProgramIr) -> Result<Code, Diagnostic> {
+    program.verify()?;
+    let registers = INTEGER_ARGUMENT_REGISTERS
+        .get(..program.parameters())
+        .filter(|registers| !registers.is_empty())
+        .ok_or_else(failure)?;
+    let mut max_registers = 0;
+    let mut estimated_steps = program.operations().len();
+    for step in program.operations() {
+        let value = match &step.kind {
+            ProgramOp::Return { value }
+            | ProgramOp::Store { value, .. }
+            | ProgramOp::Update { value, .. }
+            | ProgramOp::JumpIfFalse {
+                condition: value, ..
+            } => value,
+            _ => continue,
+        };
+        max_registers = max_registers.max(value.registers.len());
+        estimated_steps = estimated_steps
+            .checked_add(value.steps.len())
+            .ok_or_else(failure)?;
+    }
+    let slot_count = program.integer_slot_count();
+    let stack_size = frame_bytes(slot_count, max_registers)?;
+    let mut code = Code::new(estimated_steps)?;
+    code.allocate_stack(stack_size)?;
+    for (slot, register) in registers.iter().copied().enumerate() {
+        code.store_argument(slot, register)?;
+    }
+
+    let mut offsets = Vec::with_capacity(program.operations().len() + 1);
+    let mut branches = Vec::new();
+    let mut returns = Vec::new();
+    for step in program.operations() {
+        offsets.push(code.data.len());
+        match &step.kind {
+            ProgramOp::Store { slot, value } => {
+                expression(&mut code, value, slot_count, true, true)?;
+                code.store_rax(*slot)?;
+            }
+            ProgramOp::Update {
+                slot,
+                operator,
+                operator_span,
+                value,
+            } => {
+                // The RHS cannot call or write slots. Scarp snapshots the LHS
+                // first, which is equivalent to reading the same slot here.
+                expression(&mut code, value, slot_count, true, true)?;
+                code.push(&[0x48, 0x89, 0xc1])?; // mov rcx, rax
+                code.load_rax(*slot)?;
+                code.binary(*operator, true, *operator_span)?;
+                code.store_rax(*slot)?;
+            }
+            ProgramOp::Return { value } => {
+                expression(&mut code, value, slot_count, true, true)?;
+                returns.push(code.jump()?);
+            }
+            ProgramOp::JumpIfFalse { condition, target } => {
+                expression(&mut code, condition, slot_count, true, true)?;
+                code.push(&[0x48, 0x85, 0xc0])?; // test rax, rax
+                branches.push((code.near_branch(Condition::Equal)?, *target));
+            }
+            ProgramOp::Jump { target } => branches.push((code.jump()?, *target)),
+            ProgramOp::Retire { .. } => {
+                // Scalar slots own no heap payload. Definite initialization
+                // prevents any read following their lexical retirement.
+            }
+            _ => return Err(invalid(step.span)),
+        }
+    }
+    let success = code.data.len();
+    offsets.push(success);
+    resolve_branches(&mut code.data, &offsets, branches)?;
+    for displacement in returns {
+        patch_forward_branch(&mut code.data, displacement, success)?;
+    }
+    code.finish_checked_return()?;
+    code.restore_stack_and_return(stack_size)?;
+    Ok(code)
 }
 
 fn put(target: &mut [u8], at: usize, bytes: &[u8]) -> Result<(), Diagnostic> {
@@ -400,17 +556,26 @@ pub(super) fn emit_checked(program: &ScalarProgramIr) -> Result<CheckedElf64Kern
     })
 }
 
+pub(super) fn emit_function(program: &ScalarProgramIr) -> Result<CheckedElf64Kernel, Diagnostic> {
+    let code = function_text(program)?;
+    let object = object(&code.data, b"\0scarp_checked_integer_function\0")?;
+    Ok(CheckedElf64Kernel {
+        object,
+        failure_spans: code.failure_spans,
+    })
+}
+
 fn object(machine: &[u8], strings: &[u8]) -> Result<Vec<u8>, Diagnostic> {
     // Offsets are into shstrtab, starting with the required NUL name.
     const SHSTR: &[u8] = b"\0.text\0.symtab\0.strtab\0.shstrtab\0.note.GNU-stack\0";
-    let text_offset = aligned(64, 16)?;
-    let sym_offset = aligned(
+    let text_offset = align_up(64, 16)?;
+    let sym_offset = align_up(
         text_offset.checked_add(machine.len()).ok_or_else(failure)?,
         8,
     )?;
     let str_offset = sym_offset.checked_add(48).ok_or_else(failure)?;
     let shstr_offset = str_offset.checked_add(strings.len()).ok_or_else(failure)?;
-    let header_offset = aligned(
+    let header_offset = align_up(
         shstr_offset.checked_add(SHSTR.len()).ok_or_else(failure)?,
         8,
     )?;

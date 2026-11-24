@@ -16,6 +16,7 @@ struct MapStorage {
     entries: Vec<(Value, Value)>,
     work: u64,
     capture: usize,
+    utf8_bytes: usize,
 }
 
 /// Only call after the resolver has validated that both operands share one of
@@ -72,6 +73,7 @@ impl MapValue {
             .all(|w| key_compare(&w[0].0, &w[1].0).is_lt()));
         let mut work = kind.node_count() as u64 + 8;
         let mut capture = kind.display_bytes() + 8;
+        let mut utf8_bytes = 0usize;
         for (key, value) in &entries {
             work = work
                 .saturating_add(value_work(key))
@@ -80,12 +82,16 @@ impl MapValue {
                 .saturating_add(value_capture(key))
                 .saturating_add(value_capture(value))
                 .saturating_add(size_of::<(Value, Value)>());
+            utf8_bytes = utf8_bytes
+                .saturating_add(key.host_utf8_bytes())
+                .saturating_add(value.host_utf8_bytes());
         }
         Self(Arc::new(MapStorage {
             kind,
             entries,
             work,
             capture,
+            utf8_bytes,
         }))
     }
 
@@ -107,6 +113,10 @@ impl MapValue {
 
     pub(crate) fn work(&self) -> u64 {
         self.0.work
+    }
+
+    pub(super) fn host_utf8_bytes(&self) -> usize {
+        self.0.utf8_bytes
     }
 
     pub(crate) fn capture_bytes(&self) -> usize {

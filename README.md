@@ -19,7 +19,12 @@ See the [compiler documentation index](docs/README.md) for those records.
 ## Compiler releases
 
 The latest published prerelease is
-[0.0.6-alpha.18](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.18).
+[0.0.6-alpha.19](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.19).
+
+**0.0.6-alpha.19** adds checked Rust embedding handles, named and default
+arguments, export-aware callables, and cumulative host invocation quotas.
+[Release notes](docs/releases/v0.0.6-alpha.19-publication.md) ·
+[Verification record](docs/releases/v0.0.6-alpha.19-validation.md)
 
 **0.0.6-alpha.18** introduces zero-argument `scarp exec` with automatic
 bounded console input, fixed-array updates, and initial Lifetime

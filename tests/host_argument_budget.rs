@@ -365,3 +365,51 @@ fn exported_named_call_accounts_for_both_label_and_string_payload() {
     assert_eq!(ledger.argument_usage().utf8_bytes, 7);
     assert_eq!(ledger.argument_usage().supplied_values, 1);
 }
+
+#[test]
+fn nested_shared_strings_are_charged_without_committing_rejected_admission() {
+    use scarp::value::{ArrayValue, ListValue, TupleValue, ValueType};
+    let text = Value::from("é🍀");
+    let pair = Value::Tuple(TupleValue::new(vec![text.clone(), text]).unwrap());
+    let array = Value::Array(ArrayValue::new(pair.kind(), vec![pair.clone(), pair]).unwrap());
+    let list = Value::List(ListValue::new(ValueType::String, vec![Value::from("𝄞")]).unwrap());
+    let nested = Value::Tuple(TupleValue::new(vec![array, list]).unwrap());
+    let callable = slot(
+        "pure funcra count(payload: tuple<array<tuple<string, string>, 2>, list<string>>) -> integer { return 42; }"
+    );
+    let mut ledger = HostInvocationLedger::new(HostInvocationCaps {
+        arguments: HostArgumentLimits {
+            max_total_utf8_bytes: 35,
+            ..HostArgumentLimits::default()
+        },
+        ..HostInvocationCaps::default()
+    });
+
+    let rejected_by_binder = invoke(
+        &mut ledger,
+        &callable,
+        HostArguments::new(vec![], vec![("payload".into(), nested.clone())]),
+    );
+    assert!(
+        matches!(rejected_by_binder, Err(HostInvocationError::Invocation(
+        CallableSlotInvokeError::Runtime(scarp::RunError::Diagnostic(error))
+    )) if error.kind == scarp::diagnostics::DiagnosticKind::FunctionUnsupported)
+    );
+    assert_eq!(ledger.spent().calls, 0);
+    assert_eq!(
+        ledger.argument_usage(),
+        HostArgumentUsage {
+            supplied_values: 1,
+            utf8_bytes: 35,
+        }
+    );
+    let result = invoke(
+        &mut ledger,
+        &callable,
+        HostArguments::positional(vec![nested]),
+    );
+    assert!(matches!(result, Err(HostInvocationError::Quota(error))
+        if error.resource == HostQuotaResource::ArgumentBytes));
+    assert_eq!(ledger.attempts(), 1);
+    assert_eq!(ledger.argument_usage().utf8_bytes, 35);
+}

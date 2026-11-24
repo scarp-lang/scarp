@@ -16,9 +16,9 @@ use crate::{
 };
 
 /// Limits for already-allocated arguments supplied by Rust callers.
-/// These measure logical UTF-8 bytes (string values and named labels), NOT
-/// process RSS or new interpreter allocations. Shared Arc strings count once
-/// per argument occurrence so callers cannot bypass admission by aliasing.
+/// UTF-8 accounting includes named labels, strings and strings contained
+/// in composites. Shared strings count once per logical occurrence. These
+/// counters measure host admission rather than interpreter allocations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HostArgumentLimits {
     /// Total positional and named values in one invocation.
@@ -26,7 +26,7 @@ pub struct HostArgumentLimits {
     /// Cumulative supplied values admitted by this ledger, including calls
     /// that the Scarp argument binder subsequently rejects.
     pub max_total_values: usize,
-    /// String payload and named-label UTF-8 bytes in one invocation.
+    /// String payload, nested string and named-label UTF-8 bytes in one invocation.
     pub max_utf8_bytes_per_call: usize,
     /// Cumulative UTF-8 bytes of admitted host argument payloads.
     pub max_total_utf8_bytes: usize,
@@ -321,10 +321,8 @@ impl HostInvocationLedger {
         charged.input_bytes = charged.input_bytes.saturating_add(usage.input_bytes);
     }
 
-    /// Inspect bounded lengths of already-constructed host values without
-    /// cloning, allocating, parsing source or invoking the interpreter.
-    /// Bytes include named label text and the full UTF-8 string payload,
-    /// counting the payload for every occurrence of a shared Arc.
+    /// Inspect lengths and cached aggregate totals without cloning, allocating,
+    /// parsing source or invoking the interpreter.
     fn inspect_arguments(
         &self,
         arguments: &HostArguments,
@@ -343,6 +341,11 @@ impl HostInvocationLedger {
         }
         let mut utf8_bytes = 0usize;
         let mut add_bytes = |bytes: usize| {
+            // Cached aggregate counts saturate at usize::MAX. Reject that
+            // sentinel even when the caller configured an unlimited budget.
+            if bytes == usize::MAX {
+                return Err(exceeded(HostQuotaResource::ArgumentBytes));
+            }
             utf8_bytes = utf8_bytes
                 .checked_add(bytes)
                 .ok_or_else(|| exceeded(HostQuotaResource::ArgumentBytes))?;
@@ -354,15 +357,11 @@ impl HostInvocationLedger {
             Ok(())
         };
         for value in &arguments.positional {
-            if let Value::String(text) = value {
-                add_bytes(text.len())?;
-            }
+            add_bytes(value.host_utf8_bytes())?;
         }
         for (name, value) in &arguments.named {
             add_bytes(name.len())?;
-            if let Value::String(text) = value {
-                add_bytes(text.len())?;
-            }
+            add_bytes(value.host_utf8_bytes())?;
         }
         Ok(HostArgumentUsage {
             supplied_values,

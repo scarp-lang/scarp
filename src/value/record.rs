@@ -15,6 +15,7 @@ struct Storage {
     fields: Vec<Value>,
     work: u64,
     capture_bytes: usize,
+    utf8_bytes: usize,
 }
 
 impl RecordValue {
@@ -41,19 +42,22 @@ impl RecordValue {
             .fold(layout.name().len() + "new  {}".len(), |total, (name, _)| {
                 total + name.len() + 4
             });
-        let work = fields.iter().fold(syntax_bytes as u64, |total, value| {
-            total.saturating_add(value_work(value))
-        });
-        let capture_bytes = fields.iter().fold(syntax_bytes, |total, value| {
-            total
+        let mut work = syntax_bytes as u64;
+        let mut capture_bytes = syntax_bytes;
+        let mut utf8_bytes = 0usize;
+        for value in &fields {
+            work = work.saturating_add(value_work(value));
+            capture_bytes = capture_bytes
                 .saturating_add(value_capture(value))
-                .saturating_add(size_of::<Value>())
-        });
+                .saturating_add(size_of::<Value>());
+            utf8_bytes = utf8_bytes.saturating_add(value.host_utf8_bytes());
+        }
         Self(Arc::new(Storage {
             kind,
             fields,
             work,
             capture_bytes,
+            utf8_bytes,
         }))
     }
 
@@ -64,6 +68,10 @@ impl RecordValue {
 
     pub(crate) fn work(&self) -> u64 {
         self.0.work
+    }
+
+    pub(super) fn host_utf8_bytes(&self) -> usize {
+        self.0.utf8_bytes
     }
 
     pub(crate) fn capture_bytes(&self) -> usize {

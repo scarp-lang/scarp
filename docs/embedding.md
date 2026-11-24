@@ -308,3 +308,12 @@ The host kernel API validates arity/types and uses an explicit work cap, excludi
 language dispatch tasks; its diagnostics have an empty source span. Compiled
 program APIs apply all six limits. Legacy evaluate_value has unbounded standalone
 work, so prefer capped program/kernel APIs for controlled execution.
+
+### Logical string bytes in host arguments
+
+Alpha.20 counts UTF-8 string bytes inside tuples, lists, arrays, maps, records
+and variant payloads when admitting a host invocation. Both map keys and
+values contribute. Immutable aggregate storage caches its logical total.
+Sharing a string or a composite counts its strings once per occurrence.
+Direct positional and named arguments still determine the supplied-value count.
+Composite arguments still receive the existing scalar-parameter binder diagnostic after admission.

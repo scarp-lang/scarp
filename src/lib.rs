@@ -26,7 +26,7 @@ mod json;
 pub mod lexer;
 pub mod limits;
 pub mod modules;
-/// Experimental x86-64 ELF object generation for a tiny integer kernel subset.
+/// Experimental Linux x86-64 ELF object generation for checked scalar computation.
 pub mod native_object;
 mod native_preflight;
 pub mod numeric;

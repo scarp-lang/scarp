@@ -1,6 +1,6 @@
 //! Deterministic aggregate regression coverage for source map projections.
 //! This suite intentionally runs against the interpreter, not the native ABI.
-use scarp::ExecutionOptions;
+use scarp::{diagnostics::DiagnosticKind, ExecutionOptions, RunError};
 
 fn execute(source: &str) -> String {
     let mut output = Vec::new();
@@ -64,23 +64,38 @@ fn projections_of_maximum_size_map_have_matching_cardinality() {
 }
 
 #[test]
-fn zero_collection_budget_rejects_projections_without_partial_output() {
-    let source = r#"
-        print("before");
-        bind m = [map: 1: 2];
-        print(map_keys(m));
-    "#;
-    let mut output = Vec::new();
-    let result = scarp::run_with_options(
-        source,
-        &mut output,
-        ExecutionOptions {
-            max_array_bytes: 0,
-            ..ExecutionOptions::default()
-        },
-    );
-    assert!(result.is_err());
-    assert!(output.is_empty(), "failed execution must not commit output");
+fn projections_use_remaining_collection_budget_and_roll_back_output() {
+    const SETUP: &str = "print(\"before\"); bind m = [map: 1: 2];";
+    let run = |source: &str, max_array_bytes| {
+        let mut output = Vec::new();
+        let result = scarp::run_with_options(
+            source,
+            &mut output,
+            ExecutionOptions {
+                max_array_bytes,
+                ..ExecutionOptions::default()
+            },
+        );
+        (result, output)
+    };
+    // Find the map's exact charge without pinning Rust struct layout or
+    // assuming the same metadata size on every platform.
+    let setup_bytes = (0..4096)
+        .find(|&limit| run(SETUP, limit).0.is_ok())
+        .expect("one map entry fits within the fixture budget");
+    assert_eq!(run(SETUP, setup_bytes).1, b"before\n");
+
+    for projection in ["map_keys(m)", "map_values(m)"] {
+        let source = format!("{SETUP} print({projection});");
+        let (result, output) = run(&source, setup_bytes);
+        let Err(RunError::Diagnostic(error)) = result else {
+            panic!("expected the projection's list allocation to fail");
+        };
+        assert_eq!(error.kind, DiagnosticKind::ListAllocation);
+        assert_eq!(&source[error.span.start..error.span.end], projection);
+        assert!(output.is_empty(), "failed execution must not commit output");
+        assert!(run(&source, 4096).0.is_ok());
+    }
 }
 
 #[test]

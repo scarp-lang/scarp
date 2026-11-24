@@ -128,3 +128,12 @@ on the same machine and toolchain. Lifetime feature pull requests named
 `feature/lifetime-*` also run this comparison in Linux CI. Comparisons are
 indicative short samples, not a promise about RSS or a speedup. The weak
 reference checks demonstrate buffer release, **not** total RSS measurement.
+
+### Alpha.20 scalar object functions
+
+The experimental ELF64 function subset gives each activation one bounded
+stack frame. Argument slots start initialized. The IR checks both sides of
+conditionals and rejects a local read after retirement or before its first
+write. Locals and temporaries contain only immediate scalar values. Successful
+returns and arithmetic failures share the stack-restoring epilogue. Native
+heap values and ownership transfer are future extensions.

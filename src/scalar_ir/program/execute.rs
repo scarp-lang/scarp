@@ -115,6 +115,7 @@ impl ScalarProgramIr {
             }
             pc += 1;
             match &instruction.kind {
+                ProgramOp::Return { .. } => return Err(invalid(span)),
                 ProgramOp::Store { slot, value } => {
                     storage[*slot] = value.execute(&storage, &mut budget)?;
                 }

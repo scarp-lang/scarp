@@ -1,5 +1,11 @@
 # Version and API compatibility
 
+`0.0.6-alpha.19` is **a published GitHub prerelease**. Hosts can use
+snapshot-bound named callables, sparse argument binding, export-aware lookup
+and cumulative invocation budgets. The source-language call syntax is unchanged.
+[Public notes](releases/v0.0.6-alpha.19-publication.md) ·
+[Exact-source verification](releases/v0.0.6-alpha.19-validation.md)
+
 `0.0.6-alpha.18` is **a published GitHub prerelease**. Zero-argument
 `scarp exec` discovers the project entrypoint and enables bounded typed
 input by default; legacy `run` retains its interactive opt-in. Fixed-array
@@ -143,7 +149,7 @@ The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.6-alpha.18](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.18).
+[0.0.6-alpha.19](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.19).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a

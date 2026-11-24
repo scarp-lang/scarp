@@ -99,7 +99,11 @@ impl ScalarProgramIr {
         let mut states = vec![None; len + 1];
         let mut queued = vec![false; len + 1];
         let mut pending = VecDeque::new();
-        states[0] = Some(SlotSet::empty());
+        let mut entry = SlotSet::empty();
+        for slot in 0..self.parameters {
+            entry.insert(slot);
+        }
+        states[0] = Some(entry);
         queued[0] = true;
         pending.push_back(0);
 
@@ -110,6 +114,7 @@ impl ScalarProgramIr {
             }
             let mut next = states[pc].ok_or_else(|| invalid(self.steps[pc].span))?;
             let branch = match &self.steps[pc].kind {
+                ProgramOp::Return { .. } => continue,
                 ProgramOp::Store { slot, .. } | ProgramOp::Update { slot, .. } => {
                     next.insert(*slot);
                     None
@@ -155,6 +160,10 @@ impl ScalarProgramIr {
             join(pc + 1, next, &mut states, &mut queued, &mut pending);
         }
 
+        if self.parameters != 0 && states[len].is_some() {
+            return Err(invalid(Span::default()));
+        }
+
         // Reads are validated after the fixed point, not while states can
         // still shrink due to a backward edge. Unreachable instructions have
         // already passed the independent structural/type verifier.
@@ -164,7 +173,8 @@ impl ScalarProgramIr {
             };
             let span = instruction.span;
             match &instruction.kind {
-                ProgramOp::Store { value, .. }
+                ProgramOp::Return { value }
+                | ProgramOp::Store { value, .. }
                 | ProgramOp::RepeatInit { count: value, .. }
                 | ProgramOp::PrintValue { value } => needs_expression(known, value)?,
                 ProgramOp::Update { slot, value, .. } => {
