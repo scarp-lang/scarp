@@ -65,8 +65,9 @@ pub fn emit_elf64_checked_integer_kernel(source: &str) -> Result<CheckedElf64Ker
 /// The function must return an integer on every path. The backend supports
 /// integer and Boolean locals, scalar assignments, integer compound
 /// assignments, checked arithmetic, bitwise operations, and forward
-/// conditionals. It rejects calls, loops, contracts, defaults, other scalar
-/// types, aggregates, and top-level execution. Interpreter budgets do not
+/// conditionals in statements and scalar expressions. It rejects calls, loops,
+/// contracts, defaults, other scalar types, aggregates, and top-level
+/// execution. Interpreter budgets do not
 /// apply to the emitted object.
 pub fn emit_elf64_checked_integer_function(source: &str) -> Result<CheckedElf64Kernel, Diagnostic> {
     crate::scalar_ir::emit_checked_integer_function(source)

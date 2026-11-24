@@ -61,7 +61,7 @@ impl RegisterSet {
 
 fn accesses(operation: &Operation) -> (Option<usize>, [Option<usize>; 2]) {
     match *operation {
-        Operation::Work => (None, [None, None]),
+        Operation::Work | Operation::Jump { .. } => (None, [None, None]),
         Operation::Integer { dst, .. }
         | Operation::Boolean { dst, .. }
         | Operation::Load { dst, .. } => (Some(dst), [None, None]),
@@ -88,7 +88,7 @@ impl TemporaryLayout {
         if expression
             .steps
             .iter()
-            .any(|step| matches!(step.kind, Operation::Branch { .. }))
+            .any(|step| matches!(step.kind, Operation::Branch { .. } | Operation::Jump { .. }))
         {
             return Self::plan_branches(expression);
         }
@@ -159,8 +159,9 @@ impl TemporaryLayout {
         // Include the implicit read performed when the emitter loads the result.
         live[expression.steps.len()].insert(expression.root);
         for (pc, step) in expression.steps.iter().enumerate().rev() {
-            let mut outgoing = live[pc + 1];
-            if let Operation::Branch { target, .. } = step.kind {
+            let (next, alternative) = step.kind.successors(pc);
+            let mut outgoing = live[next];
+            if let Some(target) = alternative {
                 // Verification guarantees target > pc, including the exit.
                 outgoing.union(live[target]);
             }

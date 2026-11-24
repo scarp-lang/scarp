@@ -295,3 +295,28 @@ A regression with 200 successive additions and a second regression with a
 fixtures use three temporary slots and one parameter slot. Independent host
 execution compares values, overflow and short-circuited division with the
 interpreter, including exact failure spans.
+
+## Experimental scalar conditional expressions
+
+The checked and bounded integer-function emitters also accept expression-form
+`if`, `elif`, and `else` with an integer or Boolean result. Conditions run in
+source order until the first true condition. Only the selected value is
+evaluated. The existing resolver checks the types and effects of every arm.
+
+```scarp
+pure funcra classify(n: integer) -> integer {
+    return if n < 0 { -1 } elif n == 0 { 0 } else { 1 };
+}
+```
+
+The expression IR uses only forward edges. Every incoming path must initialize
+the selected value before the join. The bounded emitter charges the
+conditional expression, each visited guard and its decision, and the selected
+result. Moves and jumps at the join add no work. Checked arithmetic failures
+retain their original operator spans.
+
+Run [the mixed conditional example](../examples/native_conditional_function.srp)
+with `scarp exec examples/native_conditional_function.srp`. Pass its function
+definition alone to either native function API. The C11 emitter and both
+binding-only ELF64 kernels still reject conditional expressions. The function
+ABI, accepted primitive types and target stay the same.
