@@ -153,6 +153,9 @@ impl ScalarProgramIr {
                 | ResolvedStatement::Jump { target }
                     if *target <= len && (bounded || *target > pc) => {}
                 ResolvedStatement::LoopControl { target, .. } if bounded && *target <= len => {}
+                ResolvedStatement::RepeatInit { .. } | ResolvedStatement::RepeatNext { .. }
+                    if bounded => {}
+                ResolvedStatement::RepeatGuard { target, .. } if bounded && *target <= len => {}
                 _ => return Err(unsupported_function(step.span)),
             }
         }
@@ -394,6 +397,18 @@ impl ScalarProgramIr {
                         if self.bounded || *target > pc => {}
                     ProgramOp::LoopControl { retire, .. }
                         if self.bounded && retire.iter().all(|s| *s >= parameters) => {}
+                    ProgramOp::RepeatInit {
+                        count_slot,
+                        index_slot,
+                        ..
+                    }
+                    | ProgramOp::RepeatGuard {
+                        count_slot,
+                        index_slot,
+                        ..
+                    } if self.bounded && *count_slot >= parameters && *index_slot >= parameters => {}
+                    ProgramOp::RepeatNext { index_slot }
+                        if self.bounded && *index_slot >= parameters => {}
                     ProgramOp::Retire { slots } if slots.iter().all(|s| *s >= parameters) => {}
                     ProgramOp::Return { .. } => {}
                     _ => return Err(invalid(span)),
