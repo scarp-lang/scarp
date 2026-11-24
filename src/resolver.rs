@@ -209,6 +209,7 @@ pub(crate) enum CompositeOperation {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ArrayIntrinsic {
     Len,
+    Concat,
     GetOr,
     Set,
     Reverse,
@@ -219,6 +220,7 @@ impl ArrayIntrinsic {
     fn from_name(name: &str) -> Option<Self> {
         match name {
             "array_len" => Some(Self::Len),
+            "array_concat" => Some(Self::Concat),
             "array_get_or" => Some(Self::GetOr),
             "array_set" => Some(Self::Set),
             "array_reverse" => Some(Self::Reverse),
@@ -230,6 +232,7 @@ impl ArrayIntrinsic {
     pub(crate) fn arity(self) -> usize {
         match self {
             Self::Len | Self::Reverse => 1,
+            Self::Concat => 2,
             Self::GetOr | Self::Set | Self::Swap => 3,
         }
     }
@@ -1724,6 +1727,24 @@ fn resolve_expression(
                     let result = match operation {
                         ArrayIntrinsic::Len => ValueType::Integer.into(),
                         ArrayIntrinsic::Reverse => types[first].clone(),
+                        ArrayIntrinsic::Concat => {
+                            let second = arguments[1].expression;
+                            let second_span = syntax.nodes()[second].span;
+                            let right = types[second].as_array().ok_or_else(|| {
+                                Diagnostic::new(
+                                    DiagnosticKind::TypeMismatch,
+                                    second_span,
+                                    "array_concat requires a fixed array as its second argument",
+                                )
+                            })?;
+                            require_type(right.element(), array.element(), second_span)?;
+                            SourceType::array(array.element(), array.len() + right.len())
+                                .ok_or_else(|| Diagnostic::new(
+                                    DiagnosticKind::ArrayLimit,
+                                    node.span,
+                                    "concatenated array exceeds fixed length or expanded shape limits",
+                                ))?
+                        }
                         ArrayIntrinsic::Swap => {
                             for argument in &arguments[1..] {
                                 require_type(

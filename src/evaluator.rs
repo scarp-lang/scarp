@@ -677,6 +677,25 @@ impl Workspace {
                     let array = values[start].as_array().expect("checked array argument");
                     let result = match operation {
                         ArrayIntrinsic::Len => Value::Integer(array.len() as i64),
+                        ArrayIntrinsic::Concat => {
+                            let right = values[start + 1]
+                                .as_array()
+                                .expect("checked array argument");
+                            if array.is_empty() {
+                                Value::Array(right.clone())
+                            } else if right.is_empty() {
+                                Value::Array(array.clone())
+                            } else {
+                                let length = array.len() + right.len();
+                                let mut elements =
+                                    reserve_array_snapshot(array, length, budget, span)?;
+                                elements.extend_from_slice(array.elements());
+                                elements.extend_from_slice(right.elements());
+                                let kind = SourceType::array(array.element_type(), length)
+                                    .expect("resolved concatenated array shape");
+                                Value::Array(ArrayValue::from_checked(kind, elements))
+                            }
+                        }
                         ArrayIntrinsic::GetOr => {
                             let index = values[start + 1].require_integer(span)?;
                             usize::try_from(index)
@@ -1271,9 +1290,23 @@ fn snapshot_array(
     span: Span,
     edit: impl FnOnce(&mut [Value]),
 ) -> Result<Value, Diagnostic> {
+    let mut elements = reserve_array_snapshot(array, array.len(), budget, span)?;
+    elements.extend_from_slice(array.elements());
+    edit(&mut elements);
+    Ok(Value::Array(ArrayValue::from_checked(
+        array.kind().clone(),
+        elements,
+    )))
+}
+
+fn reserve_array_snapshot(
+    array: &ArrayValue,
+    length: usize,
+    budget: &mut Budget,
+    span: Span,
+) -> Result<Vec<Value>, Diagnostic> {
     // Each snapshot owns a new immutable backing. Charge work and the shared
     // array/list/map allocation quota before attempting a fallible reservation.
-    let length = array.len();
     budget.charge((length + array.kind().node_count() + 1) as u64, span)?;
     let bytes = ArrayValue::allocation_bytes(array.element_type(), length).ok_or_else(|| {
         Diagnostic::new(
@@ -1291,12 +1324,7 @@ fn snapshot_array(
             "could not reserve new immutable array storage",
         )
     })?;
-    elements.extend_from_slice(array.elements());
-    edit(&mut elements);
-    Ok(Value::Array(ArrayValue::from_checked(
-        array.kind().clone(),
-        elements,
-    )))
+    Ok(elements)
 }
 
 fn finish_tuple(

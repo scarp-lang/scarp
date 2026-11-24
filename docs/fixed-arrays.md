@@ -139,3 +139,15 @@ their current versions. See [module JSON](module-json.md).
 The experimental C11 and ELF64 backends reject programs using arrays with
 E0049. Run [the example](../examples/fixed_arrays.srp) with
 `cargo run -- exec examples/fixed_arrays.srp`.
+
+### Concatenation on the development branch
+
+`array_concat(left, right)` joins two fixed arrays with identical element
+types in source order. For lengths M and N, the resolver infers an array of
+length M + N. It checks both the 4096-element limit and the complete nested
+shape before execution. Each argument is evaluated once, left to right.
+An empty operand allows the result to share the other immutable snapshot.
+Two nonempty operands require one new backing buffer and work proportional to
+M + N. The runtime charges the array quota before reserving that buffer.
+The [runnable example](../examples/array_concat.srp) joins measurements while
+preserving the original two-element array.

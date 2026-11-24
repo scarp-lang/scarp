@@ -232,3 +232,100 @@ fn generated_reversals_and_swaps_match_rust_reference_arrays() {
         }
     }
 }
+
+#[test]
+fn concatenation_infers_lengths_evaluates_once_and_preserves_aliases() {
+    let source = r#"
+       funcra part(n: integer) -> array<integer, 1> { print(n); return [array: n]; }
+       bind pair: array<integer, 2> = array_concat(part(7),part(8));
+       bind nested = [array: pair];
+       bind both = array_concat(nested, nested);
+       print(both, pair);
+       print(array_set(both, 0, [array: 1, 2]), nested);
+    "#;
+    assert_eq!(run(source), b"7\n8\n[array: [array: 7, 8], [array: 7, 8]] [array: 7, 8]\n[array: [array: 1, 2], [array: 7, 8]] [array: [array: 7, 8]]\n");
+    assert_eq!(
+        run(include_str!("../examples/array_concat.srp")),
+        include_bytes!("../examples/array_concat.stdout")
+    );
+    assert_eq!(
+        run("pure funcra array_concat(n:integer)->integer{return n+1;} print(array_concat(2));"),
+        b"3\n"
+    );
+}
+
+#[test]
+fn concatenation_validates_both_types_and_the_complete_output_shape() {
+    for (call, kind, highlighted) in [
+        ("array_concat(1,[array:2])", Kind::TypeMismatch, "1"),
+        ("array_concat([array:1],false)", Kind::TypeMismatch, "false"),
+        (
+            "array_concat([array:1],[array:<float>])",
+            Kind::TypeMismatch,
+            "[array:<float>]",
+        ),
+        (
+            "array_concat([array:1])",
+            Kind::CallArguments,
+            "array_concat",
+        ),
+        (
+            "array_concat(x:[array:1],y:[array:2])",
+            Kind::CallArguments,
+            "array_concat",
+        ),
+    ] {
+        let source = format!("// नमस्ते 🌏\r\nprint({call});");
+        let error = scarp::compile(&source).unwrap_err();
+        assert_eq!(error.kind, kind);
+        assert_eq!(&source[error.span.start..error.span.end], highlighted);
+    }
+    for (element, length) in [("integer", 2049), ("array<integer,31>", 1024)] {
+        let source = format!("pure funcra f(a:array<{element},{length}>)->integer{{return array_len(array_concat(a,a));}}");
+        let error = scarp::compile(&source).unwrap_err();
+        assert_eq!(error.kind, Kind::ArrayLimit);
+        assert_eq!(
+            &source[error.span.start..error.span.end],
+            "array_concat(a,a)"
+        );
+    }
+    scarp::compile(
+        "pure funcra f(a:array<integer,2048>)->array<integer,4096>{return array_concat(a,a);}",
+    )
+    .unwrap();
+}
+
+#[test]
+fn concatenation_charges_one_snapshot_and_shares_typed_empty_identity() {
+    let setup = "bind pair=[array:1,2]; bind empty=[array:<integer>];";
+    let options = |bytes| ExecutionOptions {
+        max_array_bytes: bytes,
+        ..Default::default()
+    };
+    let threshold =
+        |source: &str| minimum(|bytes| scarp::check_with_options(source, options(bytes)).is_ok());
+    let base = threshold(setup);
+    for operation in [
+        "array_concat(pair,empty)",
+        "array_concat(empty,pair)",
+        "array_concat(empty,empty)",
+    ] {
+        let source = format!("{setup} print({operation});");
+        assert_eq!(threshold(&source), base);
+    }
+    let joined = format!("{setup} bind joined=array_concat(pair,pair);");
+    let single = threshold(&joined);
+    assert!(single > base);
+    failure(&joined, options(single - 1), Kind::ArrayAllocation);
+    let twice = format!("{joined} bind other=array_concat(pair,pair);");
+    assert_eq!(threshold(&twice) - single, single - base);
+    let steps = |n| ExecutionOptions {
+        limits: scarp::ExecutionLimits {
+            max_steps: n as u64,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let exact = minimum(|n| scarp::check_with_options(&joined, steps(n)).is_ok());
+    failure(&joined, steps(exact - 1), Kind::ExecutionLimit);
+}
