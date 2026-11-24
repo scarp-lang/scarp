@@ -325,7 +325,7 @@ ABI, accepted primitive types and target stay the same.
 
 `native_object::emit_elf64_bounded_integer_entry(source, name, max_work)`
 selects a pure function by name from an input containing only function
-declarations. Each function takes zero to six required integer parameters
+declarations. Each function takes zero to sixteen required integer parameters
 and returns an integer. The accepted scalar bodies include counted loops
 and conditional expressions. The resolver maps positional and named
 arguments to parameters. Native execution evaluates all supplied argument
@@ -335,9 +335,12 @@ The object exports `scarp_bounded_integer_entry`. The entry uses the selected
 function's arity and returns the same value/status/span structure as the
 bounded single-function API. Helper bodies are private and called at verified
 offsets in the same `.text` section. The object has no external references
-or relocation entries. Helper calls use SysV register placement, keep caller
-temporaries in the caller's frame, preserve the 16-byte call-site alignment,
-and return a checked result in RAX/RDX.
+or relocation entries. The first six arguments use the SysV integer
+registers. Each caller plans a disjoint outgoing area for arguments seven
+through sixteen below its local and temporary slots. This area is part of
+the checked stack limit. RSP remains aligned throughout the call and the
+callee reads the extra arguments after the return address. A call returns
+a checked result in RAX/RDX.
 
 The external entry initializes the R10 work counter. Every helper shares
 that counter. Visiting a call expression and dispatching it each cost one
@@ -349,7 +352,7 @@ The allowance is initialized again for each external invocation.
 A static call graph rejects cycles. It limits the object to 32 functions
 and a maximum chain of 16 active frames, with at most 64 KiB of combined
 frame bytes including return addresses. It also bounds aggregate IR and
-machine-code size. Host callbacks, stack-passed helper arguments, recursive
+machine-code size. Host callbacks, recursive
 calls, defaults, contracts, heap-backed values, and arbitrary external
 symbols are outside this entry API.
 
@@ -358,6 +361,18 @@ See [the direct-call example](../examples/native_direct_calls.srp).
 interpreter. For native emission, pass just its definitions with
 `"evaluate"` as the selected entry. This experimental API is development
 work beyond the published v0.0.6-alpha.20.
+
+The [wide-call example](../examples/native_wide_calls.srp) exercises two
+stack-passed arguments to a private helper. The independent Linux x86-64 host
+tests cover every mixed register and stack arity from seven through
+sixteen, reverse named mappings, repeat loops, and a failure raised by the
+last stack argument across multiple frames.
+
+`cargo bench --locked --bench native_calls` reports parser time, resolver
+time, end-to-end object emission time, interpreter time, and object sizes.
+Emission includes frontend work. The benchmark emits objects for both
+fixtures and verifies the interpreter output while the native integration
+tests execute the objects through an independent C host.
 
 ## Experimental explicit freestanding object target
 

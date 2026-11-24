@@ -27,7 +27,7 @@ const MAX_TEXT_BYTES: usize = 200_000;
 const MAX_OBJECT_BYTES: usize = 262_144;
 // Bound both the public signature and the number of caller-stack loads.
 pub(super) const MAX_INTEGER_ARGUMENTS: usize = 16;
-pub(super) const REGISTER_ARGUMENTS: usize = INTEGER_ARGUMENT_REGISTERS.len();
+const REGISTER_ARGUMENTS: usize = INTEGER_ARGUMENT_REGISTERS.len();
 const STACK_PROBE_INTERVAL: u32 = 4096; // Linux x86-64 base page size
 
 fn failure() -> Diagnostic {
@@ -394,8 +394,21 @@ fn patch_relative_branch(
     put(code, displacement, &offset.to_le_bytes())
 }
 
-fn temporary(base: usize, register: usize) -> Result<usize, Diagnostic> {
-    base.checked_add(register).ok_or_else(failure)
+#[derive(Clone, Copy)]
+struct StackSlots {
+    /// Slots below the locals are reserved for arguments passed to callees.
+    local_base: usize,
+    temporary_base: usize,
+}
+
+impl StackSlots {
+    fn local(self, index: usize) -> Result<usize, Diagnostic> {
+        self.local_base.checked_add(index).ok_or_else(failure)
+    }
+
+    fn temporary(self, index: usize) -> Result<usize, Diagnostic> {
+        self.temporary_base.checked_add(index).ok_or_else(failure)
+    }
 }
 
 /// Keep final user bindings in a separate stack region from the ephemeral
@@ -420,8 +433,12 @@ fn text(program: &ScalarProgramIr, checked_arithmetic: bool) -> Result<Code, Dia
     let mut code = Code::new(total_steps, false)?;
     code.allocate_stack(stack_size)?;
 
+    let slots = StackSlots {
+        local_base: 0,
+        temporary_base: slot_count,
+    };
     for (slot, expr) in program.integer_stores() {
-        expression(&mut code, expr, slot_count, checked_arithmetic, None)?;
+        expression(&mut code, expr, slots, checked_arithmetic, None)?;
         code.store_rax(slot)?;
     }
 
@@ -435,7 +452,7 @@ fn text(program: &ScalarProgramIr, checked_arithmetic: bool) -> Result<Code, Dia
 fn expression(
     code: &mut Code,
     expr: &ScalarExpressionIr,
-    slot_count: usize,
+    slots: StackSlots,
     checked: bool,
     layout: Option<&TemporaryLayout>,
 ) -> Result<(), Diagnostic> {
@@ -449,7 +466,7 @@ fn expression(
             Some(layout) => layout.slot(index)?,
             None => index,
         };
-        temporary(slot_count, index)
+        slots.temporary(index)
     };
     for step in &expr.steps {
         if control_flow {
@@ -466,7 +483,7 @@ fn expression(
                 code.store_rax(register(dst)?)?;
             }
             Operation::Load { dst, slot } => {
-                code.load_rax(slot)?;
+                code.load_rax(slots.local(slot)?)?;
                 code.store_rax(register(dst)?)?;
             }
             Operation::Move { dst, src } => {
@@ -524,8 +541,17 @@ fn expression(
                 callee,
                 ref arguments,
             } if control_flow && code.metered => {
-                if arguments.len() > REGISTER_ARGUMENTS {
+                let outgoing = arguments.len().saturating_sub(REGISTER_ARGUMENTS);
+                if arguments.len() > MAX_INTEGER_ARGUMENTS || outgoing > slots.local_base {
                     return Err(invalid(step.span));
+                }
+                // RSP is already aligned and points at argument seven's slot
+                // at the call site. Copy from the disjoint temporary region.
+                for (stack_index, &argument) in
+                    arguments.iter().skip(REGISTER_ARGUMENTS).enumerate()
+                {
+                    code.load_rax(register(argument)?)?;
+                    code.store_rax(stack_index)?;
                 }
                 for (&argument, &hardware) in arguments.iter().zip(&INTEGER_ARGUMENT_REGISTERS) {
                     code.stack_operand(0x8b, hardware, slot_offset(register(argument)?)?)?;
@@ -557,6 +583,7 @@ fn resolve_branches(
 
 struct FunctionLayout<'a> {
     expressions: Vec<Option<(&'a ScalarExpressionIr, TemporaryLayout)>>,
+    slots: StackSlots,
     frame_bytes: u32,
     estimated_steps: usize,
 }
@@ -566,6 +593,7 @@ fn plan_function(program: &ScalarProgramIr) -> Result<FunctionLayout<'_>, Diagno
         return Err(failure());
     }
     let mut max_registers = 0;
+    let mut outgoing = 0;
     let mut estimated_steps = program.operations().len();
     let mut expressions = Vec::with_capacity(program.operations().len());
     for step in program.operations() {
@@ -575,14 +603,26 @@ fn plan_function(program: &ScalarProgramIr) -> Result<FunctionLayout<'_>, Diagno
         };
         let layout = TemporaryLayout::plan_verified(value)?;
         max_registers = max_registers.max(layout.count());
+        for instruction in &value.steps {
+            if let Operation::Call { arguments, .. } = &instruction.kind {
+                outgoing = outgoing.max(arguments.len().saturating_sub(REGISTER_ARGUMENTS));
+            }
+        }
         estimated_steps = estimated_steps
             .checked_add(value.steps.len())
             .ok_or_else(failure)?;
         expressions.push(Some((value, layout)));
     }
+    let slots = StackSlots {
+        local_base: outgoing,
+        temporary_base: outgoing
+            .checked_add(program.integer_slot_count())
+            .ok_or_else(failure)?,
+    };
     Ok(FunctionLayout {
         expressions,
-        frame_bytes: frame_bytes(program.integer_slot_count(), max_registers)?,
+        slots,
+        frame_bytes: frame_bytes(slots.temporary_base, max_registers)?,
         estimated_steps,
     })
 }
@@ -600,14 +640,15 @@ fn append_function(
     let register_count = parameters.min(REGISTER_ARGUMENTS);
     let registers = &INTEGER_ARGUMENT_REGISTERS[..register_count];
     let stack_size = layout.frame_bytes;
+    let slots = layout.slots;
     code.allocate_stack(stack_size)?;
     for (slot, register) in registers.iter().copied().enumerate() {
-        code.store_argument(slot, register)?;
+        code.store_argument(slots.local(slot)?, register)?;
     }
     // Copy caller-owned arguments into ordinary verified local slots; never
     // write into the caller's frame or consume its return address as a value.
     for slot in register_count..parameters {
-        code.copy_stack_argument(slot, slot - register_count, stack_size)?;
+        code.copy_stack_argument(slots.local(slot)?, slot - register_count, stack_size)?;
     }
 
     if let Some(max_work) = initial_budget {
@@ -623,17 +664,11 @@ fn append_function(
             code.charge_work(step.span)?;
         }
         if let Some((value, layout)) = planned {
-            expression(
-                code,
-                value,
-                program.integer_slot_count(),
-                true,
-                Some(layout),
-            )?;
+            expression(code, value, slots, true, Some(layout))?;
         }
         match &step.kind {
             ProgramOp::Store { slot, .. } => {
-                code.store_rax(*slot)?;
+                code.store_rax(slots.local(*slot)?)?;
             }
             ProgramOp::Update {
                 slot,
@@ -644,9 +679,10 @@ fn append_function(
                 // Pure calls cannot write their caller's slots. Reading the
                 // LHS here yields the same value as the interpreter snapshot.
                 code.push(&[0x48, 0x89, 0xc1])?; // mov rcx, rax
-                code.load_rax(*slot)?;
+                let slot = slots.local(*slot)?;
+                code.load_rax(slot)?;
                 code.binary(*operator, true, *operator_span)?;
-                code.store_rax(*slot)?;
+                code.store_rax(slot)?;
             }
             ProgramOp::Return { .. } => {
                 returns.push(code.jump()?);
@@ -662,25 +698,26 @@ fn append_function(
                 ..
             } if code.metered => {
                 code.guard_repeat_count(step.span)?;
-                code.store_rax(*count_slot)?;
+                code.store_rax(slots.local(*count_slot)?)?;
                 code.integer_rax(0)?;
-                code.store_rax(*index_slot)?;
+                code.store_rax(slots.local(*index_slot)?)?;
             }
             ProgramOp::RepeatGuard {
                 count_slot,
                 index_slot,
                 target,
             } if code.metered => {
-                code.load_rax(*index_slot)?;
-                code.load_rcx(*count_slot)?;
+                code.load_rax(slots.local(*index_slot)?)?;
+                code.load_rcx(slots.local(*count_slot)?)?;
                 code.push(&[0x48, 0x39, 0xc8])?; // cmp rax, rcx
                 branches.push((code.near_branch(Condition::GreaterEqual)?, *target));
             }
             ProgramOp::RepeatNext { index_slot } if code.metered => {
-                code.load_rax(*index_slot)?;
+                let index_slot = slots.local(*index_slot)?;
+                code.load_rax(index_slot)?;
                 code.push(&[0x48, 0x83, 0xc0, 0x01])?; // add rax, 1
                 code.guard_overflow(step.span)?;
-                code.store_rax(*index_slot)?;
+                code.store_rax(index_slot)?;
             }
             ProgramOp::LoopControl { target, .. } if code.metered => {
                 branches.push((code.jump()?, *target));

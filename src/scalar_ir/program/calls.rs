@@ -59,7 +59,7 @@ impl ScalarCallGraph {
             if signature.parameters.len() > max_parameters {
                 return Err(unsupported(
                     signature.span,
-                    "this native call convention supports at most six integer arguments",
+                    "this native call convention supports at most sixteen integer arguments",
                 ));
             }
             arities.push(signature.parameters.len());
