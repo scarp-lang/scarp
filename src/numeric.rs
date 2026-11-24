@@ -157,11 +157,18 @@ impl Builtin {
         self,
         types: &mut crate::types::TypeRegistryBuilder,
     ) -> Result<crate::types::TypeId, crate::types::TypeRegistryError> {
+        self.intern_signature_for_arity(types, self.parameter_types().len())
+    }
+
+    pub(crate) fn intern_signature_for_arity(
+        self,
+        types: &mut crate::types::TypeRegistryBuilder,
+        arity: usize,
+    ) -> Result<crate::types::TypeId, crate::types::TypeRegistryError> {
+        debug_assert!(self.accepts_arity(arity));
         types.intern(crate::types::TypeKind::Function {
-            parameters: self
-                .parameter_types()
-                .iter()
-                .map(|kind| kind.id())
+            parameters: (0..arity)
+                .map(|index| self.parameter_type_at(index).expect("validated arity").id())
                 .collect(),
             result: self.result_type().id(),
             effect: crate::types::FunctionEffect::Pure,
@@ -229,7 +236,7 @@ impl Builtin {
             "to_integer" => Self::ToInteger,
             "integer_abs" => Self::IntegerAbs,
             "integer_sign" => Self::IntegerSign,
-            "integer_gcd" => Self::IntegerGcd,
+            "integer_gcd" | "integer_hcf" => Self::IntegerGcd,
             "integer_lcm" => Self::IntegerLcm,
             "bits_count_ones" => Self::BitsCountOnes,
             "bits_leading_zeros" => Self::BitsLeadingZeros,
@@ -297,6 +304,37 @@ impl Builtin {
         })
     }
 
+    /// True for integer reductions accepting a variable number of operands.
+    pub fn is_variadic(self) -> bool {
+        matches!(self, Self::IntegerGcd | Self::IntegerLcm)
+    }
+
+    /// Fixed signatures retain their exact arity; integer reductions accept 2..=1024.
+    pub fn accepts_arity(self, arity: usize) -> bool {
+        if self.is_variadic() {
+            (2..=1024).contains(&arity)
+        } else {
+            arity == self.parameter_types().len()
+        }
+    }
+
+    pub fn parameter_type_at(self, index: usize) -> Option<ValueType> {
+        if self.is_variadic() {
+            (index < 1024).then_some(ValueType::Integer)
+        } else {
+            self.parameter_types().get(index).copied()
+        }
+    }
+
+    pub(crate) fn arity_description(self) -> String {
+        if self.is_variadic() {
+            "2 to 1024".to_owned()
+        } else {
+            self.parameter_types().len().to_string()
+        }
+    }
+
+    /// The required prefix for variadic builtins, or the full fixed signature.
     pub fn parameter_types(self) -> &'static [ValueType] {
         use ValueType::{Float, Integer, Integers, String, Tile, Vector};
         match self {
@@ -831,15 +869,19 @@ pub(crate) fn evaluate_with_spans(
     span: Span,
     argument_span: impl Fn(usize) -> Span,
 ) -> Result<Value, Diagnostic> {
-    let types = function.parameter_types();
-    if args.len() != types.len() {
+    if !function.accepts_arity(args.len()) {
         return Err(Diagnostic::new(
             DiagnosticKind::CallArguments,
             span,
-            format!("expected {} arguments, found {}", types.len(), args.len()),
+            format!(
+                "expected {} arguments, found {}",
+                function.arity_description(),
+                args.len()
+            ),
         ));
     }
-    for (i, (value, &expected)) in args.iter().zip(types).enumerate() {
+    for (i, value) in args.iter().enumerate() {
+        let expected = function.parameter_type_at(i).expect("validated arity");
         if value.kind() != expected {
             return Err(crate::value::type_mismatch(
                 argument_span(i),
