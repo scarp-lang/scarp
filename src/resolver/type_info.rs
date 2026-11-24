@@ -9,7 +9,7 @@ pub(super) struct ProgramTypes {
     registry: TypeRegistry,
     bindings: Vec<TypeId>,
     functions: Vec<TypeId>,
-    builtins: BTreeMap<Builtin, TypeId>,
+    builtins: BTreeMap<(Builtin, usize), TypeId>,
     divmod: Option<TypeId>,
     input: BTreeMap<crate::input::IoBuiltin, TypeId>,
 }
@@ -67,7 +67,13 @@ impl TypedExpression<'_> {
                         self.types.functions.get(function).copied()
                     }
                     Some(ResolvedCall::Builtin(builtin)) => {
-                        self.types.builtins.get(&builtin).copied()
+                        let ExpressionKind::UserCall { arguments, .. } = &node.kind else {
+                            unreachable!("resolved builtin must be a call");
+                        };
+                        self.types
+                            .builtins
+                            .get(&(builtin, arguments.len()))
+                            .copied()
                     }
                     Some(ResolvedCall::Io(input)) => self.types.input.get(&input).copied(),
                     Some(ResolvedCall::BigIntDivMod) => self.types.divmod,
@@ -184,8 +190,19 @@ impl ResolvedProgram {
             .get(function)
             .map(|body| body.slot_types.as_slice())
     }
+    /// Return the signature of the smallest observed arity of this builtin.
+    /// Fixed-arity builtins always have at most one signature.
     pub fn builtin_type_id(&self, builtin: Builtin) -> Option<TypeId> {
-        self.type_info.builtins.get(&builtin).copied()
+        self.type_info
+            .builtins
+            .range((builtin, 0)..=(builtin, usize::MAX))
+            .next()
+            .map(|(_, &id)| id)
+    }
+
+    /// Return the concrete signature for a builtin call of the given arity.
+    pub fn builtin_type_id_for_arity(&self, builtin: Builtin, arity: usize) -> Option<TypeId> {
+        self.type_info.builtins.get(&(builtin, arity)).copied()
     }
     // Plan order: entry operations, then each function's defaults, contracts and
     // body. Node indices are local postorder indices within one expression.
@@ -270,11 +287,17 @@ pub(super) fn build(
                     );
                 }
                 Some(ResolvedCall::Builtin(builtin)) => {
+                    let ExpressionKind::UserCall { arguments, .. } =
+                        &expression.syntax.nodes()[index].kind
+                    else {
+                        unreachable!("resolved builtin must be a call");
+                    };
+                    let arity = arguments.len();
                     if let std::collections::btree_map::Entry::Vacant(entry) =
-                        builtins.entry(*builtin)
+                        builtins.entry((*builtin, arity))
                     {
                         let id = builtin
-                            .intern_signature(&mut registry)
+                            .intern_signature_for_arity(&mut registry, arity)
                             .map_err(|error| failure(error, span))?;
                         entry.insert(id);
                     }
