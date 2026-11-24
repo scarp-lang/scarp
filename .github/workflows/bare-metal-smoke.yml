@@ -1,0 +1,35 @@
+name: Experimental bare-metal smoke
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/bare-metal/**'
+      - 'src/**'
+      - 'examples/checked_elf64_function.*'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/bare-metal-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qemu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - name: Install emulator and boot image tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends grub-pc-bin grub-common xorriso qemu-system-x86
+      - name: Boot Scarp-generated machine code
+        run: bash experiments/bare-metal/smoke.sh
