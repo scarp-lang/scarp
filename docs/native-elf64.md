@@ -69,8 +69,10 @@ The input must pass the existing preflight: at most 256 scalar slots, 4096
 resolved statements, 1024 nodes per expression and 16,384 total nodes.
 The accepted binding-only sequence is stricter than general programs.
 The encoder checks actual machine-code growth against 200,000 bytes and caps
-the complete ELF object at 262,144 bytes. It uses fallible reserves and
-deterministic section offsets.
+the complete ELF object at 262,144 bytes. The development writer plans aligned,
+nonoverlapping file regions before reserving the output buffer. The section
+headers use the same ranges as the payload writer. The writer also validates
+the string table for its single exported symbol before allocating the object.
 The alpha.16 candidate probes every full 4 KiB stack page crossed while
 allocating a large frame. Both return paths restore the complete frame.
 No source path, timestamp, username, environment variable, or build identity
