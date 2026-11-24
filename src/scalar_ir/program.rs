@@ -24,7 +24,7 @@ pub(in crate::scalar_ir) struct ProgramStep {
     pub(in crate::scalar_ir) span: Span,
     /// The interpreter charges one work step per resolved operation except
     /// retirement. This is an accounting event, not a loop-iteration bound.
-    charge_work: bool,
+    pub(in crate::scalar_ir) charge_work: bool,
     pub(in crate::scalar_ir) kind: ProgramOp,
 }
 
