@@ -250,8 +250,9 @@ against the saved count before each iteration. Updating a source variable
 used to compute the count does not change the saved bound. Zero skips the
 body. Negative counts return status 5
 (`CHECKED_KERNEL_REPEAT_COUNT`) with the repeat initialization source span.
-Index progression is checked for integer overflow. Break and continue use
-the existing resolved control-flow targets and retirement verifier.
+Index progression is checked for integer overflow. Break and an exhausted
+guard share an uncharged exit that retires the saved count and index.
+Continue reaches the checked advancement with both slots still initialized.
 
 The native work allowance applies to initialization, guard, index advancement
 and body operations. Huge positive counts do not bypass the allowance.
@@ -271,3 +272,6 @@ The native host regression suite compares zero, one and multiple iterations,
 nested loops, early returns, break/continue, count snapshots and negative-count
 diagnostics against interpreter execution; it also tests exhaustion before
 negative-count evaluation and with a maximum signed 64-bit iteration count.
+The [mixed loop example](../examples/native_bounded_loops.srp) nests
+both forms and runs with `scarp exec examples/native_bounded_loops.srp`.
+Pass its function definition alone to the native API.
