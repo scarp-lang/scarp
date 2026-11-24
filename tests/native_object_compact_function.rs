@@ -116,9 +116,37 @@ fn long_native_expression_uses_a_small_bounded_stack_frame() {
     );
 }
 
+fn branch_chain() -> String {
+    format!(
+        "pure funcra f(x: integer) -> integer {{
+            if x == 0{} {{ return 17; }}
+            return 29;
+        }}",
+        " or x == 1".repeat(200)
+    )
+}
+
+#[test]
+fn long_short_circuit_expression_uses_a_small_bounded_stack_frame() {
+    let source = branch_chain();
+    let artifact = emit_elf64_checked_integer_function(&source).unwrap();
+    let machine = text_bytes(&artifact.object);
+    assert_eq!(&machine[..3], &[0x48, 0x81, 0xec]);
+    assert_eq!(u32::from_le_bytes(machine[3..7].try_into().unwrap()), 40);
+    assert_eq!(
+        artifact,
+        emit_elf64_checked_integer_function(&source).unwrap()
+    );
+}
+
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[test]
 fn reused_temporary_slots_preserve_results_and_first_failure_spans() {
+    use scarp::{
+        diagnostics::DiagnosticKind,
+        native_object::{CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_INTEGER_OVERFLOW},
+        RunError,
+    };
     use std::{fs, process::Command};
 
     let cc = std::env::var_os("SCARP_CC").unwrap_or_else(|| "cc".into());
@@ -134,21 +162,28 @@ fn reused_temporary_slots_preserve_results_and_first_failure_spans() {
     let object = directory.join("function.o");
     let harness = directory.join("harness.c");
     let binary = directory.join("harness");
-    let source = format!(
+    let arithmetic = format!(
         "pure funcra f(x: integer) -> integer {{ return x{}; }}",
         " + 1".repeat(200)
     );
-    let artifact = emit_elf64_checked_integer_function(&source).unwrap();
-    fs::write(&object, &artifact.object).unwrap();
+    let mixed = "pure funcra f(x: integer) -> integer {
+        // संयुक्त
+        if (x > 0) == ((x < 0 and 7 / 0 == 0) or (x == 0 or 30 / x > 5)) {
+            return x + 10;
+        }
+        return 99;
+    }";
     fs::write(
         &harness,
         r#"#include <stdint.h>
 #include <inttypes.h>
 #include <stdio.h>
+#include <unistd.h>
 struct result { int64_t value; uint32_t status; uint32_t span_id; };
 extern struct result scarp_checked_integer_function(int64_t);
 int main(void) {
-    const int64_t inputs[] = {0, -200, 72, INT64_MIN, INT64_MAX - 200, INT64_MAX};
+    const int64_t inputs[] = {0, 1, -200, 3, 72, INT64_MIN, INT64_MAX - 200, INT64_MAX};
+    alarm(5);
     for (unsigned i = 0; i < sizeof(inputs) / sizeof(inputs[0]); ++i) {
         struct result r = scarp_checked_integer_function(inputs[i]);
         printf("%" PRId64 " %" PRIu32 " %" PRIu32 "\n", r.value, r.status, r.span_id);
@@ -158,37 +193,53 @@ int main(void) {
 "#,
     )
     .unwrap();
-    let link = Command::new(&cc)
-        .args(["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror"])
-        .arg(&harness)
-        .arg(&object)
-        .arg("-o")
-        .arg(&binary)
-        .output()
-        .unwrap();
-    assert!(
-        link.status.success(),
-        "{}",
-        String::from_utf8_lossy(&link.stderr)
-    );
-    let output = Command::new(&binary).output().unwrap();
-    assert!(output.status.success());
-    let stdout = std::str::from_utf8(&output.stdout).unwrap();
-    let rows: Vec<_> = stdout.lines().collect();
-    assert_eq!(rows.len(), 6);
-    for (row, input) in rows.iter().zip([0i64, -200, 72, i64::MIN, i64::MAX - 200]) {
-        let mut expected = Vec::new();
-        scarp::run(&format!("{source} print(f({input}));"), &mut expected).unwrap();
+    for source in [arithmetic.as_str(), &branch_chain(), mixed] {
+        let artifact = emit_elf64_checked_integer_function(source).unwrap();
+        fs::write(&object, &artifact.object).unwrap();
+        let link = Command::new(&cc)
+            .args(["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror"])
+            .arg(&harness)
+            .arg(&object)
+            .arg("-o")
+            .arg(&binary)
+            .output()
+            .unwrap();
         assert_eq!(
-            *row,
-            format!("{} 0 0", String::from_utf8(expected).unwrap().trim())
+            link.status.code(),
+            Some(0),
+            "{}",
+            String::from_utf8_lossy(&link.stderr)
         );
+        let output = Command::new(&binary).output().unwrap();
+        assert!(output.status.success());
+        let stdout = std::str::from_utf8(&output.stdout).unwrap();
+        let rows: Vec<_> = stdout.lines().collect();
+        let inputs = [0i64, 1, -200, 3, 72, i64::MIN, i64::MAX - 200, i64::MAX];
+        assert_eq!(rows.len(), inputs.len());
+        for (row, input) in rows.iter().zip(inputs) {
+            let mut expected = Vec::new();
+            match scarp::run(&format!("{source} print(f({input}));"), &mut expected) {
+                Ok(()) => assert_eq!(
+                    *row,
+                    format!("{} 0 0", String::from_utf8(expected).unwrap().trim())
+                ),
+                Err(RunError::Diagnostic(error)) => {
+                    let expected_status = match error.kind {
+                        DiagnosticKind::ArithmeticOverflow => CHECKED_KERNEL_INTEGER_OVERFLOW,
+                        DiagnosticKind::DivisionByZero => CHECKED_KERNEL_DIVISION_BY_ZERO,
+                        _ => panic!("unexpected interpreter diagnostic: {error:?}"),
+                    };
+                    let fields = row.split_whitespace().collect::<Vec<_>>();
+                    assert_eq!(fields.len(), 3);
+                    assert_eq!(fields[0], "0");
+                    assert_eq!(fields[1].parse::<u32>().unwrap(), expected_status);
+                    let span_id = fields[2].parse::<usize>().unwrap();
+                    assert_eq!(artifact.failure_spans[span_id], error.span);
+                    assert!(expected.is_empty());
+                }
+                Err(error) => panic!("{error:?}"),
+            }
+        }
     }
-    let last: Vec<_> = rows[5].split_whitespace().collect();
-    assert_eq!(last.len(), 3);
-    assert_eq!(last[0], "0");
-    assert_eq!(last[1], "1");
-    let span = artifact.failure_spans[last[2].parse::<usize>().unwrap()];
-    assert_eq!(&source[span.start..span.end], "+");
     fs::remove_dir_all(directory).unwrap();
 }

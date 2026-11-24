@@ -400,7 +400,7 @@ fn text(program: &ScalarProgramIr, checked_arithmetic: bool) -> Result<Code, Dia
     code.allocate_stack(stack_size)?;
 
     for (slot, expr) in program.integer_stores() {
-        expression(&mut code, expr, slot_count, checked_arithmetic, false)?;
+        expression(&mut code, expr, slot_count, checked_arithmetic, None)?;
         code.store_rax(slot)?;
     }
 
@@ -416,18 +416,20 @@ fn expression(
     expr: &ScalarExpressionIr,
     slot_count: usize,
     checked: bool,
-    control_flow: bool,
+    layout: Option<&TemporaryLayout>,
 ) -> Result<(), Diagnostic> {
     let mut offsets = Vec::new();
     let mut branches = Vec::new();
     // Binding-only kernels keep their original byte-for-byte layout. Only
     // the function backends opt in to verified temporary slot reuse.
-    let layout = if control_flow {
-        TemporaryLayout::plan(expr)?
-    } else {
-        TemporaryLayout::identity(expr.registers.len())
+    let control_flow = layout.is_some();
+    let register = |index| {
+        let index = match layout {
+            Some(layout) => layout.slot(index)?,
+            None => index,
+        };
+        temporary(slot_count, index)
     };
-    let register = |index| temporary(slot_count, layout.slot(index)?);
     for step in &expr.steps {
         if control_flow {
             offsets.push(code.data.len());
@@ -528,6 +530,7 @@ fn function_text(program: &ScalarProgramIr, budget: Option<u32>) -> Result<Code,
     let registers = &INTEGER_ARGUMENT_REGISTERS[..register_count];
     let mut max_registers = 0;
     let mut estimated_steps = program.operations().len();
+    let mut expressions = Vec::with_capacity(program.operations().len());
     for step in program.operations() {
         let value = match &step.kind {
             ProgramOp::Return { value }
@@ -537,12 +540,17 @@ fn function_text(program: &ScalarProgramIr, budget: Option<u32>) -> Result<Code,
             | ProgramOp::JumpIfFalse {
                 condition: value, ..
             } => value,
-            _ => continue,
+            _ => {
+                expressions.push(None);
+                continue;
+            }
         };
-        max_registers = max_registers.max(TemporaryLayout::plan(value)?.count());
+        let layout = TemporaryLayout::plan(value)?;
+        max_registers = max_registers.max(layout.count());
         estimated_steps = estimated_steps
             .checked_add(value.steps.len())
             .ok_or_else(failure)?;
+        expressions.push(Some((value, layout)));
     }
     let slot_count = program.integer_slot_count();
     let stack_size = frame_bytes(slot_count, max_registers)?;
@@ -564,46 +572,44 @@ fn function_text(program: &ScalarProgramIr, budget: Option<u32>) -> Result<Code,
     let mut offsets = Vec::with_capacity(program.operations().len() + 1);
     let mut branches = Vec::new();
     let mut returns = Vec::new();
-    for step in program.operations() {
+    for (step, planned) in program.operations().iter().zip(&expressions) {
         offsets.push(code.data.len());
         if step.charge_work {
             code.charge_work(step.span)?;
         }
+        if let Some((value, layout)) = planned {
+            expression(&mut code, value, slot_count, true, Some(layout))?;
+        }
         match &step.kind {
-            ProgramOp::Store { slot, value } => {
-                expression(&mut code, value, slot_count, true, true)?;
+            ProgramOp::Store { slot, .. } => {
                 code.store_rax(*slot)?;
             }
             ProgramOp::Update {
                 slot,
                 operator,
                 operator_span,
-                value,
+                ..
             } => {
                 // The RHS cannot call or write slots. Scarp snapshots the LHS
                 // first, which is equivalent to reading the same slot here.
-                expression(&mut code, value, slot_count, true, true)?;
                 code.push(&[0x48, 0x89, 0xc1])?; // mov rcx, rax
                 code.load_rax(*slot)?;
                 code.binary(*operator, true, *operator_span)?;
                 code.store_rax(*slot)?;
             }
-            ProgramOp::Return { value } => {
-                expression(&mut code, value, slot_count, true, true)?;
+            ProgramOp::Return { .. } => {
                 returns.push(code.jump()?);
             }
-            ProgramOp::JumpIfFalse { condition, target } => {
-                expression(&mut code, condition, slot_count, true, true)?;
+            ProgramOp::JumpIfFalse { target, .. } => {
                 code.push(&[0x48, 0x85, 0xc0])?; // test rax, rax
                 branches.push((code.near_branch(Condition::Equal)?, *target));
             }
             ProgramOp::Jump { target } => branches.push((code.jump()?, *target)),
             ProgramOp::RepeatInit {
-                count,
                 count_slot,
                 index_slot,
+                ..
             } if code.metered => {
-                expression(&mut code, count, slot_count, true, true)?;
                 code.guard_repeat_count(step.span)?;
                 code.store_rax(*count_slot)?;
                 code.integer_rax(0)?;

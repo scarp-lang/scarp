@@ -1126,7 +1126,14 @@ impl<'a> Resolver<'a> {
         self.scopes.pop();
         let next = self.emit(ResolvedStatement::RepeatNext { index_slot }, index_span);
         self.emit(ResolvedStatement::Jump { target: start }, count_span);
-        let end = self.statements.len();
+        // Both normal exhaustion and break end the lifetime of the hidden
+        // count and the index. Continue still needs both on the backedge.
+        let end = self.emit(
+            ResolvedStatement::Retire {
+                slots: vec![count_slot, index_slot],
+            },
+            span,
+        );
         if let ResolvedStatement::RepeatGuard { target, .. } = &mut self.statements[start].kind {
             *target = end;
         }
@@ -1227,7 +1234,8 @@ impl<'a> Resolver<'a> {
 
     // Every declaration has a unique resolver-assigned slot. Lexical retirement
     // can therefore be planned once and executed without tracing live objects.
-    // Repeat indices are read after body exit by RepeatNext and stay live.
+    // Repeat indices survive body exit for RepeatNext. The repeat exit retires
+    // the index together with the hidden count.
     fn retirement_slots(&self, from_depth: usize) -> Vec<usize> {
         let mut slots: Vec<usize> = self.scopes[from_depth..]
             .iter()
@@ -2388,8 +2396,20 @@ mod retirement_plan_tests {
         assert_eq!(transfers.len(), 2);
         assert_eq!(transfers[0].1, vec![3, 4]);
         assert_eq!(transfers[1].1, vec![3, 5]);
-        assert!(transfers[0].0 != transfers[1].0);
-        // Index slot 2 and outer binding slot 0 must stay live.
+        assert!(matches!(
+            program.statements[transfers[0].0].kind,
+            ResolvedStatement::RepeatNext { index_slot: 2 }
+        ));
+        let exit = transfers[1].0;
+        assert!(matches!(
+            &program.statements[exit].kind,
+            ResolvedStatement::Retire { slots } if slots == &[1, 2]
+        ));
+        assert!(program.statements.iter().any(|operation| matches!(
+            operation.kind,
+            ResolvedStatement::RepeatGuard { target, .. } if target == exit
+        )));
+        // Loop control itself only retires lexical bindings from the body.
         assert!(transfers
             .iter()
             .all(|(_, slots)| !slots.contains(&0) && !slots.contains(&2)));

@@ -2,6 +2,8 @@ use scarp::native_object::{
     emit_elf64_bounded_integer_function, emit_elf64_checked_integer_function,
 };
 
+const MIXED_LOOPS: &str = include_str!("../examples/native_bounded_loops.srp");
+
 const SUM: &str = "pure funcra f(n: integer) -> integer {
     var i = n;
     var total = 0;
@@ -53,6 +55,7 @@ fn bounded_native_rejects_unsupported_effects_and_calls() {
 #[test]
 fn native_loops_match_interpreter_and_exhaust_budget_per_invocation() {
     use scarp::{
+        diagnostics::Span,
         native_object::{
             CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_REPEAT_COUNT, CHECKED_KERNEL_WORK_LIMIT,
         },
@@ -80,9 +83,11 @@ fn native_loops_match_interpreter_and_exhaust_budget_per_invocation() {
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 struct result { int64_t value; uint32_t status; uint32_t span_id; };
 extern struct result scarp_bounded_integer_function(int64_t);
 int main(int argc, char **argv) {
+    alarm(5);
     if (argc != 2) return 1;
     int64_t input = strtoll(argv[1], NULL, 10);
     for (int i = 0; i < 2; ++i) {
@@ -157,6 +162,7 @@ int main(int argc, char **argv) {
         }
         return 0;
     }";
+    let mixed = MIXED_LOOPS.split_once("\nprint(").unwrap().0;
     let cases = [
         (constant, 0, 0, true),
         (constant, 1, 0, true),
@@ -183,8 +189,10 @@ int main(int argc, char **argv) {
         (count_snapshot, 1000, 5, false),
         (early_return, 1000, 10, false),
         (early_return, 1000, 2, false),
+        (mixed, 1000, 3, false),
+        (mixed, 1000, 0, false),
     ];
-    for (source, allowance, argument, exhausted) in cases {
+    let invoke = |source: &str, allowance, argument: i64| {
         let artifact = emit_elf64_bounded_integer_function(source, allowance).unwrap();
         fs::write(&object, &artifact.object).unwrap();
         let link = Command::new(&cc)
@@ -204,28 +212,40 @@ int main(int argc, char **argv) {
             .arg(argument.to_string())
             .output()
             .unwrap();
-        assert!(result.status.success());
+        assert!(
+            result.status.success(),
+            "native harness exited with {} for {source}, argument {argument}, allowance {allowance}",
+            result.status
+        );
         let stdout = std::str::from_utf8(&result.stdout).unwrap();
         let rows = stdout.lines().collect::<Vec<_>>();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0], rows[1], "meter must reset on each invocation");
         let values = rows[0].split_whitespace().collect::<Vec<_>>();
         assert_eq!(values.len(), 3);
+        (
+            values[0].parse::<i64>().unwrap(),
+            values[1].parse::<u32>().unwrap(),
+            values[2].parse::<usize>().unwrap(),
+            artifact.failure_spans,
+        )
+    };
+    for (source, allowance, argument, exhausted) in cases {
+        let (value, status, id, spans) = invoke(source, allowance, argument);
         if exhausted {
-            assert_eq!(values[0], "0");
-            assert_eq!(values[1].parse::<u32>().unwrap(), CHECKED_KERNEL_WORK_LIMIT);
-            let id = values[2].parse::<usize>().unwrap();
-            let span = artifact.failure_spans[id];
+            assert_eq!(value, 0);
+            assert_eq!(status, CHECKED_KERNEL_WORK_LIMIT);
+            let span = spans[id];
             assert!(source.get(span.start..span.end).is_some());
         } else {
             let mut expected = Vec::new();
             match scarp::run(&format!("{source} print(f({argument}));"), &mut expected) {
                 Ok(()) => {
-                    let expected = std::str::from_utf8(&expected).unwrap().trim();
-                    assert_eq!(values, [expected, "0", "0"]);
+                    assert_eq!(format!("{value}\n").as_bytes(), expected);
+                    assert_eq!((status, id), (0, 0));
                 }
                 Err(RunError::Diagnostic(error)) => {
-                    let status = match error.kind {
+                    let expected_status = match error.kind {
                         scarp::diagnostics::DiagnosticKind::DivisionByZero => {
                             CHECKED_KERNEL_DIVISION_BY_ZERO
                         }
@@ -234,17 +254,84 @@ int main(int argc, char **argv) {
                         }
                         _ => panic!("{error:?}"),
                     };
-                    assert_eq!(values[0], "0");
-                    assert_eq!(values[1].parse::<u32>().unwrap(), status);
-                    let id = values[2].parse::<usize>().unwrap();
-                    assert_eq!(artifact.failure_spans[id], error.span);
+                    assert_eq!(value, 0);
+                    assert_eq!(status, expected_status);
+                    assert_eq!(spans[id], error.span);
                     assert!(expected.is_empty());
                 }
                 Err(error) => panic!("{error:?}"),
             }
         }
     }
+
+    let source = "// गणना\npure funcra f(n: integer) -> integer { repeat n as i {} return 7; }";
+    let token_span = |text: &str, prefix: &str| {
+        let start = source.find(prefix).unwrap() + prefix.len();
+        assert_eq!(&source[start..start + text.len()], text);
+        Span::new(start, start + text.len())
+    };
+    let count = token_span("n", "repeat ");
+    let index = token_span("i", "repeat n as ");
+    let return_start = source.find("return 7;").unwrap();
+    let return_statement = Span::new(return_start, return_start + "return 7;".len());
+    let literal = token_span("7", "return ");
+    for (argument, expected_trace) in [
+        (0, &[count, count, count, return_statement, literal][..]),
+        (
+            1,
+            &[
+                count,
+                count,
+                count,
+                index,
+                count,
+                count,
+                return_statement,
+                literal,
+            ],
+        ),
+    ] {
+        for (allowance, &expected_span) in expected_trace.iter().enumerate() {
+            let (value, status, id, spans) = invoke(source, allowance as u32, argument);
+            assert_eq!(
+                (value, status, spans[id]),
+                (0, CHECKED_KERNEL_WORK_LIMIT, expected_span)
+            );
+        }
+        let (value, status, id, _) = invoke(source, expected_trace.len() as u32, argument);
+        assert_eq!((value, status, id), (7, 0, 0));
+    }
+    for (allowance, expected_status) in [
+        (1, CHECKED_KERNEL_WORK_LIMIT),
+        (2, CHECKED_KERNEL_REPEAT_COUNT),
+    ] {
+        let (value, status, id, spans) = invoke(source, allowance, -1);
+        assert_eq!((value, status, spans[id]), (0, expected_status, count));
+    }
+
+    let source = "pure funcra f(n: integer) -> integer { repeat n / 0 as i {} return 7; }";
+    let slash = source.find('/').unwrap();
+    for (allowance, expected_status) in [
+        (4, CHECKED_KERNEL_WORK_LIMIT),
+        (5, CHECKED_KERNEL_DIVISION_BY_ZERO),
+    ] {
+        let (value, status, id, spans) = invoke(source, allowance, -1);
+        assert_eq!(
+            (value, status, spans[id]),
+            (0, expected_status, Span::new(slash, slash + 1))
+        );
+    }
     fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn mixed_loop_example_runs_in_the_interpreter() {
+    let mut output = Vec::new();
+    scarp::run(MIXED_LOOPS, &mut output).unwrap();
+    assert_eq!(
+        output,
+        include_bytes!("../examples/native_bounded_loops.stdout")
+    );
 }
 
 #[test]

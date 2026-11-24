@@ -12,7 +12,10 @@ blocks, calls, returns and loop control; no deallocation syntax is needed.
 
 The resolver assigns a unique slot per declaration and emits internal `Retire`
 operations at block exits. `break` and `continue` carry the slots of every scope
-they exit, preserving outer bindings and repeat-control state. Retirement drops
+they exit, preserving outer bindings and the repeat state needed by the next
+iteration. On development branches with repeat-exit retirement, a normal
+counted-loop exit or a `break` also retires the saved count and index.
+Retirement drops
 a slot's immutable value by replacing it with the internal unit marker. It is
 bookkeeping excluded from source statement counts and existing work charges.
 

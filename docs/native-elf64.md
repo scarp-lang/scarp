@@ -250,8 +250,9 @@ against the saved count before each iteration. Updating a source variable
 used to compute the count does not change the saved bound. Zero skips the
 body. Negative counts return status 5
 (`CHECKED_KERNEL_REPEAT_COUNT`) with the repeat initialization source span.
-Index progression is checked for integer overflow. Break and continue use
-the existing resolved control-flow targets and retirement verifier.
+Index progression is checked for integer overflow. Break and an exhausted
+guard share an uncharged exit that retires the saved count and index.
+Continue reaches the checked advancement with both slots still initialized.
 
 The native work allowance applies to initialization, guard, index advancement
 and body operations. Huge positive counts do not bypass the allowance.
@@ -271,22 +272,26 @@ The native host regression suite compares zero, one and multiple iterations,
 nested loops, early returns, break/continue, count snapshots and negative-count
 diagnostics against interpreter execution; it also tests exhaustion before
 negative-count evaluation and with a maximum signed 64-bit iteration count.
+The [mixed loop example](../examples/native_bounded_loops.srp) nests
+both forms and runs with `scarp exec examples/native_bounded_loops.srp`.
+Pass its function definition alone to the native API.
 
 ## Experimental temporary lifetime reuse
 
-Function emission plans a deterministic stack layout for straight-line scalar
-expressions. A temporary is live from its first definition or access through
-its last access; the returned expression root remains live through the final
-load. Non-overlapping lifetimes can reuse physical slots. Both operands and
-the destination of a binary operation remain distinct at that instruction.
+PR #366 adds deterministic stack layouts for checked and bounded function
+expressions. Straight-line expressions use first/last-access intervals.
+For short-circuit expressions, the allocator walks forward-only control flow in
+reverse, combines live values from both successors, and gives conflicting
+temporaries different stack slots. A store preserves all other live values,
+and the root remains live through the final load on every path. Simultaneous
+operands and destinations remain distinct.
 
-Expressions containing conditional IR branches conservatively retain their
-original register-to-slot identity. Binding-only kernel encodings remain
-unchanged. The optimization does not reorder operations, remove work charges,
-or alter arithmetic failure-span indexing.
+Each plan is computed once per expression and used both to size the frame and
+to encode stack accesses. Work events, operation order, failure spans and the
+published binding-only kernel encodings are preserved.
 
-A regression fixture with 200 successive additions uses three simultaneous
-temporary slots and one parameter slot, with a target aligned frame of 40
-bytes instead of over 3 KiB. This is a stack-footprint target verified by the
-native object tests, not a measured execution-speed claim. Independent host
-execution checks successful values and checked overflow.
+A regression with 200 successive additions and a second regression with a
+200-branch short-circuit chain each verify a 40-byte aligned frame. Both
+fixtures use three temporary slots and one parameter slot. Independent host
+execution compares values, overflow and short-circuited division with the
+interpreter, including exact failure spans.
