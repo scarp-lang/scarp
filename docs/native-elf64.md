@@ -333,14 +333,23 @@ expressions in written order and then loads the parameter registers.
 
 The object exports `scarp_bounded_integer_entry`. The entry uses the selected
 function's arity and returns the same value/status/span structure as the
-bounded single-function API. Helper bodies are private and called at verified
-offsets in the same `.text` section. The object has no external references
+bounded single-function API. The selected entry and its reachable helper
+bodies are emitted after all declarations pass verification. The helpers
+are private and called at verified offsets in the same `.text` section.
+The object has no external references
 or relocation entries. The first six arguments use the SysV integer
 registers. Each caller plans a disjoint outgoing area for arguments seven
 through sixteen below its local and temporary slots. This area is part of
 the checked stack limit. RSP remains aligned throughout the call and the
 callee reads the extra arguments after the return address. A call returns
 a checked result in RAX/RDX.
+
+In this entry API, straight-line expressions with no calls may use R11 for
+one group of nonoverlapping temporary lifetimes. Additional live values
+use stack slots. Expressions with calls or control-flow joins use stack
+slots for all temporaries. The allocator reserves RAX, RCX and RDX for
+arithmetic and R10 for the meter. Each expression passes its result in
+RAX before the next statement, so no R11 value is live at a call site.
 
 The external entry initializes the R10 work counter. Every helper shares
 that counter. Visiting a call expression and dispatching it each cost one
@@ -349,7 +358,7 @@ callee. Charged events use the original byte spans. A callee failure
 unwinds each frame immediately and preserves the status and span ID.
 The allowance is initialized again for each external invocation.
 
-A static call graph rejects cycles. It limits the object to 32 functions
+A static call graph rejects cycles. It limits the input to 32 functions
 and a maximum chain of 16 active frames, with at most 64 KiB of combined
 frame bytes including return addresses. It also bounds aggregate IR and
 machine-code size. Host callbacks, recursive

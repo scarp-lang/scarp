@@ -142,6 +142,23 @@ impl ScalarCallGraph {
         &self.bodies
     }
 
+    /// Every caller precedes its callees in reverse postorder. Propagate
+    /// reachability once, then retain source order for deterministic output.
+    pub(in crate::scalar_ir) fn emission_order(&self) -> Vec<usize> {
+        let mut reachable = vec![false; self.bodies.len()];
+        reachable[self.entry] = true;
+        for &id in self.postorder.iter().rev() {
+            if reachable[id] {
+                for &(callee, _) in &self.edges[id] {
+                    reachable[callee] = true;
+                }
+            }
+        }
+        std::iter::once(self.entry)
+            .chain((0..self.bodies.len()).filter(|&id| id != self.entry && reachable[id]))
+            .collect()
+    }
+
     /// The longest active path includes each frame's actual allocation and
     /// its saved return address. Sequential calls do not accumulate stack.
     pub(in crate::scalar_ir) fn verify_stack(&self, frames: &[u32]) -> Result<(), Diagnostic> {

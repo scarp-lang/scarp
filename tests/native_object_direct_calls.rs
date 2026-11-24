@@ -82,6 +82,38 @@ fn direct_object_is_deterministic_and_exports_only_the_selected_entry() {
 }
 
 #[test]
+fn direct_object_omits_unreachable_bodies_after_validating_them() {
+    let source = "pure funcra entry(n: integer) -> integer { return middle(n); }
+                  pure funcra leaf(n: integer) -> integer { return n + 3; }
+                  pure funcra middle(n: integer) -> integer { return leaf(n); }";
+    let artifact = emit_elf64_bounded_integer_entry(source, "entry", 100).unwrap();
+    let extra = format!("{source}\npure funcra unused() -> integer {{ return entry(0); }}");
+    assert_eq!(
+        artifact,
+        emit_elf64_bounded_integer_entry(&extra, "entry", 100).unwrap()
+    );
+    let cycle = format!("{source}\npure funcra unused() -> integer {{ return unused(); }}");
+    let error = emit_elf64_bounded_integer_entry(&cycle, "entry", 100).unwrap_err();
+    assert_eq!(error.kind, DiagnosticKind::NativeUnsupported);
+    assert!(error.message.contains("nonrecursive"), "{error:?}");
+}
+
+#[test]
+fn straight_line_entry_uses_r11_and_a_smaller_frame() {
+    let source = "pure funcra f() -> integer { return 2 + 1; }";
+    let artifact = emit_elf64_bounded_integer_entry(source, "f", 100).unwrap();
+    let bytes = &artifact.object;
+    let read = |at: usize| u64::from_le_bytes(bytes[at..at + 8].try_into().unwrap()) as usize;
+    let header = read(40) + 64;
+    let start = read(header + 24);
+    let code = &bytes[start..start + read(header + 32)];
+    assert_eq!(&code[..6], &[0x41, 0xba, 100, 0, 0, 0]); // mov r10d, 100
+    assert_eq!(&code[6..13], &[0x48, 0x81, 0xec, 24, 0, 0, 0]); // sub rsp, 24
+    assert!(code.windows(3).any(|bytes| bytes == [0x49, 0x89, 0xc3])); // mov r11, rax
+    assert!(code.windows(3).any(|bytes| bytes == [0x4c, 0x89, 0xd8])); // mov rax, r11
+}
+
+#[test]
 fn direct_objects_reject_cycles_unknown_entries_and_unsupported_signatures() {
     for (source, entry, message) in [
         (
@@ -162,7 +194,7 @@ fn native_direct_calls_share_meter_and_propagate_the_first_failure() {
         diagnostics::Span,
         native_object::{
             CheckedElf64Kernel, CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_INTEGER_OVERFLOW,
-            CHECKED_KERNEL_WORK_LIMIT,
+            CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_WORK_LIMIT,
         },
         RunError,
     };
@@ -335,6 +367,31 @@ int main(int argc, char **argv) {{
         };
         assert_eq!(
             (value, status, artifact.failure_spans[id]),
+            (0, expected_status, error.span)
+        );
+    }
+
+    let scalar = "// गणना\npure funcra f(n: integer, shift: integer) -> integer {
+        return ((n + 1) * 3 / 2) << shift;
+    }";
+    let artifact = emit_elf64_bounded_integer_entry(scalar, "f", 100).unwrap();
+    let rows = invoke(&artifact, 2, &[5, 1, i64::MAX, -1, 5, -1]);
+    assert_eq!(rows[0], (18, 0, 0));
+    for (args, row, expected_status) in [
+        (
+            format!("{}, -1", i64::MAX),
+            rows[1],
+            CHECKED_KERNEL_INTEGER_OVERFLOW,
+        ),
+        ("5, -1".to_string(), rows[2], CHECKED_KERNEL_INVALID_SHIFT),
+    ] {
+        let Err(RunError::Diagnostic(error)) =
+            scarp::run(&format!("{scalar}\nprint(f({args}));"), &mut Vec::new())
+        else {
+            panic!("interpreter should reject f({args})");
+        };
+        assert_eq!(
+            (row.0, row.1, artifact.failure_spans[row.2]),
             (0, expected_status, error.span)
         );
     }

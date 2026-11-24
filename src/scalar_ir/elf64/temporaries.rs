@@ -1,4 +1,4 @@
-//! Stack-slot reuse for verified scalar expressions.
+//! Temporary storage for verified scalar expressions.
 use super::{failure, Diagnostic, Operation, ScalarExpressionIr};
 use crate::scalar_ir::MAX_IR_REGISTERS;
 use std::collections::BTreeSet;
@@ -7,6 +7,22 @@ use std::collections::BTreeSet;
 pub(super) struct TemporaryLayout {
     slots: Vec<usize>,
     count: usize,
+    r11: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TemporaryHome {
+    Stack(usize),
+    R11,
+}
+
+impl TemporaryHome {
+    pub(super) fn stack_slot(self) -> Result<usize, Diagnostic> {
+        match self {
+            Self::Stack(slot) => Ok(slot),
+            Self::R11 => Err(failure()),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -157,7 +173,11 @@ impl TemporaryLayout {
             slots[interval.register] = slot;
             active.insert((interval.last, slot));
         }
-        Ok(Self { slots, count })
+        Ok(Self {
+            slots,
+            count,
+            r11: false,
+        })
     }
 
     fn plan_branches(expression: &ScalarExpressionIr) -> Result<Self, Diagnostic> {
@@ -260,19 +280,49 @@ impl TemporaryLayout {
             slots[register] = slot;
             count = count.max(slot + 1);
         }
-        Ok(Self { slots, count })
+        Ok(Self {
+            slots,
+            count,
+            r11: false,
+        })
+    }
+
+    /// Move slot zero's noninterfering lifetimes into caller-saved R11.
+    /// Scalar operations use RAX, RCX, RDX and the R10 meter. The emitter
+    /// hands the root back in RAX, so R11 is dead at statement boundaries.
+    pub(super) fn allocate_r11(&mut self, expression: &ScalarExpressionIr) {
+        self.r11 = self.count != 0
+            && expression.steps.iter().all(|step| match step.kind {
+                Operation::Call { .. } | Operation::Branch { .. } | Operation::Jump { .. } => false,
+                Operation::Work
+                | Operation::Integer { .. }
+                | Operation::Boolean { .. }
+                | Operation::Load { .. }
+                | Operation::Move { .. }
+                | Operation::Unary { .. }
+                | Operation::Binary { .. } => true,
+            });
     }
 
     pub(super) fn count(&self) -> usize {
-        self.count
+        self.count - usize::from(self.r11)
     }
 
-    pub(super) fn slot(&self, register: usize) -> Result<usize, Diagnostic> {
+    fn slot(&self, register: usize) -> Result<usize, Diagnostic> {
         self.slots
             .get(register)
             .copied()
             .filter(|slot| *slot < self.count)
             .ok_or_else(failure)
+    }
+
+    pub(super) fn home(&self, register: usize) -> Result<TemporaryHome, Diagnostic> {
+        let slot = self.slot(register)?;
+        Ok(match (self.r11, slot) {
+            (true, 0) => TemporaryHome::R11,
+            (true, slot) => TemporaryHome::Stack(slot - 1),
+            (false, slot) => TemporaryHome::Stack(slot),
+        })
     }
 }
 
@@ -341,21 +391,27 @@ mod tests {
         let layout = plan(expression).unwrap();
         assert_eq!(layout.count(), 3);
         assert_eq!(layout, plan(expression).unwrap());
+        let mut allocated = plan(expression).unwrap();
+        allocated.allocate_r11(expression);
+        assert_eq!(allocated, layout);
     }
 
     #[test]
     fn distinct_binary_operands_and_destination_do_not_alias() {
         let expression =
             expression("pure funcra f(x: integer) -> integer { return (x + 2) * (x - 3); }");
-        let layout = plan(&expression).unwrap();
+        let mut layout = plan(&expression).unwrap();
+        layout.allocate_r11(&expression);
+        assert_eq!(layout.count(), 3);
+        assert_eq!(layout.home(0).unwrap(), TemporaryHome::R11);
         for step in expression.steps {
             if let Operation::Binary {
                 dst, left, right, ..
             } = step.kind
             {
-                assert_ne!(layout.slot(dst).unwrap(), layout.slot(left).unwrap());
-                assert_ne!(layout.slot(dst).unwrap(), layout.slot(right).unwrap());
-                assert_ne!(layout.slot(left).unwrap(), layout.slot(right).unwrap());
+                assert_ne!(layout.home(dst).unwrap(), layout.home(left).unwrap());
+                assert_ne!(layout.home(dst).unwrap(), layout.home(right).unwrap());
+                assert_ne!(layout.home(left).unwrap(), layout.home(right).unwrap());
             }
         }
     }
