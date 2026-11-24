@@ -2,10 +2,12 @@
 //! Production emission uses only safe Rust, no external compiler or linker.
 
 mod layout;
+mod temporaries;
 
 use self::layout::{
     align_up, frame_bytes, slot_offset, stack_argument_offset, INTEGER_ARGUMENT_REGISTERS,
 };
+use self::temporaries::TemporaryLayout;
 use super::{
     invalid,
     program::{ProgramOp, ScalarProgramIr},
@@ -399,7 +401,7 @@ fn text(program: &ScalarProgramIr, checked_arithmetic: bool) -> Result<Code, Dia
     code.allocate_stack(stack_size)?;
 
     for (slot, expr) in program.integer_stores() {
-        expression(&mut code, expr, slot_count, checked_arithmetic, false)?;
+        expression(&mut code, expr, slot_count, checked_arithmetic, None)?;
         code.store_rax(slot)?;
     }
 
@@ -415,11 +417,20 @@ fn expression(
     expr: &ScalarExpressionIr,
     slot_count: usize,
     checked: bool,
-    control_flow: bool,
+    layout: Option<&TemporaryLayout>,
 ) -> Result<(), Diagnostic> {
     let mut offsets = Vec::new();
     let mut branches = Vec::new();
-    let register = |index| temporary(slot_count, index);
+    // Binding-only kernels keep their original byte-for-byte layout. Only
+    // the function backends opt in to verified temporary slot reuse.
+    let control_flow = layout.is_some();
+    let register = |index| {
+        let index = match layout {
+            Some(layout) => layout.slot(index)?,
+            None => index,
+        };
+        temporary(slot_count, index)
+    };
     for step in &expr.steps {
         if control_flow {
             offsets.push(code.data.len());
@@ -523,6 +534,7 @@ fn function_text(
     let registers = &INTEGER_ARGUMENT_REGISTERS[..register_count];
     let mut max_registers = 0;
     let mut estimated_steps = program.operations().len();
+    let mut expressions = Vec::with_capacity(program.operations().len());
     for step in program.operations() {
         let value = match &step.kind {
             ProgramOp::Return { value }
@@ -532,12 +544,17 @@ fn function_text(
             | ProgramOp::JumpIfFalse {
                 condition: value, ..
             } => value,
-            _ => continue,
+            _ => {
+                expressions.push(None);
+                continue;
+            }
         };
-        max_registers = max_registers.max(value.registers.len());
+        let layout = TemporaryLayout::plan_verified(value)?;
+        max_registers = max_registers.max(layout.count());
         estimated_steps = estimated_steps
             .checked_add(value.steps.len())
             .ok_or_else(failure)?;
+        expressions.push(Some((value, layout)));
     }
     let slot_count = program.integer_slot_count();
     let stack_size = frame_bytes(slot_count, max_registers)?;
@@ -559,46 +576,44 @@ fn function_text(
     let mut offsets = Vec::with_capacity(program.operations().len() + 1);
     let mut branches = Vec::new();
     let mut returns = Vec::new();
-    for step in program.operations() {
+    for (step, planned) in program.operations().iter().zip(&expressions) {
         offsets.push(code.data.len());
         if step.charge_work {
             code.charge_work(step.span)?;
         }
+        if let Some((value, layout)) = planned {
+            expression(&mut code, value, slot_count, true, Some(layout))?;
+        }
         match &step.kind {
-            ProgramOp::Store { slot, value } => {
-                expression(&mut code, value, slot_count, true, true)?;
+            ProgramOp::Store { slot, .. } => {
                 code.store_rax(*slot)?;
             }
             ProgramOp::Update {
                 slot,
                 operator,
                 operator_span,
-                value,
+                ..
             } => {
                 // The RHS cannot call or write slots. Scarp snapshots the LHS
                 // first, which is equivalent to reading the same slot here.
-                expression(&mut code, value, slot_count, true, true)?;
                 code.push(&[0x48, 0x89, 0xc1])?; // mov rcx, rax
                 code.load_rax(*slot)?;
                 code.binary(*operator, true, *operator_span)?;
                 code.store_rax(*slot)?;
             }
-            ProgramOp::Return { value } => {
-                expression(&mut code, value, slot_count, true, true)?;
+            ProgramOp::Return { .. } => {
                 returns.push(code.jump()?);
             }
-            ProgramOp::JumpIfFalse { condition, target } => {
-                expression(&mut code, condition, slot_count, true, true)?;
+            ProgramOp::JumpIfFalse { target, .. } => {
                 code.push(&[0x48, 0x85, 0xc0])?; // test rax, rax
                 branches.push((code.near_branch(Condition::Equal)?, *target));
             }
             ProgramOp::Jump { target } => branches.push((code.jump()?, *target)),
             ProgramOp::RepeatInit {
-                count,
                 count_slot,
                 index_slot,
+                ..
             } if code.metered => {
-                expression(&mut code, count, slot_count, true, true)?;
                 code.guard_repeat_count(step.span)?;
                 code.store_rax(*count_slot)?;
                 code.integer_rax(0)?;
@@ -847,6 +862,21 @@ fn object(machine: &[u8], strings: &[u8]) -> Result<Vec<u8>, Diagnostic> {
 #[cfg(test)]
 mod encoding_tests {
     use super::*;
+
+    #[test]
+    fn compact_prologue_probes_all_full_pages_and_restores_the_entire_frame() {
+        let mut code = Code::new(0, true).unwrap();
+        let size = 2 * STACK_PROBE_INTERVAL + 24;
+        code.allocate_stack(size).unwrap();
+        code.restore_stack_and_return(size).unwrap();
+        let probe = [0x48, 0x81, 0xec, 0, 0x10, 0, 0, 0xc6, 0x04, 0x24, 0];
+        assert_eq!(&code.data[..11], &probe);
+        assert_eq!(&code.data[11..22], &probe);
+        assert_eq!(&code.data[22..29], &[0x48, 0x81, 0xec, 24, 0, 0, 0]);
+        assert_eq!(&code.data[29..32], &[0x48, 0x81, 0xc4]);
+        assert_eq!(&code.data[32..36], &size.to_le_bytes());
+        assert_eq!(&code.data[36..], &[0xc3]);
+    }
 
     #[test]
     fn bounded_statement_branches_encode_signed_relative_offsets() {

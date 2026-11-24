@@ -276,6 +276,26 @@ The [mixed loop example](../examples/native_bounded_loops.srp) nests
 both forms and runs with `scarp exec examples/native_bounded_loops.srp`.
 Pass its function definition alone to the native API.
 
+## Experimental temporary lifetime reuse
+
+PR #366 adds deterministic stack layouts for checked and bounded function
+expressions. Straight-line expressions use first/last-access intervals.
+For short-circuit expressions, the allocator walks forward-only control flow in
+reverse, combines live values from both successors, and gives conflicting
+temporaries different stack slots. A store preserves all other live values,
+and the root remains live through the final load on every path. Simultaneous
+operands and destinations remain distinct.
+
+Each plan is computed once per expression and used both to size the frame and
+to encode stack accesses. Work events, operation order, failure spans and the
+published binding-only kernel encodings are preserved.
+
+A regression with 200 successive additions and a second regression with a
+200-branch short-circuit chain each verify a 40-byte aligned frame. Both
+fixtures use three temporary slots and one parameter slot. Independent host
+execution compares values, overflow and short-circuited division with the
+interpreter, including exact failure spans.
+
 ## Experimental explicit freestanding object target
 
 The Rust API accepts the exact target identifier `x86_64-none` via
