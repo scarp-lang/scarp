@@ -8,6 +8,10 @@
 
 use crate::diagnostics::{Diagnostic, Span};
 
+mod artifact;
+
+pub use artifact::write_elf64_object_new;
+
 /// Emit a deterministic ELF64 relocatable object from integer bindings.
 ///
 /// Every source operation must be a scalar integer binding initialized by
