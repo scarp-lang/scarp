@@ -22,6 +22,7 @@ header_end:
 .endm
 .global _start
 .extern scarp_checked_integer_function
+.extern scarp_bounded_integer_function
 _start:
     cli
     cld
@@ -90,6 +91,36 @@ long_mode:
     cmpl $1, %edx               /* checked integer overflow status */
     jne failed
     mark '3'
+    /* Exercise native loop control and a per-invocation work allowance. */
+    movq %rsp, %r12
+    movl $10, %edi
+    call scarp_bounded_integer_function
+    cmpq %r12, %rsp
+    jne failed
+    cmpq $55, %rax
+    jne failed
+    testq %rdx, %rdx
+    jne failed
+    mark '4'
+    movl $1000000, %edi
+    call scarp_bounded_integer_function
+    cmpq %r12, %rsp
+    jne failed
+    testq %rax, %rax
+    jne failed
+    cmpl $4, %edx
+    jne failed
+    mark '5'
+    /* A failed call must not consume the next invocation's allowance. */
+    movl $3, %edi
+    call scarp_bounded_integer_function
+    cmpq %r12, %rsp
+    jne failed
+    cmpq $6, %rax
+    jne failed
+    testq %rdx, %rdx
+    jne failed
+    mark '6'
     movl $0x10, %eax            /* QEMU exit status 33 */
     jmp finish
 failed:
@@ -131,3 +162,4 @@ stack_bottom:
     .skip 65536
 stack_top:
 .section .note.GNU-stack,"",@progbits
+
