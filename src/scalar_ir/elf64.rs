@@ -34,6 +34,8 @@ struct Code {
     data: Vec<u8>,
     branches_to_failure: Vec<usize>,
     failure_spans: Vec<Span>,
+    // Keep the two existing kernel encodings byte-for-byte compatible.
+    compact_function: bool,
 }
 
 // Second opcode byte of a near conditional branch (0F 8x rel32).
@@ -46,7 +48,7 @@ enum Condition {
 }
 
 impl Code {
-    fn new(steps: usize) -> Result<Self, Diagnostic> {
+    fn new(steps: usize, compact_function: bool) -> Result<Self, Diagnostic> {
         // IR work events may emit no bytes. Use the estimate for reservation
         // only and enforce the actual text limit in push.
         let capacity = steps
@@ -59,6 +61,7 @@ impl Code {
             data,
             branches_to_failure: Vec::new(),
             failure_spans: Vec::new(),
+            compact_function,
         })
     }
 
@@ -78,26 +81,47 @@ impl Code {
         Ok(())
     }
 
+    /// Emit a register/memory operand using RSP as the base. SIB is required
+    /// even for zero displacement. The short displacement is signed, so
+    /// offsets 128 and above must retain the full 32-bit encoding.
+    fn stack_operand(
+        &mut self,
+        opcode: u8,
+        register: u8,
+        displacement: [u8; 4],
+    ) -> Result<(), Diagnostic> {
+        if register >= 16 {
+            return Err(failure());
+        }
+        let rex = 0x48 | ((register >> 3) << 2);
+        let field = (register & 7) << 3;
+        let offset = i32::from_le_bytes(displacement);
+        if self.compact_function {
+            if offset == 0 {
+                return self.push(&[rex, opcode, field | 0x04, 0x24]);
+            }
+            if let Ok(short) = i8::try_from(offset) {
+                return self.push(&[rex, opcode, field | 0x44, 0x24, short as u8]);
+            }
+        }
+        self.push(&[rex, opcode, field | 0x84, 0x24])?;
+        self.push(&displacement)
+    }
+
     fn load_rax(&mut self, src: usize) -> Result<(), Diagnostic> {
-        self.push(&[0x48, 0x8b, 0x84, 0x24])?;
-        self.push(&slot_offset(src)?)
+        self.stack_operand(0x8b, 0, slot_offset(src)?)
     }
 
     fn load_rcx(&mut self, src: usize) -> Result<(), Diagnostic> {
-        self.push(&[0x48, 0x8b, 0x8c, 0x24])?;
-        self.push(&slot_offset(src)?)
+        self.stack_operand(0x8b, 1, slot_offset(src)?)
     }
 
     fn store_rax(&mut self, dst: usize) -> Result<(), Diagnostic> {
-        self.push(&[0x48, 0x89, 0x84, 0x24])?;
-        self.push(&slot_offset(dst)?)
+        self.stack_operand(0x89, 0, slot_offset(dst)?)
     }
 
     fn store_argument(&mut self, index: usize, register: u8) -> Result<(), Diagnostic> {
-        let rex = 0x48 | ((register >> 3) << 2);
-        let mod_rm = 0x84 | ((register & 7) << 3);
-        self.push(&[rex, 0x89, mod_rm, 0x24])?;
-        self.push(&slot_offset(index)?)
+        self.stack_operand(0x89, register, slot_offset(index)?)
     }
 
     fn copy_stack_argument(
@@ -106,9 +130,25 @@ impl Code {
         stack_index: usize,
         frame: u32,
     ) -> Result<(), Diagnostic> {
-        self.push(&[0x48, 0x8b, 0x84, 0x24])?; // mov rax, [rsp + disp32]
-        self.push(&stack_argument_offset(frame, stack_index)?)?;
+        self.stack_operand(0x8b, 0, stack_argument_offset(frame, stack_index)?)?;
         self.store_rax(index)
+    }
+
+    /// MOV does not change arithmetic flags. Writing EAX zero-extends; C7
+    /// with REX.W sign-extends its immediate. All other values need imm64.
+    fn integer_rax(&mut self, value: i64) -> Result<(), Diagnostic> {
+        if self.compact_function {
+            if let Ok(unsigned) = u32::try_from(value) {
+                self.push(&[0xb8])?; // mov eax, imm32
+                return self.push(&unsigned.to_le_bytes());
+            }
+            if let Ok(signed) = i32::try_from(value) {
+                self.push(&[0x48, 0xc7, 0xc0])?; // mov rax, sign-extended imm32
+                return self.push(&signed.to_le_bytes());
+            }
+        }
+        self.push(&[0x48, 0xb8])?; // movabs rax, imm64
+        self.push(&value.to_le_bytes())
     }
 
     fn restore_stack_and_return(&mut self, bytes: u32) -> Result<(), Diagnostic> {
@@ -308,7 +348,7 @@ fn text(program: &ScalarProgramIr, checked_arithmetic: bool) -> Result<Code, Dia
         .and_then(|n| n.checked_mul(8))
         .and_then(|n| u32::try_from(n).ok())
         .ok_or_else(failure)?;
-    let mut code = Code::new(total_steps)?;
+    let mut code = Code::new(total_steps, false)?;
     code.allocate_stack(stack_size)?;
 
     for (slot, expr) in program.integer_stores() {
@@ -340,8 +380,7 @@ fn expression(
         match step.kind {
             Operation::Work => {}
             Operation::Integer { dst, value } => {
-                code.push(&[0x48, 0xb8])?; // movabs rax, imm64
-                code.push(&value.to_le_bytes())?;
+                code.integer_rax(value)?;
                 code.store_rax(register(dst)?)?;
             }
             Operation::Boolean { dst, value } if control_flow => {
@@ -451,7 +490,7 @@ fn function_text(program: &ScalarProgramIr) -> Result<Code, Diagnostic> {
     }
     let slot_count = program.integer_slot_count();
     let stack_size = frame_bytes(slot_count, max_registers)?;
-    let mut code = Code::new(estimated_steps)?;
+    let mut code = Code::new(estimated_steps, true)?;
     code.allocate_stack(stack_size)?;
     for (slot, register) in registers.iter().copied().enumerate() {
         code.store_argument(slot, register)?;
@@ -691,4 +730,59 @@ fn object(machine: &[u8], strings: &[u8]) -> Result<Vec<u8>, Diagnostic> {
     )?;
     section(&mut object, header_offset, 5, 33, 1, 0, 0, 0, 0, 0, 1, 0)?;
     Ok(object)
+}
+
+#[cfg(test)]
+mod encoding_tests {
+    use super::*;
+
+    #[test]
+    fn compact_stack_operands_use_the_smallest_valid_displacement() {
+        for (slot, expected) in [
+            (0, vec![0x48, 0x8b, 0x04, 0x24]),
+            (1, vec![0x48, 0x8b, 0x44, 0x24, 8]),
+            (15, vec![0x48, 0x8b, 0x44, 0x24, 120]),
+            (16, vec![0x48, 0x8b, 0x84, 0x24, 128, 0, 0, 0]),
+        ] {
+            let mut code = Code::new(1, true).unwrap();
+            code.load_rax(slot).unwrap();
+            assert_eq!(code.data, expected);
+        }
+        let mut code = Code::new(1, true).unwrap();
+        code.store_argument(0, 9).unwrap();
+        assert_eq!(code.data, [0x4c, 0x89, 0x0c, 0x24]);
+        assert!(code.store_argument(0, 16).is_err());
+
+        let mut code = Code::new(1, false).unwrap();
+        code.load_rax(0).unwrap();
+        assert_eq!(code.data, [0x48, 0x8b, 0x84, 0x24, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn compact_immediates_preserve_signed_and_unsigned_boundaries() {
+        for (value, prefix, len) in [
+            (0, &[0xb8][..], 5),
+            (i64::from(u32::MAX), &[0xb8][..], 5),
+            (i64::from(u32::MAX) + 1, &[0x48, 0xb8][..], 10),
+            (-1, &[0x48, 0xc7, 0xc0][..], 7),
+            (i64::from(i32::MIN), &[0x48, 0xc7, 0xc0][..], 7),
+            (i64::from(i32::MIN) - 1, &[0x48, 0xb8][..], 10),
+            (i64::MIN, &[0x48, 0xb8][..], 10),
+            (i64::MAX, &[0x48, 0xb8][..], 10),
+        ] {
+            let mut code = Code::new(1, true).unwrap();
+            code.integer_rax(value).unwrap();
+            assert_eq!(code.data.len(), len);
+            assert!(code.data.starts_with(prefix));
+            let decoded = match len {
+                5 => i64::from(u32::from_le_bytes(code.data[1..].try_into().unwrap())),
+                7 => i64::from(i32::from_le_bytes(code.data[3..].try_into().unwrap())),
+                _ => i64::from_le_bytes(code.data[2..].try_into().unwrap()),
+            };
+            assert_eq!(decoded, value);
+        }
+        let mut code = Code::new(1, false).unwrap();
+        code.integer_rax(1).unwrap();
+        assert_eq!(code.data, [0x48, 0xb8, 1, 0, 0, 0, 0, 0, 0, 0]);
+    }
 }

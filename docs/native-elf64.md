@@ -179,3 +179,20 @@ Run the [Rust object emission example](../examples/checked_elf64_function.rs)
 with `cargo run --locked --example checked_elf64_function`. The
 [Scarp implementation](../examples/checked_elf64_function.srp) is also runnable
 through the interpreter and has a checked output fixture.
+
+## Experimental compact function encoding
+
+The next pre-release development branch selects smaller x86-64 instruction
+forms for the checked integer-function API. Stack operands use no
+displacement for offset zero, a signed 8-bit displacement when possible,
+and the full 32-bit displacement otherwise. Integer immediates use a
+zero-extending 32-bit move or sign-extending 32-bit move where exact;
+values outside those ranges retain the 64-bit immediate.
+
+The two original binding-only kernel encodings remain unchanged.
+Function calling conventions, stack probes, branch resolution, overflow
+checks and failure-span indexing are unchanged. The code-density regression
+verifies 37 bytes of machine code rather than the previous 48 bytes for
+`pure funcra f() -> integer { return 42; }`. This is a static size target,
+not a measured runtime speedup. Independent native execution tests cover
+signed and unsigned immediate boundaries.
