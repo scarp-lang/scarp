@@ -20,8 +20,35 @@ creates a BIOS-only ISO using the GRUB i386-pc platform at
 `/usr/lib/grub/i386-pc`, reports GRUB messages over the serial console, and boots only an emulated machine using TCG.
 It needs no root privileges, does not write a physical disk, and removes the
 temporary outputs on exit. A successful guest reports QEMU debug-exit
-status 33, translated into host exit status zero. Guest failure, timeout,
+status 33 and the complete marker sequence, translated into host exit status zero. Guest failure, timeout,
 tool failure or unexpected exit status is a failed smoke test.
+
+## Boot-stage diagnostics
+
+The BIOS GRUB configuration loads the image directly rather than waiting in
+a menu. The Multiboot2 header explicitly declares the 32-bit entry address.
+The QEMU debug console captures one character per completed stage:
+
+| Marker | Stage |
+| --- | --- |
+| B | Multiboot2 magic checked |
+| G | GDT loaded |
+| P | PAE enabled and page table root loaded |
+| E | Long mode enabled in EFER |
+| V | Paging enabled |
+| L | Entered 64-bit code |
+| S | Stack and segment registers initialized |
+| 1 | Positive multiplication checked |
+| 2 | Negative-input return checked |
+| 3 | Checked overflow verified |
+| X / F | Invalid boot magic / failed function check |
+
+Success requires exactly `BGPEVLS123` and exit status 33.
+On failure the runner prints the last 80 lines of QEMU exception and reset
+diagnostics. A CPU triple fault is not kept running by `-no-shutdown`.
+No marker means the assembly entry was not reached or the boot magic failed
+before the debug device could be used; GRUB output and the QEMU log provide
+additional evidence.
 
 ## Guest contract
 

@@ -15,5 +15,5 @@ SECTIONS {
     .bss ALIGN(16) (NOLOAD) : { *(.bss .bss.*) *(COMMON) } :rw
     /DISCARD/ : { *(.note.GNU-stack) *(.comment) }
     ASSERT(. < 0x40000000, "kernel outside identity-mapped first GiB")
-    ASSERT(SIZEOF(.multiboot) == 24, "unexpected Multiboot2 header size")
+    ASSERT(SIZEOF(.multiboot) == 40, "unexpected Multiboot2 header size")
 }

@@ -26,22 +26,38 @@ ld -m elf_x86_64 -z max-page-size=0x1000 --fatal-warnings \
 grub-file --is-x86-multiboot2 "$work/iso/boot/kernel.elf"
 cat > "$work/iso/boot/grub/grub.cfg" <<'GRUB'
 serial --unit=0 --speed=115200
+terminal_input serial
 terminal_output serial
-set timeout=0
-set default=0
-menuentry "Scarp bare-metal smoke" {
-    multiboot2 /boot/kernel.elf
+echo 'Loading Scarp Multiboot2 image'
+if multiboot2 /boot/kernel.elf; then
+    echo 'Handing control to Scarp bootstrap'
     boot
-}
+fi
+echo 'GRUB could not start the Scarp image'
+halt
 GRUB
 grub-mkrescue -d "$grub_platform" -o "$work/scarp.iso" "$work/iso"
 status=0
 timeout 45s qemu-system-x86_64 -accel tcg -cpu qemu64 -m 128M \
-    -display none -serial stdio -monitor none -no-reboot -no-shutdown \
+    -display none -serial stdio -monitor none -no-reboot \
+    -debugcon "file:$work/boot-markers.log" \
+    -d int,cpu_reset,guest_errors -D "$work/qemu.log" \
     -device isa-debug-exit,iobase=0xf4,iosize=4 \
-    -boot d -cdrom "$work/scarp.iso" || status=$?
+    -boot order=d,strict=on -cdrom "$work/scarp.iso" || status=$?
+markers="$(cat "$work/boot-markers.log" 2>/dev/null || true)"
+printf 'Guest boot markers: %s\n' "${markers:-<none>}"
+if [[ "$status" != 33 || "$markers" != BGPEVLS123 ]]; then
+    echo 'Last QEMU exception/reset log entries:' >&2
+    if [[ -f "$work/qemu.log" ]]; then tail -n 80 "$work/qemu.log" >&2; fi
+fi
 case "$status" in
-    33) echo 'PASS: Scarp-generated function ran in bare-metal x86-64 mode.' ;;
+    33)
+        if [[ "$markers" != BGPEVLS123 ]]; then
+            echo 'FAIL: guest exit code did not match complete boot markers.' >&2
+            exit 1
+        fi
+        echo 'PASS: Scarp-generated function ran in bare-metal x86-64 mode.'
+        ;;
     35) echo 'FAIL: boot magic or Scarp ABI/result check failed.' >&2; exit 1 ;;
     124) echo 'FAIL: QEMU timed out before reporting a result.' >&2; exit 1 ;;
     *) printf 'FAIL: unexpected QEMU status %s\n' "$status" >&2; exit 1 ;;
