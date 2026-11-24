@@ -240,3 +240,8 @@ assert!(!artifact.object.is_empty());
 The public alpha.20 release does not include this API. A C host must use the
 exact arity and symbol documented above. Tests link and execute emitted ELF
 objects on Linux x86-64 using an independent C compiler.
+
+The bounded function meter subtracts one from its unsigned 32-bit allowance
+and branches on borrow. Zero therefore fails at the current event, including
+the first event of a zero-budget call. The subtraction and failure check use
+two fewer bytes per metered event than the earlier test-and-decrement sequence.

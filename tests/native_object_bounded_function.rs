@@ -128,7 +128,10 @@ int main(int argc, char **argv) {
         (constant, 0, 0, true),
         (constant, 1, 0, true),
         (constant, 2, 0, false),
+        (constant, u32::MAX, 0, false),
         (failure, 0, 8, true),
+        (failure, 4, 8, true),
+        (failure, 5, 8, false),
         (failure, 100, 8, false),
         (SUM, 1000, 10, false),
         (SUM, 1000, 0, false),
@@ -173,7 +176,12 @@ int main(int argc, char **argv) {
             assert_eq!(values[1].parse::<u32>().unwrap(), CHECKED_KERNEL_WORK_LIMIT);
             let id = values[2].parse::<usize>().unwrap();
             let span = artifact.failure_spans[id];
-            assert!(source.get(span.start..span.end).is_some());
+            let text = &source[span.start..span.end];
+            if source == constant {
+                assert_eq!(text, if allowance == 0 { "return 42;" } else { "42" });
+            } else if source == failure && allowance == 4 {
+                assert_eq!(text, "/");
+            }
         } else {
             let mut expected = Vec::new();
             match scarp::run(&format!("{source} print(f({argument}));"), &mut expected) {

@@ -43,6 +43,7 @@ struct Code {
 #[repr(u8)]
 enum Condition {
     Overflow = 0x80,
+    Below = 0x82,
     Equal = 0x84,
     NotEqual = 0x85,
     Above = 0x87,
@@ -197,9 +198,10 @@ impl Code {
             return Ok(());
         }
         let id = self.record_failure_span(span)?;
-        self.push(&[0x4d, 0x85, 0xd2])?; // test r10, r10
-        self.branch_to_failure(Condition::Equal, CHECKED_KERNEL_WORK_LIMIT, id)?;
-        self.push(&[0x49, 0xff, 0xca]) // dec r10
+        // Unsigned subtraction borrows exactly when the old allowance was zero.
+        // The failure branch preserves CF and returns before the wrapped value is used.
+        self.push(&[0x41, 0x83, 0xea, 0x01])?; // sub r10d, 1
+        self.branch_to_failure(Condition::Below, CHECKED_KERNEL_WORK_LIMIT, id)
     }
 
     fn guard_overflow(&mut self, span: Span) -> Result<(), Diagnostic> {
