@@ -16,8 +16,8 @@ use crate::{
     ast::BinaryOperator,
     diagnostics::{Diagnostic, Span},
     native_object::{
-        CheckedElf64Kernel, CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_INTEGER_OVERFLOW,
-        CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_WORK_LIMIT,
+        CheckedElf64Kernel, FreestandingCallLayout, CHECKED_KERNEL_DIVISION_BY_ZERO,
+        CHECKED_KERNEL_INTEGER_OVERFLOW, CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_WORK_LIMIT,
     },
 };
 
@@ -497,7 +497,10 @@ fn resolve_branches(
     Ok(())
 }
 
-fn function_text(program: &ScalarProgramIr, budget: Option<u32>) -> Result<Code, Diagnostic> {
+fn function_text(
+    program: &ScalarProgramIr,
+    budget: Option<u32>,
+) -> Result<(Code, FreestandingCallLayout), Diagnostic> {
     program.verify()?;
     if !program.is_function() || program.is_bounded() != budget.is_some() {
         return Err(failure());
@@ -604,7 +607,13 @@ fn function_text(program: &ScalarProgramIr, budget: Option<u32>) -> Result<Code,
     }
     code.finish_checked_return()?;
     code.restore_stack_and_return(stack_size)?;
-    Ok(code)
+    Ok((
+        code,
+        FreestandingCallLayout {
+            frame_bytes: stack_size,
+            integer_arguments: parameters,
+        },
+    ))
 }
 
 fn put(target: &mut [u8], at: usize, bytes: &[u8]) -> Result<(), Diagnostic> {
@@ -678,25 +687,24 @@ pub(super) fn emit_checked(program: &ScalarProgramIr) -> Result<CheckedElf64Kern
     })
 }
 
-pub(super) fn emit_function(program: &ScalarProgramIr) -> Result<CheckedElf64Kernel, Diagnostic> {
-    let code = function_text(program, None)?;
-    let object = object(&code.data, b"\0scarp_checked_integer_function\0")?;
-    Ok(CheckedElf64Kernel {
-        object,
-        failure_spans: code.failure_spans,
-    })
-}
-
-pub(super) fn emit_bounded_function(
+pub(super) fn emit_function_with_layout(
     program: &ScalarProgramIr,
-    max_work: u32,
-) -> Result<CheckedElf64Kernel, Diagnostic> {
-    let code = function_text(program, Some(max_work))?;
-    let object = object(&code.data, b"\0scarp_bounded_integer_function\0")?;
-    Ok(CheckedElf64Kernel {
-        object,
-        failure_spans: code.failure_spans,
-    })
+    budget: Option<u32>,
+) -> Result<(CheckedElf64Kernel, FreestandingCallLayout), Diagnostic> {
+    let (code, layout) = function_text(program, budget)?;
+    let strings: &[u8] = if budget.is_some() {
+        b"\0scarp_bounded_integer_function\0"
+    } else {
+        b"\0scarp_checked_integer_function\0"
+    };
+    let object = object(&code.data, strings)?;
+    Ok((
+        CheckedElf64Kernel {
+            object,
+            failure_spans: code.failure_spans,
+        },
+        layout,
+    ))
 }
 
 fn object(machine: &[u8], strings: &[u8]) -> Result<Vec<u8>, Diagnostic> {
