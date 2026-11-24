@@ -496,6 +496,18 @@ pub(crate) fn emit_checked_integer_function(
     elf64::emit_function(&ir)
 }
 
+pub(crate) fn emit_bounded_integer_function(
+    source: &str,
+    max_work: u32,
+) -> Result<crate::native_object::CheckedElf64Kernel, Diagnostic> {
+    let resolved = crate::compile(source)?;
+    let ir = program::ScalarProgramIr::lower_bounded_integer_function(
+        &resolved,
+        elf64::MAX_INTEGER_ARGUMENTS,
+    )?;
+    elf64::emit_bounded_function(&ir, max_work)
+}
+
 fn lower_integer_kernel(source: &str) -> Result<program::ScalarProgramIr, Diagnostic> {
     let syntax = crate::parse(source)?;
     // The resolved plan uses the same Store for declarations and plain
