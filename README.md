@@ -19,7 +19,15 @@ See the [compiler documentation index](docs/README.md) for those records.
 ## Compiler releases
 
 The latest published prerelease is
-[0.0.6-alpha.19](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.19).
+[0.0.6-alpha.20](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.20).
+It ships exact decimal literals, numeric tuple ordering, persistent indexed
+tuple assignment, and experimental ELF64 emission for pure integer functions
+with one to six required integer parameters. The tagged source is
+[`b1a9347`](https://github.com/scarp-lang/scarp/commit/b1a9347f93540fdf95b0ddecba4adc55a3b4bb98).
+
+Development on `main` extends the native integer-function ABI, exercises
+bounded loops under QEMU, and supports multi-operand GCD, HCF and LCM.
+[Native object ABI](docs/native-elf64.md) · [Integer example](examples/integer_reductions.srp)
 
 **0.0.6-alpha.19** adds checked Rust embedding handles, named and default
 arguments, export-aware callables, and cumulative host invocation quotas.
