@@ -192,7 +192,7 @@ values outside those ranges retain the 64-bit immediate.
 The two original binding-only kernel encodings remain unchanged.
 Function calling conventions, stack probes, branch resolution, overflow
 checks and failure-span indexing are unchanged. The code-density regression
-targets 35 bytes of machine code rather than the previous 48 bytes for
+verifies 37 bytes of machine code rather than the previous 48 bytes for
 `pure funcra f() -> integer { return 42; }`. This is a static size target,
 not a measured runtime speedup. Independent native execution tests cover
 signed and unsigned immediate boundaries.
