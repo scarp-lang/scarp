@@ -53,7 +53,9 @@ fn bounded_native_rejects_unsupported_effects_and_calls() {
 #[test]
 fn native_loops_match_interpreter_and_exhaust_budget_per_invocation() {
     use scarp::{
-        native_object::{CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_WORK_LIMIT},
+        native_object::{
+            CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_REPEAT_COUNT, CHECKED_KERNEL_WORK_LIMIT,
+        },
         RunError,
     };
     use std::{fs, process::Command};
@@ -124,6 +126,37 @@ int main(int argc, char **argv) {
     }";
     let constant = "pure funcra f(n: integer) -> integer { return 42; }";
     let failure = "pure funcra f(n: integer) -> integer { return n / 0; }";
+    let counted = "pure funcra f(n: integer) -> integer {
+        var total = 0;
+        repeat n as i { total += i; }
+        return total;
+    }";
+    let counted_nested = "pure funcra f(n: integer) -> integer {
+        var total = 0;
+        repeat n as i {
+            repeat 4 as j {
+                if j == 1 { continue; }
+                if j == 3 { break; }
+                total += i + j;
+            }
+        }
+        return total;
+    }";
+    let count_snapshot = "pure funcra f(n: integer) -> integer {
+        var count = n;
+        var total = 0;
+        repeat count as i {
+            count = 0;
+            total += i + 1;
+        }
+        return total;
+    }";
+    let early_return = "pure funcra f(n: integer) -> integer {
+        repeat n as i {
+            if i == 2 { return i + 10; }
+        }
+        return 0;
+    }";
     let cases = [
         (constant, 0, 0, true),
         (constant, 1, 0, true),
@@ -140,6 +173,16 @@ int main(int argc, char **argv) {
         (nested, 1000, 4, false),
         (short, 1000, 0, false),
         (short, 1000, 4, false),
+        (counted, 1000, 0, false),
+        (counted, 1000, 1, false),
+        (counted, 1000, 10, false),
+        (counted, 1000, -1, false),
+        (counted, 100, i64::MAX, true),
+        (counted, 0, -1, true),
+        (counted_nested, 1000, 4, false),
+        (count_snapshot, 1000, 5, false),
+        (early_return, 1000, 10, false),
+        (early_return, 1000, 2, false),
     ];
     for (source, allowance, argument, exhausted) in cases {
         let artifact = emit_elf64_bounded_integer_function(source, allowance).unwrap();
@@ -182,15 +225,17 @@ int main(int argc, char **argv) {
                     assert_eq!(values, [expected, "0", "0"]);
                 }
                 Err(RunError::Diagnostic(error)) => {
-                    assert_eq!(
-                        error.kind,
-                        scarp::diagnostics::DiagnosticKind::DivisionByZero
-                    );
+                    let status = match error.kind {
+                        scarp::diagnostics::DiagnosticKind::DivisionByZero => {
+                            CHECKED_KERNEL_DIVISION_BY_ZERO
+                        }
+                        scarp::diagnostics::DiagnosticKind::RepeatCount => {
+                            CHECKED_KERNEL_REPEAT_COUNT
+                        }
+                        _ => panic!("{error:?}"),
+                    };
                     assert_eq!(values[0], "0");
-                    assert_eq!(
-                        values[1].parse::<u32>().unwrap(),
-                        CHECKED_KERNEL_DIVISION_BY_ZERO
-                    );
+                    assert_eq!(values[1].parse::<u32>().unwrap(), status);
                     let id = values[2].parse::<usize>().unwrap();
                     assert_eq!(artifact.failure_spans[id], error.span);
                     assert!(expected.is_empty());
@@ -200,4 +245,17 @@ int main(int argc, char **argv) {
         }
     }
     fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn counted_repeat_is_supported_only_by_the_bounded_native_api() {
+    let source = "pure funcra f(n: integer) -> integer {
+        var total = 0;
+        repeat n as i { total += i; }
+        return total;
+    }";
+    let first = emit_elf64_bounded_integer_function(source, 1000).unwrap();
+    let second = emit_elf64_bounded_integer_function(source, 1000).unwrap();
+    assert_eq!(first, second);
+    assert!(emit_elf64_checked_integer_function(source).is_err());
 }
