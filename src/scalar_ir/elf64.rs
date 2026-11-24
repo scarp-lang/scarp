@@ -2,10 +2,12 @@
 //! Production emission uses only safe Rust, no external compiler or linker.
 
 mod layout;
+mod temporaries;
 
 use self::layout::{
     align_up, frame_bytes, slot_offset, stack_argument_offset, INTEGER_ARGUMENT_REGISTERS,
 };
+use self::temporaries::TemporaryLayout;
 use super::{
     invalid,
     program::{ProgramOp, ScalarProgramIr},
@@ -418,7 +420,14 @@ fn expression(
 ) -> Result<(), Diagnostic> {
     let mut offsets = Vec::new();
     let mut branches = Vec::new();
-    let register = |index| temporary(slot_count, index);
+    // Binding-only kernels keep their original byte-for-byte layout. Only
+    // the function backends opt in to verified temporary slot reuse.
+    let layout = if control_flow {
+        TemporaryLayout::plan(expr)?
+    } else {
+        TemporaryLayout::identity(expr.registers.len())
+    };
+    let register = |index| temporary(slot_count, layout.slot(index)?);
     for step in &expr.steps {
         if control_flow {
             offsets.push(code.data.len());
@@ -530,7 +539,7 @@ fn function_text(program: &ScalarProgramIr, budget: Option<u32>) -> Result<Code,
             } => value,
             _ => continue,
         };
-        max_registers = max_registers.max(value.registers.len());
+        max_registers = max_registers.max(TemporaryLayout::plan(value)?.count());
         estimated_steps = estimated_steps
             .checked_add(value.steps.len())
             .ok_or_else(failure)?;
