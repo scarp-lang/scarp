@@ -28,9 +28,38 @@ fn generated_example_matches_its_oracle_and_object_is_deterministic() {
 }
 
 #[test]
+fn zero_argument_functions_emit_deterministic_objects_and_preserve_failure_spans() {
+    let source = "pure funcra answer() -> integer { bind a = 6; return a * 7; }";
+    let artifact = emit_elf64_checked_integer_function(source).unwrap();
+    assert_eq!(
+        artifact,
+        emit_elf64_checked_integer_function(source).unwrap()
+    );
+    assert_eq!(&artifact.object[..7], b"\x7fELF\x02\x01\x01");
+    assert_eq!(artifact.failure_spans.len(), 1);
+    let span = artifact.failure_spans[0];
+    assert_eq!(&source[span.start..span.end], "*");
+    let mut output = Vec::new();
+    scarp::run(&format!("{source} print(answer());"), &mut output).unwrap();
+    assert_eq!(output, b"42\n");
+
+    let source = "pure funcra fail() -> integer { bind zero = 0; return 7 / zero; }";
+    let artifact = emit_elf64_checked_integer_function(source).unwrap();
+    let span = artifact.failure_spans[0];
+    assert_eq!(&source[span.start..span.end], "/");
+    let mut output = Vec::new();
+    let error = scarp::run(&format!("{source} print(fail());"), &mut output).unwrap_err();
+    let scarp::RunError::Diagnostic(error) = error else {
+        panic!("expected arithmetic diagnostic");
+    };
+    assert_eq!(error.kind, DiagnosticKind::DivisionByZero);
+    assert_eq!(error.span, span);
+    assert!(output.is_empty());
+}
+
+#[test]
 fn unsupported_functions_return_diagnostics_without_an_object() {
     for source in [
-        "pure funcra f() -> integer { return 0; }",
         "funcra f(x: integer) -> integer { return x; }",
         "pure funcra f(x: boolean) -> integer { return 0; }",
         "pure funcra f(x: integer = 2) -> integer { return x; }",
@@ -204,4 +233,76 @@ int main(void) {
         String::from_utf8(result.stdout).unwrap(),
         expected.repeat(2)
     );
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[test]
+fn sysv_zero_argument_function_matches_interpreter_success_and_failure() {
+    use std::{fs, process::Command};
+
+    let cc = std::env::var_os("SCARP_CC").unwrap_or_else(|| "cc".into());
+    if Command::new(&cc).arg("--version").output().is_err() {
+        assert!(std::env::var_os("SCARP_REQUIRE_C").is_none(), "C compiler required");
+        return;
+    }
+    let directory =
+        std::env::temp_dir().join(format!("scarp-elf64-zero-function-{}", std::process::id()));
+    fs::create_dir(&directory).unwrap();
+    let harness = directory.join("harness.c");
+    fs::write(
+        &harness,
+        r#"#include <stdint.h>
+#include <inttypes.h>
+#include <stdio.h>
+struct result { int64_t value; uint32_t status; uint32_t span_id; };
+extern struct result scarp_checked_integer_function(void);
+int main(void) {
+    for (int i = 0; i < 2; ++i) {
+        struct result r = scarp_checked_integer_function();
+        printf("%" PRId64 " %" PRIu32 " %" PRIu32 "\n", r.value, r.status, r.span_id);
+    }
+    return 0;
+}
+"#,
+    )
+    .unwrap();
+    for (index, (source, expected)) in [
+        (
+            "pure funcra f() -> integer { return 42; }",
+            "42 0 0\n",
+        ),
+        (
+            "pure funcra f() -> integer { bind zero = 0; return 7 / zero; }",
+            "0 2 0\n",
+        ),
+        (
+            "pure funcra f() -> integer { bind a = 4; if a > 0 { return a; } return 9; }",
+            "4 0 0\n",
+        ),
+        (
+            "pure funcra f() -> integer { bind a = 9223372036854775807; return a + 1; }",
+            "0 1 0\n",
+        ),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let artifact = emit_elf64_checked_integer_function(source).unwrap();
+        let object = directory.join(format!("function-{index}.o"));
+        let binary = directory.join(format!("function-{index}"));
+        fs::write(&object, artifact.object).unwrap();
+        let link = Command::new(&cc)
+            .args(["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror"])
+            .arg(&harness)
+            .arg(&object)
+            .arg("-o")
+            .arg(&binary)
+            .output()
+            .unwrap();
+        assert!(link.status.success(), "{}", String::from_utf8_lossy(&link.stderr));
+        let result = Command::new(&binary).output().unwrap();
+        assert!(result.status.success());
+        assert_eq!(String::from_utf8(result.stdout).unwrap(), expected.repeat(2));
+    }
+    fs::remove_dir_all(directory).unwrap();
 }
