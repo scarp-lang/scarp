@@ -16,7 +16,7 @@ use crate::{
     diagnostics::{Diagnostic, Span},
     native_object::{
         CheckedElf64Kernel, CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_INTEGER_OVERFLOW,
-        CHECKED_KERNEL_INVALID_SHIFT,
+        CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_WORK_LIMIT,
     },
 };
 
@@ -36,6 +36,7 @@ struct Code {
     failure_spans: Vec<Span>,
     // Keep the two existing kernel encodings byte-for-byte compatible.
     compact_function: bool,
+    metered: bool,
 }
 
 // Second opcode byte of a near conditional branch (0F 8x rel32).
@@ -62,6 +63,7 @@ impl Code {
             branches_to_failure: Vec::new(),
             failure_spans: Vec::new(),
             compact_function,
+            metered: false,
         })
     }
 
@@ -179,6 +181,25 @@ impl Code {
             self.push(&bytes.to_le_bytes())?;
         }
         Ok(())
+    }
+
+    /// R10 is caller-saved and unused by the scalar encoder. It is loaded
+    /// once per invocation and never exposed as an argument or result.
+    fn start_meter(&mut self, max_work: u32) -> Result<(), Diagnostic> {
+        self.push(&[0x41, 0xba])?; // mov r10d, imm32 (zero extends)
+        self.push(&max_work.to_le_bytes())?;
+        self.metered = true;
+        Ok(())
+    }
+
+    fn charge_work(&mut self, span: Span) -> Result<(), Diagnostic> {
+        if !self.metered {
+            return Ok(());
+        }
+        let id = self.record_failure_span(span)?;
+        self.push(&[0x4d, 0x85, 0xd2])?; // test r10, r10
+        self.branch_to_failure(Condition::Equal, CHECKED_KERNEL_WORK_LIMIT, id)?;
+        self.push(&[0x49, 0xff, 0xca]) // dec r10
     }
 
     fn guard_overflow(&mut self, span: Span) -> Result<(), Diagnostic> {
@@ -325,6 +346,23 @@ fn patch_forward_branch(
     put(code, displacement, &offset.to_le_bytes())
 }
 
+/// Only bounded statement CFG edges may point backward. Expression and
+/// failure edges retain their original forward-only patching.
+fn patch_relative_branch(
+    code: &mut [u8],
+    displacement: usize,
+    target: usize,
+) -> Result<(), Diagnostic> {
+    let end = displacement.checked_add(4).ok_or_else(failure)?;
+    if target > code.len() || end > code.len() {
+        return Err(failure());
+    }
+    let target = i64::try_from(target).map_err(|_| failure())?;
+    let end = i64::try_from(end).map_err(|_| failure())?;
+    let offset = i32::try_from(target - end).map_err(|_| failure())?;
+    put(code, displacement, &offset.to_le_bytes())
+}
+
 fn temporary(base: usize, register: usize) -> Result<usize, Diagnostic> {
     base.checked_add(register).ok_or_else(failure)
 }
@@ -378,7 +416,7 @@ fn expression(
             offsets.push(code.data.len());
         }
         match step.kind {
-            Operation::Work => {}
+            Operation::Work => code.charge_work(step.span)?,
             Operation::Integer { dst, value } => {
                 code.integer_rax(value)?;
                 code.store_rax(register(dst)?)?;
@@ -460,9 +498,9 @@ fn resolve_branches(
     Ok(())
 }
 
-fn function_text(program: &ScalarProgramIr) -> Result<Code, Diagnostic> {
+fn function_text(program: &ScalarProgramIr, budget: Option<u32>) -> Result<Code, Diagnostic> {
     program.verify()?;
-    if !program.is_function() {
+    if !program.is_function() || program.is_bounded() != budget.is_some() {
         return Err(failure());
     }
     let parameters = program.parameters();
@@ -501,11 +539,18 @@ fn function_text(program: &ScalarProgramIr) -> Result<Code, Diagnostic> {
         code.copy_stack_argument(slot, slot - register_count, stack_size)?;
     }
 
+    if let Some(max_work) = budget {
+        code.start_meter(max_work)?;
+    }
+
     let mut offsets = Vec::with_capacity(program.operations().len() + 1);
     let mut branches = Vec::new();
     let mut returns = Vec::new();
     for step in program.operations() {
         offsets.push(code.data.len());
+        if step.charge_work {
+            code.charge_work(step.span)?;
+        }
         match &step.kind {
             ProgramOp::Store { slot, value } => {
                 expression(&mut code, value, slot_count, true, true)?;
@@ -535,6 +580,9 @@ fn function_text(program: &ScalarProgramIr) -> Result<Code, Diagnostic> {
                 branches.push((code.near_branch(Condition::Equal)?, *target));
             }
             ProgramOp::Jump { target } => branches.push((code.jump()?, *target)),
+            ProgramOp::LoopControl { target, .. } if code.metered => {
+                branches.push((code.jump()?, *target));
+            }
             ProgramOp::Retire { .. } => {
                 // Scalar slots own no heap payload. Definite initialization
                 // prevents any read following their lexical retirement.
@@ -544,7 +592,14 @@ fn function_text(program: &ScalarProgramIr) -> Result<Code, Diagnostic> {
     }
     let success = code.data.len();
     offsets.push(success);
-    resolve_branches(&mut code.data, &offsets, branches)?;
+    if code.metered {
+        for (displacement, target) in branches {
+            let offset = *offsets.get(target).ok_or_else(failure)?;
+            patch_relative_branch(&mut code.data, displacement, offset)?;
+        }
+    } else {
+        resolve_branches(&mut code.data, &offsets, branches)?;
+    }
     for displacement in returns {
         patch_forward_branch(&mut code.data, displacement, success)?;
     }
@@ -620,8 +675,20 @@ pub(super) fn emit_checked(program: &ScalarProgramIr) -> Result<CheckedElf64Kern
 }
 
 pub(super) fn emit_function(program: &ScalarProgramIr) -> Result<CheckedElf64Kernel, Diagnostic> {
-    let code = function_text(program)?;
+    let code = function_text(program, None)?;
     let object = object(&code.data, b"\0scarp_checked_integer_function\0")?;
+    Ok(CheckedElf64Kernel {
+        object,
+        failure_spans: code.failure_spans,
+    })
+}
+
+pub(super) fn emit_bounded_function(
+    program: &ScalarProgramIr,
+    max_work: u32,
+) -> Result<CheckedElf64Kernel, Diagnostic> {
+    let code = function_text(program, Some(max_work))?;
+    let object = object(&code.data, b"\0scarp_bounded_integer_function\0")?;
     Ok(CheckedElf64Kernel {
         object,
         failure_spans: code.failure_spans,
@@ -735,6 +802,18 @@ fn object(machine: &[u8], strings: &[u8]) -> Result<Vec<u8>, Diagnostic> {
 #[cfg(test)]
 mod encoding_tests {
     use super::*;
+
+    #[test]
+    fn bounded_statement_branches_encode_signed_relative_offsets() {
+        let mut bytes = [0u8; 16];
+        patch_relative_branch(&mut bytes, 4, 0).unwrap();
+        assert_eq!(i32::from_le_bytes(bytes[4..8].try_into().unwrap()), -8);
+        patch_relative_branch(&mut bytes, 4, 16).unwrap();
+        assert_eq!(i32::from_le_bytes(bytes[4..8].try_into().unwrap()), 8);
+        assert!(patch_relative_branch(&mut bytes, 14, 0).is_err());
+        assert!(patch_relative_branch(&mut bytes, 4, 17).is_err());
+        assert!(patch_forward_branch(&mut bytes, 4, 0).is_err());
+    }
 
     #[test]
     fn compact_stack_operands_use_the_smallest_valid_displacement() {
