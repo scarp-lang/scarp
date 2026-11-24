@@ -545,7 +545,7 @@ fn function_text(program: &ScalarProgramIr, budget: Option<u32>) -> Result<Code,
                 continue;
             }
         };
-        let layout = TemporaryLayout::plan(value)?;
+        let layout = TemporaryLayout::plan_verified(value)?;
         max_registers = max_registers.max(layout.count());
         estimated_steps = estimated_steps
             .checked_add(value.steps.len())

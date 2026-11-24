@@ -83,8 +83,9 @@ fn register_sets(len: usize) -> Result<Vec<RegisterSet>, Diagnostic> {
 }
 
 impl TemporaryLayout {
-    pub(super) fn plan(expression: &ScalarExpressionIr) -> Result<Self, Diagnostic> {
-        expression.verify()?;
+    /// The containing program has already verified the expression's indices,
+    /// definite initialization and forward-only edges.
+    pub(super) fn plan_verified(expression: &ScalarExpressionIr) -> Result<Self, Diagnostic> {
         if expression
             .steps
             .iter()
@@ -153,16 +154,31 @@ impl TemporaryLayout {
 
     fn plan_branches(expression: &ScalarExpressionIr) -> Result<Self, Diagnostic> {
         let registers = expression.registers.len();
-        let mut live = register_sets(expression.steps.len() + 1)?;
+        let mut target_states = vec![None; expression.steps.len() + 1];
+        let mut targets = 0;
+        for step in &expression.steps {
+            if let Operation::Branch { target, .. } = step.kind {
+                target_states[target].get_or_insert_with(|| {
+                    let state = targets;
+                    targets += 1;
+                    state
+                });
+            }
+        }
+        let mut live_targets = register_sets(targets)?;
         let mut conflicts = register_sets(registers)?;
         let mut written = RegisterSet::EMPTY;
         // Include the implicit read performed when the emitter loads the result.
-        live[expression.steps.len()].insert(expression.root);
+        let mut fallthrough = RegisterSet::EMPTY;
+        fallthrough.insert(expression.root);
+        if let Some(state) = target_states[expression.steps.len()] {
+            live_targets[state] = fallthrough;
+        }
         for (pc, step) in expression.steps.iter().enumerate().rev() {
-            let mut outgoing = live[pc + 1];
+            let mut outgoing = fallthrough;
             if let Operation::Branch { target, .. } = step.kind {
                 // Verification guarantees target > pc, including the exit.
-                outgoing.union(live[target]);
+                outgoing.union(live_targets[target_states[target].ok_or_else(failure)?]);
             }
 
             let (write, reads) = accesses(&step.kind);
@@ -191,7 +207,11 @@ impl TemporaryLayout {
             for src in reads.into_iter().flatten() {
                 outgoing.insert(src);
             }
-            live[pc] = outgoing;
+            fallthrough = outgoing;
+            // Only non-fallthrough targets need a saved liveness state.
+            if let Some(state) = target_states[pc] {
+                live_targets[state] = fallthrough;
+            }
         }
 
         let mut slots = vec![usize::MAX; registers];
@@ -238,6 +258,11 @@ mod tests {
         value::ValueType,
     };
 
+    fn plan(expression: &ScalarExpressionIr) -> Result<TemporaryLayout, Diagnostic> {
+        expression.verify()?;
+        TemporaryLayout::plan_verified(expression)
+    }
+
     fn expression(source: &str) -> ScalarExpressionIr {
         let program = crate::compile(source).unwrap();
         let ir = ScalarProgramIr::lower_integer_function(&program, 16).unwrap();
@@ -257,10 +282,10 @@ mod tests {
             " + 1".repeat(200)
         );
         let expression = expression(&source);
-        let layout = TemporaryLayout::plan(&expression).unwrap();
+        let layout = plan(&expression).unwrap();
         assert_eq!(layout.count(), 3);
         assert!(expression.registers.len() > 400);
-        assert_eq!(layout, TemporaryLayout::plan(&expression).unwrap());
+        assert_eq!(layout, plan(&expression).unwrap());
         assert!(layout.slot(expression.root).is_ok());
         assert!(layout.slot(usize::MAX).is_err());
     }
@@ -283,16 +308,16 @@ mod tests {
                 _ => None,
             })
             .unwrap();
-        let layout = TemporaryLayout::plan(expression).unwrap();
+        let layout = plan(expression).unwrap();
         assert_eq!(layout.count(), 3);
-        assert_eq!(layout, TemporaryLayout::plan(expression).unwrap());
+        assert_eq!(layout, plan(expression).unwrap());
     }
 
     #[test]
     fn distinct_binary_operands_and_destination_do_not_alias() {
         let expression =
             expression("pure funcra f(x: integer) -> integer { return (x + 2) * (x - 3); }");
-        let layout = TemporaryLayout::plan(&expression).unwrap();
+        let layout = plan(&expression).unwrap();
         for step in expression.steps {
             if let Operation::Binary {
                 dst, left, right, ..
@@ -342,7 +367,7 @@ mod tests {
             })
             .collect(),
         };
-        let layout = TemporaryLayout::plan(&ir).unwrap();
+        let layout = plan(&ir).unwrap();
         // The original root is read on the taken edge. On the fallthrough
         // it is overwritten before the final read, so this dead store may
         // borrow its slot.
@@ -350,7 +375,7 @@ mod tests {
         assert_ne!(layout.slot(0).unwrap(), layout.slot(3).unwrap());
 
         ir.steps[5].kind = Operation::Move { dst: 4, src: 3 };
-        let layout = TemporaryLayout::plan(&ir).unwrap();
+        let layout = plan(&ir).unwrap();
         // With no redefinition, even the dead writes must preserve the root.
         assert_ne!(layout.slot(0).unwrap(), layout.slot(2).unwrap());
         assert_ne!(layout.slot(0).unwrap(), layout.slot(4).unwrap());
@@ -359,6 +384,6 @@ mod tests {
             unreachable!()
         };
         *target = usize::MAX;
-        assert!(TemporaryLayout::plan(&ir).is_err());
+        assert!(plan(&ir).is_err());
     }
 }
