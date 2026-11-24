@@ -91,3 +91,113 @@ pub fn emit_elf64_bounded_integer_function(
 ) -> Result<CheckedElf64Kernel, Diagnostic> {
     crate::scalar_ir::emit_bounded_integer_function(source, max_work)
 }
+
+
+/// Maximum callee frame size enforced by the experimental x86-64 encoder.
+/// The caller must additionally provide space for the return address,
+/// stack-passed arguments, and any surrounding kernel or interrupt frames.
+pub const FREESTANDING_X86_64_MAX_FRAME_BYTES: usize = 16 * 1024;
+
+/// Experimental native object target. This is not a complete OS target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FreestandingTarget {
+    X86_64None,
+}
+
+impl FreestandingTarget {
+    /// Exact target identifier for the experimental object API.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::X86_64None => "x86_64-none",
+        }
+    }
+
+    /// Required caller stack alignment immediately before a CALL.
+    pub const fn call_stack_alignment(self) -> usize {
+        match self {
+            Self::X86_64None => 16,
+        }
+    }
+
+    /// Upper bound on callee-owned stack storage, not total kernel stack use.
+    pub const fn max_frame_bytes(self) -> usize {
+        match self {
+            Self::X86_64None => FREESTANDING_X86_64_MAX_FRAME_BYTES,
+        }
+    }
+}
+
+/// An unrecognized target must never silently select the host architecture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnsupportedFreestandingTarget;
+
+impl std::fmt::Display for UnsupportedFreestandingTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("unsupported experimental target; expected x86_64-none")
+    }
+}
+
+impl std::error::Error for UnsupportedFreestandingTarget {}
+
+impl std::str::FromStr for FreestandingTarget {
+    type Err = UnsupportedFreestandingTarget;
+
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        match name {
+            "x86_64-none" => Ok(Self::X86_64None),
+            _ => Err(UnsupportedFreestandingTarget),
+        }
+    }
+}
+
+/// Select the checked scalar function ABI or its bounded-loop counterpart.
+/// A finite work allowance is mandatory for the loop-capable variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FreestandingFunctionMode {
+    Checked,
+    Bounded { max_work: u32 },
+}
+
+impl FreestandingFunctionMode {
+    /// The global ELF symbol exported by this function mode.
+    pub const fn symbol(self) -> &'static str {
+        match self {
+            Self::Checked => "scarp_checked_integer_function",
+            Self::Bounded { .. } => "scarp_bounded_integer_function",
+        }
+    }
+}
+
+/// Target and ABI metadata travel with the existing checked object bytes.
+#[derive(Debug, PartialEq, Eq)]
+pub struct FreestandingFunction {
+    pub target: FreestandingTarget,
+    pub mode: FreestandingFunctionMode,
+    pub kernel: CheckedElf64Kernel,
+}
+
+/// Compile one pure scalar function into an experimental freestanding object.
+///
+/// Uses the existing verified IR and ELF64 encoder. The caller supplies the
+/// boot environment, stack and linker; no executable or boot image is emitted.
+/// No filesystem access, host compiler, libc or guest interpreter is involved.
+/// The existing checked and bounded APIs retain their exact byte contracts.
+pub fn emit_freestanding_function(
+    source: &str,
+    target: FreestandingTarget,
+    mode: FreestandingFunctionMode,
+) -> Result<FreestandingFunction, Diagnostic> {
+    let kernel = match (target, mode) {
+        (FreestandingTarget::X86_64None, FreestandingFunctionMode::Checked) => {
+            emit_elf64_checked_integer_function(source)?
+        }
+        (FreestandingTarget::X86_64None, FreestandingFunctionMode::Bounded { max_work }) => {
+            emit_elf64_bounded_integer_function(source, max_work)?
+        }
+    };
+    Ok(FreestandingFunction {
+        target,
+        mode,
+        kernel,
+    })
+}
