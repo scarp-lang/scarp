@@ -1,0 +1,10 @@
+// Native work accounting bounds execution even without a guest OS.
+pure funcra sum_to(n: integer) -> integer {
+    var i = n;
+    var total = 0;
+    while i > 0 {
+        total += i;
+        i -= 1;
+    }
+    return total;
+}
