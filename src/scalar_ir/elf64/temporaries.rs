@@ -61,7 +61,7 @@ impl RegisterSet {
 
 fn accesses(operation: &Operation) -> (Option<usize>, [Option<usize>; 2]) {
     match *operation {
-        Operation::Work => (None, [None, None]),
+        Operation::Work | Operation::Jump { .. } => (None, [None, None]),
         Operation::Integer { dst, .. }
         | Operation::Boolean { dst, .. }
         | Operation::Load { dst, .. } => (Some(dst), [None, None]),
@@ -89,7 +89,7 @@ impl TemporaryLayout {
         if expression
             .steps
             .iter()
-            .any(|step| matches!(step.kind, Operation::Branch { .. }))
+            .any(|step| matches!(step.kind, Operation::Branch { .. } | Operation::Jump { .. }))
         {
             return Self::plan_branches(expression);
         }
@@ -156,8 +156,10 @@ impl TemporaryLayout {
         let registers = expression.registers.len();
         let mut target_states = vec![None; expression.steps.len() + 1];
         let mut targets = 0;
-        for step in &expression.steps {
-            if let Operation::Branch { target, .. } = step.kind {
+        for (pc, step) in expression.steps.iter().enumerate() {
+            let (next, alternative) = step.kind.successors(pc);
+            let target = alternative.or((next != pc + 1).then_some(next));
+            if let Some(target) = target {
                 target_states[target].get_or_insert_with(|| {
                     let state = targets;
                     targets += 1;
@@ -175,10 +177,19 @@ impl TemporaryLayout {
             live_targets[state] = fallthrough;
         }
         for (pc, step) in expression.steps.iter().enumerate().rev() {
-            let mut outgoing = fallthrough;
-            if let Operation::Branch { target, .. } = step.kind {
-                // Verification guarantees target > pc, including the exit.
-                outgoing.union(live_targets[target_states[target].ok_or_else(failure)?]);
+            let (next, alternative) = step.kind.successors(pc);
+            let live_at = |target: usize| {
+                target_states[target]
+                    .map(|state| live_targets[state])
+                    .ok_or_else(failure)
+            };
+            let mut outgoing = if next == pc + 1 {
+                fallthrough
+            } else {
+                live_at(next)?
+            };
+            if let Some(target) = alternative {
+                outgoing.union(live_at(target)?);
             }
 
             let (write, reads) = accesses(&step.kind);

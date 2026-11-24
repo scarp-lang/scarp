@@ -1,0 +1,15 @@
+pure funcra f(x: integer) -> integer {
+    bind nonnegative = if x >= 0 { true } else { false };
+
+    return 10 + if nonnegative and x < 4 {
+        if x == 0 { 60 } else { 12 / x }
+    } elif x == 5 {
+        4 << x
+    } elif x < 0 {
+        99 / (x + 2)
+    } else {
+        x + 1
+    };
+}
+
+print(f(0), f(3), f(5), f(9));

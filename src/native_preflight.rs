@@ -115,7 +115,7 @@ fn verify_expression_shape(
                 return Err(Diagnostic::new(
                     DiagnosticKind::NativeUnsupported,
                     node.span,
-                    "conditional expressions are not supported by the experimental native backends",
+                    "conditional expressions are not supported by the C11 or binding-only ELF64 emitters",
                 ))
             }
             ExpressionKind::Integer(_) => ValueType::Integer,

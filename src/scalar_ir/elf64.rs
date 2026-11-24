@@ -496,6 +496,9 @@ fn expression(
                 };
                 branches.push((code.near_branch(condition)?, target));
             }
+            Operation::Jump { target } if control_flow => {
+                branches.push((code.jump()?, target));
+            }
             _ => return Err(invalid(step.span)),
         }
     }
