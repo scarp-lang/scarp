@@ -114,7 +114,7 @@ fn reported_stack_layout_matches_emitted_small_frame_and_argument_count() {
 }
 
 #[test]
-fn reported_large_frame_includes_every_page_probe_and_tail() {
+fn reported_frame_matches_compact_prologue_after_temporary_reuse() {
     let source = format!(
         "pure funcra sum(n:integer)->integer {{ return n{}; }}",
         " + n".repeat(320)
@@ -128,18 +128,10 @@ fn reported_large_frame_includes_every_page_probe_and_tail() {
         let elf = &artifact.kernel.object;
         let sections = u64::from_le_bytes(elf[40..48].try_into().unwrap()) as usize;
         let field = sections + 64 + 24;
-        let mut at = u64::from_le_bytes(elf[field..field + 8].try_into().unwrap()) as usize;
-        let mut allocated = 0;
-        while elf[at..].starts_with(&[0x48, 0x81, 0xec]) {
-            let bytes = u32::from_le_bytes(elf[at + 3..at + 7].try_into().unwrap());
-            allocated += bytes;
-            at += 7;
-            if bytes == 4096 {
-                assert_eq!(&elf[at..at + 4], &[0xc6, 0x04, 0x24, 0]);
-                at += 4;
-            }
-        }
-        assert!(allocated > 4096);
+        let at = u64::from_le_bytes(elf[field..field + 8].try_into().unwrap()) as usize;
+        assert_eq!(&elf[at..at + 3], &[0x48, 0x81, 0xec]);
+        let allocated = u32::from_le_bytes(elf[at + 3..at + 7].try_into().unwrap());
+        assert!((8..=64).contains(&allocated));
         assert_eq!(artifact.layout.frame_bytes, allocated);
         assert_eq!(
             artifact.layout.callee_stack_bytes(),

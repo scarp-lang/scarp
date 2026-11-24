@@ -1,0 +1,10 @@
+// Divide three ribbons into the longest possible identical pieces.
+pure funcra piece_length(a: integer, b: integer, c: integer) -> integer {
+    return integer_hcf(a, b, c);
+}
+
+// Three periodic signals line up at the least common multiple of their periods.
+print(piece_length(24, 36, 60));
+print(integer_gcd(-24, 36, 60));
+print(integer_lcm(4, 6, 10));
+print(integer_lcm(9223372036854775807, 2, 0));

@@ -87,6 +87,21 @@ impl Workspace {
         self.values.clear();
         self.tasks.clear();
     }
+
+    pub(crate) fn retire_for_reuse(&mut self, max_items: usize) {
+        self.clear();
+        if self.values.capacity() > max_items {
+            self.values = Vec::new();
+        }
+        if self.tasks.capacity() > max_items {
+            self.tasks = Vec::new();
+        }
+    }
+
+    pub(crate) fn largest_buffer_capacity(&self) -> usize {
+        self.values.capacity().max(self.tasks.capacity())
+    }
+
     pub(crate) fn evaluate(
         &mut self,
         expression: &ResolvedExpression,
@@ -677,6 +692,25 @@ impl Workspace {
                     let array = values[start].as_array().expect("checked array argument");
                     let result = match operation {
                         ArrayIntrinsic::Len => Value::Integer(array.len() as i64),
+                        ArrayIntrinsic::Concat => {
+                            let right = values[start + 1]
+                                .as_array()
+                                .expect("checked array argument");
+                            if array.is_empty() {
+                                Value::Array(right.clone())
+                            } else if right.is_empty() {
+                                Value::Array(array.clone())
+                            } else {
+                                let length = array.len() + right.len();
+                                let mut elements =
+                                    reserve_array_snapshot(array, length, budget, span)?;
+                                elements.extend_from_slice(array.elements());
+                                elements.extend_from_slice(right.elements());
+                                let kind = SourceType::array(array.element_type(), length)
+                                    .expect("resolved concatenated array shape");
+                                Value::Array(ArrayValue::from_checked(kind, elements))
+                            }
+                        }
                         ArrayIntrinsic::GetOr => {
                             let index = values[start + 1].require_integer(span)?;
                             usize::try_from(index)
@@ -1271,9 +1305,23 @@ fn snapshot_array(
     span: Span,
     edit: impl FnOnce(&mut [Value]),
 ) -> Result<Value, Diagnostic> {
+    let mut elements = reserve_array_snapshot(array, array.len(), budget, span)?;
+    elements.extend_from_slice(array.elements());
+    edit(&mut elements);
+    Ok(Value::Array(ArrayValue::from_checked(
+        array.kind().clone(),
+        elements,
+    )))
+}
+
+fn reserve_array_snapshot(
+    array: &ArrayValue,
+    length: usize,
+    budget: &mut Budget,
+    span: Span,
+) -> Result<Vec<Value>, Diagnostic> {
     // Each snapshot owns a new immutable backing. Charge work and the shared
     // array/list/map allocation quota before attempting a fallible reservation.
-    let length = array.len();
     budget.charge((length + array.kind().node_count() + 1) as u64, span)?;
     let bytes = ArrayValue::allocation_bytes(array.element_type(), length).ok_or_else(|| {
         Diagnostic::new(
@@ -1291,12 +1339,7 @@ fn snapshot_array(
             "could not reserve new immutable array storage",
         )
     })?;
-    elements.extend_from_slice(array.elements());
-    edit(&mut elements);
-    Ok(Value::Array(ArrayValue::from_checked(
-        array.kind().clone(),
-        elements,
-    )))
+    Ok(elements)
 }
 
 fn finish_tuple(
@@ -1362,4 +1405,35 @@ fn numeric_tuple_cmp(left: &TupleValue, right: &TupleValue) -> Option<std::cmp::
         }
     }
     Some(left.len().cmp(&right.len()))
+}
+
+#[cfg(test)]
+mod workspace_retirement_tests {
+    use super::*;
+    use std::sync::Arc;
+
+    #[test]
+    fn retirement_drops_values_and_only_keeps_buffers_within_the_cap() {
+        let mut workspace = Workspace::default();
+        workspace.tasks.reserve_exact(256);
+        workspace.values.reserve_exact(8);
+        let text: Arc<str> = Arc::from("temporary owned only by the evaluator");
+        let weak = Arc::downgrade(&text);
+        workspace.values.push(Value::String(text));
+        let small = workspace.values.capacity();
+        workspace.retire_for_reuse(128);
+        assert!(weak.upgrade().is_none());
+        assert_eq!(workspace.tasks.capacity(), 0);
+        assert_eq!(workspace.values.capacity(), small);
+        assert!(workspace.values.is_empty());
+
+        workspace.values.reserve_exact(256);
+        workspace.tasks.reserve_exact(8);
+        workspace.tasks.push(Task::Visit(0));
+        let small = workspace.tasks.capacity();
+        workspace.retire_for_reuse(128);
+        assert_eq!(workspace.values.capacity(), 0);
+        assert_eq!(workspace.tasks.capacity(), small);
+        assert!(workspace.tasks.is_empty());
+    }
 }

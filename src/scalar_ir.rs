@@ -79,6 +79,20 @@ enum Operation {
         when_true: bool,
         target: usize,
     },
+    /// Skip the remaining arms of a conditional expression after selecting a value.
+    Jump {
+        target: usize,
+    },
+}
+
+impl Operation {
+    fn successors(&self, pc: usize) -> (usize, Option<usize>) {
+        match *self {
+            Self::Branch { target, .. } => (pc + 1, Some(target)),
+            Self::Jump { target } => (target, None),
+            _ => (pc + 1, None),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,7 +107,26 @@ enum Task {
     Visit(usize),
     Finish(usize),
     Logical(usize),
-    CloseLogical { node: usize, branch: usize },
+    CloseLogical {
+        node: usize,
+        branch: usize,
+    },
+    NextConditionalArm {
+        node: usize,
+        arm: usize,
+        exits: Vec<usize>,
+    },
+    ConditionalGuard {
+        node: usize,
+        arm: usize,
+        exits: Vec<usize>,
+    },
+    FinishConditionalArm {
+        node: usize,
+        result: usize,
+        next_arm: Option<(usize, usize)>,
+        exits: Vec<usize>,
+    },
 }
 
 fn register_type(
@@ -136,6 +169,25 @@ fn join(destination: &mut Option<Vec<bool>>, incoming: Cow<'_, [bool]>) {
 }
 
 impl ScalarExpressionIr {
+    fn patch_target(
+        &mut self,
+        step: usize,
+        destination: usize,
+        span: Span,
+    ) -> Result<(), Diagnostic> {
+        match self
+            .steps
+            .get_mut(step)
+            .map(|instruction| &mut instruction.kind)
+        {
+            Some(Operation::Branch { target, .. } | Operation::Jump { target }) => {
+                *target = destination;
+                Ok(())
+            }
+            _ => Err(invalid(span)),
+        }
+    }
+
     fn emit(&mut self, span: Span, kind: Operation) -> Result<usize, Diagnostic> {
         if self.steps.len() >= MAX_IR_STEPS || span.start > span.end {
             return Err(invalid(span));
@@ -216,6 +268,13 @@ impl ScalarExpressionIr {
                         ExpressionKind::Logical { left, .. } => {
                             tasks.push(Task::Logical(index));
                             tasks.push(Task::Visit(*left));
+                        }
+                        ExpressionKind::Conditional { .. } => {
+                            tasks.push(Task::NextConditionalArm {
+                                node: index,
+                                arm: 0,
+                                exits: Vec::new(),
+                            });
                         }
                         _ => return Err(invalid(node.span)),
                     }
@@ -351,11 +410,77 @@ impl ScalarExpressionIr {
                             src: *right,
                         },
                     )?;
-                    let end = ir.steps.len();
-                    if let Operation::Branch { target, .. } = &mut ir.steps[branch].kind {
-                        *target = end;
+                    ir.patch_target(branch, ir.steps.len(), node.span)?;
+                }
+                Task::NextConditionalArm { node, arm, exits } => {
+                    let ExpressionKind::Conditional {
+                        branches,
+                        otherwise,
+                    } = &nodes[node].kind
+                    else {
+                        return Err(invalid(nodes[node].span));
+                    };
+                    if let Some(branch) = branches.get(arm) {
+                        tasks.push(Task::ConditionalGuard { node, arm, exits });
+                        tasks.push(Task::Visit(branch.condition));
                     } else {
-                        return Err(invalid(node.span));
+                        tasks.push(Task::FinishConditionalArm {
+                            node,
+                            result: *otherwise,
+                            next_arm: None,
+                            exits,
+                        });
+                        tasks.push(Task::Visit(*otherwise));
+                    }
+                }
+                Task::ConditionalGuard { node, arm, exits } => {
+                    let ExpressionKind::Conditional { branches, .. } = &nodes[node].kind else {
+                        return Err(invalid(nodes[node].span));
+                    };
+                    let branch = &branches[arm];
+                    let span = nodes[branch.condition].span;
+                    // The interpreter charges once for deciding a reached guard.
+                    ir.emit(span, Operation::Work)?;
+                    let skip = ir.emit(
+                        span,
+                        Operation::Branch {
+                            condition: branch.condition,
+                            when_true: false,
+                            target: usize::MAX,
+                        },
+                    )?;
+                    tasks.push(Task::FinishConditionalArm {
+                        node,
+                        result: branch.result,
+                        next_arm: Some((arm + 1, skip)),
+                        exits,
+                    });
+                    tasks.push(Task::Visit(branch.result));
+                }
+                Task::FinishConditionalArm {
+                    node,
+                    result,
+                    next_arm,
+                    mut exits,
+                } => {
+                    let span = nodes[node].span;
+                    // The selected result defines the root on this path. Moving
+                    // it and skipping other arms add no source work events.
+                    ir.emit(
+                        span,
+                        Operation::Move {
+                            dst: node,
+                            src: result,
+                        },
+                    )?;
+                    if let Some((arm, skip)) = next_arm {
+                        exits.push(ir.emit(span, Operation::Jump { target: usize::MAX })?);
+                        ir.patch_target(skip, ir.steps.len(), span)?;
+                        tasks.push(Task::NextConditionalArm { node, arm, exits });
+                    } else {
+                        for exit in exits {
+                            ir.patch_target(exit, ir.steps.len(), span)?;
+                        }
                     }
                 }
             }
@@ -390,11 +515,10 @@ impl ScalarExpressionIr {
             let mut initialized = incoming[pc]
                 .take()
                 .ok_or_else(|| invalid(instruction.span))?;
-            let mut branch = None;
             let types = &self.registers;
             let span = instruction.span;
             match &instruction.kind {
-                Operation::Work => {}
+                Operation::Work | Operation::Jump { .. } => {}
                 Operation::Integer { dst, .. } => {
                     register_type(types, *dst, ValueType::Integer, span)?;
                     initialized[*dst] = true;
@@ -445,20 +569,19 @@ impl ScalarExpressionIr {
                     register_type(types, *dst, result_kind, span)?;
                     initialized[*dst] = true;
                 }
-                Operation::Branch {
-                    condition, target, ..
-                } => {
+                Operation::Branch { condition, .. } => {
                     require_read(&initialized, types, *condition, ValueType::Boolean, span)?;
-                    if *target <= pc || *target > self.steps.len() {
-                        return Err(invalid(span));
-                    }
-                    branch = Some(*target);
                 }
             }
-            if let Some(target) = branch.filter(|&target| target != pc + 1) {
+            let (next, alternative) = instruction.kind.successors(pc);
+            let valid_target = |target| target > pc && target <= self.steps.len();
+            if !valid_target(next) || alternative.is_some_and(|target| !valid_target(target)) {
+                return Err(invalid(span));
+            }
+            if let Some(target) = alternative.filter(|&target| target != next) {
                 join(&mut incoming[target], Cow::Borrowed(&initialized));
             }
-            join(&mut incoming[pc + 1], Cow::Owned(initialized));
+            join(&mut incoming[next], Cow::Owned(initialized));
         }
         if incoming[self.steps.len()]
             .as_ref()
@@ -558,7 +681,6 @@ mod tests {
 
     fn lower(source: &str) -> ScalarExpressionIr {
         let program = compile(source).unwrap();
-        crate::native_preflight::inspect(&program).unwrap();
         let expression = program
             .statements
             .iter()
@@ -689,6 +811,28 @@ mod tests {
         };
         *target = 2;
         ir.verify().unwrap();
+    }
+
+    #[test]
+    fn conditional_join_requires_a_value_from_each_selected_arm() {
+        let intact = lower("print(if true { 1 } elif false { 2 } else { 3 });");
+        let first_jump = intact
+            .steps
+            .iter()
+            .position(|step| matches!(step.kind, Operation::Jump { .. }))
+            .unwrap();
+        let mut missing_value = intact.clone();
+        missing_value.steps[first_jump - 1].kind = Operation::Work;
+        assert_eq!(
+            missing_value.verify().unwrap_err().kind,
+            DiagnosticKind::NativeUnsupported
+        );
+        for target in [first_jump, intact.steps.len() + 1] {
+            let mut bad_target = intact.clone();
+            let span = bad_target.steps[first_jump].span;
+            bad_target.steps[first_jump].kind = Operation::Jump { target };
+            assert_eq!(bad_target.verify().unwrap_err().span, span);
+        }
     }
 
     #[test]

@@ -1,0 +1,17 @@
+pure funcra f(n: integer) -> integer {
+    var outer = 0;
+    var total = 0;
+    while outer < n {
+        repeat outer as index {
+            var step = 0;
+            while step < 2 {
+                total += index + step;
+                step += 1;
+            }
+        }
+        outer += 1;
+    }
+    return total;
+}
+
+print(f(3));

@@ -1,0 +1,10 @@
+// Ordered projections are immutable snapshots, not live views.
+bind original = [map: 7: "seven", -1: "minus", 2: "two"];
+bind keys = map_keys(original);
+bind values = map_values(original);
+bind changed = map_set(original, 2, "updated");
+print(keys == [list: -1, 2, 7]);
+print(values == [list: "minus", "two", "seven"]);
+print(map_values(changed) == [list: "minus", "updated", "seven"]);
+print(map_values(original) == values);
+print(map_len(original) == map_len(changed));

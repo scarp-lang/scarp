@@ -247,3 +247,16 @@ fn cli_verify_is_static_for_literal_array_indices_and_json_reports_their_byte_sp
         "{json}"
     );
 }
+
+#[test]
+fn exported_concatenation_preserves_inferred_shapes_across_modules() {
+    let lib = "pub pure funcra join(a:array<string,1>,b:array<string,2>)->array<string,3>{return array_concat(a,b);}";
+    let entry = r#"import "lib.srp" as lib; bind result=lib.join([array:"a"],[array:"b","c"]); print(result[2],array_len(result));"#;
+    let program = compile(&[("main.srp", entry), ("lib.srp", lib)]).unwrap();
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    program
+        .execute(&mut out, &mut err, Default::default())
+        .unwrap();
+    assert_eq!(out, b"c 3\n");
+    assert!(err.is_empty());
+}

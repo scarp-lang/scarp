@@ -79,6 +79,7 @@ impl ScalarExpressionIr {
                         pc = *target;
                     }
                 }
+                super::super::Operation::Jump { target } => pc = *target,
             }
         }
         register(&values, self.root, Span::default())
@@ -313,6 +314,37 @@ mod tests {
             "print(\"\"); print(\"é\tदेवनागरी\");",
         ] {
             same(source, ExecutionOptions::default());
+        }
+    }
+
+    #[test]
+    fn scalar_conditional_matches_interpreter_at_each_work_boundary() {
+        for source in [
+            "print(if true { 7 } elif 1 / 0 == 1 { 2 } else { 1 / 0 });",
+            "print(if false { 1 / 0 } elif true { if false { 3 } else { 8 } } else { 0 });",
+            "print(if false { 7 } else { 1 / 0 });",
+        ] {
+            let program = compile(source).unwrap();
+            let ir = ScalarProgramIr::lower(&program).unwrap();
+            for max_steps in 0..24 {
+                let options = ExecutionOptions {
+                    limits: ExecutionLimits {
+                        max_steps,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+                let mut expected = Vec::new();
+                let result = interpreter::execute_with_options(&program, &mut expected, options);
+                match result {
+                    Ok(()) => assert_eq!(ir.execute(options).unwrap(), expected),
+                    Err(RunError::Diagnostic(error)) => {
+                        let actual = ir.execute(options).unwrap_err();
+                        assert_eq!((actual.kind, actual.span), (error.kind, error.span));
+                    }
+                    Err(error) => panic!("{error:?}"),
+                }
+            }
         }
     }
 
