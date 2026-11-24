@@ -406,7 +406,8 @@ impl ScalarProgramIr {
                         count_slot,
                         index_slot,
                         ..
-                    } if self.bounded && *count_slot >= parameters && *index_slot >= parameters => {}
+                    } if self.bounded && *count_slot >= parameters && *index_slot >= parameters => {
+                    }
                     ProgramOp::RepeatNext { index_slot }
                         if self.bounded && *index_slot >= parameters => {}
                     ProgramOp::Retire { slots } if slots.iter().all(|s| *s >= parameters) => {}
