@@ -28,6 +28,17 @@ pub(super) fn slot_offset(index: usize) -> Result<[u8; 4], Diagnostic> {
         .ok_or_else(failure)
 }
 
+/// Offset of a caller-owned stack argument from RSP after frame allocation.
+/// Entry RSP points at the return address, then argument seven, eight, etc.
+pub(super) fn stack_argument_offset(frame: u32, stack_index: usize) -> Result<[u8; 4], Diagnostic> {
+    (frame as usize)
+        .checked_add(SLOT_BYTES)
+        .and_then(|base| stack_index.checked_mul(SLOT_BYTES)?.checked_add(base))
+        .and_then(|offset| i32::try_from(offset).ok())
+        .map(i32::to_le_bytes)
+        .ok_or_else(failure)
+}
+
 pub(super) fn frame_bytes(slots: usize, temporaries: usize) -> Result<u32, Diagnostic> {
     let bytes = slots
         .checked_add(temporaries)
@@ -46,6 +57,20 @@ pub(super) fn frame_bytes(slots: usize, temporaries: usize) -> Result<u32, Diagn
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn incoming_arguments_follow_the_return_address() {
+        for frame in [8, 24, 4088, 8200] {
+            for index in 0..10 {
+                assert_eq!(
+                    i32::from_le_bytes(stack_argument_offset(frame, index).unwrap()),
+                    frame as i32 + 8 + index as i32 * 8
+                );
+            }
+        }
+        assert!(stack_argument_offset(u32::MAX, 0).is_err());
+        assert!(stack_argument_offset(8, usize::MAX).is_err());
+    }
 
     #[test]
     fn alignment_and_frame_boundaries_are_checked() {
