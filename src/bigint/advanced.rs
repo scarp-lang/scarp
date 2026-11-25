@@ -45,6 +45,36 @@ impl BigInt {
             .saturating_add(1);
         budget.check_bigint_digits(usize::try_from(lower_digits).unwrap_or(usize::MAX), span)?;
 
+        // Powers of ten need no multiplication: directly construct the
+        // canonical decimal limbs after prepaying exact size and work.
+        budget.charge(self.limbs.len() as u64, span)?;
+        if self.limbs[..self.limbs.len() - 1].iter().all(|&x| x == 0) {
+            let top = *self.limbs.last().expect("nonzero magnitude");
+            if (0_u32..9).any(|i| 10_u32.pow(i) == top) {
+                let zeros = self.decimal_digits() - 1;
+                let output_zeros = (zeros as u64).saturating_mul(exponent);
+                let output_digits = output_zeros.saturating_add(1);
+                budget.check_bigint_digits(
+                    usize::try_from(output_digits).unwrap_or(usize::MAX),
+                    span,
+                )?;
+                let zeros = usize::try_from(output_zeros).map_err(|_| allocation(span))?;
+                let count = zeros / 9 + 1;
+                budget.charge(count as u64, span)?;
+                let mut limbs = buffer(count, budget, span)?;
+                limbs.resize(count - 1, 0);
+                limbs.push(10_u32.pow((zeros % 9) as u32));
+                return finish(limbs, self.negative && exponent % 2 == 1, budget, span);
+            }
+        }
+
+        // For a d-digit base, |base| >= 10^(d-1). Reject impossible dense
+        // powers before allocating intermediate products.
+        let lower_digits = ((self.decimal_digits() - 1) as u64)
+            .saturating_mul(exponent)
+            .saturating_add(1);
+        budget.check_bigint_digits(usize::try_from(lower_digits).unwrap_or(usize::MAX), span)?;
+
         let mut power = Self::from_integer(1, budget, span)?;
         let mut factor = self.clone();
         let mut remaining = exponent;
