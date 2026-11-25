@@ -151,6 +151,20 @@ pub enum Builtin {
     DecimalDivRounded,
     Median,
     Quantile,
+    BigIntDigits,
+    BigIntDigitSum,
+    BigIntTrailingZeros,
+    BigIntSign,
+    BigIntIsEven,
+    BigIntIsOdd,
+    BigIntIsZero,
+    BigIntIsPositive,
+    BigIntIsNegative,
+    BigIntLog2,
+    BigIntIsPrime,
+    BigIntIsProbablePrime,
+    BigIntFactorial,
+    BigIntRoot,
 }
 
 impl Builtin {
@@ -204,6 +218,20 @@ impl Builtin {
             "bigint_not" => Self::BigIntNot,
             "bigint_shl" => Self::BigIntShl,
             "bigint_shr" => Self::BigIntShr,
+            "bigint_digits" => Self::BigIntDigits,
+            "bigint_digit_sum" => Self::BigIntDigitSum,
+            "bigint_trailing_zeros" => Self::BigIntTrailingZeros,
+            "bigint_sign" => Self::BigIntSign,
+            "bigint_is_even" => Self::BigIntIsEven,
+            "bigint_is_odd" => Self::BigIntIsOdd,
+            "bigint_is_zero" => Self::BigIntIsZero,
+            "bigint_is_positive" => Self::BigIntIsPositive,
+            "bigint_is_negative" => Self::BigIntIsNegative,
+            "bigint_log2" => Self::BigIntLog2,
+            "bigint_is_prime" => Self::BigIntIsPrime,
+            "bigint_is_probable_prime" => Self::BigIntIsProbablePrime,
+            "bigint_factorial" => Self::BigIntFactorial,
+            "bigint_root" => Self::BigIntRoot,
             "integer_to_text" => Self::IntegerToText,
             "float_to_text" => Self::FloatToText,
             "text_to_integer" => Self::TextToInteger,
@@ -353,7 +381,20 @@ impl Builtin {
             | Self::BigIntAbs
             | Self::BigIntBitLength
             | Self::BigIntToText => &[ValueType::BigInt],
-            Self::BigIntPow => &[ValueType::BigInt, Integer],
+            Self::BigIntDigits
+            | Self::BigIntDigitSum
+            | Self::BigIntTrailingZeros
+            | Self::BigIntSign
+            | Self::BigIntIsEven
+            | Self::BigIntIsOdd
+            | Self::BigIntIsZero
+            | Self::BigIntIsPositive
+            | Self::BigIntIsNegative
+            | Self::BigIntLog2
+            | Self::BigIntIsPrime
+            | Self::BigIntIsProbablePrime => &[ValueType::BigInt],
+            Self::BigIntFactorial => &[Integer],
+            Self::BigIntPow | Self::BigIntRoot => &[ValueType::BigInt, Integer],
             Self::BigIntPowMod => &[ValueType::BigInt, Integer, ValueType::BigInt],
             Self::BigIntFromRadix => &[String, Integer],
             Self::BigIntToRadix => &[ValueType::BigInt, Integer],
@@ -472,7 +513,20 @@ impl Builtin {
             | Self::BigIntNot
             | Self::BigIntShl
             | Self::BigIntShr => ValueType::BigInt,
-            Self::BigIntBitLength => ValueType::Integer,
+            Self::BigIntBitLength
+            | Self::BigIntDigits
+            | Self::BigIntDigitSum
+            | Self::BigIntTrailingZeros
+            | Self::BigIntSign
+            | Self::BigIntLog2 => ValueType::Integer,
+            Self::BigIntIsEven
+            | Self::BigIntIsOdd
+            | Self::BigIntIsZero
+            | Self::BigIntIsPositive
+            | Self::BigIntIsNegative
+            | Self::BigIntIsPrime
+            | Self::BigIntIsProbablePrime => ValueType::Boolean,
+            Self::BigIntFactorial | Self::BigIntRoot => ValueType::BigInt,
             Self::BigIntToText | Self::BigIntToRadix => ValueType::String,
             Self::BigIntToInteger => ValueType::Integer,
             Self::IntegerToText
@@ -596,6 +650,20 @@ impl Builtin {
                 | Self::BigIntNot
                 | Self::BigIntShl
                 | Self::BigIntShr
+                | Self::BigIntDigits
+                | Self::BigIntDigitSum
+                | Self::BigIntTrailingZeros
+                | Self::BigIntSign
+                | Self::BigIntIsEven
+                | Self::BigIntIsOdd
+                | Self::BigIntIsZero
+                | Self::BigIntIsPositive
+                | Self::BigIntIsNegative
+                | Self::BigIntLog2
+                | Self::BigIntIsPrime
+                | Self::BigIntIsProbablePrime
+                | Self::BigIntFactorial
+                | Self::BigIntRoot
         )
     }
 
@@ -1326,6 +1394,20 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::BigIntNot
         | Builtin::BigIntShl
         | Builtin::BigIntShr
+        | Builtin::BigIntDigits
+        | Builtin::BigIntDigitSum
+        | Builtin::BigIntTrailingZeros
+        | Builtin::BigIntSign
+        | Builtin::BigIntIsEven
+        | Builtin::BigIntIsOdd
+        | Builtin::BigIntIsZero
+        | Builtin::BigIntIsPositive
+        | Builtin::BigIntIsNegative
+        | Builtin::BigIntLog2
+        | Builtin::BigIntIsPrime
+        | Builtin::BigIntIsProbablePrime
+        | Builtin::BigIntFactorial
+        | Builtin::BigIntRoot
         | Builtin::IntegerToText
         | Builtin::FloatToText
         | Builtin::TextToInteger
