@@ -22,6 +22,21 @@ pub(super) fn evaluate(
             argument_span(0),
         )
         .map(Value::BigInt),
+        Builtin::BigIntFactorial => BigInt::factorial(
+            args[0].as_integer().expect("typed integer"),
+            budget,
+            argument_span(0),
+        )
+        .map(Value::BigInt),
+        Builtin::BigIntRoot => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .integer_root(
+                args[1].as_integer().expect("typed integer"),
+                budget,
+                span,
+            )
+            .map(Value::BigInt),
         Builtin::BigIntPow => args[0]
             .as_bigint()
             .expect("typed bigint")
@@ -126,6 +141,43 @@ pub(super) fn evaluate(
                         )
                         .with_help("keep the exact bigint value or select a value from -9223372036854775808 through 9223372036854775807")
                     })
+                }
+                Builtin::BigIntDigits => {
+                    budget.charge(1, span)?;
+                    Ok(Value::Integer(value.decimal_digits() as i64))
+                }
+                Builtin::BigIntDigitSum => value.digit_sum(budget, span).map(Value::Integer),
+                Builtin::BigIntTrailingZeros => {
+                    value.trailing_zeros(budget, span).map(Value::Integer)
+                }
+                Builtin::BigIntLog2 => value.log2(budget, span).map(Value::Integer),
+                Builtin::BigIntIsPrime => value.is_prime(budget, span).map(Value::Boolean),
+                Builtin::BigIntIsProbablePrime => {
+                    value.is_probable_prime(budget, span).map(Value::Boolean)
+                }
+                Builtin::BigIntSign => {
+                    budget.charge(1, span)?;
+                    Ok(Value::Integer(if value.is_zero() {
+                        0
+                    } else if value.is_negative() {
+                        -1
+                    } else {
+                        1
+                    }))
+                }
+                Builtin::BigIntIsEven
+                | Builtin::BigIntIsOdd
+                | Builtin::BigIntIsZero
+                | Builtin::BigIntIsPositive
+                | Builtin::BigIntIsNegative => {
+                    budget.charge(1, span)?;
+                    Ok(Value::Boolean(match function {
+                        Builtin::BigIntIsEven => value.is_even(),
+                        Builtin::BigIntIsOdd => !value.is_even(),
+                        Builtin::BigIntIsZero => value.is_zero(),
+                        Builtin::BigIntIsPositive => !value.is_zero() && !value.is_negative(),
+                        _ => value.is_negative(),
+                    }))
                 }
                 Builtin::BigIntBitLength => value
                     .bit_length(budget, argument_span(0))
