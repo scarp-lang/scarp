@@ -4,7 +4,10 @@ use super::*;
 impl BigInt {
     pub(crate) fn fibonacci(n: i64, budget: &mut Budget, span: Span) -> Result<Self, Diagnostic> {
         if n < 0 {
-            return Err(domain(span, "bigint_fibonacci requires a nonnegative index"));
+            return Err(domain(
+                span,
+                "bigint_fibonacci requires a nonnegative index",
+            ));
         }
         if n == 0 {
             return Self::from_integer(0, budget, span);
@@ -124,7 +127,11 @@ impl BigInt {
     }
 
     /// Reverse the decimal magnitude without allocating a text value.
-    pub(crate) fn reverse_digits(&self, budget: &mut Budget, span: Span) -> Result<Self, Diagnostic> {
+    pub(crate) fn reverse_digits(
+        &self,
+        budget: &mut Budget,
+        span: Span,
+    ) -> Result<Self, Diagnostic> {
         let digits = self.decimal_digits();
         budget.check_bigint_digits(digits, span)?;
         budget.charge((digits as u64).saturating_mul(3), span)?;
@@ -171,7 +178,10 @@ impl BigInt {
         budget.check_bigint_digits(modulus.decimal_digits(), span)?;
         budget.charge(1, span)?;
         if modulus.is_negative() || modulus.is_zero() || modulus.limbs.as_slice() == [1] {
-            return Err(domain(span, "bigint_mod_inverse requires a modulus greater than one"));
+            return Err(domain(
+                span,
+                "bigint_mod_inverse requires a modulus greater than one",
+            ));
         }
         let zero = Self::from_integer(0, budget, span)?;
         let one = Self::from_integer(1, budget, span)?;
