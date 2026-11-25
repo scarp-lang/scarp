@@ -1,0 +1,5 @@
+bind exponent = bigint("340282366920938463463374607431768211456");
+print(bigint_pow_big(bigint("-1"), exponent));
+print(bigint_pow_mod_big(bigint("-12345678901234567890987654321"),
+                        exponent, bigint("4294967291")));
+print(bigint_pow_big(bigint("-10"), bigint("17")));

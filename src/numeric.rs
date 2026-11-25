@@ -127,12 +127,14 @@ pub enum Builtin {
     BigIntToInteger,
     BigIntAbs,
     BigIntPow,
+    BigIntPowBig,
     BigIntBitLength,
     BigIntToText,
     BigIntGcd,
     BigIntLcm,
     BigIntSqrt,
     BigIntPowMod,
+    BigIntPowModBig,
     BigIntFromRadix,
     BigIntToRadix,
     BigIntAnd,
@@ -215,12 +217,14 @@ impl Builtin {
             "bigint_to_integer" => Self::BigIntToInteger,
             "bigint_abs" => Self::BigIntAbs,
             "bigint_pow" => Self::BigIntPow,
+            "bigint_pow_big" => Self::BigIntPowBig,
             "bigint_bit_length" => Self::BigIntBitLength,
             "bigint_to_text" => Self::BigIntToText,
             "bigint_gcd" => Self::BigIntGcd,
             "bigint_lcm" => Self::BigIntLcm,
             "bigint_sqrt" => Self::BigIntSqrt,
             "bigint_pow_mod" => Self::BigIntPowMod,
+            "bigint_pow_mod_big" => Self::BigIntPowModBig,
             "bigint_from_radix" => Self::BigIntFromRadix,
             "bigint_to_radix" => Self::BigIntToRadix,
             "bigint_and" => Self::BigIntAnd,
@@ -427,6 +431,8 @@ impl Builtin {
             | Self::BigIntIsPalindrome => &[ValueType::BigInt],
             Self::BigIntPow | Self::BigIntRoot => &[ValueType::BigInt, Integer],
             Self::BigIntPowMod => &[ValueType::BigInt, Integer, ValueType::BigInt],
+            Self::BigIntPowBig => &[ValueType::BigInt, ValueType::BigInt],
+            Self::BigIntPowModBig => &[ValueType::BigInt, ValueType::BigInt, ValueType::BigInt],
             Self::BigIntFromRadix => &[String, Integer],
             Self::BigIntToRadix => &[ValueType::BigInt, Integer],
             Self::BigIntAnd | Self::BigIntOr | Self::BigIntXor => {
@@ -533,10 +539,12 @@ impl Builtin {
             | Self::BigIntFromInteger
             | Self::BigIntAbs
             | Self::BigIntPow
+            | Self::BigIntPowBig
             | Self::BigIntGcd
             | Self::BigIntLcm
             | Self::BigIntSqrt
             | Self::BigIntPowMod
+            | Self::BigIntPowModBig
             | Self::BigIntFromRadix
             | Self::BigIntAnd
             | Self::BigIntOr
@@ -679,12 +687,14 @@ impl Builtin {
                 | Self::BigIntToInteger
                 | Self::BigIntAbs
                 | Self::BigIntPow
+                | Self::BigIntPowBig
                 | Self::BigIntBitLength
                 | Self::BigIntToText
                 | Self::BigIntGcd
                 | Self::BigIntLcm
                 | Self::BigIntSqrt
                 | Self::BigIntPowMod
+                | Self::BigIntPowModBig
                 | Self::BigIntFromRadix
                 | Self::BigIntToRadix
                 | Self::BigIntAnd
@@ -1434,12 +1444,14 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::BigIntToInteger
         | Builtin::BigIntAbs
         | Builtin::BigIntPow
+        | Builtin::BigIntPowBig
         | Builtin::BigIntBitLength
         | Builtin::BigIntToText
         | Builtin::BigIntGcd
         | Builtin::BigIntLcm
         | Builtin::BigIntSqrt
         | Builtin::BigIntPowMod
+        | Builtin::BigIntPowModBig
         | Builtin::BigIntFromRadix
         | Builtin::BigIntToRadix
         | Builtin::BigIntAnd
