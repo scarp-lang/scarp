@@ -6,15 +6,24 @@ use scarp::{diagnostics::DiagnosticKind as Kind, ExecutionLimits, ExecutionOptio
 use std::io::{self, Write};
 
 const TARGET: usize = 100_000_000;
+const NEXT_TARGET: usize = 1_000_000_000;
 
 fn options(digits: usize) -> ExecutionOptions {
     ExecutionOptions {
         // The base literal 10 requires two digits even when exponent is zero.
         max_bigint_digits: digits.max(2),
-        max_bigint_bytes: 512 * 1024 * 1024,
+        max_bigint_bytes: if digits > TARGET {
+            5 * 1024 * 1024 * 1024
+        } else {
+            512 * 1024 * 1024
+        },
         max_capture_bytes: digits + 1024,
         limits: ExecutionLimits {
-            max_steps: 2_000_000_000,
+            max_steps: if digits > TARGET {
+                20_000_000_000
+            } else {
+                2_000_000_000
+            },
             ..ExecutionLimits::default()
         },
         ..ExecutionOptions::default()
@@ -27,6 +36,7 @@ struct ExactOutput {
     prefix: &'static [u8],
     repeated: u8,
     repeats: usize,
+    suffix: &'static [u8],
     seen: usize,
 }
 
@@ -37,7 +47,9 @@ impl Write for ExactOutput {
                 self.prefix[self.seen]
             } else if self.seen < self.prefix.len() + self.repeats {
                 self.repeated
-            } else if self.seen == self.prefix.len() + self.repeats {
+            } else if self.seen < self.prefix.len() + self.repeats + self.suffix.len() {
+                self.suffix[self.seen - self.prefix.len() - self.repeats]
+            } else if self.seen == self.prefix.len() + self.repeats + self.suffix.len() {
                 b'\n'
             } else {
                 panic!("extra output at byte {}", self.seen);
@@ -54,11 +66,22 @@ impl Write for ExactOutput {
 }
 
 fn assert_output(source: &str, digits: usize, prefix: &'static [u8], repeated: u8) {
+    assert_output_with_suffix(source, digits, prefix, repeated, b"");
+}
+
+fn assert_output_with_suffix(
+    source: &str,
+    digits: usize,
+    prefix: &'static [u8],
+    repeated: u8,
+    suffix: &'static [u8],
+) {
     let sign = usize::from(prefix.first() == Some(&b'-'));
     let mut out = ExactOutput {
         prefix,
         repeated,
-        repeats: digits + sign - prefix.len(),
+        repeats: digits + sign - prefix.len() - suffix.len(),
+        suffix,
         seen: 0,
     };
     scarp::run_with_options(source, &mut out, options(digits)).unwrap();
@@ -86,11 +109,21 @@ fn dense_divide(digits: usize) {
     assert_output(&source, digits, b"", b'3');
 }
 
+fn dense_multiply(digits: usize) {
+    // (2*10^(d-1)-1)*5 = 10^d-5. All non-final digits are nines.
+    let source = format!(
+        "bind p=bigint_pow(bigint(\"10\"),{}); print((p+(p-bigint(\"1\")))*bigint(\"5\"));",
+        digits - 1
+    );
+    assert_output_with_suffix(&source, digits, b"", b'9', b"5");
+}
+
 #[test]
 fn chunk_boundaries_preserve_signed_dense_digits_and_single_limb_division() {
     for digits in [1, 9, 10, 9216, 9217, 9218, 18433, 18434] {
         dense_add(digits);
         dense_divide(digits);
+        dense_multiply(digits);
     }
 }
 
@@ -141,4 +174,28 @@ fn hundred_million_digit_sparse_power() {
         b"1",
         b'0',
     );
+}
+
+#[test]
+#[ignore = "opt-in 100-million-digit dense-by-single-limb multiplication"]
+fn hundred_million_digit_dense_multiplication() {
+    dense_multiply(TARGET);
+}
+
+#[test]
+#[ignore = "next milestone: opt-in one-billion-digit dense addition"]
+fn one_billion_digit_dense_addition() {
+    dense_add(NEXT_TARGET);
+}
+
+#[test]
+#[ignore = "next milestone: opt-in one-billion-digit dense multiplication by one limb"]
+fn one_billion_digit_dense_multiplication() {
+    dense_multiply(NEXT_TARGET);
+}
+
+#[test]
+#[ignore = "next milestone: opt-in one-billion-digit division by one limb"]
+fn one_billion_digit_dense_division() {
+    dense_divide(NEXT_TARGET);
 }
