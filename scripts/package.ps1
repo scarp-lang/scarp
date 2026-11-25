@@ -79,7 +79,7 @@ try {
     New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
     New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
     $binaryName = if ($isWindowsTarget) { 'scarp.exe' } else { 'scarp' }
-    $binary = Join-Path $projectRoot "target/$Target/release/$binaryName"
+    $binary = Join-Path $metadata.target_directory "$Target/release/$binaryName"
     Copy-Item -LiteralPath $binary -Destination $packageRoot
     foreach ($filename in @('LICENSE', 'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md')) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $filename) -Destination $packageRoot
