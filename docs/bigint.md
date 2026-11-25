@@ -86,6 +86,50 @@ and work quotas. Modular multiplication intermediates pay the ordinary BigInt
 limits. Run [`examples/bigint_exact.srp`](../examples/bigint_exact.srp) with the
 development compiler.
 
+## Extended integer utilities (development)
+
+| Built-in | Signature | Contract |
+| --- | --- | --- |
+| `bigint_digits(n)` | bigint → integer | Decimal magnitude digits; zero has one digit. |
+| `bigint_digit_sum(n)` | bigint → integer | Sum of decimal magnitude digits. |
+| `bigint_trailing_zeros(n)` | bigint → integer | Decimal trailing zeros of a nonzero magnitude. |
+| `bigint_sign(n)` | bigint → integer | -1, 0 or 1. |
+| `bigint_is_even(n)`, `bigint_is_odd(n)` | bigint → boolean | Parity, including negative values and zero. |
+| `bigint_is_zero(n)`, `bigint_is_positive(n)`, `bigint_is_negative(n)` | bigint → boolean | Canonical signed predicates. |
+| `bigint_log2(n)` | bigint → integer | Floor of log2 of the nonzero magnitude. |
+| `bigint_factorial(n)` | integer → bigint | Exact factorial for nonnegative integer n; 0! = 1. |
+| `bigint_root(n,k)` | bigint, integer → bigint | Floor of the nonnegative kth root; k must be positive. |
+| `bigint_is_prime(n)` | bigint → boolean | Exact on successful return; values less than 2 are false. |
+| `bigint_is_probable_prime(n)` | bigint → boolean | Deterministic on unsigned 64-bit values; fixed-base strong probable-prime screen above that range. |
+
+```scarp
+bind n = bigint_pow(bigint("250"), 1000);
+print(bigint_digits(n)); // 2398
+print(bigint_factorial(20)); // 2432902008176640000
+print(bigint_root(bigint("1000000"), 3)); // 100
+print(bigint_is_prime(bigint("97"))); // true
+```
+
+Primality up to 2^64-1 uses deterministic Miller–Rabin with seven
+established witnesses. Above this bound, exact primality first uses
+the probable-prime screen and then performs budgeted trial division if
+necessary. A true probable-prime result above the unsigned 64-bit range
+is not a primality proof or a cryptographic assurance; bases are fixed,
+not randomly selected. Exact primality may report a resource diagnostic
+rather than completing a very large proof. All intermediate products,
+scratch and work obey existing quotas. These algorithms are not
+constant-time.
+
+Factorial uses a balanced product tree. The nth root uses binary search
+with bounded exponentiation comparisons and the existing square-root
+kernel for degree two. Zero is outside the domain of log2 and trailing
+zeros; negative radicands are rejected. Digit count and sign/parity
+predicates do not format a string. Digit sum is linear in decimal digits.
+
+```sh
+cargo test --locked --offline --test bigint_utilities
+```
+
 ## Resource limits
 
 | Resource | Default | Contract |
