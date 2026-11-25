@@ -145,3 +145,41 @@ jobs:
       - name: Compare Lifetime against exact PR base
         shell: bash
         run: sh scripts/benchmarks/compare-lifetime.sh "${{ github.event.pull_request.base.sha }}"
+
+  bigint_100m:
+    name: BigInt / 100 million digits (64-bit Linux)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+      github.head_ref == 'bigint-100m-validation')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - name: Record environment and build acceptance tests
+        run: |
+          rustc -Vv
+          uname -a
+          free -h
+          cargo test --locked --offline --release --test bigint_capacity_100m --no-run
+      - name: Run ordinary acceptance tests
+        run: cargo test --locked --offline --release --test bigint_capacity_100m
+      - name: Verify every digit in each stress workload
+        run: |
+          for case in hundred_million_digit_dense_addition hundred_million_digit_dense_multiplication hundred_million_digit_dense_division hundred_million_digit_sparse_power; do
+            /usr/bin/time -v cargo test --locked --offline --release --test bigint_capacity_100m "$case" -- --ignored --exact --test-threads=1
+          done
+      - name: Opt-in one-billion-digit stress tests
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          for case in one_billion_digit_dense_addition one_billion_digit_dense_multiplication one_billion_digit_dense_division; do
+            /usr/bin/time -v cargo test --locked --offline --release --test bigint_capacity_100m "$case" -- --ignored --exact --test-threads=1
+          done

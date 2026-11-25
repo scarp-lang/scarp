@@ -165,32 +165,31 @@ impl fmt::Display for BigInt {
         }
         let mut limbs = self.limbs.iter().rev();
         write!(f, "{}", limbs.next().expect("nonzero magnitude"))?;
-        // Batch consecutive zero limbs without allocating a decimal string.
-        // A sparse billion-digit value would otherwise make >100M writes.
-        const ZERO_BYTES: [u8; 9 * 1024] = [b'0'; 9 * 1024];
-        const ZEROS: &str = match std::str::from_utf8(&ZERO_BYTES) {
-            Ok(text) => text,
-            Err(_) => panic!("ASCII zeros"),
-        };
-        let zeros = ZEROS;
-        let mut pending = 0;
+        // Batch both dense and sparse decimal limbs into bounded chunks.
+        // Do not allocate an intermediate decimal string or make one writer
+        // call per limb. Every non-leading limb has exactly nine ASCII digits.
+        const CHUNK_BYTES: usize = 9 * 1024;
+        let mut chunk = [b'0'; CHUNK_BYTES];
+        let mut used = 0;
         for &limb in limbs {
+            let slot = &mut chunk[used..used + 9];
             if limb == 0 {
-                pending += 9;
-                if pending == zeros.len() {
-                    f.write_str(zeros)?;
-                    pending = 0;
-                }
+                slot.fill(b'0');
             } else {
-                if pending != 0 {
-                    f.write_str(&zeros[..pending])?;
-                    pending = 0;
+                let mut value = limb;
+                for digit in slot.iter_mut().rev() {
+                    *digit = b'0' + (value % 10) as u8;
+                    value /= 10;
                 }
-                write!(f, "{limb:09}")?;
+            }
+            used += 9;
+            if used == CHUNK_BYTES {
+                f.write_str(std::str::from_utf8(&chunk).map_err(|_| fmt::Error)?)?;
+                used = 0;
             }
         }
-        if pending != 0 {
-            f.write_str(&zeros[..pending])?;
+        if used != 0 {
+            f.write_str(std::str::from_utf8(&chunk[..used]).map_err(|_| fmt::Error)?)?;
         }
         Ok(())
     }
