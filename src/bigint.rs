@@ -20,6 +20,10 @@ mod radix;
 
 const BASE: u64 = 1_000_000_000;
 /// Opt-in implementation ceiling; hosts may select a smaller per-value limit.
+/// Keep smaller address-space targets (including wasm32) at ten million.
+#[cfg(target_pointer_width = "64")]
+pub const MAX_BIGINT_DIGITS: usize = 1_000_000_000;
+#[cfg(not(target_pointer_width = "64"))]
 pub const MAX_BIGINT_DIGITS: usize = 10_000_000;
 pub const DEFAULT_BIGINT_DIGITS: usize = 10_000;
 pub const DEFAULT_BIGINT_BYTES: usize = 8 * 1024 * 1024;
@@ -159,8 +163,28 @@ impl fmt::Display for BigInt {
         }
         let mut limbs = self.limbs.iter().rev();
         write!(f, "{}", limbs.next().expect("nonzero magnitude"))?;
-        for limb in limbs {
-            write!(f, "{limb:09}")?;
+        // Batch consecutive zero limbs without allocating a decimal string.
+        // A sparse billion-digit value would otherwise make >100M writes.
+        const ZERO_BYTES: [u8; 9 * 1024] = [b'0'; 9 * 1024];
+        let zeros = std::str::from_utf8(&ZERO_BYTES).expect("ASCII zeros");
+        let mut pending = 0;
+        for &limb in limbs {
+            if limb == 0 {
+                pending += 9;
+                if pending == zeros.len() {
+                    f.write_str(zeros)?;
+                    pending = 0;
+                }
+            } else {
+                if pending != 0 {
+                    f.write_str(&zeros[..pending])?;
+                    pending = 0;
+                }
+                write!(f, "{limb:09}")?;
+            }
+        }
+        if pending != 0 {
+            f.write_str(&zeros[..pending])?;
         }
         Ok(())
     }
