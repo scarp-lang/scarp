@@ -1,6 +1,26 @@
 # Changelog
 
-## 0.0.7-alpha.1 — unreleased candidate
+## 0.0.7-alpha.2 — development candidate
+
+- Emit bounded, nonrecursive direct calls between pure integer functions in
+  one x86-64 ELF64 object. Pass up to sixteen signed integer arguments across
+  registers and stack slots. Verify the call depth and the stack footprint
+  before emission, and preserve nested failures and their original byte spans.
+- Reuse a caller-saved register for eligible scalar temporaries and retain
+  verified stack slots for values that must survive a call.
+- Add `scarp native-object` for checked functions, bounded functions and
+  bounded call graphs. Publish objects atomically at new destinations and
+  optionally report ABI, stack and failure-span metadata as JSON.
+- Plan checked x86-64 layouts for tuples, records, fixed arrays, variants,
+  Option and Result. The layout API provides storage descriptions for future
+  aggregate lowering.
+- Verify the extracted compiler's native object command on package hosts and
+  boot a CLI-produced call chain in the existing QEMU smoke harness.
+
+## 0.0.7-alpha.1 — published GitHub prerelease, 2026-11-25
+
+Published from [`996bd5b`](https://github.com/scarp-lang/scarp/commit/996bd5b83c8cb26e98637563729f67bdacc61cd4).
+[Release and downloads](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.1)
 
 - Join fixed arrays with `array_concat(left, right)`. The resolver infers the
   combined length and checks the full element type. Empty arrays share storage.

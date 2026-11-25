@@ -1,7 +1,11 @@
 # Feature completeness and development roadmap
 
-Development toward Alpha.1 adds typed fixed-array concatenation and variadic
-integer GCD, HCF and LCM. [Fixed arrays](../fixed-arrays.md) · [Integer utilities](../scalar-utilities.md)
+The `0.0.7-alpha.2` candidate adds bounded native direct calls and an ELF64
+object command. [Command and ABI metadata](../native-object-output.md)
+
+Published `0.0.7-alpha.1` adds typed fixed-array concatenation, variadic
+integer GCD, HCF and LCM, and bounded native loops in the Rust API.
+[Publication verification](../releases/v0.0.7-alpha.1-validation.md)
 
 Published `0.0.6-alpha.20` supports checked native integer functions with
 one to six required parameters and forward scalar control flow.

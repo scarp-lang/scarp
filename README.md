@@ -19,17 +19,21 @@ See the [compiler documentation index](docs/README.md) for those records.
 ## Compiler releases
 
 The latest published prerelease is
-[0.0.6-alpha.20](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.20).
-It ships exact decimal literals, numeric tuple ordering, persistent indexed
-tuple assignment, and experimental ELF64 emission for pure integer functions
-with one to six required integer parameters. The tagged source is
-[`b1a9347`](https://github.com/scarp-lang/scarp/commit/b1a9347f93540fdf95b0ddecba4adc55a3b4bb98).
-[Publication verification](docs/releases/v0.0.6-alpha.20-validation.md)
-
-The **0.0.7-alpha.1 candidate** adds bounded native counted loops, fixed-array
+[0.0.7-alpha.1](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.1).
+It adds bounded native counted loops in the Rust API, fixed-array
 concatenation, stable vector `softplus`, and multi-operand integer reductions.
-[Candidate scope](docs/releases/v0.0.7-alpha.1-publication.md) ·
-[Validation record](docs/releases/v0.0.7-alpha.1-validation.md)
+[Release notes](docs/releases/v0.0.7-alpha.1-publication.md) ·
+[Publication verification](docs/releases/v0.0.7-alpha.1-validation.md)
+
+The **0.0.7-alpha.2 candidate** adds verified native direct calls and the
+experimental `scarp native-object` command for x86-64 ELF64.
+[Object CLI](docs/native-object-output.md) ·
+[Candidate validation](docs/releases/v0.0.7-alpha.2-validation.md)
+
+**0.0.6-alpha.20** adds exact decimal literals, numeric tuple ordering,
+persistent indexed tuple assignment, and initial checked ELF64 functions.
+[Release notes](docs/releases/v0.0.6-alpha.20-publication.md) ·
+[Publication verification](docs/releases/v0.0.6-alpha.20-validation.md)
 
 **0.0.6-alpha.19** adds checked Rust embedding handles, named and default
 arguments, export-aware callables, and cumulative host invocation quotas.

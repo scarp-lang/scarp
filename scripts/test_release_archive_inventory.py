@@ -30,9 +30,11 @@ def valid_entries():
 
 
 class ArchiveInventoryTests(unittest.TestCase):
-    def test_alpha7_1_requires_exact_git_source_for_full_inventory(self):
-        with self.assertRaisesRegex(ValueError, "requires the exact Git source directory"):
-            release.verify(Path("unused"), "0.0.7-alpha.1", "a" * 40)
+    def test_alpha7_candidates_require_exact_git_source_for_full_inventory(self):
+        for version in ("0.0.7-alpha.1", "0.0.7-alpha.2"):
+            with self.subTest(version=version):
+                with self.assertRaisesRegex(ValueError, "requires the exact Git source directory"):
+                    release.verify(Path("unused"), version, "a" * 40)
 
     def test_accepts_exact_tree_and_root_directory(self):
         release.validate_archive_inventory(valid_entries(), ROOT, "scarp", SOURCES)

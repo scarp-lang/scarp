@@ -80,6 +80,7 @@ impl ScalarExpressionIr {
                     }
                 }
                 super::super::Operation::Jump { target } => pc = *target,
+                super::super::Operation::Call { .. } => return Err(invalid(span)),
             }
         }
         register(&values, self.root, Span::default())

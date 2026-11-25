@@ -10,6 +10,9 @@ statement and expression IR, then encodes a **freestanding x86-64 ELF64 ET_REL
 relocatable object** using only safe Rust. No C compiler, linker or network
 request is performed during production emission.
 
+The separate [value layout planner](native-value-layout.md) describes
+experimental target value shapes for future aggregate lowering.
+
 ## Exact accepted source
 
 The bitwise kernel accepts a bounded linear sequence of immutable integer
@@ -61,7 +64,7 @@ let object = scarp::native_object::emit_elf64_integer_kernel(
 The returned byte buffer has no filesystem side effects. Hosts may explicitly
 save the object under a *new* path and link it with their own test harnesses.
 The target is always ELF64 x86-64 even when encoding on Windows or macOS; the
-current CLI has no cross-platform executable linking or target-selector flag.
+CLI supports an explicit experimental object target.
 
 ## Resource and correctness limits
 
@@ -328,6 +331,80 @@ and branches on borrow. Zero therefore fails at the current event, including
 the first event of a zero-budget call. The subtraction and failure check use
 two fewer bytes per metered event than the earlier test-and-decrement sequence.
 
+## Experimental bounded direct calls
+
+`native_object::emit_elf64_bounded_integer_entry(source, name, max_work)`
+selects a pure function by name from an input containing only function
+declarations. Each function takes zero to sixteen required integer parameters
+and returns an integer. The accepted scalar bodies include counted loops
+and conditional expressions. The resolver maps positional and named
+arguments to parameters. Native execution evaluates all supplied argument
+expressions in written order and then loads the parameter registers.
+
+The object exports `scarp_bounded_integer_entry`. The entry uses the selected
+function's arity and returns the same value/status/span structure as the
+bounded single-function API. The selected entry and its reachable helper
+bodies are emitted after all declarations pass verification. The helpers
+are private and called at verified offsets in the same `.text` section.
+The object has no external references
+or relocation entries. The first six arguments use the SysV integer
+registers. Each caller plans a disjoint outgoing area for arguments seven
+through sixteen below its local and temporary slots. This area is part of
+the checked stack limit. RSP remains aligned throughout the call and the
+callee reads the extra arguments after the return address. A call returns
+a checked result in RAX/RDX.
+
+In this entry API, straight-line expressions with no calls may use R11 for
+one group of nonoverlapping temporary lifetimes. Additional live values
+use stack slots. Expressions with calls or control-flow joins use stack
+slots for all temporaries. The allocator reserves RAX, RCX and RDX for
+arithmetic and R10 for the meter. Each expression passes its result in
+RAX before the next statement, so no R11 value is live at a call site.
+
+The external entry initializes the R10 work counter. Every helper shares
+that counter. Visiting a call expression and dispatching it each cost one
+unit, in addition to work in the evaluated arguments and the executed
+callee. Charged events use the original byte spans. A callee failure
+unwinds each frame immediately and preserves the status and span ID.
+The allowance is initialized again for each external invocation.
+
+A static call graph rejects cycles. It limits the input to 32 functions
+and a maximum chain of 16 active frames, with at most 64 KiB of combined
+frame bytes including return addresses. It also bounds aggregate IR and
+machine-code size. Host callbacks, recursive
+calls, defaults, contracts, heap-backed values, and arbitrary external
+symbols are outside this entry API.
+
+Freestanding callers can use
+`emit_elf64_bounded_integer_entry_with_layout(source, name, max_work, max_stack_bytes)`
+to enforce their own stack budget. The budget starts below the caller's RSP
+immediately before the external call. The result reports the selected
+entry's arity and frame size, the maximum simultaneous frame count, and a
+static upper bound on peak bytes computed over the reachable call graph.
+The bound includes the entry return address and all active private frames,
+including their outgoing stack arguments. Sequential calls reuse the same
+space. The embedding caller provides its own argument slots and alignment
+padding before the external call, along with any interrupt stack it needs.
+The compiler still enforces its whole-input limits. A budget equal to the
+reported bound emits the same ELF bytes as the original entry API.
+
+Run `scarp exec examples/native_direct_calls.srp` for an interpreter
+example. For native emission, use the [standalone call chain](../examples/native_bounded_entry.srp)
+with the [bounded-entry object command](native-object-output.md).
+This experimental entry ABI is part of the v0.0.7-alpha.2 candidate.
+
+The [wide-call example](../examples/native_wide_calls.srp) exercises two
+stack-passed arguments to a private helper. The independent Linux x86-64 host
+tests cover every mixed register and stack arity from seven through
+sixteen, reverse named mappings, repeat loops, and a failure raised by the
+last stack argument across multiple frames.
+
+`cargo bench --locked --bench native_calls` reports parser time, resolver
+time, end-to-end object emission time, interpreter time, and object sizes.
+Emission includes frontend work. The benchmark emits objects for both
+fixtures and verifies the interpreter output while the native integration
+tests execute the objects through an independent C host.
+
 ## Experimental explicit freestanding object target
 
 The Rust API accepts the exact target identifier `x86_64-none` via
@@ -361,5 +438,8 @@ is 16 KiB, enforced by the same constant in the encoder. It is not a complete st
 return addresses and surrounding kernel/interrupt frames need additional space.
 The target is an experimental relocatable object contract, not a general
 kernel compilation target, and provides no memory I/O, interrupts, linker,
-bootloader or native CLI flag. The verified QEMU integration experiment is
+or bootloader. The verified QEMU integration experiment is
 described in [bare-metal smoke harness](../experiments/bare-metal/README.md).
+
+The development CLI can save these relocatable objects through the explicit
+[`native-object` command](native-object-output.md#experimental-cli).
