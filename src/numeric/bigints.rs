@@ -22,6 +22,39 @@ pub(super) fn evaluate(
             argument_span(0),
         )
         .map(Value::BigInt),
+        Builtin::BigIntFibonacci => BigInt::fibonacci(
+            args[0].as_integer().expect("typed integer"),
+            budget,
+            argument_span(0),
+        )
+        .map(Value::BigInt),
+        Builtin::BigIntBinomial | Builtin::BigIntPermutation => {
+            let n = args[0].as_integer().expect("typed integer");
+            let k = args[1].as_integer().expect("typed integer");
+            if function == Builtin::BigIntBinomial {
+                BigInt::binomial(n, k, budget, span)
+            } else {
+                BigInt::permutation(n, k, budget, span)
+            }
+            .map(Value::BigInt)
+        }
+        Builtin::BigIntMin | Builtin::BigIntMax => {
+            let a = args[0].as_bigint().expect("typed bigint");
+            let b = args[1].as_bigint().expect("typed bigint");
+            budget.check_bigint_digits(a.decimal_digits().max(b.decimal_digits()), span)?;
+            budget.charge(a.decimal_digits().max(b.decimal_digits()) as u64, span)?;
+            let selected = if function == Builtin::BigIntMin {
+                a.min(b)
+            } else {
+                a.max(b)
+            };
+            Ok(Value::BigInt(selected.clone()))
+        }
+        Builtin::BigIntModInverse => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .mod_inverse(args[1].as_bigint().expect("typed bigint"), budget, span)
+            .map(Value::BigInt),
         Builtin::BigIntFactorial => BigInt::factorial(
             args[0].as_integer().expect("typed integer"),
             budget,
@@ -138,6 +171,15 @@ pub(super) fn evaluate(
                         .with_help("keep the exact bigint value or select a value from -9223372036854775808 through 9223372036854775807")
                     })
                 }
+                Builtin::BigIntNextPrime => value.next_prime(budget, span).map(Value::BigInt),
+                Builtin::BigIntIsPerfectSquare => {
+                    value.is_perfect_square(budget, span).map(Value::Boolean)
+                }
+                Builtin::BigIntIsPowerOfTwo => {
+                    value.is_power_of_two(budget, span).map(Value::Boolean)
+                }
+                Builtin::BigIntReverse => value.reverse_digits(budget, span).map(Value::BigInt),
+                Builtin::BigIntIsPalindrome => value.is_palindrome(budget, span).map(Value::Boolean),
                 Builtin::BigIntDigits => {
                     budget.charge(1, span)?;
                     Ok(Value::Integer(value.decimal_digits() as i64))
