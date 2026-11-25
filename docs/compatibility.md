@@ -1,5 +1,11 @@
 # Version and API compatibility
 
+`0.0.6-alpha.20` is **a published GitHub prerelease**. Its experimental
+Linux x86-64 object API accepts one to six required integer arguments.
+New projects use `scarp.project`. The CLI also reads legacy `Scarp.project` files.
+[Public notes](releases/v0.0.6-alpha.20-publication.md) ·
+[Publication verification](releases/v0.0.6-alpha.20-validation.md)
+
 `0.0.6-alpha.19` is **a published GitHub prerelease**. Hosts can use
 snapshot-bound named callables, sparse argument binding, export-aware lookup
 and cumulative invocation budgets. The source-language call syntax is unchanged.
@@ -149,7 +155,7 @@ The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.6-alpha.19](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.19).
+[0.0.6-alpha.20](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.20).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a

@@ -45,13 +45,15 @@ jobs:
           toolchain: stable
           targets: ${{ matrix.target }}
       - name: Build, extract, and smoke-test package
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/scarp-package-first
         shell: pwsh
         run: ./scripts/package.ps1 -Target '${{ matrix.target }}'
-      - name: Compare payloads from a clean second release build
+      - name: Compare payloads from an independent second release build
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/scarp-package-second
         shell: pwsh
         run: |
-          & cargo clean --release --target '${{ matrix.target }}'
-          if ($LASTEXITCODE -ne 0) { throw 'Could not clean the first release build' }
           ./scripts/package.ps1 -Target '${{ matrix.target }}' -OutputDirectory 'target/rebuilt-dist'
           $python = if ($IsWindows) { 'python' } else { 'python3' }
           & $python ./scripts/verify-package-rebuild.py dist target/rebuilt-dist '${{ matrix.target }}' --require-byte-identical-archives

@@ -9,7 +9,91 @@ const STACK_ALIGNMENT: usize = 16;
 // The IR permits 256 bindings and 1024 temporaries, plus frame padding.
 const MAX_FRAME_BYTES: usize = crate::native_object::FREESTANDING_X86_64_MAX_FRAME_BYTES;
 
-pub(super) fn align_up(value: usize, alignment: usize) -> Result<usize, Diagnostic> {
+pub(super) const MAX_TEXT_BYTES: usize = 200_000;
+pub(super) const ELF_HEADER_BYTES: usize = 64;
+pub(super) const SECTION_HEADER_BYTES: usize = 64;
+pub(super) const SECTION_COUNT: usize = 6;
+pub(super) const SYMBOL_BYTES: usize = 24;
+const MAX_OBJECT_BYTES: usize = 262_144;
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct FileRegion {
+    offset: usize,
+    size: usize,
+    alignment: usize,
+}
+
+impl FileRegion {
+    fn place(after: usize, size: usize, alignment: usize) -> Result<Self, Diagnostic> {
+        let region = Self {
+            offset: align_up(after, alignment)?,
+            size,
+            alignment,
+        };
+        region.end()?;
+        Ok(region)
+    }
+
+    pub(super) fn end(self) -> Result<usize, Diagnostic> {
+        self.offset
+            .checked_add(self.size)
+            .filter(|end| *end <= MAX_OBJECT_BYTES)
+            .ok_or_else(failure)
+    }
+
+    pub(super) fn offset(self) -> usize {
+        self.offset
+    }
+
+    pub(super) fn size(self) -> usize {
+        self.size
+    }
+
+    pub(super) fn alignment(self) -> usize {
+        self.alignment
+    }
+}
+
+/// File ranges shared by the payload writer and the headers. Each placement
+/// checks padding and end offsets before any output allocation.
+pub(super) struct ObjectLayout {
+    pub(super) text: FileRegion,
+    pub(super) symbols: FileRegion,
+    pub(super) strings: FileRegion,
+    pub(super) section_names: FileRegion,
+    pub(super) section_headers: FileRegion,
+}
+
+impl ObjectLayout {
+    pub(super) fn plan(
+        text_bytes: usize,
+        string_bytes: usize,
+        section_name_bytes: usize,
+    ) -> Result<Self, Diagnostic> {
+        if !(1..=MAX_TEXT_BYTES).contains(&text_bytes) || string_bytes < 3 || section_name_bytes < 2
+        {
+            return Err(failure());
+        }
+        let text = FileRegion::place(ELF_HEADER_BYTES, text_bytes, 16)?;
+        let symbols = FileRegion::place(text.end()?, 2 * SYMBOL_BYTES, 8)?;
+        let strings = FileRegion::place(symbols.end()?, string_bytes, 1)?;
+        let section_names = FileRegion::place(strings.end()?, section_name_bytes, 1)?;
+        let section_headers = FileRegion::place(
+            section_names.end()?,
+            SECTION_COUNT * SECTION_HEADER_BYTES,
+            8,
+        )?;
+        Ok(Self {
+            text,
+            symbols,
+            strings,
+            section_names,
+            section_headers,
+        })
+    }
+}
+
+fn align_up(value: usize, alignment: usize) -> Result<usize, Diagnostic> {
     if !alignment.is_power_of_two() {
         return Err(failure());
     }
@@ -90,5 +174,40 @@ mod tests {
                 assert!((used..used + STACK_ALIGNMENT).contains(&frame));
             }
         }
+    }
+
+    #[test]
+    fn elf_payloads_and_section_headers_are_aligned_bounded_and_disjoint() {
+        for text_size in [1, 7, 8, 9, MAX_TEXT_BYTES] {
+            let layout = ObjectLayout::plan(text_size, 19, 44).unwrap();
+            let sections = [
+                layout.text,
+                layout.symbols,
+                layout.strings,
+                layout.section_names,
+                layout.section_headers,
+            ];
+            assert_eq!(layout.text.offset, ELF_HEADER_BYTES);
+            for (index, section) in sections.iter().enumerate() {
+                assert_eq!(section.offset % section.alignment, 0);
+                assert!(section.end().unwrap() <= MAX_OBJECT_BYTES);
+                if let Some(previous) = index.checked_sub(1) {
+                    let end = sections[previous].end().unwrap();
+                    assert!(section.offset >= end);
+                    assert!(section.offset - end < section.alignment);
+                }
+            }
+        }
+        for (text, strings, names) in [
+            (0, 19, 44),
+            (MAX_TEXT_BYTES + 1, 19, 44),
+            (1, 2, 44),
+            (1, 19, 1),
+            (1, MAX_OBJECT_BYTES, 44),
+            (1, 19, usize::MAX),
+        ] {
+            assert!(ObjectLayout::plan(text, strings, names).is_err());
+        }
+        assert!(FileRegion::place(usize::MAX, 1, 8).is_err());
     }
 }

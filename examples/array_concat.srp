@@ -1,0 +1,10 @@
+// Joining two snapshots determines the output length at compile time.
+pure funcra readings(first: array<integer, 2>, last: array<integer, 1>) -> array<integer, 3> {
+    return array_concat(first, last);
+}
+
+bind morning = [array: 12, 18];
+bind full_day = readings(morning, [array: 24]);
+print(morning);
+print(full_day);
+print(array_concat([array: <integer>], full_day));
