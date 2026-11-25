@@ -130,6 +130,42 @@ predicates do not format a string. Digit sum is linear in decimal digits.
 cargo test --locked --offline --test bigint_utilities
 ```
 
+## Sequences, combinatorics and additional number theory (development)
+
+| Built-in | Signature | Contract |
+| --- | --- | --- |
+| `bigint_fibonacci(n)` | integer → bigint | F(0)=0, F(1)=1; nonnegative index. |
+| `bigint_binomial(n,k)` | integer, integer → bigint | Exact combinations for 0 <= k <= n. |
+| `bigint_permutation(n,k)` | integer, integer → bigint | Ordered selections for 0 <= k <= n. |
+| `bigint_next_prime(n)` | bigint → bigint | Smallest proven prime strictly greater than n. |
+| `bigint_is_perfect_square(n)` | bigint → boolean | True for zero and nonnegative perfect squares; false for negatives. |
+| `bigint_is_power_of_two(n)` | bigint → boolean | True only for positive integer powers of two, including 1. |
+| `bigint_reverse(n)` | bigint → bigint | Reverse magnitude digits; preserve sign and normalize leading zeros. |
+| `bigint_is_palindrome(n)` | bigint → boolean | Nonnegative canonical decimal palindrome; negatives are false. |
+| `bigint_min(a,b)`, `bigint_max(a,b)` | bigint, bigint → bigint | Signed ordering, returning a shared immutable operand. |
+| `bigint_mod_inverse(a,m)` | bigint, bigint → bigint | Least nonnegative inverse; m > 1 and gcd(a,m)=1 required. |
+
+```scarp
+print(bigint_fibonacci(100)); // 354224848179261915075
+print(bigint_binomial(10, 3)); // 120
+print(bigint_permutation(10, 3)); // 720
+print(bigint_next_prime(bigint("100"))); // 101
+print(bigint_mod_inverse(bigint("3"), bigint("11"))); // 4
+```
+
+Fibonacci uses fast doubling, combinations cancel common factors before
+multiplication, and permutations use a balanced product tree. Prime search
+uses exact primality rather than silently accepting probable primes. Decimal
+reversal works directly on limbs without materializing a string. Modular
+inverse uses extended Euclid; this variable-time routine is not a
+constant-time cryptographic primitive. All operations remain subject to
+work, digit and cumulative allocation quotas, including intermediates.
+For very large prime candidates, a resource diagnostic is possible.
+
+```sh
+cargo test --locked --offline --test bigint_sequences_extended
+```
+
 ## Resource limits
 
 | Resource | Default | Contract |
