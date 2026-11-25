@@ -10,7 +10,7 @@ mod program;
 use crate::{
     ast::{BinaryOperator, ExpressionKind, LogicalOperator, Statement},
     diagnostics::{Diagnostic, DiagnosticKind, Span},
-    resolver::{ResolvedExpression, ResolvedProgram},
+    resolver::{ResolvedCall, ResolvedExpression, ResolvedProgram},
     value::ValueType,
 };
 use std::borrow::Cow;
@@ -72,6 +72,13 @@ enum Operation {
         right: usize,
         op: BinaryOperator,
     },
+    /// Arguments are already evaluated in source order. This list is in ABI
+    /// parameter order, using the resolver's explicit-argument mapping.
+    Call {
+        dst: usize,
+        callee: usize,
+        arguments: Vec<usize>,
+    },
     /// Both paths are conservatively considered possible by the verifier.
     /// The target must be forward and may point exactly past the last step.
     Branch {
@@ -106,6 +113,7 @@ struct ScalarExpressionIr {
 enum Task {
     Visit(usize),
     Finish(usize),
+    FinishCall(usize),
     Logical(usize),
     CloseLogical {
         node: usize,
@@ -197,13 +205,18 @@ impl ScalarExpressionIr {
         Ok(index)
     }
 
-    fn lower(expression: &ResolvedExpression, slots: &[ValueType]) -> Result<Self, Diagnostic> {
+    fn lower(
+        expression: &ResolvedExpression,
+        slots: &[ValueType],
+        call_arities: Option<&[usize]>,
+    ) -> Result<Self, Diagnostic> {
         let nodes = expression.syntax.nodes();
         if nodes.is_empty()
             || nodes.len() > MAX_IR_REGISTERS
             || expression.syntax.root() >= nodes.len()
             || expression.types.len() != nodes.len()
             || expression.slots.len() != nodes.len()
+            || expression.calls.len() != nodes.len()
         {
             return Err(invalid(Span::default()));
         }
@@ -276,8 +289,55 @@ impl ScalarExpressionIr {
                                 exits: Vec::new(),
                             });
                         }
+                        ExpressionKind::UserCall { arguments, .. } if call_arities.is_some() => {
+                            tasks.push(Task::FinishCall(index));
+                            for argument in arguments.iter().rev() {
+                                tasks.push(Task::Visit(argument.expression));
+                            }
+                        }
                         _ => return Err(invalid(node.span)),
                     }
+                }
+                Task::FinishCall(index) => {
+                    let node = &nodes[index];
+                    let (
+                        ExpressionKind::UserCall { arguments, .. },
+                        Some(ResolvedCall::User {
+                            function,
+                            parameters,
+                        }),
+                    ) = (&node.kind, &expression.calls[index])
+                    else {
+                        return Err(invalid(node.span));
+                    };
+                    let arity = call_arities
+                        .and_then(|counts| counts.get(*function).copied())
+                        .ok_or_else(|| invalid(node.span))?;
+                    if arguments.len() != arity || parameters.len() != arity {
+                        return Err(invalid(node.span));
+                    }
+                    let mut ordered = vec![None; arity];
+                    for (argument, &parameter) in arguments.iter().zip(parameters) {
+                        let destination = ordered
+                            .get_mut(parameter)
+                            .ok_or_else(|| invalid(node.span))?;
+                        if destination.replace(argument.expression).is_some() {
+                            return Err(invalid(node.span));
+                        }
+                    }
+                    let arguments = ordered
+                        .into_iter()
+                        .collect::<Option<Vec<_>>>()
+                        .ok_or_else(|| invalid(node.span))?;
+                    ir.emit(node.span, Operation::Work)?;
+                    ir.emit(
+                        node.span,
+                        Operation::Call {
+                            dst: index,
+                            callee: *function,
+                            arguments,
+                        },
+                    )?;
                 }
                 Task::Finish(index) => {
                     let node = &nodes[index];
@@ -485,13 +545,17 @@ impl ScalarExpressionIr {
                 }
             }
         }
-        ir.verify()?;
+        ir.verify_with_calls(call_arities)?;
         Ok(ir)
     }
 
     /// Verify forward-only CFG edges, definite assignment at every join,
     /// scalar types and bounded memory before any backend consumes this IR.
     fn verify(&self) -> Result<(), Diagnostic> {
+        self.verify_with_calls(None)
+    }
+
+    fn verify_with_calls(&self, call_arities: Option<&[usize]>) -> Result<(), Diagnostic> {
         if self.registers.is_empty()
             || self.registers.len() > MAX_IR_REGISTERS
             || self.steps.len() > MAX_IR_STEPS
@@ -572,6 +636,21 @@ impl ScalarExpressionIr {
                 Operation::Branch { condition, .. } => {
                     require_read(&initialized, types, *condition, ValueType::Boolean, span)?;
                 }
+                Operation::Call {
+                    dst,
+                    callee,
+                    arguments,
+                } => {
+                    if call_arities.and_then(|counts| counts.get(*callee)) != Some(&arguments.len())
+                    {
+                        return Err(invalid(span));
+                    }
+                    for &argument in arguments {
+                        require_read(&initialized, types, argument, ValueType::Integer, span)?;
+                    }
+                    register_type(types, *dst, ValueType::Integer, span)?;
+                    initialized[*dst] = true;
+                }
             }
             let (next, alternative) = instruction.kind.successors(pc);
             let valid_target = |target| target > pc && target <= self.steps.len();
@@ -645,6 +724,17 @@ pub(crate) fn emit_integer_function_with_layout(
     elf64::emit_function_with_layout(&ir, budget)
 }
 
+pub(crate) fn emit_bounded_integer_entry(
+    source: &str,
+    entry: &str,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<crate::native_object::FreestandingEntry, Diagnostic> {
+    let resolved = crate::compile(source)?;
+    let ir = program::ScalarCallGraph::lower(&resolved, entry, elf64::MAX_INTEGER_ARGUMENTS)?;
+    elf64::emit_bounded_entry(&ir, max_work, max_stack_bytes)
+}
+
 fn lower_integer_kernel(source: &str) -> Result<program::ScalarProgramIr, Diagnostic> {
     let syntax = crate::parse(source)?;
     // The resolved plan uses the same Store for declarations and plain
@@ -701,6 +791,7 @@ mod tests {
                 .iter()
                 .map(|kind| kind.as_primitive().expect("scalar test type"))
                 .collect::<Vec<_>>(),
+            None,
         )
         .unwrap()
     }

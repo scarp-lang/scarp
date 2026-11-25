@@ -1,6 +1,7 @@
 //! Private, bounded scalar program IR lowered from the canonical resolved plan.
 //! No interpreter fallback, target ABI, public commands, or native object output.
 
+mod calls;
 mod definite_slots;
 
 #[cfg(test)]
@@ -13,6 +14,8 @@ use crate::{
     resolver::{ResolvedArgument, ResolvedProgram, ResolvedStatement},
     value::ValueType,
 };
+
+pub(super) use self::calls::ScalarCallGraph;
 
 const MAX_PROGRAM_SLOTS: usize = 256;
 const MAX_PROGRAM_STEPS: usize = 4096;
@@ -78,6 +81,22 @@ pub(in crate::scalar_ir) enum ProgramOp {
     },
 }
 
+impl ProgramOp {
+    pub(super) fn expression(&self) -> Option<&ScalarExpressionIr> {
+        match self {
+            Self::Return { value }
+            | Self::Store { value, .. }
+            | Self::Update { value, .. }
+            | Self::RepeatInit { count: value, .. }
+            | Self::JumpIfFalse {
+                condition: value, ..
+            }
+            | Self::PrintValue { value } => Some(value),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ScalarProgramIr {
     slots: Vec<ValueType>,
@@ -88,20 +107,13 @@ pub(super) struct ScalarProgramIr {
 }
 
 impl ScalarProgramIr {
-    fn expression(
-        expression: &crate::resolver::ResolvedExpression,
-        slots: &[ValueType],
-    ) -> Result<ScalarExpressionIr, Diagnostic> {
-        ScalarExpressionIr::lower(expression, slots)
-    }
-
     pub(super) fn lower(program: &ResolvedProgram) -> Result<Self, Diagnostic> {
         let slots = program
             .binding_types()
             .iter()
             .map(|kind| kind.as_primitive().ok_or_else(|| invalid(Span::default())))
             .collect::<Result<Vec<_>, _>>()?;
-        Self::lower_operations(slots, &program.statements, None, false)
+        Self::lower_operations(slots, &program.statements, None, false, None)
     }
 
     pub(super) fn lower_integer_function(
@@ -126,21 +138,40 @@ impl ScalarProgramIr {
         if let Some(statement) = program.statements.first() {
             return Err(unsupported_function(statement.span));
         }
-        let ([signature], [function]) = (program.functions(), program.functions.as_slice()) else {
+        if program.functions().len() != 1 || program.functions.len() != 1 {
             return Err(unsupported_function(Span::default()));
+        }
+        Self::lower_selected_function(program, 0, max_parameters, bounded, None)
+    }
+
+    fn lower_selected_function(
+        program: &ResolvedProgram,
+        id: usize,
+        max_parameters: usize,
+        bounded: bool,
+        call_arities: Option<&[usize]>,
+    ) -> Result<Self, Diagnostic> {
+        let signature = &program.functions()[id];
+        let function = &program.functions[id];
+        let unsupported = |span| {
+            if call_arities.is_some() {
+                invalid(span).with_help("use pure integer functions with required integer parameters, scalar locals and integer returns")
+            } else {
+                unsupported_function(span)
+            }
         };
         let parameters = signature.parameters.len();
         if !signature.pure || signature.result != ValueType::Integer || parameters > max_parameters
         {
-            return Err(unsupported_function(signature.span));
+            return Err(unsupported(signature.span));
         }
         for parameter in &signature.parameters {
             if parameter.kind != ValueType::Integer || parameter.default.is_some() {
-                return Err(unsupported_function(parameter.span));
+                return Err(unsupported(parameter.span));
             }
         }
         if let Some(contract) = signature.contracts.first() {
-            return Err(unsupported_function(contract.span));
+            return Err(unsupported(contract.span));
         }
         let len = function.statements.len();
         for (pc, step) in function.statements.iter().enumerate() {
@@ -156,7 +187,7 @@ impl ScalarProgramIr {
                 ResolvedStatement::RepeatInit { .. } | ResolvedStatement::RepeatNext { .. }
                     if bounded => {}
                 ResolvedStatement::RepeatGuard { target, .. } if bounded && *target <= len => {}
-                _ => return Err(unsupported_function(step.span)),
+                _ => return Err(unsupported(step.span)),
             }
         }
         let slots = function
@@ -164,10 +195,16 @@ impl ScalarProgramIr {
             .iter()
             .map(|kind| match kind.primitive() {
                 Some(kind @ (ValueType::Integer | ValueType::Boolean)) => Ok(kind),
-                _ => Err(unsupported_function(signature.span)),
+                _ => Err(unsupported(signature.span)),
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Self::lower_operations(slots, &function.statements, Some(parameters), bounded)
+        Self::lower_operations(
+            slots,
+            &function.statements,
+            Some(parameters),
+            bounded,
+            call_arities,
+        )
     }
 
     fn lower_operations(
@@ -175,6 +212,7 @@ impl ScalarProgramIr {
         operations: &[crate::resolver::ResolvedOperation],
         function_parameters: Option<usize>,
         bounded: bool,
+        call_arities: Option<&[usize]>,
     ) -> Result<Self, Diagnostic> {
         if slots.len() > MAX_PROGRAM_SLOTS || operations.len() > MAX_PROGRAM_STEPS {
             return Err(invalid(Span::default()));
@@ -182,18 +220,19 @@ impl ScalarProgramIr {
         let mut steps = Vec::with_capacity(operations.len());
         let mut total_nodes = 0usize;
         let mut literal_bytes = 0usize;
+        let lower_expression = |value| ScalarExpressionIr::lower(value, &slots, call_arities);
         for statement in operations {
             let kind = match &statement.kind {
                 ResolvedStatement::Return { value: Some(value) }
                     if function_parameters.is_some() =>
                 {
                     ProgramOp::Return {
-                        value: Self::expression(value, &slots)?,
+                        value: lower_expression(value)?,
                     }
                 }
                 ResolvedStatement::Store { slot, value } => ProgramOp::Store {
                     slot: *slot,
-                    value: Self::expression(value, &slots)?,
+                    value: lower_expression(value)?,
                 },
                 ResolvedStatement::Update {
                     slot,
@@ -204,14 +243,14 @@ impl ScalarProgramIr {
                     slot: *slot,
                     operator: *operator,
                     operator_span: *operator_span,
-                    value: Self::expression(value, &slots)?,
+                    value: lower_expression(value)?,
                 },
                 ResolvedStatement::RepeatInit {
                     count,
                     count_slot,
                     index_slot,
                 } => ProgramOp::RepeatInit {
-                    count: Self::expression(count, &slots)?,
+                    count: lower_expression(count)?,
                     count_slot: *count_slot,
                     index_slot: *index_slot,
                 },
@@ -228,7 +267,7 @@ impl ScalarProgramIr {
                     index_slot: *index_slot,
                 },
                 ResolvedStatement::JumpIfFalse { condition, target } => ProgramOp::JumpIfFalse {
-                    condition: Self::expression(condition, &slots)?,
+                    condition: lower_expression(condition)?,
                     target: *target,
                 },
                 ResolvedStatement::Jump { target } => ProgramOp::Jump { target: *target },
@@ -245,7 +284,7 @@ impl ScalarProgramIr {
                     newline: true,
                 } if arguments.len() == 1 => match &arguments[0] {
                     ResolvedArgument::Expression(value) => ProgramOp::PrintValue {
-                        value: Self::expression(value, &slots)?,
+                        value: lower_expression(value)?,
                     },
                     ResolvedArgument::String(text) => {
                         literal_bytes = literal_bytes
@@ -261,15 +300,7 @@ impl ScalarProgramIr {
                 },
                 _ => return Err(invalid(statement.span)),
             };
-            let expression_nodes = match &kind {
-                ProgramOp::Return { value }
-                | ProgramOp::Store { value, .. }
-                | ProgramOp::Update { value, .. }
-                | ProgramOp::RepeatInit { count: value, .. }
-                | ProgramOp::PrintValue { value } => value.registers.len(),
-                ProgramOp::JumpIfFalse { condition, .. } => condition.registers.len(),
-                _ => 0,
-            };
+            let expression_nodes = kind.expression().map_or(0, |value| value.registers.len());
             total_nodes = total_nodes
                 .checked_add(expression_nodes)
                 .ok_or_else(|| invalid(statement.span))?;
@@ -289,7 +320,7 @@ impl ScalarProgramIr {
             function_parameters,
             bounded,
         };
-        ir.verify()?;
+        ir.verify_with_calls(call_arities)?;
         Ok(ir)
     }
 
@@ -355,8 +386,9 @@ impl ScalarProgramIr {
         expression: &ScalarExpressionIr,
         kind: Option<ValueType>,
         span: Span,
+        call_arities: Option<&[usize]>,
     ) -> Result<(), Diagnostic> {
-        expression.verify()?;
+        expression.verify_with_calls(call_arities)?;
         for instruction in &expression.steps {
             if instruction.span.start < span.start || instruction.span.end > span.end {
                 return Err(invalid(instruction.span));
@@ -373,10 +405,15 @@ impl ScalarProgramIr {
     /// Check every operation, including currently unreachable source code.
     /// Then walk possible statement edges without executing user expressions.
     pub(super) fn verify(&self) -> Result<(), Diagnostic> {
+        self.verify_with_calls(None)
+    }
+
+    fn verify_with_calls(&self, call_arities: Option<&[usize]>) -> Result<(), Diagnostic> {
         let len = self.steps.len();
         let function = self.is_function();
         let parameters = self.parameters();
         if (self.bounded && !function)
+            || (call_arities.is_some() && !self.bounded)
             || len > MAX_PROGRAM_STEPS
             || self.slots.len() > MAX_PROGRAM_SLOTS
             || self.slots.get(..parameters).map_or(true, |kinds| {
@@ -422,12 +459,12 @@ impl ScalarProgramIr {
             }
             let expression = match &instruction.kind {
                 ProgramOp::Return { value } if function => {
-                    self.check_expression(value, Some(ValueType::Integer), span)?;
+                    self.check_expression(value, Some(ValueType::Integer), span, call_arities)?;
                     Some(value)
                 }
                 ProgramOp::Return { .. } => return Err(invalid(span)),
                 ProgramOp::Store { slot, value } => {
-                    self.check_expression(value, None, span)?;
+                    self.check_expression(value, None, span, call_arities)?;
                     self.check_slot(*slot, value.registers[value.root], span)?;
                     Some(value)
                 }
@@ -445,7 +482,7 @@ impl ScalarProgramIr {
                         return Err(invalid(*operator_span));
                     }
                     self.check_slot(*slot, ValueType::Integer, span)?;
-                    self.check_expression(value, Some(ValueType::Integer), span)?;
+                    self.check_expression(value, Some(ValueType::Integer), span, call_arities)?;
                     Some(value)
                 }
                 ProgramOp::RepeatInit {
@@ -458,7 +495,7 @@ impl ScalarProgramIr {
                     }
                     self.check_slot(*count_slot, ValueType::Integer, span)?;
                     self.check_slot(*index_slot, ValueType::Integer, span)?;
-                    self.check_expression(count, Some(ValueType::Integer), span)?;
+                    self.check_expression(count, Some(ValueType::Integer), span, call_arities)?;
                     Some(count)
                 }
                 ProgramOp::RepeatGuard {
@@ -478,7 +515,7 @@ impl ScalarProgramIr {
                     None
                 }
                 ProgramOp::JumpIfFalse { condition, target } => {
-                    self.check_expression(condition, Some(ValueType::Boolean), span)?;
+                    self.check_expression(condition, Some(ValueType::Boolean), span, call_arities)?;
                     if *target > len {
                         return Err(invalid(span));
                     }
@@ -503,7 +540,7 @@ impl ScalarProgramIr {
                     None
                 }
                 ProgramOp::PrintValue { value } => {
-                    self.check_expression(value, None, span)?;
+                    self.check_expression(value, None, span, call_arities)?;
                     Some(value)
                 }
                 ProgramOp::PrintLiteral { text } => {

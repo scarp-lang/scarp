@@ -23,6 +23,7 @@ header_end:
 .global _start
 .extern scarp_checked_integer_function
 .extern scarp_bounded_integer_function
+.extern scarp_bounded_integer_entry
 _start:
     cli
     cld
@@ -121,6 +122,28 @@ long_mode:
     testq %rdx, %rdx
     jne failed
     mark '6'
+    /* Call through two private helpers, with stack arguments in the last call. */
+    movl $20, %edi
+    movl $2, %esi
+    call scarp_bounded_integer_entry
+    cmpq %r12, %rsp
+    jne failed
+    cmpq $30, %rax
+    jne failed
+    testq %rdx, %rdx
+    jne failed
+    mark '7'
+    /* A division failure in the innermost helper must unwind to this caller. */
+    movl $20, %edi
+    xorl %esi, %esi
+    call scarp_bounded_integer_entry
+    cmpq %r12, %rsp
+    jne failed
+    testq %rax, %rax
+    jne failed
+    cmpl $2, %edx
+    jne failed
+    mark '8'
     movl $0x10, %eax            /* QEMU exit status 33 */
     jmp finish
 failed:

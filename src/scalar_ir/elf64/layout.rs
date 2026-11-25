@@ -129,7 +129,7 @@ pub(super) fn frame_bytes(slots: usize, temporaries: usize) -> Result<u32, Diagn
         .and_then(|count| count.checked_mul(SLOT_BYTES))
         .ok_or_else(failure)?;
     // The return address occupies one slot. Align the complete frame so
-    // RSP is 16-byte aligned after entry, as required before any future call.
+    // RSP is 16-byte aligned after the prologue, as required at a call site.
     let with_return_address = bytes.checked_add(SLOT_BYTES).ok_or_else(failure)?;
     let aligned = align_up(with_return_address, STACK_ALIGNMENT)? - SLOT_BYTES;
     if aligned > MAX_FRAME_BYTES {
