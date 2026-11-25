@@ -1,6 +1,26 @@
 # Changelog
 
-## 0.0.6-alpha.20 — release candidate
+## 0.0.7-alpha.1 — unreleased candidate
+
+- Join fixed arrays with `array_concat(left, right)`. The resolver infers the
+  combined length and checks the full element type. Empty arrays share storage.
+- Accept 2–1024 integers in `integer_gcd`, its alias `integer_hcf`, and
+  `integer_lcm`. A zero anywhere makes the LCM zero.
+- Extend the experimental checked ELF64 function ABI to zero through sixteen
+  integer parameters. The bounded API supports counted repeats, while loops
+  and scalar conditional expressions. Checked layouts and temporary storage
+  reuse preserve the per-call work allowance and error spans.
+- Add stable vector `softplus` and live, FIFO token-cache quota changes.
+- Reuse bounded interpreter frame buffers after ordinary calls and preserve
+  the active evaluator buffers across terminal self-transfers.
+- Check scalar IR expression and update-operator spans against the original
+  statement ranges. Verify separate Cargo target builds and exact-source
+  package inventories on the supported native hosts.
+
+## 0.0.6-alpha.20 — published GitHub prerelease, 2026-11-24
+
+Published from [`b1a9347`](https://github.com/scarp-lang/scarp/commit/b1a9347f93540fdf95b0ddecba4adc55a3b4bb98).
+[Release and downloads](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.20)
 
 - Emit compiler-owned x86-64 ELF64 objects for pure Scarp functions with up
   to six required integer parameters, integer and Boolean locals, checked

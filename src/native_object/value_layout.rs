@@ -5,6 +5,7 @@ use std::{collections::HashMap, fmt};
 
 const MAX_DEPTH: usize = 64;
 const MAX_COMPONENTS: usize = 65_536;
+const TAG_BYTES: u64 = 4;
 
 /// In-memory size, required alignment and shape under the experimental
 /// Linux x86-64 native value layout rules.
@@ -28,6 +29,15 @@ pub enum NativeLayoutShape {
     Array {
         length: u64,
         stride: u64,
+    },
+    /// A little-endian u32 tag at byte zero, followed by shared payload storage.
+    Tagged {
+        /// Tags run from zero through `case_count - 1` in declaration order.
+        case_count: u32,
+        /// Common payload offset, absent when every case is payloadless.
+        payload_offset: Option<u64>,
+        /// Maximum size of a case payload, excluding variant trailing padding.
+        payload_size: u64,
     },
 }
 
@@ -60,7 +70,8 @@ impl std::error::Error for NativeLayoutError {}
 /// Tuples and records preserve declaration order with natural alignment.
 /// Fixed arrays use the padded size of their element as their stride, even
 /// when the array is empty. All sizes and offsets are checked `u64` values.
-/// Heap-backed, unit, variant and callable types have no layout in this API.
+/// Tagged variants include supported `option` and `result` instantiations.
+/// Heap-backed, unit and callable types have no layout in this API.
 ///
 /// This query does not change interpreter storage or enable aggregate native
 /// code generation. It describes target values, not frame slots or a stable
@@ -107,7 +118,11 @@ pub fn plan_x86_64_value_layout(
                 },
             )
         }
-        _ => (planner.extent(root)?, NativeLayoutShape::Scalar),
+        TypeKind::Variant { cases, .. } => planner.tagged(root, cases)?,
+        _ => match kind.builtin_variant_cases() {
+            Some(cases) => planner.tagged(root, &cases)?,
+            None => (planner.extent(root)?, NativeLayoutShape::Scalar),
+        },
     };
     Ok(NativeValueLayout {
         size: extent.size,
@@ -129,13 +144,18 @@ struct Planner<'a> {
 }
 
 impl Planner<'_> {
-    fn extent(&mut self, id: TypeId) -> Result<Extent, NativeLayoutError> {
-        // Charge visits even for repeated DAG edges. Arrays visit their
-        // element descriptor once, regardless of the declared length.
+    fn charge_component(&mut self) -> Result<(), NativeLayoutError> {
         self.remaining = self
             .remaining
             .checked_sub(1)
             .ok_or(NativeLayoutError::Complexity)?;
+        Ok(())
+    }
+
+    fn extent(&mut self, id: TypeId) -> Result<Extent, NativeLayoutError> {
+        // Charge visits even for repeated DAG edges. Arrays visit their
+        // element descriptor once, regardless of the declared length.
+        self.charge_component()?;
         if let Some(extent) = self.known.get(&id) {
             return Ok(*extent);
         }
@@ -159,7 +179,11 @@ impl Planner<'_> {
                 element,
                 length: Some(length),
             } => self.array(*element, *length)?.0,
-            _ => return Err(NativeLayoutError::UnsupportedType(id)),
+            TypeKind::Variant { cases, .. } => self.tagged(id, cases)?.0,
+            _ => match kind.builtin_variant_cases() {
+                Some(cases) => self.tagged(id, &cases)?.0,
+                None => return Err(NativeLayoutError::UnsupportedType(id)),
+            },
         };
         self.known
             .try_reserve(1)
@@ -202,6 +226,50 @@ impl Planner<'_> {
                 alignment: element.alignment,
             },
             stride,
+        ))
+    }
+
+    fn tagged(
+        &mut self,
+        id: TypeId,
+        cases: &[Option<TypeId>],
+    ) -> Result<(Extent, NativeLayoutShape), NativeLayoutError> {
+        if cases.is_empty() {
+            return Err(NativeLayoutError::UnsupportedType(id));
+        }
+        if cases.len() > self.remaining {
+            return Err(NativeLayoutError::Complexity);
+        }
+        let mut payload_alignment = None;
+        let mut payload_size = 0;
+        for case in cases {
+            if let Some(id) = case {
+                let extent = self.extent(*id)?;
+                payload_alignment = Some(payload_alignment.unwrap_or(1).max(extent.alignment));
+                payload_size = payload_size.max(extent.size);
+            } else {
+                self.charge_component()?;
+            }
+        }
+        let payload_offset = payload_alignment
+            .map(|alignment| align_up(TAG_BYTES, alignment))
+            .transpose()?;
+        let alignment = TAG_BYTES.max(payload_alignment.unwrap_or(1));
+        let end = payload_offset
+            .unwrap_or(TAG_BYTES)
+            .checked_add(payload_size)
+            .ok_or(NativeLayoutError::SizeOverflow)?;
+        Ok((
+            Extent {
+                size: align_up(end, alignment)?,
+                alignment,
+            },
+            NativeLayoutShape::Tagged {
+                // The component limit is smaller than u32::MAX.
+                case_count: cases.len() as u32,
+                payload_offset,
+                payload_size,
+            },
         ))
     }
 }

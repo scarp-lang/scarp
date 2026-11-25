@@ -72,8 +72,10 @@ The input must pass the existing preflight: at most 256 scalar slots, 4096
 resolved statements, 1024 nodes per expression and 16,384 total nodes.
 The accepted binding-only sequence is stricter than general programs.
 The encoder checks actual machine-code growth against 200,000 bytes and caps
-the complete ELF object at 262,144 bytes. It uses fallible reserves and
-deterministic section offsets.
+the complete ELF object at 262,144 bytes. The development writer plans aligned,
+nonoverlapping file regions before reserving the output buffer. The section
+headers use the same ranges as the payload writer. The writer also validates
+the string table for its single exported symbol before allocating the object.
 The alpha.16 candidate probes every full 4 KiB stack page crossed while
 allocating a large frame. Both return paths restore the complete frame.
 No source path, timestamp, username, environment variable, or build identity
@@ -206,7 +208,7 @@ The development-only Rust API
 `native_object::emit_elf64_bounded_integer_function(source, max_work)`
 emits the distinct Linux x86-64 SysV symbol
 `scarp_bounded_integer_function`. It accepts the checked scalar function
-subset plus while, break and continue, including nested loops. Required
+subset plus while, counted repeat, break and continue, including nested loops. Required
 integer parameters use the same register/stack calling convention and
 the same checked result structure.
 
@@ -223,7 +225,7 @@ Backward statement edges are accepted only in the bounded mode. The
 existing verifier checks definite slot initialization and retirement at
 control-flow joins and rejects reachable fallthrough. Expression branches,
 arithmetic failure branches and unmetered function branches retain the
-forward-only rule. Counted repeat, calls, default arguments, contracts,
+forward-only rule. Calls, default arguments, contracts,
 heap-backed values, and general CLI native compilation remain unsupported.
 
 ```rust
@@ -244,6 +246,90 @@ The public alpha.20 release does not include this API. A C host must use the
 exact arity and symbol documented above. Tests link and execute emitted ELF
 objects on Linux x86-64 using an independent C compiler.
 
+### Counted native repeat
+
+The bounded API also accepts `repeat count as index { ... }`. It evaluates
+the count once before entering the loop, snapshots it in a compiler-owned
+integer slot, initializes the index to zero, and checks the signed index
+against the saved count before each iteration. Updating a source variable
+used to compute the count does not change the saved bound. Zero skips the
+body. Negative counts return status 5
+(`CHECKED_KERNEL_REPEAT_COUNT`) with the repeat initialization source span.
+Index progression is checked for integer overflow. Break and an exhausted
+guard share an uncharged exit that retires the saved count and index.
+Continue reaches the checked advancement with both slots still initialized.
+
+The native work allowance applies to initialization, guard, index advancement
+and body operations. Huge positive counts do not bypass the allowance.
+The unmetered integer-function API still rejects loops.
+
+```scarp
+pure funcra triangular(n: integer) -> integer {
+    var total = 0;
+    repeat n as i {
+        total += i + 1;
+    }
+    return total;
+}
+```
+
+The native host regression suite compares zero, one and multiple iterations,
+nested loops, early returns, break/continue, count snapshots and negative-count
+diagnostics against interpreter execution; it also tests exhaustion before
+negative-count evaluation and with a maximum signed 64-bit iteration count.
+The [mixed loop example](../examples/native_bounded_loops.srp) nests
+both forms and runs with `scarp exec examples/native_bounded_loops.srp`.
+Pass its function definition alone to the native API.
+
+## Experimental temporary lifetime reuse
+
+PR #366 adds deterministic stack layouts for checked and bounded function
+expressions. Straight-line expressions use first/last-access intervals.
+For short-circuit expressions, the allocator walks forward-only control flow in
+reverse, combines live values from both successors, and gives conflicting
+temporaries different stack slots. A store preserves all other live values,
+and the root remains live through the final load on every path. Simultaneous
+operands and destinations remain distinct.
+
+Each plan is computed once per expression and used both to size the frame and
+to encode stack accesses. Work events, operation order, failure spans and the
+published binding-only kernel encodings are preserved.
+
+A regression with 200 successive additions and a second regression with a
+200-branch short-circuit chain each verify a 40-byte aligned frame. Both
+fixtures use three temporary slots and one parameter slot. Independent host
+execution compares values, overflow and short-circuited division with the
+interpreter, including exact failure spans.
+
+## Experimental scalar conditional expressions
+
+The checked and bounded integer-function emitters also accept expression-form
+`if`, `elif`, and `else` with an integer or Boolean result. Conditions run in
+source order until the first true condition. Only the selected value is
+evaluated. The existing resolver checks the types and effects of every arm.
+
+```scarp
+pure funcra classify(n: integer) -> integer {
+    return if n < 0 { -1 } elif n == 0 { 0 } else { 1 };
+}
+```
+
+The expression IR uses only forward edges. Every incoming path must initialize
+the selected value before the join. The bounded emitter charges the
+conditional expression, each visited guard and its decision, and the selected
+result. Moves and jumps at the join add no work. Checked arithmetic failures
+retain their original operator spans.
+
+Run [the mixed conditional example](../examples/native_conditional_function.srp)
+with `scarp exec examples/native_conditional_function.srp`. Pass its function
+definition alone to either native function API. The C11 emitter and both
+binding-only ELF64 kernels still reject conditional expressions. The function
+ABI, accepted primitive types and target stay the same.
+
+The bounded function meter subtracts one from its unsigned 32-bit allowance
+and branches on borrow. Zero therefore fails at the current event, including
+the first event of a zero-budget call. The subtraction and failure check use
+two fewer bytes per metered event than the earlier test-and-decrement sequence.
 
 ## Experimental explicit freestanding object target
 

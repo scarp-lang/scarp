@@ -314,6 +314,52 @@ mod tests {
     }
 
     #[test]
+    fn repeat_exit_rejects_reads_of_retired_loop_state() {
+        let source = "pure funcra f(n: integer) -> integer {
+            repeat n as i { if i == 1 { break; } }
+            return n;
+        }";
+        let resolved = compile(source).unwrap();
+        let ir = ScalarProgramIr::lower_bounded_integer_function(&resolved, 16).unwrap();
+        let (count_slot, index_slot) = ir
+            .steps
+            .iter()
+            .find_map(|step| match step.kind {
+                ProgramOp::RepeatInit {
+                    count_slot,
+                    index_slot,
+                    ..
+                } => Some((count_slot, index_slot)),
+                _ => None,
+            })
+            .unwrap();
+        for retired in [count_slot, index_slot] {
+            let mut malformed = ir.clone();
+            let value = malformed
+                .steps
+                .iter_mut()
+                .find_map(|step| match &mut step.kind {
+                    ProgramOp::Return { value } => Some(value),
+                    _ => None,
+                })
+                .unwrap();
+            let load = value
+                .steps
+                .iter_mut()
+                .find(|step| matches!(step.kind, Operation::Load { .. }))
+                .unwrap();
+            let Operation::Load { slot, .. } = &mut load.kind else {
+                unreachable!()
+            };
+            *slot = retired;
+            let span = load.span;
+            let error = malformed.verify().unwrap_err();
+            assert_eq!(error.kind, DiagnosticKind::NativeUnsupported);
+            assert_eq!(error.span, span);
+        }
+    }
+
+    #[test]
     fn update_requires_initialized_lhs_even_with_valid_rhs() {
         let mut ir = verified("var x=1; x+=1;");
         ir.steps[0].kind = ProgramOp::Jump { target: 1 };

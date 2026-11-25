@@ -52,3 +52,12 @@ at the combined limits on an explicit 512 KiB thread, then resolves/executes
 those plans on the normal test worker. All earlier nesting tests remain intact;
 no environment stack increase or weakened limit is used. Final cross-platform
 rechecks are recorded in the milestone PR.
+
+### Softplus on the development branch
+
+The pure `softplus(vector) -> vector` activation evaluates each visible finite
+element as `max(x, 0) + log1p(exp(-abs(x)))`. The negative tail retains small
+representable values. Very negative inputs can underflow to zero. The kernel
+charges four work units per element (one for an empty input) and reserves one
+bounded vector of the same length. Rust embedders with exhaustive matches on
+`numeric::Builtin` must handle the new `Softplus` variant.

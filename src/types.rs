@@ -140,6 +140,17 @@ pub struct DefinitionId {
     pub module: u32,
     pub declaration: u32,
 }
+impl DefinitionId {
+    // Reserved module IDs cannot collide with any source module.
+    pub(crate) const BUILTIN_OPTION: Self = Self {
+        module: u32::MAX,
+        declaration: 0,
+    };
+    pub(crate) const BUILTIN_RESULT: Self = Self {
+        module: u32::MAX,
+        declaration: 1,
+    };
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FunctionEffect {
     Pure,
@@ -210,23 +221,23 @@ impl TypeKind {
     // A concrete Option/Result still has two checked source-level cases,
     // even though its canonical Applied descriptor retains only the concrete
     // type arguments. Keep the original variant arity/component accounting.
-    fn builtin_case_width(&self) -> Option<usize> {
-        match self {
-            Self::Applied {
-                constructor,
-                arguments,
-            } if constructor.module == u32::MAX
-                && ((constructor.declaration == 0 && arguments.len() == 1)
-                    || (constructor.declaration == 1 && arguments.len() == 2)) =>
-            {
-                Some(2)
-            }
+    pub(crate) fn builtin_variant_cases(&self) -> Option<[Option<TypeId>; 2]> {
+        let Self::Applied {
+            constructor,
+            arguments,
+        } = self
+        else {
+            return None;
+        };
+        match (*constructor, arguments.as_ref()) {
+            (DefinitionId::BUILTIN_OPTION, [some]) => Some([None, Some(*some)]),
+            (DefinitionId::BUILTIN_RESULT, [ok, err]) => Some([Some(*ok), Some(*err)]),
             _ => None,
         }
     }
     fn width(&self) -> usize {
-        if let Some(width) = self.builtin_case_width() {
-            return width;
+        if let Some(cases) = self.builtin_variant_cases() {
+            return cases.len();
         }
         match self {
             Self::Tuple(v) | Self::Record { fields: v, .. } => v.len(),
@@ -238,8 +249,8 @@ impl TypeKind {
         }
     }
     fn components(&self) -> Option<usize> {
-        if let Some(count) = self.builtin_case_width() {
-            return Some(count);
+        if let Some(cases) = self.builtin_variant_cases() {
+            return Some(cases.len());
         }
         if let Self::Variant { cases, .. } = self {
             return Some(cases.len());

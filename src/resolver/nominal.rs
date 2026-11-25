@@ -280,7 +280,10 @@ impl Builder<'_> {
                             "invalid compiler-generated option case layout",
                         ));
                     }
-                    Some((0, vec![type_ids[1].expect("checked Some payload")]))
+                    Some((
+                        DefinitionId::BUILTIN_OPTION,
+                        vec![type_ids[1].expect("checked Some payload")],
+                    ))
                 } else if short.starts_with("result<") && short.ends_with('>') {
                     if members.len() != 2
                         || members[0].0 != "Ok"
@@ -295,7 +298,7 @@ impl Builder<'_> {
                         ));
                     }
                     Some((
-                        1,
+                        DefinitionId::BUILTIN_RESULT,
                         vec![
                             type_ids[0].expect("checked Ok payload"),
                             type_ids[1].expect("checked Err payload"),
@@ -306,10 +309,7 @@ impl Builder<'_> {
                 };
                 match signature {
                     Some((constructor, arguments)) => TypeKind::Applied {
-                        constructor: DefinitionId {
-                            module: u32::MAX,
-                            declaration: constructor,
-                        },
+                        constructor,
                         arguments: arguments.into_boxed_slice(),
                     },
                     None => TypeKind::Variant {

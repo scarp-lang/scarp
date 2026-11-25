@@ -149,18 +149,36 @@ struct Frame<'a> {
     result: Value,
 }
 
+type FrameStorage = (Vec<Value>, Vec<bool>, Workspace);
+// One spare per execution. Larger frames release their buffers immediately.
+const MAX_SPARE_BUFFER_ITEMS: usize = 128;
+
 impl<'a> Frame<'a> {
-    fn recycle_storage(&mut self) -> (Vec<Value>, Vec<bool>, Workspace) {
+    fn take_storage(&mut self) -> FrameStorage {
         // Outgoing arguments already own their values. Release every old
         // binding/temporary before starting the next invocation's defaults.
         self.environment.fill(Value::Unit);
         self.supplied.fill(false);
-        self.workspace.clear();
         (
             std::mem::take(&mut self.environment),
             std::mem::take(&mut self.supplied),
             std::mem::take(&mut self.workspace),
         )
+    }
+
+    fn recycle_storage(&mut self) -> FrameStorage {
+        // A terminal transfer reuses the active evaluator buffers for the
+        // same function. Clear their values before moving the storage.
+        self.workspace.clear();
+        self.take_storage()
+    }
+
+    fn take_spare_storage(&mut self) -> Option<FrameStorage> {
+        if self.environment.capacity().max(self.supplied.capacity()) > MAX_SPARE_BUFFER_ITEMS {
+            return None;
+        }
+        self.workspace.retire_for_reuse(MAX_SPARE_BUFFER_ITEMS);
+        Some(self.take_storage())
     }
     fn start(&mut self, expression: &'a ResolvedExpression, completion: Completion<'a>) {
         self.workspace.start(expression);
@@ -366,6 +384,7 @@ fn run_plan<'a>(
     };
     let mut live_slots = initial.environment.len();
     let mut frames = vec![initial];
+    let mut spare: Option<FrameStorage> = None;
     let mut events: Vec<OutputEvent> = Vec::new();
     let mut calls = u64::from(is_host_call);
     let mut prints = 0;
@@ -509,6 +528,15 @@ fn run_plan<'a>(
                         }
                         let (mut environment, mut supplied, workspace) = if terminal {
                             frame.recycle_storage()
+                        } else if let Some((mut environment, mut supplied, workspace)) =
+                            spare.take().filter(|(environment, supplied, _)| {
+                                environment.capacity() >= function.slots
+                                    && supplied.capacity() >= function.defaults.len()
+                            })
+                        {
+                            environment.resize(function.slots, Value::Unit);
+                            supplied.resize(function.defaults.len(), false);
+                            (environment, supplied, workspace)
                         } else {
                             (
                                 vec![Value::Unit; function.slots],
@@ -1012,10 +1040,14 @@ fn run_plan<'a>(
                     }
                 }
                 Stage::Done => {
-                    let finished = frames.pop().unwrap();
+                    let mut finished = frames.pop().unwrap();
                     live_slots -= finished.environment.len();
                     if let Some(caller) = frames.last_mut() {
-                        caller.workspace.accept(finished.result);
+                        let result = std::mem::replace(&mut finished.result, Value::Unit);
+                        if let Some(storage) = finished.take_spare_storage() {
+                            spare = Some(storage);
+                        }
+                        caller.workspace.accept(result);
                     } else {
                         final_result = finished.result;
                     }
@@ -1144,6 +1176,40 @@ mod retirement_runtime_tests {
     use super::{Completion, Frame, Stage, Workspace};
     use crate::{diagnostics::Span, value::Value};
     use std::sync::Arc;
+
+    #[test]
+    fn pooled_storage_drops_nested_payloads_and_preserves_only_buffers() {
+        use crate::value::TupleValue;
+        let owned: Arc<str> = Arc::from("only owned by a nested parameter");
+        let weak = Arc::downgrade(&owned);
+        let tuple = TupleValue::new(vec![Value::String(owned)]).unwrap();
+        let mut frame = Frame {
+            function: Some(0),
+            call_span: Span::default(),
+            tail_sites: Vec::new(),
+            operations: &[],
+            environment: vec![Value::Tuple(tuple)],
+            supplied: vec![true],
+            pc: 0,
+            stage: Stage::Done,
+            expression: None,
+            completion: Completion::Discard,
+            workspace: Workspace::default(),
+            output: None,
+            result: Value::Integer(42),
+        };
+        let allocation = frame.environment.as_ptr();
+        assert!(weak.upgrade().is_some());
+        let (storage, supplied, _) = frame.take_spare_storage().unwrap();
+        assert_eq!(storage.as_ptr(), allocation);
+        assert_eq!(storage, [Value::Unit]);
+        assert_eq!(supplied, [false]);
+        assert!(weak.upgrade().is_none());
+        assert_eq!(frame.result, Value::Integer(42));
+
+        frame.environment = vec![Value::Unit; super::MAX_SPARE_BUFFER_ITEMS + 1];
+        assert!(frame.take_spare_storage().is_none());
+    }
 
     #[test]
     fn function_completion_releases_payloads_but_preserves_contract_inputs() {

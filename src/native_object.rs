@@ -71,8 +71,9 @@ pub fn emit_elf64_checked_integer_kernel(source: &str) -> Result<CheckedElf64Ker
 /// The function must return an integer on every path. The backend supports
 /// integer and Boolean locals, scalar assignments, integer compound
 /// assignments, checked arithmetic, bitwise operations, and forward
-/// conditionals. It rejects calls, loops, contracts, defaults, other scalar
-/// types, aggregates, and top-level execution. Interpreter budgets do not
+/// conditionals in statements and scalar expressions. It rejects calls, loops,
+/// contracts, defaults, other scalar types, aggregates, and top-level
+/// execution. Interpreter budgets do not
 /// apply to the emitted object.
 pub fn emit_elf64_checked_integer_function(source: &str) -> Result<CheckedElf64Kernel, Diagnostic> {
     crate::scalar_ir::emit_checked_integer_function(source)
@@ -81,16 +82,21 @@ pub fn emit_elf64_checked_integer_function(source: &str) -> Result<CheckedElf64K
 /// Native work allowance exhausted before executing the indicated IR event.
 pub const CHECKED_KERNEL_WORK_LIMIT: u32 = 4;
 
+/// A counted repeat evaluated a negative iteration count.
+pub const CHECKED_KERNEL_REPEAT_COUNT: u32 = 5;
+
 /// Emit one pure integer function with a fixed native work allowance per call.
 ///
 /// The distinct experimental Linux x86-64 SysV symbol
 /// `scarp_bounded_integer_function` uses the checked integer-function calling
-/// convention and supports while loops, break and continue. It charges one
+/// convention and supports while and counted repeat loops, break and
+/// continue. It charges one
 /// unit per visited non-retirement statement and per expression IR Work
 /// event. This is a native IR allowance, not interpreter execution accounting.
 /// A zero allowance is valid and rejects the first charged event. On
 /// exhaustion, status 4 and the event's source span ID are returned.
-/// Calls, counted repeat, contracts and heap-backed values remain unsupported.
+/// A negative repeat count returns status 5 and the loop source span ID.
+/// Calls, contracts and heap-backed values remain unsupported.
 pub fn emit_elf64_bounded_integer_function(
     source: &str,
     max_work: u32,
