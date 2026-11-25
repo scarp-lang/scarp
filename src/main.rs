@@ -291,7 +291,7 @@ Function defaults: --max-call-depth 256, --max-calls 100000,
 Vector and tile buffers share this cumulative quota; retirement does not refund it.
 --max-text-bytes 8388608 limits cumulative new UTF-8 payload (1048576 bytes per string).
 --max-tuple-bytes 8388608 limits cumulative immutable tuple, record and variant payload.
---max-bigint-digits 10000 (ceiling 10000000), --max-bigint-bytes 8388608 (limbs and scratch).
+--max-bigint-digits 10000 (ceiling 1000000000 on 64-bit, 10000000 otherwise), --max-bigint-bytes 8388608 (limbs and scratch).
 --max-array-bytes 8388608 limits cumulative immutable fixed-array member/type payload.
 String sharing and direct literal output do not allocate text payload; retirement gives no refund.
 Snapshot bytes are a logical storage cap, not an exact process-memory limit.
@@ -321,7 +321,7 @@ Function defaults: --max-call-depth 256, --max-calls 100000,
 Vector and tile buffers share this cumulative quota; retirement does not refund it.
 --max-text-bytes 8388608 limits cumulative new UTF-8 payload (1048576 bytes per string).
 --max-tuple-bytes 8388608 limits cumulative immutable tuple, record and variant payload.
---max-bigint-digits 10000 (ceiling 10000000), --max-bigint-bytes 8388608 (limbs and scratch).
+--max-bigint-digits 10000 (ceiling 1000000000 on 64-bit, 10000000 otherwise), --max-bigint-bytes 8388608 (limbs and scratch).
 --max-array-bytes 8388608 limits cumulative immutable fixed-array member/type payload.
 String sharing and direct literal output do not allocate text payload; retirement gives no refund.
 All resource options take unsigned decimal counts, allow zero, and may occur once.
@@ -1272,7 +1272,7 @@ fn invocation(args: &[OsString]) -> Result<Invocation<'_>, &'static str> {
                     "--max-tuple-bytes" => options.max_tuple_bytes = value,
                     "--max-bigint-digits" => {
                         if value > scarp::bigint::MAX_BIGINT_DIGITS {
-                            return Err("bigint digit limit cannot exceed 10000000");
+                            return Err("bigint digit limit exceeds platform ceiling (1000000000 on 64-bit, 10000000 otherwise)");
                         }
                         options.max_bigint_digits = value;
                     }
