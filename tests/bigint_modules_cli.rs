@@ -185,7 +185,7 @@ fn cli_digit_allocation_and_work_failures_are_atomic_and_explainable() {
 fn cli_rejects_invalid_duplicate_and_unsupported_limit_flags() {
     let source = Source::new("print(bigint(\"1\"));");
     for args in [
-        vec!["exec", "--max-bigint-digits", "1000001"],
+        vec!["exec", "--max-bigint-digits", "10000001"],
         vec!["exec", "--max-bigint-bytes", "-1"],
         vec![
             "exec",
