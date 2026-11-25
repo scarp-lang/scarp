@@ -1,6 +1,9 @@
 # Changelog
 
-## 0.0.6-alpha.20 — release candidate
+## 0.0.6-alpha.20 — published GitHub prerelease, 2026-11-24
+
+Published from [`b1a9347`](https://github.com/scarp-lang/scarp/commit/b1a9347f93540fdf95b0ddecba4adc55a3b4bb98).
+[Release and downloads](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.20)
 
 - Emit compiler-owned x86-64 ELF64 objects for pure Scarp functions with up
   to six required integer parameters, integer and Boolean locals, checked
