@@ -189,3 +189,89 @@ fn ten_million_digit_decimal_power_is_exact() {
         format!("1{}\n", "0".repeat(9_999_999))
     );
 }
+
+#[test]
+fn sparse_output_batches_preserve_internal_and_trailing_zeros() {
+    let digits = format!(
+        "123{}456{}789{}",
+        "0".repeat(9_216),
+        "0".repeat(19),
+        "0".repeat(9_225)
+    );
+    let source = format!("print(bigint(\"-{digits}\"));");
+    assert_eq!(run(&source, options(digits.len())), format!("-{digits}\n"));
+}
+
+#[cfg(target_pointer_width = "64")]
+#[test]
+fn billion_digit_requests_reject_insufficient_resources_before_allocation() {
+    assert_eq!(scarp::bigint::MAX_BIGINT_DIGITS, 1_000_000_000);
+    let source = "print(bigint_pow(bigint(\"10\"),999999999));";
+    let opts = ExecutionOptions {
+        max_bigint_digits: 1_000_000_000,
+        max_bigint_bytes: 1024,
+        limits: ExecutionLimits {
+            max_steps: 2_000_000_000,
+            ..ExecutionLimits::default()
+        },
+        ..ExecutionOptions::default()
+    };
+    let mut out = Vec::new();
+    let mut err = Vec::new();
+    let RunError::Diagnostic(error) =
+        scarp::run_with_io_and_options(source, &mut out, &mut err, opts).unwrap_err()
+    else {
+        panic!("expected allocation-budget diagnostic");
+    };
+    assert_eq!(error.kind, Kind::BigIntLimit);
+    assert!(out.is_empty() && err.is_empty());
+}
+
+#[cfg(target_pointer_width = "64")]
+#[test]
+#[ignore = "explicit high-memory billion-digit stress test; requires roughly 424 MiB of limb storage"]
+fn billion_digit_decimal_power_streams_exact_output() {
+    use std::io::{self, Write};
+
+    // Check every byte without retaining a second billion-byte copy.
+    struct ExactOutput {
+        seen: usize,
+    }
+    impl Write for ExactOutput {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            for &byte in bytes {
+                let expected = match self.seen {
+                    0 => b'1',
+                    1..=999_999_999 => b'0',
+                    1_000_000_000 => b'\n',
+                    _ => panic!("unexpected extra output"),
+                };
+                assert_eq!(byte, expected, "byte {}", self.seen);
+                self.seen += 1;
+            }
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let mut out = ExactOutput { seen: 0 };
+    let opts = ExecutionOptions {
+        max_bigint_digits: 1_000_000_000,
+        max_bigint_bytes: 536_870_912,
+        max_capture_bytes: 1_100_000_000,
+        limits: ExecutionLimits {
+            max_steps: 2_000_000_000,
+            ..ExecutionLimits::default()
+        },
+        ..ExecutionOptions::default()
+    };
+    scarp::run_with_options(
+        "print(bigint_pow(bigint(\"10\"),999999999));",
+        &mut out,
+        opts,
+    )
+    .unwrap();
+    assert_eq!(out.seen, 1_000_000_001);
+}
