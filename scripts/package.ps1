@@ -72,7 +72,14 @@ try {
         throw 'Package output already exists; choose a fresh output directory'
     }
 
-    & cargo build --locked --offline --release --target $Target
+    if ($isWindowsTarget) {
+        # The package ships the executable alone. Keep linker timestamps and
+        # per-build debug database identities out of the release image.
+        & cargo rustc --locked --offline --release --target $Target --bin scarp -- -C link-arg=/Brepro -C link-arg=/DEBUG:NONE
+    }
+    else {
+        & cargo build --locked --offline --release --target $Target
+    }
     if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
     $stagingRoot = Join-Path $projectRoot ('target/packages/' + [guid]::NewGuid().ToString('N'))
     $packageRoot = Join-Path $stagingRoot $packageName
