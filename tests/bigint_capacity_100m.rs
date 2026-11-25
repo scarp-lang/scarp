@@ -9,7 +9,8 @@ const TARGET: usize = 100_000_000;
 
 fn options(digits: usize) -> ExecutionOptions {
     ExecutionOptions {
-        max_bigint_digits: digits,
+        // The base literal 10 requires two digits even when exponent is zero.
+        max_bigint_digits: digits.max(2),
         max_bigint_bytes: 512 * 1024 * 1024,
         max_capture_bytes: digits + 1024,
         limits: ExecutionLimits {
