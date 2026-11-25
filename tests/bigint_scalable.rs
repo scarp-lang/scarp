@@ -45,7 +45,14 @@ fn reference_power(base: u32, exponent: usize) -> String {
 
 #[test]
 fn large_dense_products_match_closed_form_across_kernel_boundaries() {
-    for (a, b) in [(567, 567), (576, 576), (585, 576), (1152, 576), (1153, 576), (2000, 1700)] {
+    for (a, b) in [
+        (567, 567),
+        (576, 576),
+        (585, 576),
+        (1152, 576),
+        (1153, 576),
+        (2000, 1700),
+    ] {
         let left = "9".repeat(a);
         let right = "9".repeat(b);
         let expected = format!(
@@ -98,9 +105,30 @@ fn large_power_respects_digit_allocation_and_work_limits_atomically() {
     let source = "print(\"pending\"); print(bigint_pow(bigint(\"10\"),99999));";
     let base = options(100_000);
     let cases = [
-        (ExecutionOptions { max_bigint_digits: 99_999, ..base }, Kind::BigIntLimit),
-        (ExecutionOptions { max_bigint_bytes: 1024, ..base }, Kind::BigIntLimit),
-        (ExecutionOptions { limits: ExecutionLimits { max_steps: 1000, ..base.limits }, ..base }, Kind::ExecutionLimit),
+        (
+            ExecutionOptions {
+                max_bigint_digits: 99_999,
+                ..base
+            },
+            Kind::BigIntLimit,
+        ),
+        (
+            ExecutionOptions {
+                max_bigint_bytes: 1024,
+                ..base
+            },
+            Kind::BigIntLimit,
+        ),
+        (
+            ExecutionOptions {
+                limits: ExecutionLimits {
+                    max_steps: 1000,
+                    ..base.limits
+                },
+                ..base
+            },
+            Kind::ExecutionLimit,
+        ),
     ];
     for (opts, expected) in cases {
         let (mut out, mut err) = (Vec::new(), Vec::new());
@@ -122,4 +150,42 @@ fn million_digit_decimal_power_is_exact() {
     let mut opts = options(1_000_000);
     opts.limits.max_steps = 20_000_000;
     assert_eq!(run(source, opts), format!("1{}\n", "0".repeat(999_999)));
+}
+
+#[test]
+fn decimal_power_fast_path_preserves_sign_and_limb_boundaries() {
+    for (base, exponent, zeros, negative) in [
+        ("10", 8, 8, false),
+        ("10", 9, 9, false),
+        ("10", 10, 10, false),
+        ("-100", 11, 22, true),
+        ("-100", 12, 24, false),
+        ("1000000000000000000", 7, 126, false),
+    ] {
+        let source = format!("print(bigint_pow(bigint(\"{base}\"),{exponent}));");
+        let sign = if negative { "-" } else { "" };
+        assert_eq!(
+            run(&source, options(zeros + 1)),
+            format!("{sign}1{}\n", "0".repeat(zeros))
+        );
+    }
+}
+
+#[test]
+fn beyond_old_ceiling_is_supported_with_explicit_limits() {
+    let source = "print(bigint_pow(bigint(\"10\"),1000000));";
+    assert_eq!(
+        run(source, options(1_000_001)),
+        format!("1{}\n", "0".repeat(1_000_000))
+    );
+}
+
+#[test]
+#[ignore = "opt-in ten-million-digit output stress test"]
+fn ten_million_digit_decimal_power_is_exact() {
+    let source = "print(bigint_pow(bigint(\"10\"),9999999));";
+    assert_eq!(
+        run(source, options(10_000_000)),
+        format!("1{}\n", "0".repeat(9_999_999))
+    );
 }
