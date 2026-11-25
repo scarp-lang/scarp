@@ -91,7 +91,7 @@ development compiler.
 | Resource | Default | Contract |
 | --- | --- | --- |
 | `--max-bigint-digits` / `ExecutionOptions.max_bigint_digits` | 10,000 | Raw input digits including leading zeros and normalized result digits; sign excluded, zero needs one digit |
-| Implementation digit ceiling | 10,000,000 | CLI rejects larger requested limits; embedding limits are clamped to this ceiling |
+| Implementation digit ceiling | 1,000,000,000 on 64-bit; 10,000,000 otherwise | CLI rejects larger requested limits; embedding limits are clamped to the platform ceiling |
 | `--max-bigint-bytes` / `ExecutionOptions.max_bigint_bytes` | 8,388,608 | Cumulative newly reserved u32 limb payload, including scratch; four bytes per reserved limb |
 | `--max-steps` | 1,000,000 | Shared deterministic dispatch, arithmetic and formatting work |
 | `--max-capture-bytes` | 16,777,216 | Each output snapshot charges 64 plus max(limb bytes, printed digit/sign bytes) |
@@ -152,7 +152,7 @@ No claim is made about practical million-digit general multiplication or divisio
 
 ## Larger exact powers
 
-The default limits are unchanged; the opt-in digit ceiling is ten million. To calculate a 23,980-digit result, put
+The default limits are unchanged. The opt-in ceiling is one billion decimal digits on 64-bit targets and ten million on smaller address-space targets. To calculate a 23,980-digit result, put
 `print(bigint_pow(bigint("250"),10000));` in `large.srp` and run:
 
 ```sh
@@ -177,8 +177,36 @@ opt-in million- and ten-million-digit output cases:
 
 ```sh
 cargo test --locked --offline --test bigint_scalable
-cargo test --locked --offline --test bigint_scalable -- --ignored
+cargo test --locked --offline --test bigint_scalable million_digit_decimal_power_is_exact -- --ignored
+cargo test --locked --offline --test bigint_scalable ten_million_digit_decimal_power_is_exact -- --ignored
 ```
+
+### Billion-digit experimental stress case (64-bit only)
+
+For `bigint_pow(bigint("10"),999999999)`, the direct decimal construction
+requires 111,111,112 u32 limbs (444,444,448 bytes, approximately 424 MiB),
+plus process overhead. Printed output is one billion decimal bytes plus a
+newline. Do not render this in an interactive terminal; use a file or a
+counting writer. Ensure adequate RAM and disk space first.
+
+```sh
+scarp exec --max-bigint-digits 1000000000 --max-bigint-bytes 536870912 --max-steps 2000000000 --max-capture-bytes 1100000000 large.srp > large.txt
+```
+
+The default output capture quota is too small for this case. Large zero runs
+are emitted in fixed-size chunks without constructing a billion-byte string.
+The separate one-MiB string cap still applies to `bigint_to_text`. The opt-in
+test checks each output byte with a counting writer, rather than storing a
+second billion-byte copy. It is intentionally ignored in ordinary CI:
+
+```sh
+cargo test --release --locked --offline --test bigint_scalable billion_digit_decimal_power_streams_exact_output -- --ignored
+```
+
+The ceiling is not a performance guarantee for arbitrary dense products,
+division, bitwise conversion or powers. Work and cumulative allocation limits
+continue to apply. The billion-digit test requires explicit high-memory
+validation before advertising actual runtime capacity.
 
 ## Rust embedding and validation
 
