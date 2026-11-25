@@ -372,6 +372,19 @@ machine-code size. Host callbacks, recursive
 calls, defaults, contracts, heap-backed values, and arbitrary external
 symbols are outside this entry API.
 
+Freestanding callers can use
+`emit_elf64_bounded_integer_entry_with_layout(source, name, max_work, max_stack_bytes)`
+to enforce their own stack budget. The budget starts below the caller's RSP
+immediately before the external call. The result reports the selected
+entry's arity and frame size, the maximum simultaneous frame count, and a
+static upper bound on peak bytes computed over the reachable call graph.
+The bound includes the entry return address and all active private frames,
+including their outgoing stack arguments. Sequential calls reuse the same
+space. The embedding caller provides its own argument slots and alignment
+padding before the external call, along with any interrupt stack it needs.
+The compiler still enforces its whole-input limits. A budget equal to the
+reported bound emits the same ELF bytes as the original entry API.
+
 See [the direct-call example](../examples/native_direct_calls.srp).
 `scarp exec examples/native_direct_calls.srp` runs the script through the
 interpreter. For native emission, pass just its definitions with

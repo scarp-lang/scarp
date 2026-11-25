@@ -1,6 +1,9 @@
 use scarp::{
     diagnostics::DiagnosticKind,
-    native_object::{emit_elf64_bounded_integer_entry, emit_elf64_bounded_integer_function},
+    native_object::{
+        emit_elf64_bounded_integer_entry, emit_elf64_bounded_integer_entry_with_layout,
+        emit_elf64_bounded_integer_function, BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES,
+    },
 };
 
 const EXAMPLE: &str = include_str!("../examples/native_direct_calls.srp");
@@ -99,10 +102,78 @@ fn direct_object_omits_unreachable_bodies_after_validating_them() {
 }
 
 #[test]
+fn entry_stack_budget_covers_the_deepest_active_chain() {
+    let source = "pure funcra entry(n: integer) -> integer { return middle(n) + leaf(n); }
+                  pure funcra leaf(n: integer) -> integer { return n + 3; }
+                  pure funcra middle(n: integer) -> integer { return leaf(n); }
+                  pure funcra unused() -> integer { return entry(0); }";
+    let compile =
+        |name, budget| emit_elf64_bounded_integer_entry_with_layout(source, name, 100, budget);
+    let limit = BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES;
+    let entry = compile("entry", limit).unwrap();
+    let unused = compile("unused", limit).unwrap();
+    let expected_peak: u64 = ["entry", "middle", "leaf"]
+        .map(|name| {
+            compile(name, limit)
+                .unwrap()
+                .entry_layout
+                .callee_stack_bytes()
+        })
+        .into_iter()
+        .sum();
+    assert_eq!(u64::from(entry.peak_stack_bytes), expected_peak);
+    assert_eq!(entry.max_active_frames, 3);
+    assert_eq!(unused.max_active_frames, 4);
+    assert!(unused.peak_stack_bytes > entry.peak_stack_bytes);
+    assert_eq!(entry.entry_layout.integer_arguments, 1);
+    assert_eq!(entry.entry_layout.stack_argument_bytes(), 0);
+    assert_eq!(compile("entry", entry.peak_stack_bytes).unwrap(), entry);
+    assert_eq!(
+        emit_elf64_bounded_integer_entry(source, "entry", 100).unwrap(),
+        entry.kernel,
+    );
+    for budget in [0, entry.peak_stack_bytes - 1] {
+        let error = compile("entry", budget).unwrap_err();
+        assert_eq!(error.kind, DiagnosticKind::NativeUnsupported);
+        assert!(
+            error.message.contains(&format!(
+                "requires {} stack bytes, exceeding the caller budget of {budget}",
+                entry.peak_stack_bytes
+            )),
+            "{error:?}"
+        );
+    }
+}
+
+#[test]
+fn entry_stack_layout_separates_external_arguments_from_internal_outgoing_areas() {
+    let source = wide_definitions(16);
+    let limit = BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES;
+    let entry =
+        emit_elf64_bounded_integer_entry_with_layout(&source, "dispatch", 2000, limit).unwrap();
+    let relay =
+        emit_elf64_bounded_integer_entry_with_layout(&source, "relay", 2000, limit).unwrap();
+    let leaf = emit_elf64_bounded_integer_entry_with_layout(&source, "wide", 2000, limit).unwrap();
+    assert_eq!(entry.entry_layout.integer_arguments, 16);
+    assert_eq!(entry.entry_layout.stack_argument_bytes(), 80);
+    assert_eq!(entry.max_active_frames, 3);
+    assert!(entry.entry_layout.frame_bytes >= 80);
+    assert!(relay.entry_layout.frame_bytes >= 80);
+    assert_eq!(
+        u64::from(entry.peak_stack_bytes),
+        entry.entry_layout.callee_stack_bytes()
+            + relay.entry_layout.callee_stack_bytes()
+            + leaf.entry_layout.callee_stack_bytes(),
+    );
+}
+
+#[test]
 fn straight_line_entry_uses_r11_and_a_smaller_frame() {
     let source = "pure funcra f() -> integer { return 2 + 1; }";
-    let artifact = emit_elf64_bounded_integer_entry(source, "f", 100).unwrap();
-    let bytes = &artifact.object;
+    let artifact = emit_elf64_bounded_integer_entry_with_layout(source, "f", 100, 32).unwrap();
+    assert_eq!(artifact.entry_layout.frame_bytes, 24);
+    assert_eq!(artifact.peak_stack_bytes, 32);
+    let bytes = &artifact.kernel.object;
     let read = |at: usize| u64::from_le_bytes(bytes[at..at + 8].try_into().unwrap()) as usize;
     let header = read(40) + 64;
     let start = read(header + 24);

@@ -79,6 +79,9 @@ pub const CHECKED_KERNEL_WORK_LIMIT: u32 = 4;
 /// A counted repeat evaluated a negative iteration count.
 pub const CHECKED_KERNEL_REPEAT_COUNT: u32 = 5;
 
+/// Hard limit for an emitted direct-call chain, including return addresses.
+pub const BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES: u32 = 64 * 1024;
+
 /// Emit one pure integer function with a fixed native work allowance per call.
 ///
 /// The distinct experimental Linux x86-64 SysV symbol
@@ -117,7 +120,29 @@ pub fn emit_elf64_bounded_integer_entry(
     entry: &str,
     max_work: u32,
 ) -> Result<CheckedElf64Kernel, Diagnostic> {
-    crate::scalar_ir::emit_bounded_integer_entry(source, entry, max_work)
+    emit_elf64_bounded_integer_entry_with_layout(
+        source,
+        entry,
+        max_work,
+        BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES,
+    )
+    .map(|artifact| artifact.kernel)
+}
+
+/// Emit the same direct-call object and report its checked stack requirements.
+/// `max_stack_bytes` is the caller's budget below RSP immediately before
+/// calling the entry symbol. The planner rejects the input before emission
+/// when that budget is smaller than the selected entry's static bound.
+/// The hard compiler limit still applies to every declared function.
+/// An equal budget is sufficient. Caller-owned argument space, alignment
+/// padding before the external call, and interrupt frames are separate.
+pub fn emit_elf64_bounded_integer_entry_with_layout(
+    source: &str,
+    entry: &str,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<FreestandingEntry, Diagnostic> {
+    crate::scalar_ir::emit_bounded_integer_entry(source, entry, max_work, max_stack_bytes)
 }
 
 /// Maximum callee frame size enforced by the experimental x86-64 encoder.
@@ -215,6 +240,20 @@ impl FreestandingCallLayout {
     pub const fn callee_stack_bytes(self) -> u64 {
         self.frame_bytes as u64 + 8
     }
+}
+
+/// Stack requirements and object bytes for a bounded direct-call entry.
+#[derive(Debug, PartialEq, Eq)]
+pub struct FreestandingEntry {
+    pub kernel: CheckedElf64Kernel,
+    /// Argument count and frame bytes for the exported entry alone.
+    pub entry_layout: FreestandingCallLayout,
+    /// Static upper bound on simultaneous frames, including the entry.
+    pub max_active_frames: usize,
+    /// Static upper bound on bytes below RSP before the external `CALL`.
+    /// Includes active return addresses and outgoing arguments inside the
+    /// object's frames. Sequential calls reuse the same stack space.
+    pub peak_stack_bytes: u32,
 }
 
 /// Target and ABI metadata travel with the existing checked object bytes.

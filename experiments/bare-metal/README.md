@@ -5,6 +5,8 @@ host OS or libc **inside the guest**. It reuses the real Scarp
 [checked integer function](../../examples/checked_elf64_function.srp);
 the existing Rust example emits its standalone relocatable machine code.
 A second example emits a bounded integer loop from `bounded_sum.srp`.
+A third emits the three-function call chain in `direct_calls.srp` with a
+512-byte stack budget below the caller's aligned stack pointer.
 
 ## Run on a Linux development host
 
@@ -45,9 +47,11 @@ The QEMU debug console captures one character per completed stage:
 | 4 | Bounded loop returns 55 for input 10 and restores the stack |
 | 5 | Work allowance exhaustion returns status 4 and restores the stack |
 | 6 | Subsequent invocation returns 6 with a fresh allowance and restored stack |
+| 7 | Three Scarp frames pass two arguments on the stack and return 30 |
+| 8 | Division by zero in the innermost frame returns status 2 and restores the stack |
 | X / F | Invalid boot magic / failed function check |
 
-Success requires exactly `BGPEVLS123456` and exit status 33.
+Success requires exactly `BGPEVLS12345678` and exit status 33.
 On failure the runner prints the last 80 lines of QEMU exception and reset
 diagnostics. A CPU triple fault is not kept running by `-no-shutdown`.
 No marker means the assembly entry was not reached or the boot magic failed
@@ -68,6 +72,8 @@ additional evidence.
 - A second emitted function uses a 1000-event native IR work allowance. It
   checks finite loop execution, controlled exhaustion for a large input, and
   a successful fresh call after failure. No interpreter runs in the guest.
+- A third object exercises native direct calls, outgoing stack arguments,
+  and stack restoration after both a successful result and a callee failure.
 - The emulator-specific debug-exit device reports pass/fail; it is not a
   portable hardware interface.
 

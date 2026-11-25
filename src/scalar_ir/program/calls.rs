@@ -3,6 +3,7 @@
 use super::{ScalarProgramIr, Span};
 use crate::{
     diagnostics::{Diagnostic, DiagnosticKind},
+    native_object::BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES,
     resolver::ResolvedProgram,
     scalar_ir::Operation,
 };
@@ -10,12 +11,12 @@ use crate::{
 const MAX_FUNCTIONS: usize = 32;
 const MAX_IR_STEPS: usize = 32_768;
 const MAX_CALL_DEPTH: usize = 16;
-const MAX_STACK_BYTES: usize = 64 * 1024;
-const RETURN_ADDRESS_BYTES: usize = 8;
+const RETURN_ADDRESS_BYTES: u32 = 8;
 
 pub(in crate::scalar_ir) struct ScalarCallGraph {
     bodies: Vec<ScalarProgramIr>,
     entry: usize,
+    entry_depth: usize,
     edges: Vec<Vec<(usize, Span)>>,
     postorder: Vec<usize>,
     spans: Vec<Span>,
@@ -128,6 +129,7 @@ impl ScalarCallGraph {
         Ok(Self {
             bodies,
             entry,
+            entry_depth: depth[entry],
             edges,
             postorder,
             spans,
@@ -136,6 +138,10 @@ impl ScalarCallGraph {
 
     pub(in crate::scalar_ir) fn entry(&self) -> usize {
         self.entry
+    }
+
+    pub(in crate::scalar_ir) fn entry_depth(&self) -> usize {
+        self.entry_depth
     }
 
     pub(in crate::scalar_ir) fn bodies(&self) -> &[ScalarProgramIr] {
@@ -161,17 +167,21 @@ impl ScalarCallGraph {
 
     /// The longest active path includes each frame's actual allocation and
     /// its saved return address. Sequential calls do not accumulate stack.
-    pub(in crate::scalar_ir) fn verify_stack(&self, frames: &[u32]) -> Result<(), Diagnostic> {
+    pub(in crate::scalar_ir) fn verify_stack(
+        &self,
+        frames: &[u32],
+        max_stack_bytes: u32,
+    ) -> Result<u32, Diagnostic> {
         if frames.len() != self.bodies.len() {
             return Err(super::invalid(Span::default()));
         }
-        let mut peak = vec![0usize; frames.len()];
+        let mut peak = vec![0; frames.len()];
         for &id in &self.postorder {
             let child = self.edges[id].iter().map(|&(callee, _)| peak[callee]).max();
-            peak[id] = (frames[id] as usize)
+            peak[id] = frames[id]
                 .checked_add(RETURN_ADDRESS_BYTES)
                 .and_then(|frame| frame.checked_add(child.unwrap_or(0)))
-                .filter(|&bytes| bytes <= MAX_STACK_BYTES)
+                .filter(|&bytes| bytes <= BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES)
                 .ok_or_else(|| {
                     unsupported(
                         self.spans[id],
@@ -179,7 +189,16 @@ impl ScalarCallGraph {
                     )
                 })?;
         }
-        Ok(())
+        let bytes = peak[self.entry];
+        if bytes > max_stack_bytes {
+            return Err(unsupported(
+                self.spans[self.entry],
+                &format!(
+                    "native entry requires {bytes} stack bytes, exceeding the caller budget of {max_stack_bytes}"
+                ),
+            ));
+        }
+        Ok(bytes)
     }
 }
 
@@ -228,9 +247,10 @@ mod tests {
         let resolved = crate::compile(CHAIN).unwrap();
         let graph = ScalarCallGraph::lower(&resolved, "top", 6).unwrap();
         assert_eq!(graph.postorder, [1, 0]);
-        assert!(graph.verify_stack(&[32_760, 32_760]).is_ok());
-        assert!(graph.verify_stack(&[32_776, 32_760]).is_err());
-        assert!(graph.verify_stack(&[32_760]).is_err());
+        let limit = BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES;
+        assert_eq!(graph.verify_stack(&[32_760, 32_760], limit).unwrap(), limit);
+        assert!(graph.verify_stack(&[32_776, 32_760], u32::MAX).is_err());
+        assert!(graph.verify_stack(&[32_760], limit).is_err());
     }
 
     #[test]

@@ -18,9 +18,9 @@ use crate::{
     ast::BinaryOperator,
     diagnostics::{Diagnostic, Span},
     native_object::{
-        CheckedElf64Kernel, FreestandingCallLayout, CHECKED_KERNEL_DIVISION_BY_ZERO,
-        CHECKED_KERNEL_INTEGER_OVERFLOW, CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_REPEAT_COUNT,
-        CHECKED_KERNEL_WORK_LIMIT,
+        CheckedElf64Kernel, FreestandingCallLayout, FreestandingEntry,
+        CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_INTEGER_OVERFLOW,
+        CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_REPEAT_COUNT, CHECKED_KERNEL_WORK_LIMIT,
     },
 };
 
@@ -897,7 +897,8 @@ pub(super) fn emit_function_with_layout(
 pub(super) fn emit_bounded_entry(
     graph: &ScalarCallGraph,
     max_work: u32,
-) -> Result<CheckedElf64Kernel, Diagnostic> {
+    max_stack_bytes: u32,
+) -> Result<FreestandingEntry, Diagnostic> {
     let bodies = graph.bodies();
     let entry = graph.entry();
     let layouts = bodies
@@ -908,7 +909,11 @@ pub(super) fn emit_bounded_entry(
         .iter()
         .map(|layout| layout.frame_bytes)
         .collect::<Vec<_>>();
-    graph.verify_stack(&frame_sizes)?;
+    let peak_stack_bytes = graph.verify_stack(&frame_sizes, max_stack_bytes)?;
+    let entry_layout = FreestandingCallLayout {
+        frame_bytes: frame_sizes[entry],
+        integer_arguments: bodies[entry].parameters(),
+    };
     let order = graph.emission_order();
     let steps = order.iter().try_fold(0usize, |sum, &id| {
         sum.checked_add(layouts[id].estimated_steps)
@@ -937,9 +942,14 @@ pub(super) fn emit_bounded_entry(
         patch_relative_branch(&mut code.data, displacement, target)?;
     }
     let object = object_with_entry(&code.data, b"\0scarp_bounded_integer_entry\0", entry_bytes)?;
-    Ok(CheckedElf64Kernel {
-        object,
-        failure_spans: code.failure_spans,
+    Ok(FreestandingEntry {
+        kernel: CheckedElf64Kernel {
+            object,
+            failure_spans: code.failure_spans,
+        },
+        entry_layout,
+        max_active_frames: graph.entry_depth(),
+        peak_stack_bytes,
     })
 }
 

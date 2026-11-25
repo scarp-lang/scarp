@@ -728,10 +728,11 @@ pub(crate) fn emit_bounded_integer_entry(
     source: &str,
     entry: &str,
     max_work: u32,
-) -> Result<crate::native_object::CheckedElf64Kernel, Diagnostic> {
+    max_stack_bytes: u32,
+) -> Result<crate::native_object::FreestandingEntry, Diagnostic> {
     let resolved = crate::compile(source)?;
     let ir = program::ScalarCallGraph::lower(&resolved, entry, elf64::MAX_INTEGER_ARGUMENTS)?;
-    elf64::emit_bounded_entry(&ir, max_work)
+    elf64::emit_bounded_entry(&ir, max_work, max_stack_bytes)
 }
 
 fn lower_integer_kernel(source: &str) -> Result<program::ScalarProgramIr, Diagnostic> {
