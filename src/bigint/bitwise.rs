@@ -13,7 +13,7 @@ pub(crate) enum BitwiseOperation {
 
 impl BigInt {
     /// Convert the nonnegative magnitude to little-endian base-2^32 words.
-    fn magnitude_words(&self, budget: &mut Budget, span: Span) -> Result<Vec<u32>, Diagnostic> {
+    pub(super) fn magnitude_words(&self, budget: &mut Budget, span: Span) -> Result<Vec<u32>, Diagnostic> {
         budget.check_bigint_digits(self.decimal_digits(), span)?;
         let mut decimal = buffer(self.limbs.len(), budget, span)?;
         decimal.extend_from_slice(&self.limbs);
