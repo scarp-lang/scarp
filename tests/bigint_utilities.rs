@@ -14,7 +14,10 @@ fn fails(source: &str, options: ExecutionOptions, expected: Kind) {
         panic!("expected diagnostic");
     };
     assert_eq!(error.kind, expected);
-    assert_eq!(scarp::check_with_options(source, options).unwrap_err(), error);
+    assert_eq!(
+        scarp::check_with_options(source, options).unwrap_err(),
+        error
+    );
     assert!(out.is_empty() && err.is_empty());
 }
 
