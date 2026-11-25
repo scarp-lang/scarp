@@ -339,7 +339,9 @@ fn multiply_limbs(
                 return Ok(core);
             }
             let shift = lz + rz;
-            let length = shift.checked_add(core.len()).ok_or_else(|| allocation(span))?;
+            let length = shift
+                .checked_add(core.len())
+                .ok_or_else(|| allocation(span))?;
             budget.charge(length as u64, span)?;
             let mut result = buffer(length, budget, span)?;
             result.resize(shift, 0);
@@ -416,9 +418,8 @@ fn sum_limbs(
     )?;
     let mut carry = 0_u64;
     for i in 0..length {
-        let value = u64::from(*left.get(i).unwrap_or(&0))
-            + u64::from(*right.get(i).unwrap_or(&0))
-            + carry;
+        let value =
+            u64::from(*left.get(i).unwrap_or(&0)) + u64::from(*right.get(i).unwrap_or(&0)) + carry;
         result.push((value % BASE) as u32);
         carry = value / BASE;
     }
