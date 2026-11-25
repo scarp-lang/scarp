@@ -1,14 +1,12 @@
 //! Atomic, no-overwrite output for already compiled ELF64 objects.
 
 use std::{
-    fs::{self, DirBuilder, File, OpenOptions},
+    fs::File,
     io::{self, Write},
-    path::{Path, PathBuf},
-    sync::atomic::{AtomicUsize, Ordering},
+    path::Path,
 };
 
-static NEXT_STAGE: AtomicUsize = AtomicUsize::new(0);
-const STAGE_ATTEMPTS: usize = 64;
+use crate::output_stage::OutputStage;
 
 /// Write an emitted Linux x86-64 ELF64 relocatable object at a new path.
 ///
@@ -32,86 +30,25 @@ pub fn write_elf64_object_new(destination: impl AsRef<Path>, object: &[u8]) -> i
     publish_object(destination.as_ref(), |file| file.write_all(object))
 }
 
-struct Stage {
-    directory: PathBuf,
-    object: PathBuf,
-}
-
-impl Stage {
-    fn create(parent: &Path, destination_name: &std::ffi::OsStr) -> io::Result<Self> {
-        let mut builder = DirBuilder::new();
-        builder.recursive(false);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::DirBuilderExt;
-            builder.mode(0o700);
-        }
-        for _ in 0..STAGE_ATTEMPTS {
-            let nonce = NEXT_STAGE.fetch_add(1, Ordering::Relaxed);
-            let name = format!(".scarp-object-{}-{nonce}.tmp", std::process::id());
-            // Also avoid the ordinary case-insensitive and trailing-dot
-            // aliases of this ASCII name on Windows.
-            if destination_name
-                .to_string_lossy()
-                .trim_end_matches(['.', ' '])
-                .eq_ignore_ascii_case(&name)
-            {
-                continue;
-            }
-            let directory = parent.join(name);
-            match builder.create(&directory) {
-                Ok(()) => {
-                    let object = directory.join("object");
-                    return Ok(Self { directory, object });
-                }
-                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
-                Err(error) => return Err(error),
-            }
-        }
-        Err(io::Error::new(
-            io::ErrorKind::AlreadyExists,
-            "unable to reserve a native object staging directory",
-        ))
-    }
-}
-
-impl Drop for Stage {
-    fn drop(&mut self) {
-        // Clean up only our own staging paths. The successful destination
-        // is a distinct link and is never removed by this guard.
-        let _ = fs::remove_file(&self.object);
-        let _ = fs::remove_dir(&self.directory);
-    }
-}
-
 fn publish_object(
     destination: &Path,
     write_object: impl FnOnce(&mut File) -> io::Result<()>,
 ) -> io::Result<()> {
-    let name = destination.file_name().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidInput, "expected an output filename")
-    })?;
-    let parent = destination
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
-    let stage = Stage::create(parent, name)?;
+    let stage = OutputStage::create(destination, "object")?;
     {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&stage.object)?;
+        let mut file = stage.open_output()?;
         write_object(&mut file)?;
         file.sync_all()?;
     }
     // hard_link has an atomic create-if-absent contract. A rename fallback
     // would overwrite existing output on some hosts.
-    fs::hard_link(&stage.object, destination)
+    stage.publish()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{fs, path::PathBuf};
 
     #[test]
     fn failed_write_does_not_expose_partial_bytes_or_leave_staging() {

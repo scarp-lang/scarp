@@ -14,6 +14,8 @@ use crate::{
 
 mod advanced;
 pub(crate) mod bitwise;
+/// Experimental file-backed decimal addition and subtraction for Rust hosts.
+pub mod file;
 mod modular;
 mod number_theory;
 mod radix;
