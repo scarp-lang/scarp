@@ -17,6 +17,7 @@ pub(crate) mod bitwise;
 mod modular;
 mod number_theory;
 mod radix;
+mod sequences;
 mod utilities;
 
 const BASE: u64 = 1_000_000_000;
