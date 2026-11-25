@@ -154,12 +154,11 @@ type FrameStorage = (Vec<Value>, Vec<bool>, Workspace);
 const MAX_SPARE_BUFFER_ITEMS: usize = 128;
 
 impl<'a> Frame<'a> {
-    fn recycle_storage(&mut self) -> FrameStorage {
+    fn take_storage(&mut self) -> FrameStorage {
         // Outgoing arguments already own their values. Release every old
         // binding/temporary before starting the next invocation's defaults.
         self.environment.fill(Value::Unit);
         self.supplied.fill(false);
-        self.workspace.retire_for_reuse(MAX_SPARE_BUFFER_ITEMS);
         (
             std::mem::take(&mut self.environment),
             std::mem::take(&mut self.supplied),
@@ -167,13 +166,19 @@ impl<'a> Frame<'a> {
         )
     }
 
+    fn recycle_storage(&mut self) -> FrameStorage {
+        // A terminal transfer reuses the active evaluator buffers for the
+        // same function. Clear their values before moving the storage.
+        self.workspace.clear();
+        self.take_storage()
+    }
+
     fn take_spare_storage(&mut self) -> Option<FrameStorage> {
-        let capacity = self
-            .environment
-            .capacity()
-            .max(self.supplied.capacity())
-            .max(self.workspace.largest_buffer_capacity());
-        (capacity <= MAX_SPARE_BUFFER_ITEMS).then(|| self.recycle_storage())
+        if self.environment.capacity().max(self.supplied.capacity()) > MAX_SPARE_BUFFER_ITEMS {
+            return None;
+        }
+        self.workspace.retire_for_reuse(MAX_SPARE_BUFFER_ITEMS);
+        Some(self.take_storage())
     }
     fn start(&mut self, expression: &'a ResolvedExpression, completion: Completion<'a>) {
         self.workspace.start(expression);

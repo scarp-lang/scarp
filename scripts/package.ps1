@@ -48,8 +48,8 @@ try {
     if ($version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
         throw 'Expected a three-part package version'
     }
-    # Alpha.15 through alpha.20 retain the extracted-package checks from alpha.14.
-    $contractVersion = if ($version -in @('0.0.6-alpha.15', '0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20')) { '0.0.6-alpha.14' } else { $version }
+    # Current packages retain the extracted-package checks introduced in alpha.14.
+    $contractVersion = if ($version -in @('0.0.6-alpha.15', '0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1')) { '0.0.6-alpha.14' } else { $version }
     $compiler = & rustc --version
     if ($LASTEXITCODE -ne 0) { throw 'Could not read compiler version' }
     $compilerDetails = & rustc --version --verbose
@@ -147,7 +147,7 @@ try {
     # Alpha.18 and later: test the actual extracted compiler, not only the development
     # binary. Manifest precedence, conventional entrypoints, and typed prompts
     # must work with zero-argument exec on every supported package target.
-    if ($version -in @('0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20')) {
+    if ($version -in @('0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1')) {
         $workspace = Join-Path $stagingRoot 'unified-exec-smoke'
         $srcDir = Join-Path $workspace 'src'
         New-Item -ItemType Directory -Path $srcDir -Force | Out-Null
@@ -204,7 +204,7 @@ try {
     [System.IO.File]::WriteAllText($staticSource, 'print(1/0);')
     $staticCheck = Invoke-ScarpProcess -Executable $executable -Arguments @('verify', '--diagnostic-format=json', $staticSource)
     if ($staticCheck.ExitCode -ne 0 -or $staticCheck.Stdout.Length -ne 0 -or $staticCheck.Stderr.Length -ne 0) { throw 'Packaged verify must remain static and silent' }
-    if ($version -in @('0.0.6-alpha.15', '0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20')) {
+    if ($version -in @('0.0.6-alpha.15', '0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1')) {
         $oversized = Join-Path $stagingRoot 'oversized-frontend.srp'
         [IO.File]::WriteAllText($oversized, (' ' * (1MB + 1)))
         foreach ($mode in @('tokens', 'ast')) {
@@ -235,7 +235,7 @@ try {
             throw 'Packaged text comparison output differs at the exact budget'
         }
     }
-    if ($version -in @('0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20')) {
+    if ($version -in @('0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1')) {
         foreach ($example in @('order_statistics', 'core_collections')) {
             $source = Join-Path $extractedPackage "examples/$example.srp"
             $expectedOutput = [IO.File]::ReadAllBytes((Join-Path $extractedPackage "examples/$example.stdout"))
@@ -414,7 +414,7 @@ try {
     }
     $interactiveExamples = @('typed_calculator', 'exact_integer')
     if ($contractVersion -in @('0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) { $interactiveExamples += 'exact_decimal' }
-    if ($version -in @('0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20')) { $interactiveExamples += 'boolean_prompt' }
+    if ($version -in @('0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1')) { $interactiveExamples += 'boolean_prompt' }
     foreach ($example in $interactiveExamples) {
         $source = Join-Path $extractedPackage "examples/interactive/$example.srp"
         $inputPath = Join-Path $extractedPackage "examples/interactive/$example.stdin"
@@ -424,7 +424,7 @@ try {
             throw "Packaged interactive $example output differs"
         }
     }
-    if ($version -in @('0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20')) {
+    if ($version -in @('0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1')) {
         $source = Join-Path $extractedPackage 'examples/interactive/boolean_prompt.srp'
         $invalidInput = [Text.Encoding]::UTF8.GetBytes("invalid`n")
         $invalidBoolean = Invoke-ScarpProcess -Executable $executable -Arguments @(

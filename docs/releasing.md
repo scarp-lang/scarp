@@ -7,6 +7,9 @@ The [publication verification record](releases/v0.0.6-alpha.20-validation.md)
 lists the annotated tag, source tree and verified archive digests.
 Future publication requires separate maintainer approval for its full source SHA.
 
+See the [v0.0.7-alpha.1 candidate validation record](releases/v0.0.7-alpha.1-validation.md)
+for the systems-foundation scope and the checks required on the final source.
+
 See [Alpha.20 preparation](releases/v0.0.6-alpha.20-preparation.md) for the
 candidate scope and qualification requirements.
 

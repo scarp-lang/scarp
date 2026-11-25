@@ -34,6 +34,11 @@ fits. Returned values keep their own references. Calls still spend the same
 work and quota and count the same active slots. Retained buffer capacity is
 separate from active frame slots and process resident memory.
 
+An eligible terminal self-call reuses the active frame's evaluator buffers
+after clearing all temporary values. Those buffers are released with the
+frame, or individually discarded if their capacity exceeds the spare limit
+when the frame finishes an ordinary invocation.
+
 Clones, returned values, immutable vector windows, tiles and queued output events
 retain their own references to shared backing storage. Retiring a source slot
 does not change those values. Shared storage is released when its final holder

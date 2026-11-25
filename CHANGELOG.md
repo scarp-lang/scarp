@@ -1,14 +1,21 @@
 # Changelog
 
-## Unreleased — development toward 0.0.7-alpha.1
+## 0.0.7-alpha.1 — unreleased candidate
 
 - Join fixed arrays with `array_concat(left, right)`. The resolver infers the
   combined length and checks the full element type. Empty arrays share storage.
 - Accept 2–1024 integers in `integer_gcd`, its alias `integer_hcf`, and
   `integer_lcm`. A zero anywhere makes the LCM zero.
 - Extend the experimental checked ELF64 function ABI to zero through sixteen
-  integer parameters. A separate bounded ABI supports while loops with a
-  per-call work allowance. An isolated QEMU experiment exercises emitted code.
+  integer parameters. The bounded API supports counted repeats, while loops
+  and scalar conditional expressions. Checked layouts and temporary storage
+  reuse preserve the per-call work allowance and error spans.
+- Add stable vector `softplus` and live, FIFO token-cache quota changes.
+- Reuse bounded interpreter frame buffers after ordinary calls and preserve
+  the active evaluator buffers across terminal self-transfers.
+- Check scalar IR expression and update-operator spans against the original
+  statement ranges. Verify separate Cargo target builds and exact-source
+  package inventories on the supported native hosts.
 
 ## 0.0.6-alpha.20 — published GitHub prerelease, 2026-11-24
 

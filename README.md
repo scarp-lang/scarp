@@ -26,9 +26,10 @@ with one to six required integer parameters. The tagged source is
 [`b1a9347`](https://github.com/scarp-lang/scarp/commit/b1a9347f93540fdf95b0ddecba4adc55a3b4bb98).
 [Publication verification](docs/releases/v0.0.6-alpha.20-validation.md)
 
-Development on `main` extends the native integer-function ABI, exercises
-bounded loops under QEMU, and supports multi-operand GCD, HCF and LCM.
-[Native object ABI](docs/native-elf64.md) · [Integer example](examples/integer_reductions.srp)
+The **0.0.7-alpha.1 candidate** adds bounded native counted loops, fixed-array
+concatenation, stable vector `softplus`, and multi-operand integer reductions.
+[Candidate scope](docs/releases/v0.0.7-alpha.1-publication.md) ·
+[Validation record](docs/releases/v0.0.7-alpha.1-validation.md)
 
 **0.0.6-alpha.19** adds checked Rust embedding handles, named and default
 arguments, export-aware callables, and cumulative host invocation quotas.
