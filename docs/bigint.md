@@ -122,15 +122,16 @@ contract and cannot roll back completed writes.
 
 Let `n`, `m` be base-10^9 limb counts and `d` raw input/printed decimal digits.
 The magnitude uses canonical little-endian u32 limbs with a separate sign.
-All algorithms are iterative, dependency-free safe Rust with checked buffer-byte
-calculations. No allocation occurs inside multiplication or division loops.
+The algorithms use dependency-free safe Rust with checked buffer-byte
+calculations. Large balanced multiplication uses size-decreasing recursion;
+individual schoolbook and division kernels do not allocate inside their loops.
 
 | Operation | Algorithm / complexity | Prepaid kernel work (excluding dispatch) |
 | --- | --- | --- |
 | Parse | Decimal chunks, O(d) | max(d, 1) |
 | i64 construction | At most three limbs | 3 |
 | Add/subtract | Carry/borrow, O(max(n,m)) | 3*max(n,m)+1 |
-| Multiply | Schoolbook, O(n*m) | n*m+n+m+1 |
+| Multiply | Schoolbook for small/unbalanced products; Karatsuba for balanced products with at least 64 limbs per operand; low zero limbs factored out | Schoolbook n*m+n+m+1; larger products also prepay scanning, recursive work and linear recombination |
 | General divide/remainder | Binary search per quotient digit, O((n-m+1)*m*log2(10^9)) | max(n,m), then 64*(n-m+1)*m+4*n |
 | One-limb divisor | High-to-low long division, O(n) | max(n,m), then n |
 | Compare | Signed lexicographic magnitude, O(max(n,m)) worst case | max(n,m,1) |
@@ -143,9 +144,31 @@ prepay the same work. Capacity charges can
 exceed the normalized result's payload (for example an addition's carry limb).
 Actual result digits are checked after normalization. Work counts
 are deterministic implementation costs, not CPU instruction counts or timing
-guarantees. Large quadratic operations may be refused even when values fit the
-digit cap. No claim is made about practical million-digit general multiplication
-or division.
+guarantees. Large operations may be refused even when values fit the digit cap. Balanced
+multiplication uses Karatsuba's three recursive products (approximately
+O(n^1.585) for comparable dense operands); low zero limbs are removed before
+multiplication and restored in a budgeted buffer. Division remains quadratic.
+No claim is made about practical million-digit general multiplication or division.
+
+## Larger exact powers
+
+The default limits are unchanged. To calculate a 23,980-digit result, put
+`print(bigint_pow(bigint("250"),10000));` in `large.srp` and run:
+
+```sh
+scarp exec --max-bigint-digits 100000 --max-bigint-bytes 67108864 --max-steps 100000000 large.srp
+```
+
+For a sparse million-digit stress case, use `bigint_pow(bigint("10"),999999)`
+with a one-million-digit limit and adequate work and allocation budgets. This
+is not a guarantee for arbitrary dense million-digit powers. The integration
+suite includes a 100,000-digit decimal power and independent exact-power
+reference comparisons, and an opt-in one-million-digit output case:
+
+```sh
+cargo test --locked --offline --test bigint_scalable
+cargo test --locked --offline --test bigint_scalable million_digit_decimal_power_is_exact -- --ignored
+```
 
 ## Rust embedding and validation
 
@@ -175,8 +198,8 @@ The seeded Python oracle independently checks signed arithmetic/comparisons.
 it is opt-in and explicitly adjusts Python's own conversion safeguard. Ordinary
 CI does not perform million-digit stress tests. Benchmarks compile once and
 measure real interpreter execution including constructors; they do not pretend
-to isolate arithmetic-only cost or physical peak memory. Faster multiplication,
-division and detailed allocator/RSS profiling remain later optimization work.
+to isolate arithmetic-only cost or physical peak memory. Further multiplication optimization, faster division and detailed allocator/RSS
+profiling remain later optimization work.
 
 Runnable examples: [arithmetic](../examples/bigint_arithmetic.srp),
 [Fibonacci/factorial](../examples/bigint_sequences.srp), and
