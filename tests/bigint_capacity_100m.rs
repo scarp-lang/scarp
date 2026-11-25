@@ -7,6 +7,7 @@ use std::io::{self, Write};
 
 const TARGET: usize = 100_000_000;
 const NEXT_TARGET: usize = 1_000_000_000;
+const _: () = assert!(scarp::bigint::MAX_BIGINT_DIGITS >= NEXT_TARGET);
 
 fn options(digits: usize) -> ExecutionOptions {
     ExecutionOptions {
@@ -129,7 +130,6 @@ fn chunk_boundaries_preserve_signed_dense_digits_and_single_limb_division() {
 
 #[test]
 fn target_preflight_rejects_one_digit_over_and_low_allocation_budget() {
-    assert!(scarp::bigint::MAX_BIGINT_DIGITS >= TARGET);
     let source = "print(\"pending\"); print(bigint_pow(bigint(\"10\"),99999999));";
     let cases = [
         ExecutionOptions {
