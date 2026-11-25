@@ -169,7 +169,7 @@ impl Budget {
         if digits > self.bigint_digits {
             return Err(Diagnostic::new(DiagnosticKind::BigIntLimit, span,
                 format!("bigint decimal digit limit of {} exceeded", self.bigint_digits))
-                .with_help("reduce input/result digits or raise --max-bigint-digits / ExecutionOptions.max_bigint_digits up to 1000000"));
+                .with_help("reduce input/result digits or raise --max-bigint-digits / ExecutionOptions.max_bigint_digits up to 10000000"));
         }
         Ok(())
     }
