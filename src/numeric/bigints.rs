@@ -31,11 +31,7 @@ pub(super) fn evaluate(
         Builtin::BigIntRoot => args[0]
             .as_bigint()
             .expect("typed bigint")
-            .integer_root(
-                args[1].as_integer().expect("typed integer"),
-                budget,
-                span,
-            )
+            .integer_root(args[1].as_integer().expect("typed integer"), budget, span)
             .map(Value::BigInt),
         Builtin::BigIntPow => args[0]
             .as_bigint()
