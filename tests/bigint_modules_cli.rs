@@ -184,8 +184,9 @@ fn cli_digit_allocation_and_work_failures_are_atomic_and_explainable() {
 #[test]
 fn cli_rejects_invalid_duplicate_and_unsupported_limit_flags() {
     let source = Source::new("print(bigint(\"1\"));");
+    let above_ceiling = (scarp::bigint::MAX_BIGINT_DIGITS + 1).to_string();
     for args in [
-        vec!["exec", "--max-bigint-digits", "10000001"],
+        vec!["exec", "--max-bigint-digits", above_ceiling.as_str()],
         vec!["exec", "--max-bigint-bytes", "-1"],
         vec![
             "exec",
