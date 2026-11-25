@@ -179,7 +179,9 @@ pub(super) fn evaluate(
                     value.is_power_of_two(budget, span).map(Value::Boolean)
                 }
                 Builtin::BigIntReverse => value.reverse_digits(budget, span).map(Value::BigInt),
-                Builtin::BigIntIsPalindrome => value.is_palindrome(budget, span).map(Value::Boolean),
+                Builtin::BigIntIsPalindrome => {
+                    value.is_palindrome(budget, span).map(Value::Boolean)
+                }
                 Builtin::BigIntDigits => {
                     budget.charge(1, span)?;
                     Ok(Value::Integer(value.decimal_digits() as i64))
