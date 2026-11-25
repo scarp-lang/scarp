@@ -1,4 +1,4 @@
-# Native object output and proposed compile command
+# Experimental native object output
 
 The experimental Rust API writes a completed ELF64 object at an explicit
 destination. The object emitter performs compilation before the writer
@@ -20,39 +20,46 @@ exist and its filesystem must support hard links. The caller controls
 that directory. Directory durability after a crash and reaping staging
 paths left by process termination are separate concerns.
 
-## Proposed first CLI contract
+## Experimental CLI
 
-- Accept one UTF-8 Scarp source file and require `--target x86_64-linux`,
-  `--entry NAME`, `--max-work COUNT`, and `-o PATH`. The allowance is an
-  unsigned 32-bit count per entry invocation. Project input and other
-  targets can be separate modes once their import and ABI rules are defined.
-- Emit one Linux x86-64 ELF64 relocatable object. Use the checked scalar
-  function entry ABI, a bounded native work allowance, and the existing
-  diagnostics and byte spans for unsupported source or compilation errors.
-- Return 0 when the object is written, 2 for invalid arguments or an
-  unsupported target selector, and 1 for unreadable input, a compilation
-  diagnostic, or an output failure. Diagnostics distinguish each stage.
-- Complete compilation before staging and publish through the
-  no-overwrite writer. Return a diagnostic on an unsupported filesystem
-  or target. Keep execution, user input and host linking outside this
-  object's compilation operation.
+```sh
+scarp native-object x86_64-none checked input.srp -o output.o
+scarp native-object --json x86_64-none bounded 1000 loop.srp -o loop.o
+```
 
-The existing CLI commands keep their own contracts. This proposal does
-not add a command or an executable linker.
-
-### Experimental CLI
-
-`scarp native-object x86_64-none checked input.srp output.o` checks one
-standalone pure integer function and emits an ELF64 relocatable object.
-For a loop use `scarp native-object x86_64-none bounded 1000 input.srp output.o`.
+The command compiles one standalone pure integer function and emits an ELF64
+relocatable object. Checked mode accepts forward scalar control flow. Bounded
+mode also accepts `while` and counted `repeat` loops.
 Checked and bounded modes use the corresponding [function ABI](native-elf64.md)
 and export one symbol. The bounded allowance is a decimal unsigned 32-bit
 integer. Source reads use the regular frontend file-size and UTF-8 limits.
-All compiler and output-size limits apply. Callers that need the failure-span
-table alongside the bytes can use the Rust object API.
+The caller chooses a new filename with `-o`. The command stops at relocatable
+object emission. Project inputs and linking remain future work.
 
-Success writes a new object and exits 0 with empty output streams. Invalid
-arguments or targets exit 2. Source, compilation and output errors exit 1
-with text diagnostics on stderr. The compiler finishes before the first file
-write. Publication uses the atomic, no-overwrite writer described above.
-The caller chooses the complete destination path. There is no linking step.
+By default, success exits 0 with empty output streams. Invalid arguments or
+targets exit 2. Source, compilation and file output errors exit 1 and write
+text diagnostics to stderr. The compiler finishes before the first file write.
+Publication uses the atomic, no-overwrite writer described above.
+
+### JSON metadata
+
+Pass `--json` before the target to write a single JSON record to stdout after
+the new object is published. Compilation and file output errors leave stdout
+empty. The object remains published if stdout fails after the write.
+
+| Field | Meaning |
+| --- | --- |
+| `schema_version` | `1` for this schema |
+| `target`, `mode`, `symbol` | Object target, ABI mode and exported symbol |
+| `max_work` | Native work allowance, or `null` for checked mode |
+| `integer_arguments` | Number of required integer arguments |
+| `call_stack_alignment` | Required caller stack alignment in bytes before `CALL` |
+| `callee_frame_bytes` | Callee-allocated frame bytes |
+| `callee_stack_bytes` | Callee-allocated frame plus the return address |
+| `stack_argument_bytes` | Caller-owned stack argument bytes before alignment padding |
+| `span_encoding` | `utf-8-bytes` |
+| `failure_spans` | Half-open `[start, end]` byte ranges in the original source, indexed by the native `span_id` on failure |
+
+Consult `failure_spans` only when the native call returns a nonzero status.
+The offsets include the original UTF-8 byte lengths and line endings. Keep the
+report with the object and its input source when diagnosing native failures.

@@ -34,6 +34,7 @@ pub enum Builtin {
     SampleSlopes,
     SampleCumulativeArea,
     Sigmoid,
+    Softplus,
     Relu,
     Tanh,
     IntsLength,
@@ -222,6 +223,7 @@ impl Builtin {
             "sample_slopes" => Self::SampleSlopes,
             "sample_cumulative_area" => Self::SampleCumulativeArea,
             "sigmoid" => Self::Sigmoid,
+            "softplus" => Self::Softplus,
             "relu" => Self::Relu,
             "tanh" => Self::Tanh,
             "ints_len" => Self::IntsLength,
@@ -371,7 +373,12 @@ impl Builtin {
             | Self::TextUpper
             | Self::TextReverse => &[String],
             Self::TextReplace => &[String, String, String],
-            Self::Variance | Self::StdDev | Self::Sigmoid | Self::Relu | Self::Tanh => &[Vector],
+            Self::Variance
+            | Self::StdDev
+            | Self::Sigmoid
+            | Self::Softplus
+            | Self::Relu
+            | Self::Tanh => &[Vector],
             Self::Median => &[Vector],
             Self::Quantile => &[Vector, Float],
             Self::SampleArea | Self::SampleSlopes | Self::SampleCumulativeArea => &[Vector, Vector],
@@ -955,7 +962,12 @@ pub(crate) fn evaluate_with_spans(
     }
     if matches!(
         function,
-        Builtin::Variance | Builtin::StdDev | Builtin::Sigmoid | Builtin::Relu | Builtin::Tanh
+        Builtin::Variance
+            | Builtin::StdDev
+            | Builtin::Sigmoid
+            | Builtin::Softplus
+            | Builtin::Relu
+            | Builtin::Tanh
     ) {
         return kernels::evaluate(function, args, budget, span, argument_span);
     }
@@ -1330,6 +1342,7 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::SampleSlopes
         | Builtin::SampleCumulativeArea
         | Builtin::Sigmoid
+        | Builtin::Softplus
         | Builtin::Relu
         | Builtin::Tanh
         | Builtin::IntsLength

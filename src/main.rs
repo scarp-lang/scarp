@@ -36,7 +36,7 @@ Commands:
   launch <directory>               Execute a Scarp project entrypoint
   run [directory|file.srp]          Run a project or legacy source file
   test [--json|--json=v2] [--list] [--require-tests] [--filter SUBSTRING] [directory]  Project tests
-  native-object <target> <mode> ...   Emit an experimental relocatable object
+  native-object [--json] <target> <mode> ... -o <file>  Emit an experimental relocatable object
   inspect ast <file.srp>           Show the parsed syntax tree (development)
   inspect modules [--json] <file.srp|directory>  Inspect statically checked modules
   explain E####                   Explain a real diagnostic code

@@ -125,7 +125,10 @@ jobs:
 
   lifetime_comparison:
     name: Lifetime / baseline comparison
-    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'feature/lifetime-')
+    if: >-
+      github.event_name == 'pull_request' &&
+      (startsWith(github.head_ref, 'feature/lifetime-') ||
+      github.head_ref == 'scarp/alpha1-combined-verification')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

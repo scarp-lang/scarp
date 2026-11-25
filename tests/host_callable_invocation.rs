@@ -178,3 +178,39 @@ fn host_supplied_numeric_vectors_remain_explicitly_unsupported() {
         Kind::FunctionUnsupported
     );
 }
+
+#[test]
+fn returned_host_snapshot_survives_sibling_calls_and_failed_frames_release_arguments() {
+    use std::sync::Arc;
+    let source = r#"
+        pure funcra copy(s: string) -> string { return s; }
+        pure funcra pair(s: string, ok: boolean) -> tuple<string, string>
+            ensures ok;
+        {
+            bind first = copy(s);
+            bind second = copy("next");
+            return (first, second);
+        }
+    "#;
+    let catalog = CallableCatalog::from_program(scarp::compile(source).unwrap());
+    let pair = catalog.bind_exact(1).unwrap();
+    for ok in [false, true, false] {
+        let text: Arc<str> = Arc::from("श".repeat(4096));
+        let weak = Arc::downgrade(&text);
+        let result = call(&pair, vec![Value::String(text), Value::Boolean(ok)]);
+        if ok {
+            let value = result.unwrap();
+            let snapshot = value.as_tuple().unwrap();
+            assert_eq!(
+                snapshot.elements()[0].as_str().unwrap().chars().count(),
+                4096
+            );
+            assert_eq!(snapshot.elements()[1].as_str(), Some("next"));
+            assert!(weak.upgrade().is_some());
+            drop(value);
+        } else {
+            assert_eq!(kind(result.unwrap_err()), Kind::ContractViolation);
+        }
+        assert!(weak.upgrade().is_none());
+    }
+}

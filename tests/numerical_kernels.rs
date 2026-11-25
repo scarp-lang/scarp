@@ -123,7 +123,12 @@ fn activations_saturate_safely_and_define_signed_zero_behavior() {
 
 #[test]
 fn empty_activation_values_and_statistical_domains_are_explicit() {
-    for function in [Builtin::Sigmoid, Builtin::Relu, Builtin::Tanh] {
+    for function in [
+        Builtin::Sigmoid,
+        Builtin::Softplus,
+        Builtin::Relu,
+        Builtin::Tanh,
+    ] {
         assert_eq!(
             numeric::evaluate_with_vector_limit(function, &[vector(&[])], 1, 0).unwrap(),
             vector(&[])
@@ -152,6 +157,7 @@ fn all_kernel_work_and_payload_limits_are_exact_and_inputs_stay_immutable() {
         (Builtin::StdDev, 12, 0),
         (Builtin::Relu, 3, 24),
         (Builtin::Sigmoid, 12, 24),
+        (Builtin::Softplus, 12, 24),
         (Builtin::Tanh, 12, 24),
     ] {
         let args = [vector(&[-1.0, 0.0, 1.0])];
@@ -256,7 +262,7 @@ fn activation_symmetry_monotonicity_and_bounds_hold_for_generated_inputs() {
 
 #[test]
 fn function_signatures_and_builtin_arguments_use_existing_static_rules() {
-    for name in ["variance", "stddev", "sigmoid", "relu", "tanh"] {
+    for name in ["variance", "stddev", "sigmoid", "softplus", "relu", "tanh"] {
         assert_eq!(
             scarp::compile(&format!("print({name}(1.0));"))
                 .unwrap_err()
@@ -365,4 +371,40 @@ fn exact_statistical_diagnostics_agree_between_cli_and_embedding() {
             .unwrap();
         assert!(result.status.success() && result.stderr.is_empty());
     }
+}
+
+#[test]
+fn softplus_matches_reference_values_including_the_small_negative_tail() {
+    // Rounded from ln(1 + exp(x)) at 100 decimal digits for the interior inputs.
+    let inputs = [-f64::MAX, -40.0, -2.0, -0.0, 0.0, 2.0, 40.0, f64::MAX];
+    let expected = [
+        0.0,
+        4.248354255291589e-18,
+        0.1269280110429725,
+        std::f64::consts::LN_2,
+        std::f64::consts::LN_2,
+        2.1269280110429727,
+        40.0,
+        f64::MAX,
+    ];
+    let result = call(Builtin::Softplus, &inputs);
+    let elements = result.as_vector().unwrap().as_slice();
+    for (actual, expected) in elements.iter().zip(expected) {
+        let actual = actual.get();
+        assert!(actual.is_finite() && actual >= 0.0);
+        assert!(
+            actual.to_bits().abs_diff(expected.to_bits()) <= 2,
+            "{actual} vs {expected}"
+        );
+    }
+    assert!(elements
+        .windows(2)
+        .all(|pair| pair[0].get() <= pair[1].get()));
+    let mut stdout = Vec::new();
+    scarp::run(
+        "pure funcra softplus(n:integer)->integer{return n+1;} print(softplus(7));",
+        &mut stdout,
+    )
+    .unwrap();
+    assert_eq!(stdout, b"8\n");
 }
