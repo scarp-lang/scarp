@@ -154,6 +154,17 @@ write. Locals and temporaries contain only immediate scalar values. Successful
 returns and arithmetic failures share the stack-restoring epilogue. Native
 heap values and ownership transfer are future extensions.
 
+### Alpha.2 native direct calls
+
+The native call verifier computes the maximum number of active frames and
+their combined stack footprint before emitting an object. Each integer
+call receives initialized argument slots. Values live across a call keep
+their stack slots, and both success and failure restore the active frames.
+The [bounded-entry command](native-object-output.md) checks the caller's
+stack budget against that footprint.
+
+### Interpreter terminal self-calls
+
 On a terminal self-call the binding and supplied-argument buffers keep their
 fixed frame shape. The evaluator retires its value stack and task stack
 individually. A stack with capacity above 128 entries drops its backing

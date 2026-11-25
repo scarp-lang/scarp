@@ -8,6 +8,10 @@
 
 use crate::diagnostics::{Diagnostic, Span};
 
+mod artifact;
+
+pub use artifact::write_elf64_object_new;
+
 /// Emit a deterministic ELF64 relocatable object from integer bindings.
 ///
 /// Every source operation must be a scalar integer binding initialized by
@@ -79,6 +83,9 @@ pub const CHECKED_KERNEL_WORK_LIMIT: u32 = 4;
 /// A counted repeat evaluated a negative iteration count.
 pub const CHECKED_KERNEL_REPEAT_COUNT: u32 = 5;
 
+/// Hard limit for an emitted direct-call chain, including return addresses.
+pub const BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES: u32 = 64 * 1024;
+
 /// Emit one pure integer function with a fixed native work allowance per call.
 ///
 /// The distinct experimental Linux x86-64 SysV symbol
@@ -96,6 +103,50 @@ pub fn emit_elf64_bounded_integer_function(
     max_work: u32,
 ) -> Result<CheckedElf64Kernel, Diagnostic> {
     crate::scalar_ir::emit_bounded_integer_function(source, max_work)
+}
+
+/// Emit a bounded Linux x86-64 ELF64 entry and its private direct-call bodies.
+///
+/// Select a source function by its exact name. The only exported symbol is
+/// `scarp_bounded_integer_entry`. Each function is pure and takes zero to
+/// sixteen required integer arguments, with an integer result. The first six
+/// use registers and the rest use the stack. The external symbol
+/// uses the selected function's arity and the checked integer result layout.
+/// Calls are statically resolved, nonrecursive, and confined to this object.
+/// Named argument expressions are evaluated in written order.
+///
+/// One native work allowance is initialized at the external entry and debited
+/// by every active function. Callee errors return the original status and
+/// source span ID. Compilation rejects over 32 functions, a call chain deeper
+/// than 16 active frames, or a chain that needs more than 64 KiB of stack.
+pub fn emit_elf64_bounded_integer_entry(
+    source: &str,
+    entry: &str,
+    max_work: u32,
+) -> Result<CheckedElf64Kernel, Diagnostic> {
+    emit_elf64_bounded_integer_entry_with_layout(
+        source,
+        entry,
+        max_work,
+        BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES,
+    )
+    .map(|artifact| artifact.kernel)
+}
+
+/// Emit the same direct-call object and report its checked stack requirements.
+/// `max_stack_bytes` is the caller's budget below RSP immediately before
+/// calling the entry symbol. The planner rejects the input before emission
+/// when that budget is smaller than the selected entry's static bound.
+/// The hard compiler limit still applies to every declared function.
+/// An equal budget is sufficient. Caller-owned argument space, alignment
+/// padding before the external call, and interrupt frames are separate.
+pub fn emit_elf64_bounded_integer_entry_with_layout(
+    source: &str,
+    entry: &str,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<FreestandingEntry, Diagnostic> {
+    crate::scalar_ir::emit_bounded_integer_entry(source, entry, max_work, max_stack_bytes)
 }
 
 /// Maximum callee frame size enforced by the experimental x86-64 encoder.
@@ -195,6 +246,20 @@ impl FreestandingCallLayout {
     }
 }
 
+/// Stack requirements and object bytes for a bounded direct-call entry.
+#[derive(Debug, PartialEq, Eq)]
+pub struct FreestandingEntry {
+    pub kernel: CheckedElf64Kernel,
+    /// Argument count and frame bytes for the exported entry alone.
+    pub entry_layout: FreestandingCallLayout,
+    /// Static upper bound on simultaneous frames, including the entry.
+    pub max_active_frames: usize,
+    /// Static upper bound on bytes below RSP before the external `CALL`.
+    /// Includes active return addresses and outgoing arguments inside the
+    /// object's frames. Sequential calls reuse the same stack space.
+    pub peak_stack_bytes: u32,
+}
+
 /// Target and ABI metadata travel with the existing checked object bytes.
 #[derive(Debug, PartialEq, Eq)]
 pub struct FreestandingFunction {
@@ -230,3 +295,9 @@ pub fn emit_freestanding_function(
         kernel,
     })
 }
+
+mod value_layout;
+
+pub use value_layout::{
+    plan_x86_64_value_layout, NativeLayoutError, NativeLayoutShape, NativeValueLayout,
+};

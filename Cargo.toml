@@ -1,6 +1,6 @@
 [package]
 name = "scarp"
-version = "0.0.7-alpha.1"
+version = "0.0.7-alpha.2"
 edition = "2021"
 rust-version = "1.74"
 description = "The Scarp programming language prototype"
@@ -35,6 +35,10 @@ harness = false
 
 [[bench]]
 name = "lifetime"
+harness = false
+
+[[bench]]
+name = "native_calls"
 harness = false
 
 [lints.rust]

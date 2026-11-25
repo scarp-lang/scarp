@@ -1,0 +1,13 @@
+// The native object command selects evaluate as the external entry.
+pure funcra evaluate(n: integer, divisor: integer) -> integer {
+    return route(n, divisor) + 1;
+}
+
+pure funcra route(n: integer, divisor: integer) -> integer {
+    return combine(n, divisor, 0, 0, 0, 0, 11, 17);
+}
+
+pure funcra combine(a: integer, b: integer, c: integer, d: integer,
+                    e: integer, f: integer, g: integer, h: integer) -> integer {
+    return (a + g * 2 + h) / b;
+}

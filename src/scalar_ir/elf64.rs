@@ -8,25 +8,27 @@ use self::layout::{
     frame_bytes, slot_offset, stack_argument_offset, FileRegion, ObjectLayout, ELF_HEADER_BYTES,
     INTEGER_ARGUMENT_REGISTERS, MAX_TEXT_BYTES, SECTION_COUNT, SECTION_HEADER_BYTES, SYMBOL_BYTES,
 };
-use self::temporaries::TemporaryLayout;
+use self::temporaries::{TemporaryHome, TemporaryLayout};
 use super::{
     invalid,
-    program::{ProgramOp, ScalarProgramIr},
+    program::{ProgramOp, ScalarCallGraph, ScalarProgramIr},
     Operation, ScalarExpressionIr, Unary,
 };
 use crate::{
     ast::BinaryOperator,
     diagnostics::{Diagnostic, Span},
     native_object::{
-        CheckedElf64Kernel, FreestandingCallLayout, CHECKED_KERNEL_DIVISION_BY_ZERO,
-        CHECKED_KERNEL_INTEGER_OVERFLOW, CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_REPEAT_COUNT,
-        CHECKED_KERNEL_WORK_LIMIT,
+        CheckedElf64Kernel, FreestandingCallLayout, FreestandingEntry,
+        CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_INTEGER_OVERFLOW,
+        CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_REPEAT_COUNT, CHECKED_KERNEL_WORK_LIMIT,
     },
 };
 
 // Bound both the public signature and the number of caller-stack loads.
 pub(super) const MAX_INTEGER_ARGUMENTS: usize = 16;
+const REGISTER_ARGUMENTS: usize = INTEGER_ARGUMENT_REGISTERS.len();
 const STACK_PROBE_INTERVAL: u32 = 4096; // Linux x86-64 base page size
+const TEMPORARY_REGISTER: u8 = 11; // R11, caller-saved by x86-64 SysV
 
 fn failure() -> Diagnostic {
     invalid(Span::default())
@@ -36,6 +38,7 @@ struct Code {
     data: Vec<u8>,
     branches_to_failure: Vec<usize>,
     failure_spans: Vec<Span>,
+    call_fixups: Vec<(usize, usize)>,
     // Keep the two existing kernel encodings byte-for-byte compatible.
     compact_function: bool,
     metered: bool,
@@ -67,6 +70,7 @@ impl Code {
             data,
             branches_to_failure: Vec::new(),
             failure_spans: Vec::new(),
+            call_fixups: Vec::new(),
             compact_function,
             metered: false,
         })
@@ -123,6 +127,29 @@ impl Code {
         self.stack_operand(0x8b, 1, slot_offset(src)?)
     }
 
+    fn move_register(&mut self, destination: u8, source: u8) -> Result<(), Diagnostic> {
+        if destination >= 16 || source >= 16 {
+            return Err(failure());
+        }
+        let rex = 0x48 | ((source >> 3) << 2) | (destination >> 3);
+        let operand = 0xc0 | ((source & 7) << 3) | (destination & 7);
+        self.push(&[rex, 0x89, operand])
+    }
+
+    fn load_temporary(&mut self, home: TemporaryHome, register: u8) -> Result<(), Diagnostic> {
+        match home {
+            TemporaryHome::Stack(slot) => self.stack_operand(0x8b, register, slot_offset(slot)?),
+            TemporaryHome::R11 => self.move_register(register, TEMPORARY_REGISTER),
+        }
+    }
+
+    fn store_temporary(&mut self, home: TemporaryHome) -> Result<(), Diagnostic> {
+        match home {
+            TemporaryHome::Stack(slot) => self.store_rax(slot),
+            TemporaryHome::R11 => self.move_register(TEMPORARY_REGISTER, 0),
+        }
+    }
+
     fn store_rax(&mut self, dst: usize) -> Result<(), Diagnostic> {
         self.stack_operand(0x89, 0, slot_offset(dst)?)
     }
@@ -171,6 +198,23 @@ impl Code {
         Ok(displacement)
     }
 
+    fn call(&mut self, callee: usize) -> Result<(), Diagnostic> {
+        self.call_fixups.try_reserve(1).map_err(|_| failure())?;
+        self.branches_to_failure
+            .try_reserve(1)
+            .map_err(|_| failure())?;
+        self.push(&[0xe8])?; // call rel32
+        let displacement = self.data.len();
+        self.push(&[0; 4])?;
+        self.call_fixups.push((displacement, callee));
+        // Preserve the callee's packed RDX failure while unwinding. Only
+        // the low status word is tested, and this branch does not charge work.
+        self.push(&[0x85, 0xd2])?; // test edx, edx
+        let failure = self.near_branch(Condition::NotEqual)?;
+        self.branches_to_failure.push(failure);
+        Ok(())
+    }
+
     fn allocate_stack(&mut self, mut bytes: u32) -> Result<(), Diagnostic> {
         // Touch each full page crossed so a large frame cannot jump a guard
         // page. The final adjustment is less than one page and all slots are
@@ -188,8 +232,8 @@ impl Code {
         Ok(())
     }
 
-    /// R10 is caller-saved and unused by the scalar encoder. It is loaded
-    /// once per invocation and never exposed as an argument or result.
+    /// R10 is caller-saved and reserved as the shared native work meter.
+    /// Only external entries initialize it, and generated callees debit it.
     fn start_meter(&mut self, max_work: u32) -> Result<(), Diagnostic> {
         self.push(&[0x41, 0xba])?; // mov r10d, imm32 (zero extends)
         self.push(&max_work.to_le_bytes())?;
@@ -335,7 +379,7 @@ impl Code {
         self.push(&[0xeb, clear_failed_value.len() as u8])?; // success skips failure
         let failure_target = self.data.len();
         self.push(&clear_failed_value)?;
-        for &displacement in &self.branches_to_failure {
+        for displacement in self.branches_to_failure.drain(..) {
             patch_forward_branch(&mut self.data, displacement, failure_target)?;
         }
         Ok(())
@@ -375,8 +419,21 @@ fn patch_relative_branch(
     put(code, displacement, &offset.to_le_bytes())
 }
 
-fn temporary(base: usize, register: usize) -> Result<usize, Diagnostic> {
-    base.checked_add(register).ok_or_else(failure)
+#[derive(Clone, Copy)]
+struct StackSlots {
+    /// Slots below the locals are reserved for arguments passed to callees.
+    local_base: usize,
+    temporary_base: usize,
+}
+
+impl StackSlots {
+    fn local(self, index: usize) -> Result<usize, Diagnostic> {
+        self.local_base.checked_add(index).ok_or_else(failure)
+    }
+
+    fn temporary(self, index: usize) -> Result<usize, Diagnostic> {
+        self.temporary_base.checked_add(index).ok_or_else(failure)
+    }
 }
 
 /// Keep final user bindings in a separate stack region from the ephemeral
@@ -401,8 +458,12 @@ fn text(program: &ScalarProgramIr, checked_arithmetic: bool) -> Result<Code, Dia
     let mut code = Code::new(total_steps, false)?;
     code.allocate_stack(stack_size)?;
 
+    let slots = StackSlots {
+        local_base: 0,
+        temporary_base: slot_count,
+    };
     for (slot, expr) in program.integer_stores() {
-        expression(&mut code, expr, slot_count, checked_arithmetic, None)?;
+        expression(&mut code, expr, slots, checked_arithmetic, None)?;
         code.store_rax(slot)?;
     }
 
@@ -416,7 +477,7 @@ fn text(program: &ScalarProgramIr, checked_arithmetic: bool) -> Result<Code, Dia
 fn expression(
     code: &mut Code,
     expr: &ScalarExpressionIr,
-    slot_count: usize,
+    slots: StackSlots,
     checked: bool,
     layout: Option<&TemporaryLayout>,
 ) -> Result<(), Diagnostic> {
@@ -425,12 +486,15 @@ fn expression(
     // Binding-only kernels keep their original byte-for-byte layout. Only
     // the function backends opt in to verified temporary slot reuse.
     let control_flow = layout.is_some();
-    let register = |index| {
-        let index = match layout {
-            Some(layout) => layout.slot(index)?,
-            None => index,
+    let home = |index| {
+        let home = match layout {
+            Some(layout) => layout.home(index)?,
+            None => TemporaryHome::Stack(index),
         };
-        temporary(slot_count, index)
+        match home {
+            TemporaryHome::Stack(slot) => Ok(TemporaryHome::Stack(slots.temporary(slot)?)),
+            TemporaryHome::R11 => Ok(TemporaryHome::R11),
+        }
     };
     for step in &expr.steps {
         if control_flow {
@@ -440,22 +504,22 @@ fn expression(
             Operation::Work => code.charge_work(step.span)?,
             Operation::Integer { dst, value } => {
                 code.integer_rax(value)?;
-                code.store_rax(register(dst)?)?;
+                code.store_temporary(home(dst)?)?;
             }
             Operation::Boolean { dst, value } if control_flow => {
                 code.push(&[0xb8, u8::from(value), 0, 0, 0])?; // mov eax, imm32
-                code.store_rax(register(dst)?)?;
+                code.store_temporary(home(dst)?)?;
             }
             Operation::Load { dst, slot } => {
-                code.load_rax(slot)?;
-                code.store_rax(register(dst)?)?;
+                code.load_rax(slots.local(slot)?)?;
+                code.store_temporary(home(dst)?)?;
             }
             Operation::Move { dst, src } => {
-                code.load_rax(register(src)?)?;
-                code.store_rax(register(dst)?)?;
+                code.load_temporary(home(src)?, 0)?;
+                code.store_temporary(home(dst)?)?;
             }
             Operation::Unary { dst, src, op } => {
-                code.load_rax(register(src)?)?;
+                code.load_temporary(home(src)?, 0)?;
                 match op {
                     Unary::BitNot => code.push(&[0x48, 0xf7, 0xd0])?, // not rax
                     Unary::Negate if checked => {
@@ -466,7 +530,7 @@ fn expression(
                     Unary::Not if control_flow => code.push(&[0x83, 0xf0, 0x01])?,
                     _ => return Err(invalid(step.span)),
                 }
-                code.store_rax(register(dst)?)?;
+                code.store_temporary(home(dst)?)?;
             }
             Operation::Binary {
                 dst,
@@ -474,21 +538,21 @@ fn expression(
                 right,
                 op,
             } => {
-                code.load_rax(register(left)?)?;
-                code.load_rcx(register(right)?)?;
+                code.load_temporary(home(left)?, 0)?;
+                code.load_temporary(home(right)?, 1)?;
                 if control_flow && op.is_comparison() {
                     code.compare(op, step.span)?;
                 } else {
                     code.binary(op, checked, step.span)?;
                 }
-                code.store_rax(register(dst)?)?;
+                code.store_temporary(home(dst)?)?;
             }
             Operation::Branch {
                 condition,
                 when_true,
                 target,
             } if control_flow => {
-                code.load_rax(register(condition)?)?;
+                code.load_temporary(home(condition)?, 0)?;
                 code.push(&[0x48, 0x85, 0xc0])?; // test rax, rax
                 let condition = if when_true {
                     Condition::NotEqual
@@ -500,6 +564,33 @@ fn expression(
             Operation::Jump { target } if control_flow => {
                 branches.push((code.jump()?, target));
             }
+            Operation::Call {
+                dst,
+                callee,
+                ref arguments,
+            } if control_flow && code.metered => {
+                let outgoing = arguments.len().saturating_sub(REGISTER_ARGUMENTS);
+                if arguments.len() > MAX_INTEGER_ARGUMENTS || outgoing > slots.local_base {
+                    return Err(invalid(step.span));
+                }
+                // RSP is already aligned and points at argument seven's slot
+                // at the call site. Copy from the disjoint temporary region.
+                for (stack_index, &argument) in
+                    arguments.iter().skip(REGISTER_ARGUMENTS).enumerate()
+                {
+                    code.load_rax(home(argument)?.stack_slot()?)?;
+                    code.store_rax(stack_index)?;
+                }
+                for (&argument, &hardware) in arguments.iter().zip(&INTEGER_ARGUMENT_REGISTERS) {
+                    code.stack_operand(
+                        0x8b,
+                        hardware,
+                        slot_offset(home(argument)?.stack_slot()?)?,
+                    )?;
+                }
+                code.call(callee)?;
+                code.store_rax(home(dst)?.stack_slot()?)?;
+            }
             _ => return Err(invalid(step.span)),
         }
     }
@@ -507,7 +598,7 @@ fn expression(
         offsets.push(code.data.len());
         resolve_branches(&mut code.data, &offsets, branches)?;
     }
-    code.load_rax(register(expr.root)?)
+    code.load_temporary(home(expr.root)?, 0)
 }
 
 fn resolve_branches(
@@ -522,75 +613,100 @@ fn resolve_branches(
     Ok(())
 }
 
-fn function_text(
+struct FunctionLayout<'a> {
+    expressions: Vec<Option<(&'a ScalarExpressionIr, TemporaryLayout)>>,
+    slots: StackSlots,
+    frame_bytes: u32,
+    estimated_steps: usize,
+}
+
+fn plan_function(
     program: &ScalarProgramIr,
-    budget: Option<u32>,
-) -> Result<(Code, FreestandingCallLayout), Diagnostic> {
-    program.verify()?;
-    if !program.is_function() || program.is_bounded() != budget.is_some() {
+    register_temporaries: bool,
+) -> Result<FunctionLayout<'_>, Diagnostic> {
+    if !program.is_function() || program.parameters() > MAX_INTEGER_ARGUMENTS {
         return Err(failure());
     }
-    let parameters = program.parameters();
-    if parameters > MAX_INTEGER_ARGUMENTS {
-        return Err(failure());
-    }
-    let register_count = parameters.min(INTEGER_ARGUMENT_REGISTERS.len());
-    let registers = &INTEGER_ARGUMENT_REGISTERS[..register_count];
     let mut max_registers = 0;
+    let mut outgoing = 0;
     let mut estimated_steps = program.operations().len();
     let mut expressions = Vec::with_capacity(program.operations().len());
     for step in program.operations() {
-        let value = match &step.kind {
-            ProgramOp::Return { value }
-            | ProgramOp::Store { value, .. }
-            | ProgramOp::Update { value, .. }
-            | ProgramOp::RepeatInit { count: value, .. }
-            | ProgramOp::JumpIfFalse {
-                condition: value, ..
-            } => value,
-            _ => {
-                expressions.push(None);
-                continue;
-            }
+        let Some(value) = step.kind.expression() else {
+            expressions.push(None);
+            continue;
         };
-        let layout = TemporaryLayout::plan_verified(value)?;
+        let mut layout = TemporaryLayout::plan_verified(value)?;
+        if register_temporaries {
+            layout.allocate_r11(value);
+        }
         max_registers = max_registers.max(layout.count());
+        for instruction in &value.steps {
+            if let Operation::Call { arguments, .. } = &instruction.kind {
+                outgoing = outgoing.max(arguments.len().saturating_sub(REGISTER_ARGUMENTS));
+            }
+        }
         estimated_steps = estimated_steps
             .checked_add(value.steps.len())
             .ok_or_else(failure)?;
         expressions.push(Some((value, layout)));
     }
-    let slot_count = program.integer_slot_count();
-    let stack_size = frame_bytes(slot_count, max_registers)?;
-    let mut code = Code::new(estimated_steps, true)?;
+    let slots = StackSlots {
+        local_base: outgoing,
+        temporary_base: outgoing
+            .checked_add(program.integer_slot_count())
+            .ok_or_else(failure)?,
+    };
+    Ok(FunctionLayout {
+        expressions,
+        slots,
+        frame_bytes: frame_bytes(slots.temporary_base, max_registers)?,
+        estimated_steps,
+    })
+}
+
+fn append_function(
+    code: &mut Code,
+    program: &ScalarProgramIr,
+    layout: &FunctionLayout<'_>,
+    initial_budget: Option<u32>,
+) -> Result<(), Diagnostic> {
+    if program.is_bounded() != code.metered {
+        return Err(failure());
+    }
+    let parameters = program.parameters();
+    let register_count = parameters.min(REGISTER_ARGUMENTS);
+    let registers = &INTEGER_ARGUMENT_REGISTERS[..register_count];
+    let stack_size = layout.frame_bytes;
+    let slots = layout.slots;
     code.allocate_stack(stack_size)?;
     for (slot, register) in registers.iter().copied().enumerate() {
-        code.store_argument(slot, register)?;
+        code.store_argument(slots.local(slot)?, register)?;
     }
     // Copy caller-owned arguments into ordinary verified local slots; never
     // write into the caller's frame or consume its return address as a value.
     for slot in register_count..parameters {
-        code.copy_stack_argument(slot, slot - register_count, stack_size)?;
+        code.copy_stack_argument(slots.local(slot)?, slot - register_count, stack_size)?;
     }
 
-    if let Some(max_work) = budget {
+    if let Some(max_work) = initial_budget {
         code.start_meter(max_work)?;
     }
 
     let mut offsets = Vec::with_capacity(program.operations().len() + 1);
     let mut branches = Vec::new();
     let mut returns = Vec::new();
-    for (step, planned) in program.operations().iter().zip(&expressions) {
+    for (step, planned) in program.operations().iter().zip(&layout.expressions) {
         offsets.push(code.data.len());
         if step.charge_work {
             code.charge_work(step.span)?;
         }
         if let Some((value, layout)) = planned {
-            expression(&mut code, value, slot_count, true, Some(layout))?;
+            expression(code, value, slots, true, Some(layout))?;
         }
         match &step.kind {
             ProgramOp::Store { slot, .. } => {
-                code.store_rax(*slot)?;
+                code.store_rax(slots.local(*slot)?)?;
             }
             ProgramOp::Update {
                 slot,
@@ -598,12 +714,13 @@ fn function_text(
                 operator_span,
                 ..
             } => {
-                // The RHS cannot call or write slots. Scarp snapshots the LHS
-                // first, which is equivalent to reading the same slot here.
+                // Pure calls cannot write their caller's slots. Reading the
+                // LHS here yields the same value as the interpreter snapshot.
                 code.push(&[0x48, 0x89, 0xc1])?; // mov rcx, rax
-                code.load_rax(*slot)?;
+                let slot = slots.local(*slot)?;
+                code.load_rax(slot)?;
                 code.binary(*operator, true, *operator_span)?;
-                code.store_rax(*slot)?;
+                code.store_rax(slot)?;
             }
             ProgramOp::Return { .. } => {
                 returns.push(code.jump()?);
@@ -619,25 +736,26 @@ fn function_text(
                 ..
             } if code.metered => {
                 code.guard_repeat_count(step.span)?;
-                code.store_rax(*count_slot)?;
+                code.store_rax(slots.local(*count_slot)?)?;
                 code.integer_rax(0)?;
-                code.store_rax(*index_slot)?;
+                code.store_rax(slots.local(*index_slot)?)?;
             }
             ProgramOp::RepeatGuard {
                 count_slot,
                 index_slot,
                 target,
             } if code.metered => {
-                code.load_rax(*index_slot)?;
-                code.load_rcx(*count_slot)?;
+                code.load_rax(slots.local(*index_slot)?)?;
+                code.load_rcx(slots.local(*count_slot)?)?;
                 code.push(&[0x48, 0x39, 0xc8])?; // cmp rax, rcx
                 branches.push((code.near_branch(Condition::GreaterEqual)?, *target));
             }
             ProgramOp::RepeatNext { index_slot } if code.metered => {
-                code.load_rax(*index_slot)?;
+                let index_slot = slots.local(*index_slot)?;
+                code.load_rax(index_slot)?;
                 code.push(&[0x48, 0x83, 0xc0, 0x01])?; // add rax, 1
                 code.guard_overflow(step.span)?;
-                code.store_rax(*index_slot)?;
+                code.store_rax(index_slot)?;
             }
             ProgramOp::LoopControl { target, .. } if code.metered => {
                 branches.push((code.jump()?, *target));
@@ -664,11 +782,23 @@ fn function_text(
     }
     code.finish_checked_return()?;
     code.restore_stack_and_return(stack_size)?;
+    Ok(())
+}
+
+fn function_text(
+    program: &ScalarProgramIr,
+    budget: Option<u32>,
+) -> Result<(Code, FreestandingCallLayout), Diagnostic> {
+    program.verify()?;
+    let layout = plan_function(program, false)?;
+    let mut code = Code::new(layout.estimated_steps, true)?;
+    code.metered = budget.is_some();
+    append_function(&mut code, program, &layout, budget)?;
     Ok((
         code,
         FreestandingCallLayout {
-            frame_bytes: stack_size,
-            integer_arguments: parameters,
+            frame_bytes: layout.frame_bytes,
+            integer_arguments: program.parameters(),
         },
     ))
 }
@@ -764,7 +894,77 @@ pub(super) fn emit_function_with_layout(
     ))
 }
 
+pub(super) fn emit_bounded_entry(
+    graph: &ScalarCallGraph,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<FreestandingEntry, Diagnostic> {
+    let bodies = graph.bodies();
+    let entry = graph.entry();
+    let layouts = bodies
+        .iter()
+        .map(|body| plan_function(body, true))
+        .collect::<Result<Vec<_>, _>>()?;
+    let frame_sizes = layouts
+        .iter()
+        .map(|layout| layout.frame_bytes)
+        .collect::<Vec<_>>();
+    let peak_stack_bytes = graph.verify_stack(&frame_sizes, max_stack_bytes)?;
+    let entry_layout = FreestandingCallLayout {
+        frame_bytes: frame_sizes[entry],
+        integer_arguments: bodies[entry].parameters(),
+    };
+    let order = graph.emission_order();
+    let steps = order.iter().try_fold(0usize, |sum, &id| {
+        sum.checked_add(layouts[id].estimated_steps)
+            .ok_or_else(failure)
+    })?;
+    let mut code = Code::new(steps, true)?;
+    code.metered = true;
+    let mut targets = vec![None; bodies.len()];
+    let mut entry_bytes = 0;
+    for id in order {
+        let is_entry = id == entry;
+        // Calls to the named entry from another source function must not reset
+        // the shared meter. Its internal target starts after the external meter
+        // setup, at the body's own prologue.
+        if is_entry {
+            code.start_meter(max_work)?;
+        }
+        targets[id] = Some(code.data.len());
+        append_function(&mut code, &bodies[id], &layouts[id], None)?;
+        if is_entry {
+            entry_bytes = code.data.len();
+        }
+    }
+    for (displacement, callee) in code.call_fixups {
+        let target = targets.get(callee).copied().flatten().ok_or_else(failure)?;
+        patch_relative_branch(&mut code.data, displacement, target)?;
+    }
+    let object = object_with_entry(&code.data, b"\0scarp_bounded_integer_entry\0", entry_bytes)?;
+    Ok(FreestandingEntry {
+        kernel: CheckedElf64Kernel {
+            object,
+            failure_spans: code.failure_spans,
+        },
+        entry_layout,
+        max_active_frames: graph.entry_depth(),
+        peak_stack_bytes,
+    })
+}
+
 fn object(machine: &[u8], strings: &[u8]) -> Result<Vec<u8>, Diagnostic> {
+    object_with_entry(machine, strings, machine.len())
+}
+
+fn object_with_entry(
+    machine: &[u8],
+    strings: &[u8],
+    entry_bytes: usize,
+) -> Result<Vec<u8>, Diagnostic> {
+    if !(1..=machine.len()).contains(&entry_bytes) {
+        return Err(failure());
+    }
     // Offsets are into shstrtab, starting with the required NUL name.
     const SHSTR: &[u8] = b"\0.text\0.symtab\0.strtab\0.shstrtab\0.note.GNU-stack\0";
     let [0, symbol_name @ .., 0] = strings else {
@@ -799,7 +999,7 @@ fn object(machine: &[u8], strings: &[u8]) -> Result<Vec<u8>, Diagnostic> {
     u32at(global, 0, 1)?; // name offset in .strtab
     global[4] = 0x12; // STB_GLOBAL | STT_FUNC
     u16at(global, 6, 1)?; // .text section
-    u64at(global, 16, layout.text.size() as u64)?;
+    u64at(global, 16, entry_bytes as u64)?;
     put(&mut object, layout.symbols.offset(), &symbols)?;
     put(&mut object, layout.strings.offset(), strings)?;
     put(&mut object, layout.section_names.offset(), SHSTR)?;

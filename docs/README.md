@@ -6,6 +6,15 @@ Start with the [release-aware learning path](https://scarp-lang.github.io/scarp-
 The links below index compiler-specific references, implementation history and
 release evidence in this checkout.
 
+**0.0.7-alpha.2 candidate** adds bounded native direct calls and ELF64 object
+output. [Native object command](native-object-output.md) ·
+[Value layout planning](native-value-layout.md)
+
+**0.0.7-alpha.1 prerelease** adds bounded native loops through the Rust API,
+fixed-array concatenation and variadic integer reductions.
+[Public notes](releases/v0.0.7-alpha.1-publication.md) ·
+[Publication verification](releases/v0.0.7-alpha.1-validation.md)
+
 **0.0.6-alpha.20 prerelease** adds exact decimal literals, numeric tuple
 ordering, persistent indexed tuple updates and checked native integer functions.
 [Public notes](releases/v0.0.6-alpha.20-publication.md) ·
@@ -138,7 +147,7 @@ updated for the **0.0.6-alpha.6 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
 contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.6-alpha.20](https://github.com/scarp-lang/scarp/releases/tag/v0.0.6-alpha.20),
+[0.0.7-alpha.1](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.1),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)
