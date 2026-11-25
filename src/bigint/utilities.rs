@@ -21,10 +21,17 @@ impl BigInt {
     }
 
     /// Decimal trailing zero count; zero itself has no finite valuation.
-    pub(crate) fn trailing_zeros(&self, budget: &mut Budget, span: Span) -> Result<i64, Diagnostic> {
+    pub(crate) fn trailing_zeros(
+        &self,
+        budget: &mut Budget,
+        span: Span,
+    ) -> Result<i64, Diagnostic> {
         budget.check_bigint_digits(self.decimal_digits(), span)?;
         if self.is_zero() {
-            return Err(domain(span, "bigint_trailing_zeros requires a nonzero bigint"));
+            return Err(domain(
+                span,
+                "bigint_trailing_zeros requires a nonzero bigint",
+            ));
         }
         let mut count = 0_i64;
         for &limb in self.limbs.iter() {
@@ -46,17 +53,17 @@ impl BigInt {
     /// Balanced product tree; each node and every limb operation is charged.
     pub(crate) fn factorial(n: i64, budget: &mut Budget, span: Span) -> Result<Self, Diagnostic> {
         if n < 0 {
-            return Err(domain(span, "bigint_factorial requires a nonnegative integer"));
+            return Err(domain(
+                span,
+                "bigint_factorial requires a nonnegative integer",
+            ));
         }
         if n < 2 {
             return Self::from_integer(1, budget, span);
         }
         // For n >= 20 the upper half of factors are >= 10.
         if n >= 20 {
-            budget.check_bigint_digits(
-                usize::try_from(n / 2 + 1).unwrap_or(usize::MAX),
-                span,
-            )?;
+            budget.check_bigint_digits(usize::try_from(n / 2 + 1).unwrap_or(usize::MAX), span)?;
         }
         product_range(2, n, budget, span)
     }
@@ -295,11 +302,21 @@ fn pow_mod_big_exponent(
     let mut e = exponent.clone();
     while !e.is_zero() {
         if !e.is_even() {
-            result = remainder(&multiply(&result, &factor, budget, span)?, modulus, budget, span)?;
+            result = remainder(
+                &multiply(&result, &factor, budget, span)?,
+                modulus,
+                budget,
+                span,
+            )?;
         }
         e = quotient(&e, two, budget, span)?;
         if !e.is_zero() {
-            factor = remainder(&multiply(&factor, &factor, budget, span)?, modulus, budget, span)?;
+            factor = remainder(
+                &multiply(&factor, &factor, budget, span)?,
+                modulus,
+                budget,
+                span,
+            )?;
         }
     }
     Ok(result)
