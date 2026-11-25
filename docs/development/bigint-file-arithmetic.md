@@ -175,6 +175,43 @@ on Windows. Rust tests cover signed i128 differential cases, equivalence with
 the interpreter, exact quota boundaries, cancellation, corruption and concurrent
 publication.
 
+## Measured capacity
+
+The release-mode CLI on Linux 6.18.57 x86-64 used Rust 1.100.0 and one worker on
+an AMD EPYC 9V74. The benchmark source tree is
+[`10cb5342cfa226ad8f593b6a5cd0cc36a4d62edf`](https://github.com/scarp-lang/scarp/commit/10cb5342cfa226ad8f593b6a5cd0cc36a4d62edf).
+Each run verified every decimal output byte. The timings include the CLI
+process, arithmetic and file publication. [Raw measurements](../benchmarks/2026-11-25-bigint-file-arithmetic.json)
+
+| Case | Digits in each operand and result | Filesystem | Elapsed | Buffer payload | Process peak RSS | Peak temporary bytes including output |
+| --- | ---: | --- | ---: | ---: | ---: | ---: |
+| Add two distinct dense inputs | 100,000,000 | ext4 | 0.585 s | 262,138 B | 2,318,336 B | 144,451,940 B |
+| Subtract with a cross-block borrow | 100,000,000 | ext4 | 0.601 s | 262,138 B | 2,330,624 B | 144,451,936 B |
+| Double one dense input file | 1,000,000,000 | tmpfs | 5.789 s | 262,138 B | 2,289,664 B | 1,444,519,084 B |
+
+The billion-digit run used one physical input file on a memory-backed
+filesystem. The process RSS excludes the filesystem's memory. The ext4 runs
+used two distinct files and the benchmark recorded logical byte counts. The
+timings describe single runs under the observed cache and filesystem state.
+
+On the audited `main`, `cargo bench --locked --offline --bench bigint -- --large`
+completed. Its interpreter harness measured about 1.47 ms for schoolbook
+multiplication and 20.18 ms for general division at the 10,000-digit input
+size with a 5,000-digit second operand. The harness includes constructors
+and dispatch and skips those quadratic workloads at the larger sizes.
+
+The separate [#390 draft](https://github.com/scarp-lang/scarp/pull/390) at
+`4f6407565b47cf91734e53668b75b1b8adff3fd9` passed all four 100-million-digit
+interpreter cases and all three one-billion-digit cases on Linux. The latter
+cover signed addition, multiplication by one limb and division by one limb.
+These are in-memory interpreter measurements from that draft. General dense
+multiplication, multi-limb division and dense exponentiation at that scale
+remain unverified.
+
+An additional Linux run lowered `RLIMIT_FSIZE` to 8,192 bytes while adding
+`9` repeated 10,000 times and `1`. The scratch file fit, the staged decimal
+write returned the OS file-size error, and cleanup left only the input files.
+
 File-backed multiplication, division, modular/exact exponentiation, binary/hex
 I/O, automatic spilling and the source-language file value are follow-up work.
 Establish those capabilities separately before using dense linear results to
