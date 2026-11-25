@@ -13,11 +13,11 @@ use crate::{
 };
 
 mod advanced;
-mod utilities;
 pub(crate) mod bitwise;
 mod modular;
 mod number_theory;
 mod radix;
+mod utilities;
 
 const BASE: u64 = 1_000_000_000;
 /// Opt-in implementation ceiling; hosts may select a smaller per-value limit.
