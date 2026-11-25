@@ -165,6 +165,17 @@ pub enum Builtin {
     BigIntIsProbablePrime,
     BigIntFactorial,
     BigIntRoot,
+    BigIntFibonacci,
+    BigIntNextPrime,
+    BigIntBinomial,
+    BigIntPermutation,
+    BigIntIsPerfectSquare,
+    BigIntIsPowerOfTwo,
+    BigIntReverse,
+    BigIntIsPalindrome,
+    BigIntMin,
+    BigIntMax,
+    BigIntModInverse,
 }
 
 impl Builtin {
@@ -232,6 +243,17 @@ impl Builtin {
             "bigint_is_probable_prime" => Self::BigIntIsProbablePrime,
             "bigint_factorial" => Self::BigIntFactorial,
             "bigint_root" => Self::BigIntRoot,
+            "bigint_fibonacci" => Self::BigIntFibonacci,
+            "bigint_next_prime" => Self::BigIntNextPrime,
+            "bigint_binomial" => Self::BigIntBinomial,
+            "bigint_permutation" => Self::BigIntPermutation,
+            "bigint_is_perfect_square" => Self::BigIntIsPerfectSquare,
+            "bigint_is_power_of_two" => Self::BigIntIsPowerOfTwo,
+            "bigint_reverse" => Self::BigIntReverse,
+            "bigint_is_palindrome" => Self::BigIntIsPalindrome,
+            "bigint_min" => Self::BigIntMin,
+            "bigint_max" => Self::BigIntMax,
+            "bigint_mod_inverse" => Self::BigIntModInverse,
             "integer_to_text" => Self::IntegerToText,
             "float_to_text" => Self::FloatToText,
             "text_to_integer" => Self::TextToInteger,
@@ -393,7 +415,16 @@ impl Builtin {
             | Self::BigIntLog2
             | Self::BigIntIsPrime
             | Self::BigIntIsProbablePrime => &[ValueType::BigInt],
-            Self::BigIntFactorial => &[Integer],
+            Self::BigIntFactorial | Self::BigIntFibonacci => &[Integer],
+            Self::BigIntBinomial | Self::BigIntPermutation => &[Integer, Integer],
+            Self::BigIntMin | Self::BigIntMax | Self::BigIntModInverse => {
+                &[ValueType::BigInt, ValueType::BigInt]
+            }
+            Self::BigIntNextPrime
+            | Self::BigIntIsPerfectSquare
+            | Self::BigIntIsPowerOfTwo
+            | Self::BigIntReverse
+            | Self::BigIntIsPalindrome => &[ValueType::BigInt],
             Self::BigIntPow | Self::BigIntRoot => &[ValueType::BigInt, Integer],
             Self::BigIntPowMod => &[ValueType::BigInt, Integer, ValueType::BigInt],
             Self::BigIntFromRadix => &[String, Integer],
@@ -526,7 +557,19 @@ impl Builtin {
             | Self::BigIntIsNegative
             | Self::BigIntIsPrime
             | Self::BigIntIsProbablePrime => ValueType::Boolean,
-            Self::BigIntFactorial | Self::BigIntRoot => ValueType::BigInt,
+            Self::BigIntFactorial
+            | Self::BigIntRoot
+            | Self::BigIntFibonacci
+            | Self::BigIntNextPrime
+            | Self::BigIntBinomial
+            | Self::BigIntPermutation
+            | Self::BigIntReverse
+            | Self::BigIntMin
+            | Self::BigIntMax
+            | Self::BigIntModInverse => ValueType::BigInt,
+            Self::BigIntIsPerfectSquare
+            | Self::BigIntIsPowerOfTwo
+            | Self::BigIntIsPalindrome => ValueType::Boolean,
             Self::BigIntToText | Self::BigIntToRadix => ValueType::String,
             Self::BigIntToInteger => ValueType::Integer,
             Self::IntegerToText
@@ -664,6 +707,17 @@ impl Builtin {
                 | Self::BigIntIsProbablePrime
                 | Self::BigIntFactorial
                 | Self::BigIntRoot
+                | Self::BigIntFibonacci
+                | Self::BigIntNextPrime
+                | Self::BigIntBinomial
+                | Self::BigIntPermutation
+                | Self::BigIntIsPerfectSquare
+                | Self::BigIntIsPowerOfTwo
+                | Self::BigIntReverse
+                | Self::BigIntIsPalindrome
+                | Self::BigIntMin
+                | Self::BigIntMax
+                | Self::BigIntModInverse
         )
     }
 
@@ -1408,6 +1462,17 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::BigIntIsProbablePrime
         | Builtin::BigIntFactorial
         | Builtin::BigIntRoot
+        | Builtin::BigIntFibonacci
+        | Builtin::BigIntNextPrime
+        | Builtin::BigIntBinomial
+        | Builtin::BigIntPermutation
+        | Builtin::BigIntIsPerfectSquare
+        | Builtin::BigIntIsPowerOfTwo
+        | Builtin::BigIntReverse
+        | Builtin::BigIntIsPalindrome
+        | Builtin::BigIntMin
+        | Builtin::BigIntMax
+        | Builtin::BigIntModInverse
         | Builtin::IntegerToText
         | Builtin::FloatToText
         | Builtin::TextToInteger
