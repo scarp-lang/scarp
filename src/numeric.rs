@@ -567,9 +567,9 @@ impl Builtin {
             | Self::BigIntMin
             | Self::BigIntMax
             | Self::BigIntModInverse => ValueType::BigInt,
-            Self::BigIntIsPerfectSquare
-            | Self::BigIntIsPowerOfTwo
-            | Self::BigIntIsPalindrome => ValueType::Boolean,
+            Self::BigIntIsPerfectSquare | Self::BigIntIsPowerOfTwo | Self::BigIntIsPalindrome => {
+                ValueType::Boolean
+            }
             Self::BigIntToText | Self::BigIntToRadix => ValueType::String,
             Self::BigIntToInteger => ValueType::Integer,
             Self::IntegerToText
