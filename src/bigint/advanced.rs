@@ -11,83 +11,106 @@ impl BigInt {
         budget: &mut Budget,
         span: Span,
     ) -> Result<Self, Diagnostic> {
-        if exponent < 0 {
-            return Err(Diagnostic::new(
-                DiagnosticKind::NumericDomain,
-                span,
-                "bigint_pow exponent must be nonnegative",
-            )
-            .with_help("use a nonnegative integer exponent; negative powers are not integers"));
+        let exponent = u128::try_from(exponent).map_err(|_| negative_exponent(span))?;
+        self.pow_checked(Some(exponent), exponent % 2 != 0, budget, span)
+    }
+
+    pub(crate) fn pow_big(
+        &self,
+        exponent: &Self,
+        budget: &mut Budget,
+        span: Span,
+    ) -> Result<Self, Diagnostic> {
+        if exponent.is_negative() {
+            return Err(negative_exponent(span));
         }
-        budget.check_bigint_digits(self.decimal_digits(), span)?;
+        budget.check_bigint_digits(exponent.decimal_digits(), span)?;
+        let odd = exponent.limbs.first().is_some_and(|limb| limb % 2 != 0);
+        self.pow_checked(exponent.magnitude_as_u128(), odd, budget, span)
+    }
+
+    pub(super) fn magnitude_as_u128(&self) -> Option<u128> {
+        self.limbs.iter().rev().try_fold(0_u128, |magnitude, limb| {
+            magnitude
+                .checked_mul(u128::from(BASE))?
+                .checked_add(u128::from(*limb))
+        })
+    }
+
+    fn pow_checked(
+        &self,
+        exponent: Option<u128>,
+        odd: bool,
+        budget: &mut Budget,
+        span: Span,
+    ) -> Result<Self, Diagnostic> {
+        let base_digits = self.decimal_digits();
+        budget.check_bigint_digits(base_digits, span)?;
         budget.charge(1, span)?;
         // As for integer exponentiation, 0^0 is defined to be 1.
-        if exponent == 0 {
+        if exponent == Some(0) {
             return Self::from_integer(1, budget, span);
         }
-        if self.is_zero() {
-            return Self::from_integer(0, budget, span);
+        if self.is_zero() || exponent == Some(1) {
+            return Ok(self.clone());
         }
-        if self.limbs.len() == 1 && self.limbs[0] == 1 {
-            return if self.negative && exponent % 2 == 1 {
-                Ok(self.clone())
-            } else {
-                Self::from_integer(1, budget, span)
-            };
+        if self.limbs.as_slice() == [1] {
+            return Ok(if odd { self.clone() } else { self.absolute() });
         }
 
-        // |base| >= 2, so digits(base^e) >= floor(3e/10) + 1.
-        // This conservative integer bound cheaply rejects immense exponents.
-        let exponent = exponent as u64;
-        let lower_digits = (exponent / 10)
-            .saturating_mul(3)
-            .saturating_add((exponent % 10) * 3 / 10)
-            .saturating_add(1);
-        budget.check_bigint_digits(usize::try_from(lower_digits).unwrap_or(usize::MAX), span)?;
+        // Every remaining base is at least 2 in magnitude. An exponent above
+        // u128 would imply at least floor(0.3 * 2^128) digits, above usize.
+        let exponent = exponent.ok_or_else(|| expansion_limit(span))?;
+        let top = *self.limbs.last().expect("nonzero magnitude");
+        let decade = 10_u32.pow(top.ilog10());
+        let leading = u64::from(top / decade);
+        // |base| >= leading * 10^(base_digits-1). Taking the decimal logarithm
+        // of leading^10 with ilog10 gives a proved lower bound in tenths.
+        let tenths = (base_digits as u128 - 1) * 10 + u128::from(leading.pow(10).ilog10());
+        let lower_digits = exponent
+            .checked_mul(tenths)
+            .ok_or_else(|| expansion_limit(span))?
+            / 10
+            + 1;
+        let lower_digits = usize::try_from(lower_digits).map_err(|_| expansion_limit(span))?;
+        budget.check_bigint_digits(lower_digits, span)?;
+        let minimum_payload = lower_digits
+            .div_ceil(9)
+            .checked_mul(std::mem::size_of::<u32>())
+            .ok_or_else(|| expansion_limit(span))?;
+        budget.check_bigint_allocation(minimum_payload, span)?;
 
         // Powers of ten need no multiplication: directly construct the
-        // canonical decimal limbs after prepaying exact size and work.
-        budget.charge(self.limbs.len() as u64, span)?;
-        if self.limbs[..self.limbs.len() - 1].iter().all(|&x| x == 0) {
-            let top = *self.limbs.last().expect("nonzero magnitude");
-            if (0_u32..9).any(|i| 10_u32.pow(i) == top) {
-                let zeros = self.decimal_digits() - 1;
-                let output_zeros = (zeros as u64).saturating_mul(exponent);
-                let output_digits = output_zeros.saturating_add(1);
-                budget.check_bigint_digits(
-                    usize::try_from(output_digits).unwrap_or(usize::MAX),
-                    span,
-                )?;
-                let zeros = usize::try_from(output_zeros).map_err(|_| allocation(span))?;
+        // canonical decimal limbs. For this case the lower bound is exact.
+        if top == decade {
+            budget.charge(self.limbs.len() as u64, span)?;
+            if self.limbs[..self.limbs.len() - 1].iter().all(|&x| x == 0) {
+                let zeros = lower_digits - 1;
                 let count = zeros / 9 + 1;
                 budget.charge(count as u64, span)?;
                 let mut limbs = buffer(count, budget, span)?;
                 limbs.resize(count - 1, 0);
                 limbs.push(10_u32.pow((zeros % 9) as u32));
-                return finish(limbs, self.negative && exponent % 2 == 1, budget, span);
+                return finish(limbs, self.negative && odd, budget, span);
             }
         }
 
-        // For a d-digit base, |base| >= 10^(d-1). Reject impossible dense
-        // powers before allocating intermediate products.
-        let lower_digits = ((self.decimal_digits() - 1) as u64)
-            .saturating_mul(exponent)
-            .saturating_add(1);
-        budget.check_bigint_digits(usize::try_from(lower_digits).unwrap_or(usize::MAX), span)?;
-
-        let mut power = Self::from_integer(1, budget, span)?;
+        let mut power = None;
         let mut factor = self.clone();
         let mut remaining = exponent;
         while remaining > 0 {
             if remaining & 1 != 0 {
-                power = multiply(&power, &factor, budget, span)?;
+                power = Some(match power {
+                    Some(previous) => multiply(&previous, &factor, budget, span)?,
+                    None => factor.clone(),
+                });
             }
             remaining >>= 1;
             if remaining != 0 {
                 factor = multiply(&factor, &factor, budget, span)?;
             }
         }
-        Ok(power)
+        Ok(power.expect("nonzero exponent has a set bit"))
     }
 
     /// Magnitude bit width, including negative values; zero has width zero.
@@ -159,4 +182,22 @@ impl BigInt {
         debug_assert_eq!(result.len(), bytes);
         Ok(Arc::<str>::from(result))
     }
+}
+
+fn negative_exponent(span: Span) -> Diagnostic {
+    Diagnostic::new(
+        DiagnosticKind::NumericDomain,
+        span,
+        "bigint power exponent must be nonnegative",
+    )
+    .with_help("use a nonnegative integer exponent for exact integer powers")
+}
+
+fn expansion_limit(span: Span) -> Diagnostic {
+    Diagnostic::new(
+        DiagnosticKind::BigIntLimit,
+        span,
+        "bigint power exceeds the addressable result size",
+    )
+    .with_help("reduce the exponent or use bigint_pow_mod_big to compute only a modular residue")
 }

@@ -70,6 +70,7 @@ runtime binding, not a folded library constant.
 | Built-in | Result and domain |
 | --- | --- |
 | `bigint_pow(x, exponent)` | Exact power. The integer exponent must be nonnegative. `0^0` yields `1`. |
+| `bigint_pow_big(x, exponent)` | Exact power with a nonnegative BigInt exponent. Returns a resource diagnostic if expansion exceeds the available budget. |
 | `bigint_gcd(a, b)` / `bigint_lcm(a, b)` | Nonnegative results for signed inputs. `gcd(0,0)` and `lcm(0,x)` yield zero. |
 | `bigint_sqrt(x)` | Largest integer whose square is at most `x`. Requires a nonnegative input. |
 | `bigint_bit_length(x)` | Bit width of the magnitude, with zero returning `0`. |
@@ -78,6 +79,7 @@ runtime binding, not a folded library constant.
 | `bigint_and(a,b)`, `bigint_or(a,b)`, `bigint_xor(a,b)`, `bigint_not(x)` | Signed infinite two’s-complement semantics. |
 | `bigint_shl(x,n)` / `bigint_shr(x,n)` | Exact left shift and sign-extending right shift. Shift counts are nonnegative integers. |
 | `bigint_pow_mod(x, exponent, modulus)` | Nonnegative residue for a nonnegative integer exponent and strictly positive BigInt modulus. Uses variable-time arithmetic. |
+| `bigint_pow_mod_big(x, exponent, modulus)` | Nonnegative residue for a nonnegative BigInt exponent and strictly positive BigInt modulus. Uses variable-time arithmetic. |
 | `bigint_divmod(a,b)` | `tuple<bigint,bigint>` with truncating quotient and dividend-signed remainder. Divisor must be nonzero. |
 
 Radix parsing checks both the original digit count and the result’s decimal
@@ -85,6 +87,34 @@ digit count against `--max-bigint-digits`. Radix formatting pays text allocation
 and work quotas. Modular multiplication intermediates pay the ordinary BigInt
 limits. Run [`examples/bigint_exact.srp`](../examples/bigint_exact.srp) with the
 development compiler.
+
+### Powers with BigInt exponents
+
+```scarp
+bind exponent = bigint("340282366920938463463374607431768211456");
+print(bigint_pow_big(bigint("-1"), exponent)); // 1
+print(bigint_pow_mod_big(bigint("-12345678901234567890987654321"),
+                        exponent, bigint("4294967291"))); // 3252763948
+```
+
+The `integer` exponent APIs still accept signed 64-bit arguments and reject
+negative values. The `_big` APIs take a `bigint` exponent. Exact expansion
+treats `0^0` as `1` and handles `0`, `1` and `-1` without expanding the exponent.
+Power `1` shares the original limbs. For a nontrivial base with `d` decimal
+digits and leading digit `p`, the bounded engine checks
+`floor(e * (10 * (d - 1) + floor(log10(p^10))) / 10) + 1` as a lower bound on
+output digits, using checked integer arithmetic throughout. It checks the
+corresponding minimum limb bytes before squaring and continues to charge
+all actual intermediate sizes and work. For powers of ten the digit estimate
+is exact and the engine constructs the final decimal limbs directly.
+
+The modular API reduces after every product. It handles exponents beyond
+`u128` by scanning the existing decimal limbs from most significant to least
+significant, updating the residue by `r^(10^9) * x^limb mod modulus` at each step.
+This computes the residue without constructing the expanded power or a second
+binary exponent. A modulus of `1` gives `0`, including for `0^0`. The ordinary
+digit, allocation and work limits still apply to modular intermediates.
+Run [the wide exponent example](../examples/bigint_wide_exponents.srp).
 
 ## Extended integer utilities (development)
 

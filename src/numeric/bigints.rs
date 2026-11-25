@@ -75,6 +75,15 @@ pub(super) fn evaluate(
                 argument_span(1),
             )
             .map(Value::BigInt),
+        Builtin::BigIntPowBig => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .pow_big(
+                args[1].as_bigint().expect("typed bigint"),
+                budget,
+                argument_span(1),
+            )
+            .map(Value::BigInt),
         Builtin::BigIntGcd => args[0]
             .as_bigint()
             .expect("typed bigint")
@@ -95,6 +104,17 @@ pub(super) fn evaluate(
             .expect("typed bigint")
             .pow_mod(
                 args[1].as_integer().expect("typed integer"),
+                args[2].as_bigint().expect("typed bigint"),
+                budget,
+                argument_span(1),
+                argument_span(2),
+            )
+            .map(Value::BigInt),
+        Builtin::BigIntPowModBig => args[0]
+            .as_bigint()
+            .expect("typed bigint")
+            .pow_mod_big(
+                args[1].as_bigint().expect("typed bigint"),
                 args[2].as_bigint().expect("typed bigint"),
                 budget,
                 argument_span(1),

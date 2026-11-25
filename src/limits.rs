@@ -175,12 +175,17 @@ impl Budget {
     }
 
     pub fn charge_bigint_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
+        self.check_bigint_allocation(bytes, span)?;
+        self.bigint_remaining -= bytes;
+        Ok(())
+    }
+
+    pub fn check_bigint_allocation(&self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
         if bytes > self.bigint_remaining {
             return Err(Diagnostic::new(DiagnosticKind::BigIntLimit, span,
                 format!("cumulative bigint allocation limit of {} bytes exceeded", self.bigint_limit))
                 .with_help("reduce bigint materialization or raise --max-bigint-bytes / ExecutionOptions.max_bigint_bytes; scratch buffers also count"));
         }
-        self.bigint_remaining -= bytes;
         Ok(())
     }
 
