@@ -468,7 +468,7 @@ def verify(directory, version, commit, source_directory=None):
             "docs/releases/v0.0.7-alpha.2-publication.md",
             "docs/releases/v0.0.7-alpha.2-validation.md",
             "docs/native-object-output.md", "docs/native-value-layout.md",
-            "examples/native_bounded_entry.srp",
+            "examples/native_bounded_entry.srp", "examples/native_bounded_entry.stdout",
             "examples/native_direct_calls.srp", "examples/native_direct_calls.stdout",
             "examples/native_wide_calls.srp", "examples/native_wide_calls.stdout",
         ) if version == "0.0.7-alpha.2" else ()
