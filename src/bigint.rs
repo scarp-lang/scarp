@@ -19,8 +19,8 @@ mod number_theory;
 mod radix;
 
 const BASE: u64 = 1_000_000_000;
-/// Initial implementation ceiling; hosts may select a smaller per-value limit.
-pub const MAX_BIGINT_DIGITS: usize = 1_000_000;
+/// Opt-in implementation ceiling; hosts may select a smaller per-value limit.
+pub const MAX_BIGINT_DIGITS: usize = 10_000_000;
 pub const DEFAULT_BIGINT_DIGITS: usize = 10_000;
 pub const DEFAULT_BIGINT_BYTES: usize = 8 * 1024 * 1024;
 
@@ -380,11 +380,16 @@ fn sum_limbs(
     span: Span,
 ) -> Result<Vec<u32>, Diagnostic> {
     let length = left.len().max(right.len());
-    let mut result = buffer(length.checked_add(1).ok_or_else(|| allocation(span))?, budget, span)?;
+    let mut result = buffer(
+        length.checked_add(1).ok_or_else(|| allocation(span))?,
+        budget,
+        span,
+    )?;
     let mut carry = 0_u64;
     for i in 0..length {
         let value = u64::from(*left.get(i).unwrap_or(&0))
-            + u64::from(*right.get(i).unwrap_or(&0)) + carry;
+            + u64::from(*right.get(i).unwrap_or(&0))
+            + carry;
         result.push((value % BASE) as u32);
         carry = value / BASE;
     }
