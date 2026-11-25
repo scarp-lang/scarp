@@ -166,7 +166,11 @@ impl fmt::Display for BigInt {
         // Batch consecutive zero limbs without allocating a decimal string.
         // A sparse billion-digit value would otherwise make >100M writes.
         const ZERO_BYTES: [u8; 9 * 1024] = [b'0'; 9 * 1024];
-        let zeros = std::str::from_utf8(&ZERO_BYTES).expect("ASCII zeros");
+        const ZEROS: &str = match std::str::from_utf8(&ZERO_BYTES) {
+            Ok(text) => text,
+            Err(_) => panic!("ASCII zeros"),
+        };
+        let zeros = ZEROS;
         let mut pending = 0;
         for &limb in limbs {
             if limb == 0 {
