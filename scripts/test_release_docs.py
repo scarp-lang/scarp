@@ -11,7 +11,7 @@ import json
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLISHED_VERSION = "0.0.6-alpha.19"
+PUBLISHED_VERSION = "0.0.6-alpha.20"
 ALPHA6_SOURCE = "cdf6a3924ec2a36c7beca5a9aec4f01a0bce515e"
 HISTORICAL_ALPHA3 = "0.0.6-alpha.3"
 HISTORICAL_ALPHA2 = "0.0.6-alpha.2"
@@ -83,13 +83,14 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         version = package_version()
         self.assertEqual(version, PACKAGE_VERSION)
         needles = {
-            "README.md": (f"**{PUBLISHED_VERSION}**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
+            "README.md": (f"docs/releases/v{PUBLISHED_VERSION}-validation.md", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/README.md": (f"**{PUBLISHED_VERSION} prerelease**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/compatibility.md": (f"`{PUBLISHED_VERSION}` is **a published GitHub prerelease**", f"latest published prerelease is\n[{PUBLISHED_VERSION}]"),
             "docs/reference/cli.md": (f"v{PUBLISHED_VERSION}",),
             "docs/development/feature-matrix.md": (f"Published `{PUBLISHED_VERSION}`",),
             "CHANGELOG.md": (
-                f"## {PUBLISHED_VERSION} — published GitHub prerelease, 2026-11-23",
+                f"## {PUBLISHED_VERSION} — published GitHub prerelease, 2026-11-24",
+                "## 0.0.6-alpha.19 — published GitHub prerelease, 2026-11-23",
                 "## 0.0.6-alpha.12 — published GitHub prerelease, 2026-11-16",
                 "## 0.0.6-alpha.11 — published GitHub prerelease, 2026-11-15",
                 "## 0.0.6-alpha.10 — published GitHub prerelease, 2026-11-14",
@@ -268,9 +269,12 @@ class ReleaseDocConsistencyTests(unittest.TestCase):
         ):
             with self.subTest(file=filename):
                 text = (ROOT / filename).read_text(encoding="utf-8")
-                matches = re.findall(r"latest published prerelease is\s*\[v?([^]]+)\]", text)
-                self.assertEqual(matches, [version])
-                self.assertIn(f"v{version}", text)
+                matches = re.findall(
+                    r"latest published prerelease is\s*\[v?([^]]+)\]"
+                    r"\(https://github\.com/scarp-lang/scarp/releases/tag/v([^()\s]+)\)",
+                    text,
+                )
+                self.assertEqual(matches, [(version, version)])
         # The tagged candidate file intentionally remains a pre-release
         # snapshot; current status is in the separate publication record.
         candidate = (ROOT / "docs/releases/v0.0.6-alpha.3.md").read_text(encoding="utf-8")

@@ -24,6 +24,7 @@ It ships exact decimal literals, numeric tuple ordering, persistent indexed
 tuple assignment, and experimental ELF64 emission for pure integer functions
 with one to six required integer parameters. The tagged source is
 [`b1a9347`](https://github.com/scarp-lang/scarp/commit/b1a9347f93540fdf95b0ddecba4adc55a3b4bb98).
+[Publication verification](docs/releases/v0.0.6-alpha.20-validation.md)
 
 Development on `main` extends the native integer-function ABI, exercises
 bounded loops under QEMU, and supports multi-operand GCD, HCF and LCM.

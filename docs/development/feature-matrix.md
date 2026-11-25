@@ -3,15 +3,15 @@
 Development toward Alpha.1 adds typed fixed-array concatenation and variadic
 integer GCD, HCF and LCM. [Fixed arrays](../fixed-arrays.md) · [Integer utilities](../scalar-utilities.md)
 
+Published `0.0.6-alpha.20` supports checked native integer functions with
+one to six required parameters and forward scalar control flow.
+[Target and ABI](../native-elf64.md) ·
+[Publication verification](../releases/v0.0.6-alpha.20-validation.md)
+
 Published `0.0.6-alpha.19` adds Rust-host callable lookup, checked rebinding,
 and cumulative interpreter and host admission receipts.
 [Public notes](../releases/v0.0.6-alpha.19-publication.md) ·
 [Exact-source verification](../releases/v0.0.6-alpha.19-validation.md)
-
-The published Alpha.20 release extends compiler-owned ELF64 objects to pure integer
-functions with required parameters and forward scalar control flow.
-[Target and ABI](../native-elf64.md) ·
-[Candidate scope](../releases/v0.0.6-alpha.20-preparation.md)
 
 Published `0.0.6-alpha.18` adds unified zero-argument `scarp exec`,
 automatic bounded typed input, fixed-array updates and early Lifetime
