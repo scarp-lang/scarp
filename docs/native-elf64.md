@@ -69,8 +69,10 @@ The input must pass the existing preflight: at most 256 scalar slots, 4096
 resolved statements, 1024 nodes per expression and 16,384 total nodes.
 The accepted binding-only sequence is stricter than general programs.
 The encoder checks actual machine-code growth against 200,000 bytes and caps
-the complete ELF object at 262,144 bytes. It uses fallible reserves and
-deterministic section offsets.
+the complete ELF object at 262,144 bytes. The development writer plans aligned,
+nonoverlapping file regions before reserving the output buffer. The section
+headers use the same ranges as the payload writer. The writer also validates
+the string table for its single exported symbol before allocating the object.
 The alpha.16 candidate probes every full 4 KiB stack page crossed while
 allocating a large frame. Both return paths restore the complete frame.
 No source path, timestamp, username, environment variable, or build identity
@@ -321,6 +323,11 @@ definition alone to either native function API. The C11 emitter and both
 binding-only ELF64 kernels still reject conditional expressions. The function
 ABI, accepted primitive types and target stay the same.
 
+The bounded function meter subtracts one from its unsigned 32-bit allowance
+and branches on borrow. Zero therefore fails at the current event, including
+the first event of a zero-budget call. The subtraction and failure check use
+two fewer bytes per metered event than the earlier test-and-decrement sequence.
+
 ## Experimental bounded direct calls
 
 `native_object::emit_elf64_bounded_integer_entry(source, name, max_work)`
@@ -369,7 +376,7 @@ See [the direct-call example](../examples/native_direct_calls.srp).
 `scarp exec examples/native_direct_calls.srp` runs the script through the
 interpreter. For native emission, pass just its definitions with
 `"evaluate"` as the selected entry. This experimental API is development
-work beyond the published v0.0.6-alpha.20.
+work beyond the published v0.0.7-alpha.1.
 
 The [wide-call example](../examples/native_wide_calls.srp) exercises two
 stack-passed arguments to a private helper. The independent Linux x86-64 host

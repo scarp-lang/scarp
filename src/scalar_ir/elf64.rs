@@ -5,7 +5,8 @@ mod layout;
 mod temporaries;
 
 use self::layout::{
-    align_up, frame_bytes, slot_offset, stack_argument_offset, INTEGER_ARGUMENT_REGISTERS,
+    frame_bytes, slot_offset, stack_argument_offset, FileRegion, ObjectLayout, ELF_HEADER_BYTES,
+    INTEGER_ARGUMENT_REGISTERS, MAX_TEXT_BYTES, SECTION_COUNT, SECTION_HEADER_BYTES, SYMBOL_BYTES,
 };
 use self::temporaries::{TemporaryHome, TemporaryLayout};
 use super::{
@@ -23,8 +24,6 @@ use crate::{
     },
 };
 
-const MAX_TEXT_BYTES: usize = 200_000;
-const MAX_OBJECT_BYTES: usize = 262_144;
 // Bound both the public signature and the number of caller-stack loads.
 pub(super) const MAX_INTEGER_ARGUMENTS: usize = 16;
 const REGISTER_ARGUMENTS: usize = INTEGER_ARGUMENT_REGISTERS.len();
@@ -49,6 +48,7 @@ struct Code {
 #[repr(u8)]
 enum Condition {
     Overflow = 0x80,
+    Below = 0x82,
     Equal = 0x84,
     NotEqual = 0x85,
     Above = 0x87,
@@ -246,9 +246,10 @@ impl Code {
             return Ok(());
         }
         let id = self.record_failure_span(span)?;
-        self.push(&[0x4d, 0x85, 0xd2])?; // test r10, r10
-        self.branch_to_failure(Condition::Equal, CHECKED_KERNEL_WORK_LIMIT, id)?;
-        self.push(&[0x49, 0xff, 0xca]) // dec r10
+        // Unsigned subtraction borrows exactly when the old allowance was zero.
+        // The failure branch preserves CF and returns before the wrapped value is used.
+        self.push(&[0x41, 0x83, 0xea, 0x01])?; // sub r10d, 1
+        self.branch_to_failure(Condition::Below, CHECKED_KERNEL_WORK_LIMIT, id)
     }
 
     fn guard_repeat_count(&mut self, span: Span) -> Result<(), Diagnostic> {
@@ -823,33 +824,38 @@ fn u64at(target: &mut [u8], at: usize, value: u64) -> Result<(), Diagnostic> {
 #[allow(clippy::too_many_arguments)]
 fn section(
     output: &mut [u8],
-    offset: usize,
+    table: FileRegion,
     index: usize,
     name: u32,
     kind: u32,
     flags: u64,
-    file_offset: usize,
-    size: usize,
+    region: Option<FileRegion>,
     link: u32,
     info: u32,
-    alignment: u64,
     entry_size: u64,
 ) -> Result<(), Diagnostic> {
-    let mut header = [0u8; 64];
+    if index >= SECTION_COUNT
+        || table.size() != SECTION_COUNT * SECTION_HEADER_BYTES
+        || table.end()? > output.len()
+    {
+        return Err(failure());
+    }
+    let (offset, size, alignment) = region.map_or((0, 0, 1), |region| {
+        (region.offset(), region.size(), region.alignment())
+    });
+    let mut header = [0u8; SECTION_HEADER_BYTES];
     u32at(&mut header, 0, name)?;
     u32at(&mut header, 4, kind)?;
     u64at(&mut header, 8, flags)?;
-    u64at(&mut header, 24, file_offset as u64)?;
+    u64at(&mut header, 24, offset as u64)?;
     u64at(&mut header, 32, size as u64)?;
     u32at(&mut header, 40, link)?;
     u32at(&mut header, 44, info)?;
-    u64at(&mut header, 48, alignment)?;
+    u64at(&mut header, 48, alignment as u64)?;
     u64at(&mut header, 56, entry_size)?;
     put(
         output,
-        offset
-            .checked_add(index.checked_mul(64).ok_or_else(failure)?)
-            .ok_or_else(failure)?,
+        table.offset() + index * SECTION_HEADER_BYTES,
         &header,
     )
 }
@@ -951,21 +957,17 @@ fn object_with_entry(
     }
     // Offsets are into shstrtab, starting with the required NUL name.
     const SHSTR: &[u8] = b"\0.text\0.symtab\0.strtab\0.shstrtab\0.note.GNU-stack\0";
-    let text_offset = align_up(64, 16)?;
-    let sym_offset = align_up(
-        text_offset.checked_add(machine.len()).ok_or_else(failure)?,
-        8,
-    )?;
-    let str_offset = sym_offset.checked_add(48).ok_or_else(failure)?;
-    let shstr_offset = str_offset.checked_add(strings.len()).ok_or_else(failure)?;
-    let header_offset = align_up(
-        shstr_offset.checked_add(SHSTR.len()).ok_or_else(failure)?,
-        8,
-    )?;
-    let total = header_offset
-        .checked_add(6 * 64)
-        .filter(|n| *n <= MAX_OBJECT_BYTES)
-        .ok_or_else(failure)?;
+    let [0, symbol_name @ .., 0] = strings else {
+        return Err(failure());
+    };
+    if !symbol_name
+        .iter()
+        .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'_')
+    {
+        return Err(failure());
+    }
+    let layout = ObjectLayout::plan(machine.len(), strings.len(), SHSTR.len())?;
+    let total = layout.section_headers.end()?;
 
     let mut object = Vec::new();
     object.try_reserve_exact(total).map_err(|_| failure())?;
@@ -975,80 +977,84 @@ fn object_with_entry(
     u16at(&mut object, 16, 1)?; // ET_REL
     u16at(&mut object, 18, 62)?; // EM_X86_64
     u32at(&mut object, 20, 1)?;
-    u64at(&mut object, 40, header_offset as u64)?;
-    u16at(&mut object, 52, 64)?;
-    u16at(&mut object, 58, 64)?;
-    u16at(&mut object, 60, 6)?;
+    u64at(&mut object, 40, layout.section_headers.offset() as u64)?;
+    u16at(&mut object, 52, ELF_HEADER_BYTES as u16)?;
+    u16at(&mut object, 58, SECTION_HEADER_BYTES as u16)?;
+    u16at(&mut object, 60, SECTION_COUNT as u16)?;
     u16at(&mut object, 62, 4)?; // .shstrtab index
 
-    put(&mut object, text_offset, machine)?;
-    let mut symbols = [0u8; 48]; // null symbol and one global function
-    u32at(&mut symbols, 24, 1)?; // name offset in .strtab
-    symbols[28] = 0x12; // STB_GLOBAL | STT_FUNC
-    u16at(&mut symbols, 30, 1)?; // .text section
-    u64at(&mut symbols, 40, entry_bytes as u64)?;
-    put(&mut object, sym_offset, &symbols)?;
-    put(&mut object, str_offset, strings)?;
-    put(&mut object, shstr_offset, SHSTR)?;
+    put(&mut object, layout.text.offset(), machine)?;
+    let mut symbols = [0u8; 2 * SYMBOL_BYTES]; // null symbol and one global function
+    let global = &mut symbols[SYMBOL_BYTES..];
+    u32at(global, 0, 1)?; // name offset in .strtab
+    global[4] = 0x12; // STB_GLOBAL | STT_FUNC
+    u16at(global, 6, 1)?; // .text section
+    u64at(global, 16, entry_bytes as u64)?;
+    put(&mut object, layout.symbols.offset(), &symbols)?;
+    put(&mut object, layout.strings.offset(), strings)?;
+    put(&mut object, layout.section_names.offset(), SHSTR)?;
 
     // Null, executable .text, symtab, strtab, shstrtab, GNU noexec-stack.
     section(
         &mut object,
-        header_offset,
+        layout.section_headers,
         1,
         1,
         1,
         6,
-        text_offset,
-        machine.len(),
+        Some(layout.text),
         0,
         0,
-        16,
         0,
     )?;
     section(
         &mut object,
-        header_offset,
+        layout.section_headers,
         2,
         7,
         2,
         0,
-        sym_offset,
-        symbols.len(),
+        Some(layout.symbols),
         3,
         1,
-        8,
-        24,
+        SYMBOL_BYTES as u64,
     )?;
     section(
         &mut object,
-        header_offset,
+        layout.section_headers,
         3,
         15,
         3,
         0,
-        str_offset,
-        strings.len(),
+        Some(layout.strings),
         0,
         0,
-        1,
         0,
     )?;
     section(
         &mut object,
-        header_offset,
+        layout.section_headers,
         4,
         23,
         3,
         0,
-        shstr_offset,
-        SHSTR.len(),
+        Some(layout.section_names),
         0,
         0,
-        1,
         0,
     )?;
-    section(&mut object, header_offset, 5, 33, 1, 0, 0, 0, 0, 0, 1, 0)?;
+    section(
+        &mut object,
+        layout.section_headers,
+        5,
+        33,
+        1,
+        0,
+        None,
+        0,
+        0,
+        0,
+    )?;
     Ok(object)
 }
 
@@ -1069,6 +1075,23 @@ mod encoding_tests {
         assert_eq!(&code.data[29..32], &[0x48, 0x81, 0xc4]);
         assert_eq!(&code.data[32..36], &size.to_le_bytes());
         assert_eq!(&code.data[36..], &[0xc3]);
+    }
+
+    #[test]
+    fn object_rejects_missing_text_and_invalid_symbol_tables() {
+        assert!(object(&[], b"\0f\0").is_err());
+        for strings in [
+            &b""[..],
+            b"\0\0",
+            b"f\0",
+            b"\0f",
+            b"\0f\0g\0",
+            b"\0f.\0",
+            b"\0\xff\0",
+        ] {
+            assert!(object(&[0xc3], strings).is_err());
+        }
+        assert!(object(&[0xc3], b"\0scarp_test\0").is_ok());
     }
 
     #[test]

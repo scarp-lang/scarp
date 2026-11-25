@@ -72,6 +72,8 @@ pub(super) fn evaluate(
                 let exp = value.exp();
                 exp / (1.0 + exp)
             }
+            // exp sees only nonpositive inputs; log1p retains a tiny negative-tail result.
+            Builtin::Softplus => value.max(0.0) + (-value.abs()).exp().ln_1p(),
             Builtin::Relu => {
                 if value > 0.0 {
                     value

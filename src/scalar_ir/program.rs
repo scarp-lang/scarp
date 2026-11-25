@@ -389,6 +389,11 @@ impl ScalarProgramIr {
         call_arities: Option<&[usize]>,
     ) -> Result<(), Diagnostic> {
         expression.verify_with_calls(call_arities)?;
+        for instruction in &expression.steps {
+            if instruction.span.start < span.start || instruction.span.end > span.end {
+                return Err(invalid(instruction.span));
+            }
+        }
         if expression.slots != self.slots
             || kind.is_some_and(|expected| expression.registers[expression.root] != expected)
         {
@@ -469,8 +474,12 @@ impl ScalarProgramIr {
                     operator_span,
                     value,
                 } => {
-                    if operator.is_comparison() || operator_span.start > operator_span.end {
-                        return Err(invalid(span));
+                    if operator.is_comparison()
+                        || operator_span.start > operator_span.end
+                        || operator_span.start < span.start
+                        || operator_span.end > span.end
+                    {
+                        return Err(invalid(*operator_span));
                     }
                     self.check_slot(*slot, ValueType::Integer, span)?;
                     self.check_expression(value, Some(ValueType::Integer), span, call_arities)?;
@@ -610,6 +619,28 @@ mod tests {
         let mut script = ir;
         script.function_parameters = None;
         assert!(script.verify().is_err());
+    }
+
+    #[test]
+    fn verifier_rejects_spans_outside_the_enclosing_statement() {
+        let source = "// नमस्ते 🌏\r\nvar n = 4; n += 2; print(n);";
+        let ir = program(source);
+
+        let mut malformed = ir.clone();
+        let ProgramOp::Store { value, .. } = &mut malformed.steps[0].kind else {
+            unreachable!()
+        };
+        let outside = Span::new(0, 2);
+        value.steps[0].span = outside;
+        assert_eq!(malformed.verify().unwrap_err().span, outside);
+
+        let mut malformed = ir;
+        let ProgramOp::Update { operator_span, .. } = &mut malformed.steps[1].kind else {
+            unreachable!()
+        };
+        let outside = Span::new(source.len(), source.len() + 1);
+        *operator_span = outside;
+        assert_eq!(malformed.verify().unwrap_err().span, outside);
     }
 
     #[test]

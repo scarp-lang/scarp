@@ -3,3 +3,4 @@ print(variance(samples), stddev([3.0, 3.0]));
 print(relu(samples));
 print(sigmoid([-1000.0, 0.0, 1000.0]));
 print(tanh([-1000.0, 0.0, 1000.0]));
+print(softplus([-1000.0, 1000.0]));

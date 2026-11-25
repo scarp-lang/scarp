@@ -1,4 +1,4 @@
-//! Repeatable Lifetime view/clone microbenchmarks. No physical RSS claims.
+//! Repeatable Lifetime view, clone and frame-reuse benchmarks.
 //! Run: cargo bench --bench lifetime -- --quick
 //! Compare on the same host with the identical benchmark source at both commits.
 
@@ -81,6 +81,32 @@ fn main() {
             }),
         ),
     ] {
+        println!("{name},{time:.3}");
+    }
+
+    let wide_sum = format!("n{}", " + 1".repeat(180));
+    let wide_tail = format!(
+        "pure funcra descend(n: integer, total: integer = 0) -> integer {{
+             if n == 0 {{ return total; }}
+             return descend(n - 1, total + ({wide_sum}));
+         }} print(descend(128));"
+    );
+    for (name, source, expected) in [
+        (
+            "ordinary_sibling_calls_512",
+            "pure funcra next(n: integer) -> integer { return n + 1; }
+             var total = 0; repeat 512 as n { total += next(n); } print(total);",
+            &b"131328\n"[..],
+        ),
+        ("terminal_wide_calls_128", &wide_tail, &b"31296\n"[..]),
+    ] {
+        let program = scarp::compile(source).unwrap();
+        let mut output = Vec::new();
+        scarp::interpreter::execute(&program, &mut output).unwrap();
+        assert_eq!(output, expected);
+        let time = median_ns(if quick { 25 } else { 100 }, samples, || {
+            scarp::interpreter::execute(black_box(&program), &mut std::io::sink()).unwrap();
+        });
         println!("{name},{time:.3}");
     }
 }

@@ -48,8 +48,8 @@ try {
     if ($version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
         throw 'Expected a three-part package version'
     }
-    # Alpha.15 through alpha.20 retain the extracted-package checks from alpha.14.
-    $contractVersion = if ($version -in @('0.0.6-alpha.15', '0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20')) { '0.0.6-alpha.14' } else { $version }
+    # Current packages retain the extracted-package checks introduced in alpha.14.
+    $contractVersion = if ($version -in @('0.0.6-alpha.15', '0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1')) { '0.0.6-alpha.14' } else { $version }
     $compiler = & rustc --version
     if ($LASTEXITCODE -ne 0) { throw 'Could not read compiler version' }
     $compilerDetails = & rustc --version --verbose
@@ -72,14 +72,21 @@ try {
         throw 'Package output already exists; choose a fresh output directory'
     }
 
-    & cargo build --locked --offline --release --target $Target
+    if ($isWindowsTarget) {
+        # The package ships the executable alone. Keep linker timestamps and
+        # per-build debug database identities out of the release image.
+        & cargo rustc --locked --offline --release --target $Target --bin scarp -- -C link-arg=/Brepro -C link-arg=/DEBUG:NONE
+    }
+    else {
+        & cargo build --locked --offline --release --target $Target
+    }
     if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
     $stagingRoot = Join-Path $projectRoot ('target/packages/' + [guid]::NewGuid().ToString('N'))
     $packageRoot = Join-Path $stagingRoot $packageName
     New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
     New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
     $binaryName = if ($isWindowsTarget) { 'scarp.exe' } else { 'scarp' }
-    $binary = Join-Path $projectRoot "target/$Target/release/$binaryName"
+    $binary = Join-Path $metadata.target_directory "$Target/release/$binaryName"
     Copy-Item -LiteralPath $binary -Destination $packageRoot
     foreach ($filename in @('LICENSE', 'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md')) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $filename) -Destination $packageRoot
@@ -140,7 +147,7 @@ try {
     # Alpha.18 and later: test the actual extracted compiler, not only the development
     # binary. Manifest precedence, conventional entrypoints, and typed prompts
     # must work with zero-argument exec on every supported package target.
-    if ($version -in @('0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20')) {
+    if ($version -in @('0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1')) {
         $workspace = Join-Path $stagingRoot 'unified-exec-smoke'
         $srcDir = Join-Path $workspace 'src'
         New-Item -ItemType Directory -Path $srcDir -Force | Out-Null
@@ -197,7 +204,7 @@ try {
     [System.IO.File]::WriteAllText($staticSource, 'print(1/0);')
     $staticCheck = Invoke-ScarpProcess -Executable $executable -Arguments @('verify', '--diagnostic-format=json', $staticSource)
     if ($staticCheck.ExitCode -ne 0 -or $staticCheck.Stdout.Length -ne 0 -or $staticCheck.Stderr.Length -ne 0) { throw 'Packaged verify must remain static and silent' }
-    if ($version -in @('0.0.6-alpha.15', '0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20')) {
+    if ($version -in @('0.0.6-alpha.15', '0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1')) {
         $oversized = Join-Path $stagingRoot 'oversized-frontend.srp'
         [IO.File]::WriteAllText($oversized, (' ' * (1MB + 1)))
         foreach ($mode in @('tokens', 'ast')) {
@@ -228,7 +235,7 @@ try {
             throw 'Packaged text comparison output differs at the exact budget'
         }
     }
-    if ($version -in @('0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20')) {
+    if ($version -in @('0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1')) {
         foreach ($example in @('order_statistics', 'core_collections')) {
             $source = Join-Path $extractedPackage "examples/$example.srp"
             $expectedOutput = [IO.File]::ReadAllBytes((Join-Path $extractedPackage "examples/$example.stdout"))
@@ -398,16 +405,16 @@ try {
         $metadata = [System.Text.Encoding]::UTF8.GetString($json.Stdout) | ConvertFrom-Json -AsHashtable
         $expectedSchema = if ($example -in @('variant_validation', 'ui_event_patterns', 'typed_submission', 'typed_propagation', 'task_panel_state', 'structured_pattern_coverage')) { 5 }
         elseif ($example -in @('app_state', 'typed_dynamic_lists', 'persistent_list_updates')) { 4 }
-        elseif ($example -in @('fixed_arrays', 'array_updates', 'array_reordering', 'list_reordering', 'typed_maps', 'persistent_maps', 'map_projections', 'core_collections')) { 3 }
+        elseif ($example -in @('fixed_arrays', 'array_updates', 'array_concat', 'array_reordering', 'list_reordering', 'typed_maps', 'persistent_maps', 'map_projections', 'core_collections')) { 3 }
         elseif ($example -in @('tuples', 'core_input_tuple', 'data_destructure')) { 2 }
         else { 1 }
         if ($metadata.schema_version -ne $expectedSchema -or $metadata.entry -ne 0 -or $metadata.modules.Count -lt 1) {
-            throw "Packaged $example JSON schema failed"
+            throw "Packaged $example JSON schema failed: expected schema $expectedSchema, entry 0 and at least one module; got schema $($metadata.schema_version), entry $($metadata.entry) and $($metadata.modules.Count) modules"
         }
     }
     $interactiveExamples = @('typed_calculator', 'exact_integer')
     if ($contractVersion -in @('0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) { $interactiveExamples += 'exact_decimal' }
-    if ($version -in @('0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20')) { $interactiveExamples += 'boolean_prompt' }
+    if ($version -in @('0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1')) { $interactiveExamples += 'boolean_prompt' }
     foreach ($example in $interactiveExamples) {
         $source = Join-Path $extractedPackage "examples/interactive/$example.srp"
         $inputPath = Join-Path $extractedPackage "examples/interactive/$example.stdin"
@@ -417,7 +424,7 @@ try {
             throw "Packaged interactive $example output differs"
         }
     }
-    if ($version -in @('0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20')) {
+    if ($version -in @('0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1')) {
         $source = Join-Path $extractedPackage 'examples/interactive/boolean_prompt.srp'
         $invalidInput = [Text.Encoding]::UTF8.GetBytes("invalid`n")
         $invalidBoolean = Invoke-ScarpProcess -Executable $executable -Arguments @(

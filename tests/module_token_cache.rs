@@ -332,3 +332,78 @@ fn token_cache_works_with_opt_in_whole_graph_semantic_reuse() {
     assert_eq!(semantics.stats().hits, 1);
     assert_eq!(run(&next.program), b"9\n");
 }
+
+#[test]
+fn reconfiguring_each_quota_trims_oldest_entries_and_preserves_ledgers() {
+    let old = loader(&[("main.srp", "print(10);")]);
+    let recent = loader(&[("main.srp", "print(20);")]);
+    for field in 0..4 {
+        let mut cache = TokenCache::new(Default::default());
+        let saved = with_token_cache(&old, &mut cache).unwrap();
+        with_token_cache(&recent, &mut cache).unwrap();
+        with_token_cache(&old, &mut cache).unwrap(); // A hit must not promote the oldest entry.
+        let stats = cache.stats();
+        let mut limits = cache.limits();
+        match field {
+            0 => limits.max_entries = 1,
+            1 => limits.max_source_bytes = stats.retained_source_bytes - 1,
+            2 => limits.max_identity_bytes = stats.retained_identity_bytes - 1,
+            _ => limits.max_tokens = stats.retained_tokens - 1,
+        }
+        cache.set_limits(limits);
+        assert_eq!(cache.limits(), limits);
+        let after = cache.stats();
+        assert_eq!((after.entries, after.evictions), (1, stats.evictions + 1));
+        assert_eq!(
+            (after.hits, after.misses, after.bypasses),
+            (stats.hits, stats.misses, stats.bypasses)
+        );
+        assert_eq!(
+            run(&with_token_cache(&recent, &mut cache).unwrap()),
+            b"20\n"
+        );
+        assert_eq!(cache.stats().hits, after.hits + 1);
+        cache.set_limits(TokenCacheLimits {
+            max_entries: 0,
+            ..limits
+        });
+        assert_eq!(cache.stats().retained_tokens, 0);
+        with_token_cache(&old, &mut cache).unwrap();
+        assert_eq!(cache.stats().entries, 0);
+        assert_eq!(cache.stats().bypasses, after.bypasses + 1);
+        cache.set_limits(Default::default());
+        with_token_cache(&old, &mut cache).unwrap();
+        assert_eq!(cache.stats().entries, 1);
+        assert_eq!(run(&saved), b"10\n");
+    }
+}
+
+#[test]
+fn shrinking_then_expanding_preserves_cold_results_for_renamed_and_deleted_modules() {
+    let entry = "import \"café.srp\" as lib; print(lib.f());";
+    let renamed = "import \"новый.srp\" as lib; print(lib.f());";
+    let lib = "pub pure funcra f()->integer {return 42;}";
+    let invalid = "// λ 🌍\r\npub pure funcra f()->integer {return missing;}";
+    let mut cache = TokenCache::new(Default::default());
+    for files in [
+        vec![("main.srp", entry), ("café.srp", lib)],
+        vec![("main.srp", entry)],
+        vec![("main.srp", renamed), ("новый.srp", invalid)],
+        vec![("main.srp", renamed), ("новый.srp", lib)],
+    ] {
+        let source = loader(&files);
+        for limit in [1, 8] {
+            cache.set_limits(TokenCacheLimits {
+                max_entries: limit,
+                ..Default::default()
+            });
+            let warm = with_token_cache(&source, &mut cache);
+            let cold = modules::compile_with_loader("main.srp", &source, Default::default());
+            match (warm, cold) {
+                (Ok(warm), Ok(cold)) => assert_eq!(run(&warm), run(&cold)),
+                (Err(warm), Err(cold)) => assert_eq!(warm.render(), cold.render()),
+                _ => panic!("cold and warm validation disagreed"),
+            }
+        }
+    }
+}

@@ -62,6 +62,37 @@ fn recursion_forward_calls_and_mutual_recursion_use_fresh_frames() {
 }
 
 #[test]
+fn sequential_frames_rebind_defaults_and_preserve_returned_payloads() {
+    let source = r#"
+        pure funcra select(value: string, chosen: string = value) -> string {
+            return chosen;
+        }
+        bind first = select("ignored", chosen: "kept");
+        bind second = select("fresh");
+        bind third = select(chosen: "third", value: "also ignored");
+        print(first, second, third, select("last"));
+    "#;
+    assert_eq!(output(source).0, "kept fresh third last\n");
+    let options = ExecutionOptions {
+        max_calls: 4,
+        ..ExecutionOptions::default()
+    };
+    scarp::check_with_options(source, options).unwrap();
+    let error = runtime_error(
+        source,
+        ExecutionOptions {
+            max_calls: 3,
+            ..options
+        },
+        Kind::CallLimit,
+    );
+    assert_eq!(
+        &source[error.span.start..error.span.end],
+        "select(\"last\")"
+    );
+}
+
+#[test]
 fn all_primitive_types_pass_by_value_and_parameters_are_immutable() {
     assert_eq!(output("funcra transform(n: integer, s: string, b: boolean) -> integer { print(s,b); var copy=n; copy+=2; return copy; } var n=3; print(transform(n,\"café\",true)); print(n);"), ("café true\n5\n3\n".into(), "".into()));
     invalid(

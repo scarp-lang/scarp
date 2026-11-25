@@ -74,3 +74,9 @@ assert_eq!(tokens.stats().hits, 2);
 The follow-on [source-relative syntax cache](syntax-cache.md) can now reuse successfully parsed file trees and rebase all nested syntax spans when source offsets change. It may optionally combine with this token cache, which helps on syntax misses. Future work remains dependency-aware incremental semantic linking and constant checking, audited resident memory, and cold-vs-incremental diagnostic benchmarks. Keep issue #117 open.
 
 This is a development-only opt-in API after v0.0.6-alpha.1. No release or CLI behavior is changed by this milestone.
+
+Rust hosts can read the active quotas with `TokenCache::limits` and change
+them with `set_limits`. Shrinking the entry count, source bytes, identity
+bytes or token count immediately evicts old entries in FIFO order. A zero
+entry count disables retention. Previously returned module programs retain
+their snapshots. Raising limits admits new entries as sources are processed.
