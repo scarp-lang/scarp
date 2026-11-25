@@ -21,11 +21,7 @@ impl BigInt {
     }
 
     /// Decimal trailing zero count; zero itself has no finite valuation.
-    pub(crate) fn trailing_zeros(
-        &self,
-        budget: &mut Budget,
-        span: Span,
-    ) -> Result<i64, Diagnostic> {
+    pub(crate) fn trailing_zeros(&self, budget: &mut Budget, span: Span) -> Result<i64, Diagnostic> {
         budget.check_bigint_digits(self.decimal_digits(), span)?;
         if self.is_zero() {
             return Err(domain(span, "bigint_trailing_zeros requires a nonzero bigint"));
@@ -109,7 +105,7 @@ impl BigInt {
         }
         loop {
             let delta = add(&high, &low.negated(), budget, span)?;
-            if delta.limbs.len() == 1 && delta.limbs[0] <= 1 || delta.is_zero() {
+            if delta.is_zero() || (delta.limbs.len() == 1 && delta.limbs[0] == 1) {
                 return Ok(low);
             }
             let half = quotient(&delta, &two, budget, span)?;
@@ -141,6 +137,7 @@ impl BigInt {
         loop {
             budget.charge(1, span)?;
             let (q, r) = divmod(self, &divisor, budget, span)?;
+            budget.charge(divisor.limbs.len().max(q.limbs.len()) as u64, span)?;
             if divisor > q {
                 return Ok(true);
             }
@@ -181,12 +178,14 @@ impl BigInt {
         for base in [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37] {
             let a = Self::from_integer(base, budget, span)?;
             let mut x = pow_mod_big_exponent(&a, &d, self, &one, &two, budget, span)?;
+            budget.charge(self.limbs.len() as u64 + 1, span)?;
             if x == one || x == minus_one {
                 continue;
             }
             let mut passed = false;
             for _ in 1..s {
                 x = remainder(&multiply(&x, &x, budget, span)?, self, budget, span)?;
+                budget.charge(self.limbs.len() as u64 + 1, span)?;
                 if x == minus_one {
                     passed = true;
                     break;
