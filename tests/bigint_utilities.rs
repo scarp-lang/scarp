@@ -162,3 +162,19 @@ fn new_builtins_work_as_typed_pure_callables() {
         "6 true\n"
     );
 }
+
+#[test]
+fn digit_count_does_not_materialize_decimal_text() {
+    let source = r#"
+        bind n = bigint_pow(bigint("10"), 99999);
+        print(bigint_digits(n),bigint_is_even(n),bigint_sign(n));
+    "#;
+    let options = ExecutionOptions {
+        max_bigint_digits: 100_000,
+        max_text_bytes: 16,
+        ..ExecutionOptions::default()
+    };
+    let mut out = Vec::new();
+    scarp::run_with_options(source, &mut out, options).unwrap();
+    assert_eq!(out, b"100000 true 1\n");
+}
