@@ -91,7 +91,7 @@ development compiler.
 | Resource | Default | Contract |
 | --- | --- | --- |
 | `--max-bigint-digits` / `ExecutionOptions.max_bigint_digits` | 10,000 | Raw input digits including leading zeros and normalized result digits; sign excluded, zero needs one digit |
-| Implementation digit ceiling | 1,000,000 | CLI rejects larger requested limits; embedding limits are clamped to this ceiling |
+| Implementation digit ceiling | 10,000,000 | CLI rejects larger requested limits; embedding limits are clamped to this ceiling |
 | `--max-bigint-bytes` / `ExecutionOptions.max_bigint_bytes` | 8,388,608 | Cumulative newly reserved u32 limb payload, including scratch; four bytes per reserved limb |
 | `--max-steps` | 1,000,000 | Shared deterministic dispatch, arithmetic and formatting work |
 | `--max-capture-bytes` | 16,777,216 | Each output snapshot charges 64 plus max(limb bytes, printed digit/sign bytes) |
@@ -152,22 +152,32 @@ No claim is made about practical million-digit general multiplication or divisio
 
 ## Larger exact powers
 
-The default limits are unchanged. To calculate a 23,980-digit result, put
+The default limits are unchanged; the opt-in digit ceiling is ten million. To calculate a 23,980-digit result, put
 `print(bigint_pow(bigint("250"),10000));` in `large.srp` and run:
 
 ```sh
 scarp exec --max-bigint-digits 100000 --max-bigint-bytes 67108864 --max-steps 100000000 large.srp
 ```
 
-For a sparse million-digit stress case, use `bigint_pow(bigint("10"),999999)`
-with a one-million-digit limit and adequate work and allocation budgets. This
-is not a guarantee for arbitrary dense million-digit powers. The integration
-suite includes a 100,000-digit decimal power and independent exact-power
-reference comparisons, and an opt-in one-million-digit output case:
+Powers of ten use direct decimal-limb construction rather than repeated
+multiplication, including negative bases whose magnitude is a power of ten.
+For an opt-in ten-million-digit result, use `bigint_pow(bigint("10"),9999999)`
+and print the BigInt directly:
+
+```sh
+scarp exec --max-bigint-digits 10000000 --max-bigint-bytes 67108864 --max-steps 100000000 large.srp
+```
+
+The default capture budget permits a single ten-million-digit output, but
+`bigint_to_text` still obeys the separate one-MiB per-string limit. This is not
+a guarantee for arbitrary dense ten-million-digit powers. The integration
+suite includes a 100,000-digit decimal power, a result beyond the former
+one-million-digit ceiling, independent exact-power reference comparisons and
+opt-in million- and ten-million-digit output cases:
 
 ```sh
 cargo test --locked --offline --test bigint_scalable
-cargo test --locked --offline --test bigint_scalable million_digit_decimal_power_is_exact -- --ignored
+cargo test --locked --offline --test bigint_scalable -- --ignored
 ```
 
 ## Rust embedding and validation
