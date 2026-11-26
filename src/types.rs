@@ -7,7 +7,7 @@ pub use source::{
     MAX_VARIANT_CASES,
 };
 
-pub(crate) use source::NominalKind;
+pub(crate) use source::{BuiltinVariant, NominalKind};
 
 /// Built-in requirements that can be checked without implicit conversions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -73,6 +73,32 @@ operator would require one. `Numeric` satisfies `Comparable`. Purity,
 argument order, defaults, contracts and lexical scopes follow ordinary
 [`funcra` rules](functions.md).
 
+## Option and Result payloads
+
+Generic functions can construct and accept `option<T>` and `result<T, E>`.
+Type inference descends into their payload types, including nested applications.
+Use the existing `new` and `match on` forms.
+
+```scarp
+pure funcra present<T>(value: T) -> option<T> {
+    return new option<T>::Some(value);
+}
+
+pure funcra unpack<T>(value: option<T>, fallback: T) -> T {
+    match on value {
+        case Some(item) { return item; }
+        case None { return fallback; }
+    }
+}
+
+print(unpack(present("Scarp"), "missing"));
+```
+
+The specialized type has the same case layout and semantic identity as the
+equivalent concrete Option or Result type. The usual exhaustiveness and result
+propagation rules apply. A Result propagated with `?` requires an identical
+error type.
+
 ## Compilation and execution
 
 The resolver validates each generic body with distinct type parameter identities.
@@ -93,7 +119,6 @@ source signatures and count retained instances with
 
 Generic source calls currently run in the interpreter. Rust embedding can
 invoke a concrete Scarp wrapper. User-defined generic records, variants and
-aliases, parameterized `option<T>` or `result<T, E>` payloads, callable
-values, user-defined constraints and native generic code generation remain
+aliases, callable values, user-defined constraints and native generic code generation remain
 future work. Concrete records and variants, including already concrete
 `option<integer>` and `result<integer, string>`, can be passed as type arguments.

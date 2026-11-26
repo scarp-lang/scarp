@@ -129,11 +129,6 @@ fn invalid_programs_report_the_right_generic_boundary() {
             "unknown constraint",
         ),
         (
-            "funcra f<T>(a:option<T>)->T{}",
-            Kind::GenericDefinition,
-            "require concrete payload types",
-        ),
-        (
             "funcra f<T>(a:T)->T{return a;} f::<integer,string>(1);",
             Kind::GenericArguments,
             "expects 1 type arguments",

@@ -1248,11 +1248,18 @@ impl Parser<'_> {
             ));
         }
         if first.has_parameter() || second.as_ref().is_some_and(SourceType::has_parameter) {
-            return Err(ParseError::new(
-                DiagnosticKind::GenericDefinition,
-                Span::new(opening.start, end),
-                "option and result require concrete payload types",
-            ));
+            let family = if family == "option" {
+                crate::types::BuiltinVariant::Option
+            } else {
+                crate::types::BuiltinVariant::Result
+            };
+            return SourceType::variant_application(family, first, second).ok_or_else(|| {
+                ParseError::new(
+                    DiagnosticKind::VariantDefinition,
+                    Span::new(opening.start, end),
+                    "option or result application exceeds type shape limits",
+                )
+            });
         }
         let name = match &second {
             Some(error) => format!("result<{first}, {error}>"),

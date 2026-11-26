@@ -1,7 +1,7 @@
 //! Type checking and dispatch planning for source variants.
 use super::*;
 use crate::ast::{MatchArm, MatchLiteral, MatchStatement, VariantConstructor};
-use crate::types::{NominalKind, MAX_VARIANT_CASES};
+use crate::types::MAX_VARIANT_CASES;
 
 pub(super) fn case_error(span: Span, message: impl Into<String>) -> Diagnostic {
     Diagnostic::new(DiagnosticKind::VariantCase, span, message)
@@ -12,17 +12,11 @@ fn coverage_error(span: Span, message: impl Into<String>) -> Diagnostic {
 }
 
 pub(super) fn constructor(
-    layout: &nominal::Layouts,
+    kind: SourceType,
     constructor: &VariantConstructor,
     types: &[SourceType],
     syntax: &Expression,
 ) -> Result<(SourceType, NodeMetadata), Diagnostic> {
-    let kind = nominal::lookup(
-        layout,
-        NominalKind::Variant,
-        &constructor.name,
-        constructor.name_span,
-    )?;
     let variant = kind.as_variant().expect("variant lookup");
     let (tag, (_, expected)) = variant
         .cases()

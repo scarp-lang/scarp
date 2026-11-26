@@ -137,19 +137,22 @@ impl Parser<'_> {
         let built_in = self.current().is_some_and(|token| {
             matches!(&token.kind, TokenKind::Identifier(name) if name == "option" || name == "result")
         }) && self.tokens.get(self.cursor + 1).is_some_and(|token| token.kind == TokenKind::Less);
-        let (name, name_span) = if built_in {
+        let (name, name_span, application) = if built_in {
             let start = self
                 .current()
                 .expect("specialization starts with a type")
                 .span
                 .start;
             let kind = self.value_type(false)?;
-            let SourceType::VariantRef(name) = kind else {
-                unreachable!("parameterized option/result is a variant reference");
-            };
-            (name.to_string(), Span::new(start, self.type_end))
+            let span = Span::new(start, self.type_end);
+            match kind {
+                SourceType::VariantRef(name) => (name.to_string(), span, None),
+                SourceType::VariantApplication(_) => (kind.to_string(), span, Some(kind)),
+                _ => unreachable!("option/result parser made a different type"),
+            }
         } else {
-            self.qualified_identifier()?
+            let (name, span) = self.qualified_identifier()?;
+            (name, span, None)
         };
         self.punctuation(TokenKind::Colon, "'::' before the variant case")?;
         self.punctuation(TokenKind::Colon, "'::' before the variant case")?;
@@ -168,6 +171,7 @@ impl Parser<'_> {
             ExpressionKind::Variant(Box::new(VariantConstructor {
                 name,
                 name_span,
+                application,
                 tag,
                 tag_span,
                 payload,
