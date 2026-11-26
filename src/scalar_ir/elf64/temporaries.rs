@@ -75,25 +75,6 @@ impl RegisterSet {
     }
 }
 
-fn accesses(operation: &Operation) -> (Option<usize>, [Option<usize>; 2], &[usize]) {
-    match *operation {
-        Operation::Work | Operation::Jump { .. } => (None, [None, None], &[]),
-        Operation::Integer { dst, .. }
-        | Operation::Boolean { dst, .. }
-        | Operation::Load { dst, .. } => (Some(dst), [None, None], &[]),
-        Operation::Move { dst, src } | Operation::Unary { dst, src, .. } => {
-            (Some(dst), [Some(src), None], &[])
-        }
-        Operation::Binary {
-            dst, left, right, ..
-        } => (Some(dst), [Some(left), Some(right)], &[]),
-        Operation::Branch { condition, .. } => (None, [Some(condition), None], &[]),
-        Operation::Call {
-            dst, ref arguments, ..
-        } => (Some(dst), [None, None], arguments),
-    }
-}
-
 fn register_sets(len: usize) -> Result<Vec<RegisterSet>, Diagnostic> {
     let mut sets = Vec::new();
     sets.try_reserve_exact(len).map_err(|_| failure())?;
@@ -129,7 +110,7 @@ impl TemporaryLayout {
                 }
                 Ok(())
             };
-            let (write, reads, arguments) = accesses(&step.kind);
+            let (write, reads, arguments) = step.kind.register_accesses();
             for register in reads
                 .into_iter()
                 .flatten()
@@ -220,7 +201,7 @@ impl TemporaryLayout {
                 outgoing.union(live_at(target)?);
             }
 
-            let (write, reads, arguments) = accesses(&step.kind);
+            let (write, reads, arguments) = step.kind.register_accesses();
             let inputs = reads.into_iter().flatten().chain(arguments.iter().copied());
             if let Some(dst) = write {
                 written.insert(dst);

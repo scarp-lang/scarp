@@ -281,7 +281,18 @@ The [mixed loop example](../examples/native_bounded_loops.srp) nests
 both forms and runs with `scarp exec examples/native_bounded_loops.srp`.
 Pass its function definition alone to the native API.
 
-## Experimental temporary lifetime reuse
+## Constant expressions and temporary lifetime reuse
+
+The three native function modes fold integer and Boolean operations when all
+operands are known and the checked result succeeds. At an expression branch
+join, a known value must agree across both paths. The compiler removes unused
+literal and copy instructions, then verifies the rewritten expression before
+planning its stack slots.
+
+Runtime work charges still occur in source order on the selected path.
+Operations that would fail retain their original diagnostic status and byte
+span. Match native failure span IDs to the metadata for the object that
+produced them.
 
 PR #366 adds deterministic stack layouts for checked and bounded function
 expressions. Straight-line expressions use first/last-access intervals.
@@ -292,8 +303,7 @@ and the root remains live through the final load on every path. Simultaneous
 operands and destinations remain distinct.
 
 Each plan is computed once per expression and used both to size the frame and
-to encode stack accesses. Work events, operation order, failure spans and the
-published binding-only kernel encodings are preserved.
+to encode stack accesses.
 
 A regression with 200 successive additions and a second regression with a
 200-branch short-circuit chain each verify a 40-byte aligned frame. Both

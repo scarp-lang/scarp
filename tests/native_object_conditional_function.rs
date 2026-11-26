@@ -194,8 +194,8 @@ int main(int argc, char **argv) {
         }
     }
 
-    let source = "// चयन\npure funcra f(x: integer) -> integer {
-        return if x == 0 { 7 } else { 1 / 0 };
+    let source = "// चयन\r\npure funcra f(x: integer) -> integer {
+        return if x == 0 { 6 * 7 } else { 1 / 0 };
     }";
     let at = |text: &str| {
         let start = source.find(text).unwrap();
@@ -205,9 +205,12 @@ int main(int argc, char **argv) {
     let slash = Span::new(slash.start + 1, slash.end - 1);
     for (allowance, input, value, status, span) in [
         (6, 0, 0, CHECKED_KERNEL_WORK_LIMIT, Some(at("x == 0"))),
-        (7, 0, 0, CHECKED_KERNEL_WORK_LIMIT, Some(at("7"))),
+        (7, 0, 0, CHECKED_KERNEL_WORK_LIMIT, Some(at("6 * 7"))),
+        (8, 0, 0, CHECKED_KERNEL_WORK_LIMIT, Some(at("6"))),
+        (9, 0, 0, CHECKED_KERNEL_WORK_LIMIT, Some(at("7"))),
+        (10, 0, 0, CHECKED_KERNEL_WORK_LIMIT, Some(at("*"))),
+        (11, 0, 42, 0, None),
         (7, 1, 0, CHECKED_KERNEL_WORK_LIMIT, Some(at("1 / 0"))),
-        (8, 0, 7, 0, None),
         (10, 1, 0, CHECKED_KERNEL_WORK_LIMIT, Some(slash)),
         (11, 1, 0, CHECKED_KERNEL_DIVISION_BY_ZERO, Some(slash)),
     ] {

@@ -23,6 +23,7 @@ use crate::{
         CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_REPEAT_COUNT, CHECKED_KERNEL_WORK_LIMIT,
     },
 };
+use std::borrow::Cow;
 
 // Bound both the public signature and the number of caller-stack loads.
 pub(super) const MAX_INTEGER_ARGUMENTS: usize = 16;
@@ -614,16 +615,16 @@ fn resolve_branches(
 }
 
 struct FunctionLayout<'a> {
-    expressions: Vec<Option<(&'a ScalarExpressionIr, TemporaryLayout)>>,
+    expressions: Vec<Option<(Cow<'a, ScalarExpressionIr>, TemporaryLayout)>>,
     slots: StackSlots,
     frame_bytes: u32,
     estimated_steps: usize,
 }
 
-fn plan_function(
-    program: &ScalarProgramIr,
-    register_temporaries: bool,
-) -> Result<FunctionLayout<'_>, Diagnostic> {
+fn plan_function<'a>(
+    program: &'a ScalarProgramIr,
+    call_arities: Option<&[usize]>,
+) -> Result<FunctionLayout<'a>, Diagnostic> {
     if !program.is_function() || program.parameters() > MAX_INTEGER_ARGUMENTS {
         return Err(failure());
     }
@@ -636,9 +637,10 @@ fn plan_function(
             expressions.push(None);
             continue;
         };
-        let mut layout = TemporaryLayout::plan_verified(value)?;
-        if register_temporaries {
-            layout.allocate_r11(value);
+        let value = value.optimize_verified(call_arities)?;
+        let mut layout = TemporaryLayout::plan_verified(&value)?;
+        if call_arities.is_some() {
+            layout.allocate_r11(&value);
         }
         max_registers = max_registers.max(layout.count());
         for instruction in &value.steps {
@@ -790,7 +792,7 @@ fn function_text(
     budget: Option<u32>,
 ) -> Result<(Code, FreestandingCallLayout), Diagnostic> {
     program.verify()?;
-    let layout = plan_function(program, false)?;
+    let layout = plan_function(program, None)?;
     let mut code = Code::new(layout.estimated_steps, true)?;
     code.metered = budget.is_some();
     append_function(&mut code, program, &layout, budget)?;
@@ -901,9 +903,10 @@ pub(super) fn emit_bounded_entry(
 ) -> Result<FreestandingEntry, Diagnostic> {
     let bodies = graph.bodies();
     let entry = graph.entry();
+    let arities: Vec<_> = bodies.iter().map(ScalarProgramIr::parameters).collect();
     let layouts = bodies
         .iter()
-        .map(|body| plan_function(body, true))
+        .map(|body| plan_function(body, Some(&arities)))
         .collect::<Result<Vec<_>, _>>()?;
     let frame_sizes = layouts
         .iter()

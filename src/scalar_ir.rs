@@ -1,10 +1,10 @@
-//! Private, target-neutral scalar expression IR (first native IR slice).
+//! Private, target-neutral scalar expression IR.
 //!
 //! This lowers already-resolved integer/boolean expressions, never reparses
-//! source, and does not emit machine code or introduce a public ABI. Future
-//! statement and object lowering will build on its checked control-flow form.
+//! source, and verifies the typed control flow before native code generation.
 
 mod elf64;
+mod optimize;
 mod program;
 
 use crate::{
@@ -93,6 +93,25 @@ enum Operation {
 }
 
 impl Operation {
+    fn register_accesses(&self) -> (Option<usize>, [Option<usize>; 2], &[usize]) {
+        match *self {
+            Self::Work | Self::Jump { .. } => (None, [None, None], &[]),
+            Self::Integer { dst, .. } | Self::Boolean { dst, .. } | Self::Load { dst, .. } => {
+                (Some(dst), [None, None], &[])
+            }
+            Self::Move { dst, src } | Self::Unary { dst, src, .. } => {
+                (Some(dst), [Some(src), None], &[])
+            }
+            Self::Binary {
+                dst, left, right, ..
+            } => (Some(dst), [Some(left), Some(right)], &[]),
+            Self::Branch { condition, .. } => (None, [Some(condition), None], &[]),
+            Self::Call {
+                dst, ref arguments, ..
+            } => (Some(dst), [None, None], arguments),
+        }
+    }
+
     fn successors(&self, pc: usize) -> (usize, Option<usize>) {
         match *self {
             Self::Branch { target, .. } => (pc + 1, Some(target)),

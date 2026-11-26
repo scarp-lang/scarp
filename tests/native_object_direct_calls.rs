@@ -169,7 +169,7 @@ fn entry_stack_layout_separates_external_arguments_from_internal_outgoing_areas(
 
 #[test]
 fn straight_line_entry_uses_r11_and_a_smaller_frame() {
-    let source = "pure funcra f() -> integer { return 2 + 1; }";
+    let source = "pure funcra f(x: integer) -> integer { return ~x; }";
     let artifact = emit_elf64_bounded_integer_entry_with_layout(source, "f", 100, 32).unwrap();
     assert_eq!(artifact.entry_layout.frame_bytes, 24);
     assert_eq!(artifact.peak_stack_bytes, 32);
@@ -182,6 +182,16 @@ fn straight_line_entry_uses_r11_and_a_smaller_frame() {
     assert_eq!(&code[6..13], &[0x48, 0x81, 0xec, 24, 0, 0, 0]); // sub rsp, 24
     assert!(code.windows(3).any(|bytes| bytes == [0x49, 0x89, 0xc3])); // mov r11, rax
     assert!(code.windows(3).any(|bytes| bytes == [0x4c, 0x89, 0xd8])); // mov rax, r11
+}
+
+#[test]
+fn constant_entry_fits_the_exact_reduced_stack_budget() {
+    let source = "pure funcra f() -> integer { return (2 * 3) + 1; }";
+    let artifact = emit_elf64_bounded_integer_entry_with_layout(source, "f", 100, 16).unwrap();
+    assert_eq!(artifact.entry_layout.frame_bytes, 8);
+    assert_eq!(artifact.peak_stack_bytes, 16);
+    let error = emit_elf64_bounded_integer_entry_with_layout(source, "f", 100, 15).unwrap_err();
+    assert!(error.message.contains("requires 16 stack bytes"));
 }
 
 #[test]
@@ -501,4 +511,19 @@ int main(int argc, char **argv) {{
     }
     let artifact = emit_elf64_bounded_integer_entry(metered, "twice", trace.len() as u32).unwrap();
     assert_eq!(invoke(&artifact, 0, &[]), [(4, 0, 0), (4, 0, 0)]);
+
+    let folded = "pure funcra f(n: integer) -> integer {
+        return add(second: (2 * 3) + 1, first: n) + (6 / 2);
+    }
+    pure funcra add(first: integer, second: integer) -> integer {
+        return first + second;
+    }";
+    let artifact = emit_elf64_bounded_integer_entry(folded, "f", 100).unwrap();
+    let inputs = [-5, 0, 3, i64::MIN];
+    for (row, input) in invoke(&artifact, 1, &inputs).into_iter().zip(inputs) {
+        let mut expected = Vec::new();
+        scarp::run(&format!("{folded}\nprint(f({input}));"), &mut expected).unwrap();
+        assert_eq!(format!("{}\n", row.0).as_bytes(), expected);
+        assert_eq!((row.1, row.2), (0, 0));
+    }
 }
