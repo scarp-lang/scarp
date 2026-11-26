@@ -1,6 +1,7 @@
 use scarp::bigint::file::{
-    calculate, calculate_with_progress, divide, divide_with_progress, FileError, FileLimits,
-    FileOperation, FilePhase, FileResource,
+    calculate, calculate_with_progress, divide, divide_wide, divide_wide_with_progress,
+    divide_with_progress, FileError, FileLimits, FileOperation, FilePhase, FileResource,
+    WideDivisionLimits,
 };
 use std::{
     fs::{self, OpenOptions},
@@ -559,6 +560,246 @@ fn division_cli_publishes_quotient_and_prints_signed_remainder() {
         .unwrap()
         .contains("division by zero"));
     assert!(error.stdout.is_empty() && !output.exists());
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn wide_division_matches_signed_interpreter_results() {
+    let dir = Directory::new("wide-division");
+    let dense = "12345678908765432109".repeat(16);
+    let negative = format!("-000{dense}");
+    let divisor = format!("-003{}", "8919283740".repeat(10));
+    for (left, right) in [
+        (negative.as_str(), divisor.as_str()),
+        (dense.as_str(), "-9999999999999999999"),
+        (dense.as_str(), "1000000000000000001"),
+        (dense.as_str(), "1"),
+        ("-999999999999999999", "1000000000000000000"),
+        ("-1000000000000000000", "-1000000000000000000"),
+        ("-0000", divisor.as_str()),
+    ] {
+        let [a, b, output] = dir.operands(left, right);
+        let source = format!(
+            "bind a = bigint(\"{left}\"); bind b = bigint(\"{right}\"); print(a / b); print(a % b);"
+        );
+        let mut expected = Vec::new();
+        scarp::run(&source, &mut expected).unwrap();
+        for max_buffer_bytes in [110, 118, 256 * 1024] {
+            let limits = WideDivisionLimits {
+                file: FileLimits {
+                    max_buffer_bytes,
+                    ..FileLimits::default()
+                },
+                ..WideDivisionLimits::default()
+            };
+            let usage = divide_wide(&a, &b, &output, limits).unwrap();
+            let quotient = fs::read_to_string(&output).unwrap();
+            assert_eq!(
+                format!("{quotient}\n{}\n", usage.remainder).as_bytes(),
+                expected
+            );
+            assert_eq!(usage.quotient.scratch_bytes, 0);
+            assert_eq!(usage.quotient.peak_temp_bytes, quotient.len() as u64);
+            assert!(usage.quotient.buffer_bytes <= max_buffer_bytes);
+            fs::remove_file(&output).unwrap();
+        }
+    }
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn seeded_wide_division_matches_i128() {
+    let dir = Directory::new("wide-division-oracle");
+    let mut seed = 0xac0e_e321_7a98_65db_u64;
+    let mut sample = || {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+        i128::from(seed as i64)
+    };
+    for index in 0..128 {
+        let left = sample() * 1_000_000_000_000_000_000 + sample();
+        let right = sample() / (index % 7 + 1);
+        let right = if right == 0 { 1 } else { right };
+        let [a, b, output] = dir.operands(left.to_string(), right.to_string());
+        let usage = divide_wide(&a, &b, &output, WideDivisionLimits::default()).unwrap();
+        assert_eq!(usage.remainder.to_string(), (left % right).to_string());
+        assert_eq!(
+            fs::read_to_string(&output).unwrap(),
+            (left / right).to_string()
+        );
+        fs::remove_file(output).unwrap();
+    }
+}
+
+#[test]
+fn wide_division_checks_workspace_work_and_output_before_staging() {
+    let dir = Directory::new("wide-division-limits");
+    let [a, b, output] = dir.operands("-123456789123456789123456789", "1000000001");
+    let file = FileLimits {
+        max_input_bytes: 38,
+        max_output_bytes: 19,
+        max_temp_bytes: 19,
+        max_buffer_bytes: 29,
+    };
+    let try_limits = |file, max_limb_steps| {
+        divide_wide_with_progress(
+            &a,
+            &b,
+            &output,
+            WideDivisionLimits {
+                file,
+                max_limb_steps,
+            },
+            |p| {
+                assert!(matches!(
+                    p.phase,
+                    FilePhase::ReadInputs | FilePhase::CompareMagnitudes
+                ));
+                dir.assert_staging_clean();
+                ControlFlow::Continue(())
+            },
+        )
+    };
+    assert!(matches!(
+        try_limits(file, 41),
+        Err(FileError::LimbWorkLimit {
+            required: 42,
+            limit: 41
+        })
+    ));
+    assert!(matches!(
+        try_limits(file, 21),
+        Err(FileError::LimbWorkLimit {
+            required: 22,
+            limit: 21
+        })
+    ));
+    for (limits, kind) in [
+        (
+            FileLimits {
+                max_input_bytes: 37,
+                ..file
+            },
+            FileResource::InputBytes,
+        ),
+        (
+            FileLimits {
+                max_buffer_bytes: 28,
+                ..file
+            },
+            FileResource::BufferBytes,
+        ),
+        (
+            FileLimits {
+                max_output_bytes: 18,
+                ..file
+            },
+            FileResource::OutputBytes,
+        ),
+        (
+            FileLimits {
+                max_temp_bytes: 18,
+                ..file
+            },
+            FileResource::TemporaryBytes,
+        ),
+    ] {
+        assert!(matches!(
+            try_limits(limits, 42),
+            Err(FileError::Limit { resource, required, limit }) if resource == kind && required == limit + 1
+        ));
+        assert!(!output.exists());
+    }
+    let result = divide_wide(
+        &a,
+        &b,
+        &output,
+        WideDivisionLimits {
+            file,
+            max_limb_steps: 42,
+        },
+    )
+    .unwrap();
+    assert_eq!(result.limb_steps, 42);
+    assert_eq!(result.quotient.buffer_bytes, 29);
+    assert_eq!(result.remainder.to_string(), "-123456789");
+    assert_eq!(fs::read_to_string(output).unwrap(), "-123456789000000000");
+}
+
+#[test]
+fn wide_division_supports_cancellation_during_loading_and_output() {
+    let dir = Directory::new("wide-division-cancel");
+    let [a, b, output] = dir.operands("8922743609".repeat(19), "1300000000000000000007");
+    let limits = WideDivisionLimits {
+        file: FileLimits {
+            max_buffer_bytes: 37,
+            ..FileLimits::default()
+        },
+        ..WideDivisionLimits::default()
+    };
+    for cancel in [
+        FilePhase::CompareMagnitudes,
+        FilePhase::WriteDecimal,
+        FilePhase::Publish,
+    ] {
+        let result = divide_wide_with_progress(&a, &b, &output, limits, |p| {
+            assert!(!output.exists());
+            assert!(p.completed <= p.total);
+            if p.phase == cancel && (p.completed > 0 || cancel == FilePhase::Publish) {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        });
+        assert!(matches!(result, Err(FileError::Cancelled)));
+        assert!(!output.exists());
+        dir.assert_staging_clean();
+    }
+    assert!(matches!(
+        divide_wide_with_progress(&a, &b, &output, limits, |p| {
+            if p.phase == FilePhase::Publish { fs::write(&output, "already here").unwrap(); }
+            ControlFlow::Continue(())
+        }),
+        Err(FileError::Io { source, .. }) if source.kind() == io::ErrorKind::AlreadyExists
+    ));
+    assert_eq!(fs::read_to_string(output).unwrap(), "already here");
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn wide_division_cli_prints_remainders_without_narrowing() {
+    let dir = Directory::new("wide-division-cli");
+    let [_, right, output] = dir.operands("-123456789012345678901234", "123456789012345678901235");
+    let result = dir.cli(&["bigint", "div-wide", "--stats", "left", "right", "out"]);
+    assert!(result.status.success(), "{:?}", result.stderr);
+    assert_eq!(fs::read_to_string(&output).unwrap(), "0");
+    let stats = String::from_utf8(result.stdout).unwrap();
+    assert!(stats.contains("\"remainder\":\"-123456789012345678901234\""));
+    assert!(stats.contains("\"limb_steps\":31"));
+    fs::remove_file(&output).unwrap();
+    let result = dir.cli(&["bigint", "div-wide", "left", "right", "out"]);
+    assert!(result.status.success());
+    assert_eq!(result.stdout, b"-123456789012345678901234\n");
+    fs::remove_file(&output).unwrap();
+    let limited = dir.cli(&[
+        "bigint",
+        "div-wide",
+        "--max-limb-steps",
+        "30",
+        "left",
+        "right",
+        "out",
+    ]);
+    assert_eq!(limited.status.code(), Some(1));
+    assert!(String::from_utf8(limited.stderr)
+        .unwrap()
+        .contains("31 limb steps"));
+    fs::write(right, "0").unwrap();
+    let zero = dir.cli(&["bigint", "div-wide", "left", "right", "out"]);
+    assert_eq!(zero.status.code(), Some(1));
+    assert!(String::from_utf8(zero.stderr)
+        .unwrap()
+        .contains("division by zero"));
+    assert!(!output.exists());
     dir.assert_staging_clean();
 }
 

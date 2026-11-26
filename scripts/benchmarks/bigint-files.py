@@ -62,8 +62,13 @@ def product_stream(sample, digits, factor, addend):
     return str(top).encode(), blocks()
 
 
-def prepare_product_or_division(case, left, right, digits, rng):
-    sample = rng.randbytes(1024).translate(bytes(b"12345678"[i % 8] for i in range(256)))
+def division_addend(divisor, wide):
+    return divisor // 3 + 42 if wide else DIVISION_REMAINDER
+
+
+def prepare_product_or_division(case, left, right, digits, rng, divisor_digits):
+    alphabet = bytes(b"12345678"[i % 8] for i in range(256))
+    sample = rng.randbytes(1024).translate(alphabet)
     factor = abs(int(FACTOR_DIGITS))
     pattern = sample * (TILE_BYTES // len(sample))
     if case == "mul":
@@ -75,23 +80,26 @@ def prepare_product_or_division(case, left, right, digits, rng):
 
     # Construct -(quotient * divisor + remainder) independently, with a
     # known dense quotient that never has to be stored in the oracle's RAM.
-    quotient_digits = digits - (len(FACTOR_DIGITS) - 1)
-    prefix, blocks = product_stream(sample, quotient_digits, factor, DIVISION_REMAINDER)
+    wide = case == "div-wide"
+    if wide:
+        factor = int(b"99" + rng.randbytes(divisor_digits - 2).translate(alphabet))
+    quotient_digits = digits - divisor_digits
+    prefix, blocks = product_stream(sample, quotient_digits, factor, division_addend(factor, wide))
     with left.open("wb") as stream:
         stream.write(b"-" + prefix)
         for block in blocks:
             stream.write(block)
-    right.write_bytes(FACTOR_DIGITS[1:])
+    right.write_bytes(str(factor).encode())
     full, leading = divmod(quotient_digits, len(sample))
-    return left, right, "div", b"-" + sample[:leading], tiles(pattern, full * len(sample))
+    return left, right, case, b"-" + sample[:leading], tiles(pattern, full * len(sample))
 
 
-def prepare(case, directory, digits):
+def prepare(case, directory, digits, divisor_digits):
     rng = random.Random(SEED)
     left = directory / "left"
     right = directory / "right"
-    if case in {"mul", "div"}:
-        return prepare_product_or_division(case, left, right, digits, rng)
+    if case in {"mul", "div", "div-wide"}:
+        return prepare_product_or_division(case, left, right, digits, rng, divisor_digits)
     alphabet = b"1234" if case == "double" else b"12345678"
     sample = rng.randbytes(TILE_BYTES).translate(
         bytes(alphabet[index % len(alphabet)] for index in range(256))
@@ -171,20 +179,25 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("scarp", type=Path, help="path to a release-mode scarp executable")
     parser.add_argument("--digits", type=int, default=1_000_000, help="decimal digits in the main operand")
-    parser.add_argument("--case", choices=("add", "sub", "double", "mul", "div"), default="add")
+    parser.add_argument("--case", choices=("add", "sub", "double", "mul", "div", "div-wide"), default="add")
+    parser.add_argument("--divisor-digits", type=int, help="div-wide fixture width, 10 through 900 (default 180)")
     parser.add_argument("--buffer-bytes", type=int, default=256 * 1024)
     parser.add_argument("--work-dir", type=Path, default=Path(tempfile.gettempdir()))
     args = parser.parse_args()
-    division = args.case == "div"
-    factor_digits = len(FACTOR_DIGITS) - 1
+    wide = args.case == "div-wide"
+    division = wide or args.case == "div"
+    if args.divisor_digits is not None and (not wide or not 10 <= args.divisor_digits <= 900):
+        parser.error("--divisor-digits accepts 10 through 900 for the div-wide fixture")
+    factor_digits = (args.divisor_digits or 180) if wide else len(FACTOR_DIGITS) - 1
+    divisor_limbs = (factor_digits + 8) // 9
     min_digits = factor_digits + 2 if division else 2
-    min_buffer_bytes = 9 if division else 30
+    min_buffer_bytes = 8 * divisor_limbs + 13 if wide else (9 if division else 30)
     if not min_digits <= args.digits <= (2**64 - 1) // 2 or not min_buffer_bytes <= args.buffer_bytes <= 2**32 - 1:
         parser.error(f"provide at least {min_digits} digits and a buffer budget of at least {min_buffer_bytes} bytes within the supported range")
 
     digits = args.digits
     left_bytes = digits + int(division)
-    right_digits = factor_digits if args.case in {"mul", "div"} else digits
+    right_digits = factor_digits if division or args.case == "mul" else digits
     right_bytes = right_digits + int(args.case == "mul")
     if division:
         output_bytes = digits - factor_digits + 1
@@ -204,22 +217,30 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="scarp-bigint-bench-", dir=args.work_dir) as tmp:
         work = Path(tmp)
-        left, right, operation, prefix, oracle = prepare(args.case, work, digits)
+        left, right, operation, prefix, oracle = prepare(args.case, work, digits, factor_digits)
         output = work / "output"
         command = [
             str(args.scarp.resolve()), "bigint", operation, "--stats",
             "--max-input-bytes", str(left_bytes + right_bytes), "--max-output-bytes", str(output_bytes),
             "--max-temp-bytes", str(temp_bytes), "--max-buffer-bytes", str(args.buffer_bytes),
-            str(left), str(right), str(output),
         ]
+        if wide:
+            groups = (digits - factor_digits + 8) // 9
+            steps = 9 * divisor_limbs + 4 + groups * (3 * divisor_limbs + 4)
+            command.extend(["--max-limb-steps", str(steps)])
+        command.extend(map(str, (left, right, output)))
         available = linux_host_field("meminfo", "MemAvailable")
         stats, elapsed, peak_rss = run_measured(command)
         digest, verified_bytes, verify_ns = verify_output(output, prefix, oracle)
         if (verified_bytes != output_bytes or stats["peak_temp_bytes"] != temp_bytes
                 or stats["scratch_bytes"] != scratch_bytes):
             raise ValueError("observed sizes differ from the benchmark plan")
-        if division and stats["remainder"] != -DIVISION_REMAINDER:
-            raise ValueError("incorrect signed remainder")
+        if division:
+            expected = -division_addend(int(right.read_bytes()), wide)
+            if stats["remainder"] != (str(expected) if wide else expected):
+                raise ValueError("incorrect signed remainder")
+        if wide and stats["limb_steps"] != steps:
+            raise ValueError("unexpected arithmetic work bound")
         record = {
             "case": args.case,
             "operation": operation,
@@ -234,6 +255,7 @@ def main():
                 "sub": "base-10^9 borrow",
                 "mul": "base-10^9 single-limb multiplication",
                 "div": "base-10^9 long division with a partial decimal tail",
+                "div-wide": "normalized base-10^9 long division with a rolling remainder",
             }[operation],
             "fixture_seed": SEED,
             "elapsed_ns": elapsed,

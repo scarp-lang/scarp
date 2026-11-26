@@ -39,7 +39,11 @@ calculate with one signed decimal integer per regular file. Multiplication
 requires either operand's magnitude to be at most `999999999`. Division
 requires a nonzero right operand whose magnitude is at most `999999999`. It
 stores the quotient truncated toward zero and prints the signed remainder on
-stdout. With `--stats`, the remainder is part of the JSON record.
+stdout. Use `scarp bigint div-wide LEFT RIGHT OUTPUT` with a larger divisor.
+The divisor must fit the `--max-buffer-bytes` workspace. Use
+`--max-limb-steps` to set the wide division work budget. With `--stats`, the
+remainder is part of the JSON record and wide division encodes it as a
+decimal string.
 
 Each input allows an optional sign and leading zeros. Use ASCII digits
 without whitespace or a trailing newline. The result file is canonical

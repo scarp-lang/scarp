@@ -7,8 +7,12 @@
 mod division;
 mod input;
 mod scratch;
+mod wide_division;
 
 pub use division::{divide, divide_with_progress, DivisionUsage};
+pub use wide_division::{
+    divide_wide, divide_wide_with_progress, WideDivisionLimits, WideDivisionUsage, WideRemainder,
+};
 
 use super::BASE;
 use crate::output_stage::OutputStage;
@@ -48,8 +52,8 @@ pub struct FileLimits {
     pub max_output_bytes: u64,
     /// Peak combined byte length of the limb scratch and staged decimal files.
     pub max_temp_bytes: u64,
-    /// Total payload of reusable processing buffers. The kernel selects at
-    /// most 1 MiB to keep each I/O and cancellation interval short.
+    /// Total payload of reusable processing buffers. Each I/O block is at most
+    /// 1 MiB. Wide division also accounts for its in-memory limb workspace.
     pub max_buffer_bytes: usize,
 }
 
@@ -92,6 +96,10 @@ pub enum FileError {
     FactorTooLarge,
     DivisionByZero,
     DivisorTooLarge,
+    LimbWorkLimit {
+        required: u64,
+        limit: u64,
+    },
     Limit {
         resource: FileResource,
         required: u64,
@@ -125,6 +133,12 @@ impl fmt::Display for FileError {
                 write!(
                     out,
                     "file division requires a divisor with magnitude at most {maximum}"
+                )
+            }
+            Self::LimbWorkLimit { required, limit } => {
+                write!(
+                    out,
+                    "wide division needs a work budget of {required} limb steps (limit {limit})"
                 )
             }
             Self::Limit {
