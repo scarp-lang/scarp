@@ -10,7 +10,7 @@ use std::{
     process::{Command, Output},
     sync::Barrier,
 };
-use FileOperation::{Add, Subtract};
+use FileOperation::{Add, Multiply, Subtract};
 
 struct Directory(PathBuf);
 
@@ -139,6 +139,173 @@ fn seeded_signed_arithmetic_matches_i128() {
             fs::remove_file(&output).unwrap();
         }
     }
+}
+
+#[test]
+fn signed_products_match_the_interpreter_in_both_operand_orders() {
+    let dir = Directory::new("products");
+    let nines = "9".repeat(273);
+    let signed = format!("-000{nines}");
+    for (left, right) in [
+        (nines.as_str(), "-000999999999"),
+        (signed.as_str(), "-1"),
+        (signed.as_str(), "-0000000000000000000"),
+        ("+0001", "-000999999999"),
+        ("999999999", "999999999"),
+    ] {
+        let source = format!("print(bigint(\"{left}\") * bigint(\"{right}\"));");
+        let mut expected = Vec::new();
+        scarp::run(&source, &mut expected).unwrap();
+        assert_eq!(expected.pop(), Some(b'\n'));
+        for (a, b) in [(left, right), (right, left)] {
+            let [a, b, output] = dir.operands(a, b);
+            for max_buffer_bytes in [30, 52, 118, 256 * 1024] {
+                let usage = calculate(
+                    Multiply,
+                    &a,
+                    &b,
+                    &output,
+                    FileLimits {
+                        max_buffer_bytes,
+                        ..FileLimits::default()
+                    },
+                )
+                .unwrap();
+                assert_eq!(fs::read(&output).unwrap(), expected);
+                assert!(usage.buffer_bytes <= max_buffer_bytes);
+                assert_eq!(usage.output_bytes, expected.len() as u64);
+                if expected == b"0" {
+                    assert_eq!(usage.scratch_bytes, 0);
+                }
+                fs::remove_file(&output).unwrap();
+            }
+        }
+    }
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn seeded_single_limb_products_match_i128() {
+    let dir = Directory::new("product-oracle");
+    let mut seed = 0xa7aa_e921_76be_a645_u64;
+    let mut sample = || {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+        seed as i64
+    };
+    for case in 0..80 {
+        let integer = i128::from(sample()) * 1_000_000_001;
+        let factor = i128::from(sample() % 1_000_000_000);
+        let [left, right, output] = dir.operands(integer.to_string(), factor.to_string());
+        let limits = FileLimits {
+            max_buffer_bytes: 30 + 22 * (case % 3),
+            ..FileLimits::default()
+        };
+        calculate(Multiply, left, right, &output, limits).unwrap();
+        assert_eq!(
+            fs::read_to_string(&output).unwrap(),
+            (integer * factor).to_string()
+        );
+        fs::remove_file(output).unwrap();
+    }
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn multiplication_checks_factor_width_and_result_limits() {
+    let dir = Directory::new("product-limits");
+    let [left, right, output] = dir.operands("1000000000", "-1000000000");
+    assert!(matches!(
+        calculate(Multiply, &left, &right, &output, FileLimits::default()),
+        Err(FileError::FactorTooLarge)
+    ));
+    assert!(!output.exists());
+    dir.assert_staging_clean();
+
+    let [left, right, output] = dir.operands("999999999", "9");
+    let usage = calculate(Multiply, &left, &right, &output, FileLimits::default()).unwrap();
+    assert_eq!(fs::read_to_string(&output).unwrap(), "8999999991");
+    fs::remove_file(&output).unwrap();
+    let exact = FileLimits {
+        max_input_bytes: usage.input_bytes,
+        max_output_bytes: usage.output_bytes,
+        max_temp_bytes: usage.peak_temp_bytes,
+        max_buffer_bytes: usage.buffer_bytes,
+    };
+    for (limits, kind) in [
+        (
+            FileLimits {
+                max_output_bytes: 8,
+                ..exact
+            },
+            FileResource::OutputBytes,
+        ),
+        (
+            FileLimits {
+                max_output_bytes: 9,
+                ..exact
+            },
+            FileResource::OutputBytes,
+        ),
+        (
+            FileLimits {
+                max_temp_bytes: exact.max_temp_bytes - 1,
+                ..exact
+            },
+            FileResource::TemporaryBytes,
+        ),
+    ] {
+        assert!(matches!(
+            calculate(Multiply, &left, &right, &output, limits),
+            Err(FileError::Limit { resource, .. }) if resource == kind
+        ));
+        assert!(!output.exists());
+        dir.assert_staging_clean();
+    }
+    calculate(Multiply, &left, &right, &output, exact).unwrap();
+}
+
+#[test]
+fn multiplication_cancelled_mid_carry_chain_cleans_staging() {
+    let dir = Directory::new("product-cancel");
+    let [left, right, output] = dir.operands("9".repeat(90), "999999999");
+    let limits = FileLimits {
+        max_buffer_bytes: 30,
+        ..FileLimits::default()
+    };
+    let result = calculate_with_progress(Multiply, left, right, &output, limits, |progress| {
+        if progress.phase == FilePhase::Arithmetic && progress.completed == 3 {
+            assert!(progress.completed < progress.total);
+            ControlFlow::Break(())
+        } else {
+            ControlFlow::Continue(())
+        }
+    });
+    assert!(matches!(result, Err(FileError::Cancelled)));
+    assert!(!output.exists());
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn multiplication_cli_uses_the_shared_output_and_error_contract() {
+    let dir = Directory::new("product-cli");
+    let [left, _, output] = dir.operands("-999999999", "+0001000000000");
+    let run = || dir.cli(&["bigint", "mul", "--stats", "left", "right", "out"]);
+    let result = run();
+    assert!(result.status.success(), "{:?}", result.stderr);
+    assert_eq!(fs::read_to_string(&output).unwrap(), "-999999999000000000");
+    assert!(String::from_utf8(result.stdout)
+        .unwrap()
+        .contains("\"result_digits\":18"));
+    assert_eq!(run().status.code(), Some(1));
+    fs::remove_file(&output).unwrap();
+    fs::write(left, "1000000000").unwrap();
+    let error = run();
+    assert_eq!(error.status.code(), Some(1));
+    assert!(String::from_utf8(error.stderr)
+        .unwrap()
+        .contains("999999999"));
+    assert!(!output.exists());
+    dir.assert_staging_clean();
 }
 
 #[test]

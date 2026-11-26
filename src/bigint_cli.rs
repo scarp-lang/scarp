@@ -6,9 +6,10 @@ use std::{
 };
 
 pub(super) const HELP: &str =
-    "Usage: scarp bigint <add|sub> [options] [--] <left> <right> <new-output>
+    "Usage: scarp bigint <add|sub|mul> [options] [--] <left> <right> <new-output>
 
-Experimental exact addition and subtraction on seekable decimal files.
+Experimental exact arithmetic on seekable decimal files.
+Multiplication requires either operand to have magnitude at most 999999999.
 Each input contains one optionally signed ASCII integer with no newline.
 Output is canonical decimal with no newline and must be at a new path.
 
@@ -48,7 +49,8 @@ fn parse(args: &[OsString]) -> Result<(FileOperation, FileLimits, bool, &[OsStri
     let operation = match args.first().and_then(|arg| arg.to_str()) {
         Some("add") => FileOperation::Add,
         Some("sub") => FileOperation::Subtract,
-        _ => return Err("expected bigint add or sub".into()),
+        Some("mul") => FileOperation::Multiply,
+        _ => return Err("expected bigint add, sub or mul".into()),
     };
     let mut limits = FileLimits::default();
     let mut stats = false;

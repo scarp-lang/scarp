@@ -31,6 +31,8 @@ const MAX_BLOCK_BUFFER_BYTES: usize = 1024 * 1024;
 pub enum FileOperation {
     Add,
     Subtract,
+    /// Multiply when either magnitude fits in one base-10^9 limb, or is zero.
+    Multiply,
 }
 
 /// Per-operation logical limits. Filesystem metadata, OS caching and allocator
@@ -84,6 +86,7 @@ pub enum FileError {
     InputChanged {
         operand: &'static str,
     },
+    FactorTooLarge,
     Limit {
         resource: FileResource,
         required: u64,
@@ -104,6 +107,13 @@ impl fmt::Display for FileError {
                 write!(out, "invalid decimal in the {operand} at byte {offset}")
             }
             Self::InputChanged { operand } => write!(out, "{operand} changed during calculation"),
+            Self::FactorTooLarge => {
+                let maximum = BASE - 1;
+                write!(
+                    out,
+                    "file multiplication requires one operand with magnitude at most {maximum}"
+                )
+            }
             Self::Limit {
                 resource,
                 required,
@@ -174,7 +184,7 @@ pub struct FileUsage {
     pub output_time: Duration,
 }
 
-/// Calculate a sum or difference with reusable buffers and publish to a new path.
+/// Calculate a sum, difference or one-limb product with reusable buffers.
 ///
 /// Use stable input files and a trusted output directory. The output filesystem
 /// must support hard links. An existing destination is preserved, even if it
@@ -220,46 +230,20 @@ pub fn calculate_with_progress(
     left.scan(&mut buffers.left, 0, input_bytes, &mut progress)?;
     right.scan(&mut buffers.right, left.len, input_bytes, &mut progress)?;
 
-    let right_negative =
-        right.digits != 0 && (right.negative ^ (operation == FileOperation::Subtract));
-    let subtract = left.negative != right_negative;
-    let order = if subtract {
-        left.compare(
+    let plan = match operation {
+        FileOperation::Add | FileOperation::Subtract => ResultPlan::add_sub(
+            operation,
+            &mut left,
             &mut right,
-            &mut buffers.left,
-            &mut buffers.right,
+            &mut buffers,
             &mut progress,
-        )?
-    } else {
-        Ordering::Greater
+        )?,
+        FileOperation::Multiply => ResultPlan::multiply(&mut left, &mut right, &mut buffers)?,
     };
-    let negative = match order {
-        Ordering::Less => right_negative,
-        Ordering::Greater => left.negative,
-        Ordering::Equal => false,
-    };
-    let max_digits = left.digits.max(right.digits);
-    let layout = if order == Ordering::Equal || max_digits == 0 {
-        None
-    } else {
-        let limb_count = max_digits.div_ceil(LIMB_DIGITS as u64);
-        let carry_limb = u64::from(!subtract && left.digits != 0 && right.digits != 0);
-        Some(ScratchLayout::new(
-            limb_count + carry_limb,
-            buffers.chunk_limbs(),
-        )?)
-    };
-    let scratch_bytes = layout.as_ref().map_or(0, |layout| layout.bytes);
-    let min_digits = if !subtract || left.digits == 0 || right.digits == 0 {
-        max_digits.max(1)
-    } else if left.digits.abs_diff(right.digits) >= 2 {
-        // The smaller magnitude is below 10^(max_digits-2), while the
-        // larger is at least 10^(max_digits-1).
-        max_digits - 1
-    } else {
-        1
-    };
-    let min_output = min_digits
+    let negative = plan.negative;
+    let scratch_bytes = plan.scratch.as_ref().map_or(0, |(layout, _)| layout.bytes);
+    let min_output = plan
+        .min_digits
         .checked_add(u64::from(negative))
         .ok_or(FileError::SizeOverflow)?;
     check_output_sizes(min_output, scratch_bytes, limits)?;
@@ -268,8 +252,8 @@ pub fn calculate_with_progress(
     let arithmetic_start = Instant::now();
     let stage =
         OutputStage::create(output, "bigint").map_err(io_error("create staging directory"))?;
-    let file_result = if let Some(layout) = layout {
-        let (larger, smaller) = if order == Ordering::Less {
+    let file_result = if let Some((layout, kernel)) = plan.scratch {
+        let (larger, smaller) = if plan.swap {
             (&mut right, &mut left)
         } else {
             (&mut left, &mut right)
@@ -279,7 +263,7 @@ pub fn calculate_with_progress(
             &layout,
             &mut scratch,
             (larger, smaller),
-            subtract,
+            kernel,
             &mut buffers,
             &mut progress,
         )?;
@@ -338,6 +322,111 @@ pub fn calculate_with_progress(
         arithmetic_time,
         output_time: output_start.elapsed(),
     })
+}
+
+#[derive(Clone, Copy)]
+enum LimbOperation {
+    Add,
+    Subtract,
+    Multiply(i64),
+}
+
+struct ResultPlan {
+    scratch: Option<(ScratchLayout, LimbOperation)>,
+    swap: bool,
+    negative: bool,
+    min_digits: u64,
+}
+
+impl ResultPlan {
+    const ZERO: Self = Self {
+        scratch: None,
+        swap: false,
+        negative: false,
+        min_digits: 1,
+    };
+
+    fn add_sub(
+        operation: FileOperation,
+        left: &mut DecimalInput,
+        right: &mut DecimalInput,
+        buffers: &mut Buffers,
+        progress: &mut impl FnMut(FileProgress) -> ControlFlow<()>,
+    ) -> Result<Self, FileError> {
+        let right_negative =
+            right.digits != 0 && (right.negative ^ (operation == FileOperation::Subtract));
+        let subtract = left.negative != right_negative;
+        let order = if subtract {
+            left.compare(right, &mut buffers.left, &mut buffers.right, progress)?
+        } else {
+            Ordering::Greater
+        };
+        let max_digits = left.digits.max(right.digits);
+        if order == Ordering::Equal || max_digits == 0 {
+            return Ok(Self::ZERO);
+        }
+        let swap = order == Ordering::Less;
+        let both_nonzero = left.digits != 0 && right.digits != 0;
+        let min_digits = if !subtract || !both_nonzero {
+            max_digits
+        } else if left.digits.abs_diff(right.digits) >= 2 {
+            // The smaller magnitude is below 10^(max_digits-2), while the
+            // larger is at least 10^(max_digits-1).
+            max_digits - 1
+        } else {
+            1
+        };
+        let limb_count = max_digits.div_ceil(LIMB_DIGITS as u64);
+        let carry_limb = u64::from(!subtract && both_nonzero);
+        let layout = ScratchLayout::new(limb_count + carry_limb, buffers.chunk_limbs())?;
+        let kernel = if subtract {
+            LimbOperation::Subtract
+        } else {
+            LimbOperation::Add
+        };
+        Ok(Self {
+            scratch: Some((layout, kernel)),
+            swap,
+            negative: if swap { right_negative } else { left.negative },
+            min_digits,
+        })
+    }
+
+    fn multiply(
+        left: &mut DecimalInput,
+        right: &mut DecimalInput,
+        buffers: &mut Buffers,
+    ) -> Result<Self, FileError> {
+        if left.digits == 0 || right.digits == 0 {
+            return Ok(Self::ZERO);
+        }
+        let swap = left.digits < right.digits;
+        let (larger, smaller) = if swap { (right, left) } else { (left, right) };
+        if smaller.digits > LIMB_DIGITS as u64 {
+            return Err(FileError::FactorTooLarge);
+        }
+        let factor = smaller
+            .read_low(0, &mut buffers.right)?
+            .next()
+            .map(parse_limb)
+            .filter(|&limb| limb != 0)
+            .ok_or_else(|| smaller.changed())?;
+        // For positive operands with a and b digits, the product has at least
+        // a+b-1 digits. Check the exact size again after computing the limbs.
+        let min_digits = larger
+            .digits
+            .checked_add(smaller.digits - 1)
+            .ok_or(FileError::SizeOverflow)?;
+        let limb_count = larger.digits.div_ceil(LIMB_DIGITS as u64);
+        let carry_limb = u64::from(factor > 1);
+        let layout = ScratchLayout::new(limb_count + carry_limb, buffers.chunk_limbs())?;
+        Ok(Self {
+            scratch: Some((layout, LimbOperation::Multiply(i64::from(factor)))),
+            swap,
+            negative: larger.negative != smaller.negative,
+            min_digits,
+        })
+    }
 }
 
 struct Buffers {
@@ -403,7 +492,7 @@ fn compute(
     layout: &ScratchLayout,
     scratch: &mut File,
     operands: (&mut DecimalInput, &mut DecimalInput),
-    subtract: bool,
+    operation: LimbOperation,
     buffers: &mut Buffers,
     progress: &mut impl FnMut(FileProgress) -> ControlFlow<()>,
 ) -> Result<ResultShape, FileError> {
@@ -415,7 +504,11 @@ fn compute(
     for block in 0..layout.blocks {
         let start = layout.start(block);
         let mut left = left.read_low(start, &mut buffers.left)?.map(parse_limb);
-        let mut right = right.read_low(start, &mut buffers.right)?.map(parse_limb);
+        let right_digits = match operation {
+            LimbOperation::Multiply(_) => buffers.right[..0].rchunks(LIMB_DIGITS),
+            _ => right.read_low(start, &mut buffers.right)?,
+        };
+        let mut right = right_digits.map(parse_limb);
         let count = layout.count(block);
         for (index, bytes) in buffers.scratch[..count * LIMB_BYTES]
             .chunks_exact_mut(LIMB_BYTES)
@@ -423,14 +516,23 @@ fn compute(
         {
             let left = i64::from(left.next().unwrap_or(0));
             let right = i64::from(right.next().unwrap_or(0));
-            let limb = if subtract {
-                let difference = left - right - carry;
-                carry = i64::from(difference < 0);
-                difference + carry * BASE as i64
-            } else {
-                let sum = left + right + carry;
-                carry = i64::from(sum >= BASE as i64);
-                sum - carry * BASE as i64
+            let limb = match operation {
+                LimbOperation::Subtract => {
+                    let difference = left - right - carry;
+                    carry = i64::from(difference < 0);
+                    difference + carry * BASE as i64
+                }
+                LimbOperation::Add => {
+                    let sum = left + right + carry;
+                    carry = i64::from(sum >= BASE as i64);
+                    sum - carry * BASE as i64
+                }
+                LimbOperation::Multiply(factor) => {
+                    // carry < factor, so the intermediate is below BASE^2.
+                    let product = left * factor + carry;
+                    carry = product / BASE as i64;
+                    product % BASE as i64
+                }
             } as u32;
             bytes.copy_from_slice(&limb.to_le_bytes());
             if limb != 0 {

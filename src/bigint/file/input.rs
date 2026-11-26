@@ -85,11 +85,15 @@ impl DecimalInput {
     pub(super) fn check_unchanged(&self) -> Result<(), FileError> {
         let metadata = self.file.metadata().map_err(io_error(self.operand))?;
         if self.len != metadata.len() || self.modified != metadata.modified().ok() {
-            return Err(FileError::InputChanged {
-                operand: self.operand,
-            });
+            return Err(self.changed());
         }
         Ok(())
+    }
+
+    pub(super) fn changed(&self) -> FileError {
+        FileError::InputChanged {
+            operand: self.operand,
+        }
     }
 
     pub(super) fn compare(
