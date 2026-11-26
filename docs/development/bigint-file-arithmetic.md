@@ -349,6 +349,41 @@ through 100,000 dividend digits. On Linux, an 8,192-byte OS file limit caused
 a staged output error on a 10,000-digit dividend, with neither a published
 quotient nor a printed remainder.
 
+### Multi-limb division
+
+The wide benchmark independently constructs a negative dividend from a
+seeded dense quotient, its positive divisor, and the remainder magnitude
+`divisor // 3 + 42`. Python computes the product in 1,024-digit blocks. The
+oracle checks each quotient byte, its SHA-256, the complete signed remainder
+and the configured work bound. The benchmark fixture supports divisor widths
+of 10 through 900 digits. The CLI admits larger divisors through its workspace
+and work budgets.
+
+The runs used one worker with Rust 1.100.0 on an AMD EPYC 9V74 Linux x86-64
+host. The [tested source](https://github.com/scarp-lang/scarp/commit/08481f971a0d7feef4ce24b39b05288a88218db5)
+matches tree `619b95f90701e9d53688c5f499d5a69e1e33cb06`.
+[Raw benchmark records](../benchmarks/2026-11-26-bigint-file-wide-division.json)
+
+| Dividend digits | Divisor digits | Quotient digits | Filesystem | Elapsed | Buffer payload | Work bound |
+| ---: | ---: | ---: | --- | ---: | ---: | ---: |
+| 10,000,000 | 900 | 9,999,100 | ext4 | 0.536 s | 66,333 B | 337,748,552 |
+| 100,000,000 | 180 | 99,999,820 | ext4 | 1.581 s | 65,693 B | 711,110,072 |
+| 100,000,000 | 18 | 99,999,982 | ext4 | 0.479 s | 65,549 B | 111,111,122 |
+| 1,000,000,000 | 18 | 999,999,982 | tmpfs | 4.654 s | 65,549 B | 1,111,111,122 |
+
+These single runs include validation, arithmetic, staged writes and
+publication. The fixture passes each measured work bound via
+`--max-limb-steps`. All four runs used zero limb scratch, and their peak
+temporary bytes equal their signed quotient lengths. The billion-digit
+run used about 2 GB of memory-backed filesystem space for its input and
+quotient. Its process peak RSS was 2,138,112 bytes and excludes that space.
+
+The automated suite covers two quotient-estimate decrements, divisor
+add-back, signed i128 arithmetic, interpreter parity, budget boundaries,
+cancellation and competing destinations. An independent check compared 212
+signed quotient and remainder pairs against Python integers, with dividends
+up to 100,000 digits and divisors up to 4,096 digits.
+
 ### In-memory baseline
 
 On the audited `main`, `cargo bench --locked --offline --bench bigint -- --large`
