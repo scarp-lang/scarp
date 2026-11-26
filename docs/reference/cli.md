@@ -33,11 +33,16 @@ a published prerelease.
 
 ## Experimental file-backed BigInt
 
-`scarp bigint add LEFT RIGHT OUTPUT`, `scarp bigint sub LEFT RIGHT OUTPUT`, and
-`scarp bigint mul LEFT RIGHT OUTPUT` calculate with one signed decimal integer
-per regular file. Multiplication requires either operand's magnitude to be at
-most `999999999`. Each input allows an optional sign and leading zeros. Use
-ASCII digits without whitespace or a trailing newline. The result is canonical
+`scarp bigint add LEFT RIGHT OUTPUT`, `scarp bigint sub LEFT RIGHT OUTPUT`,
+`scarp bigint mul LEFT RIGHT OUTPUT`, and `scarp bigint div LEFT RIGHT OUTPUT`
+calculate with one signed decimal integer per regular file. Multiplication
+requires either operand's magnitude to be at most `999999999`. Division
+requires a nonzero right operand whose magnitude is at most `999999999`. It
+stores the quotient truncated toward zero and prints the signed remainder on
+stdout. With `--stats`, the remainder is part of the JSON record.
+
+Each input allows an optional sign and leading zeros. Use ASCII digits
+without whitespace or a trailing newline. The result file is canonical
 decimal and the destination must be a new filename on a filesystem that
 supports hard links.
 

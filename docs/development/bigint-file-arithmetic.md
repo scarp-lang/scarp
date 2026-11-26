@@ -16,16 +16,17 @@ printf '%s' '2' > right.txt
 scarp bigint add --stats left.txt right.txt sum.txt
 scarp bigint sub left.txt right.txt difference.txt
 scarp bigint mul left.txt right.txt product.txt
+scarp bigint div left.txt right.txt quotient.txt
 ```
 
-The three files contain `1000000000000000000001`, `999999999999999999997`,
-and `1999999999999999999998`, respectively, with no trailing newline. The
-equivalent source operations use the existing syntax.
+The four files contain `1000000000000000000001`, `999999999999999999997`,
+`1999999999999999999998`, and `499999999999999999999`, respectively, with no
+trailing newline. Division also prints the remainder `1` followed by a newline.
 
 ```scarp
 bind a = bigint("999999999999999999999");
 bind b = bigint("2");
-print(a + b, a - b, a * b);
+print(a + b, a - b, a * b, a / b, a % b);
 ```
 
 File inputs follow `[+-]?[0-9]+`. `-000` and `+0` normalize to `0`. Signs
@@ -39,12 +40,20 @@ this bound. Multiplication by zero writes `0` after validating both inputs.
 When both magnitudes exceed the bound, the host API returns
 `FileError::FactorTooLarge`.
 
+File division requires a nonzero right operand with magnitude at most
+`999999999`. It truncates the quotient toward zero and canonicalizes zero
+as `0`. The remainder has the dividend's sign when nonzero. For dividend
+`a`, divisor `b`, quotient `q` and remainder `r`, the result satisfies
+`a = q*b + r` and `abs(r) < abs(b)`. The CLI prints the remainder on
+stdout after publication. With `--stats`, the signed integer is the
+`remainder` field in the JSON record.
+
 | Option | Default | What it bounds |
 | --- | ---: | --- |
 | `--max-input-bytes` | 67,108,864 | The exact sum of the two input file lengths, checked before the content scan |
-| `--max-output-bytes` | 33,554,432 | Final decimal size. A lower bound is checked before arithmetic and the exact size before staging decimal bytes |
+| `--max-output-bytes` | 33,554,432 | Final decimal file size. Division knows its exact quotient size before staging. The other kernels check a lower bound before arithmetic and the exact size before staging decimal bytes |
 | `--max-temp-bytes` | 67,108,864 | Peak logical byte length of scratch plus staged output. The scratch length is computed before arithmetic |
-| `--max-buffer-bytes` | 262,144 | Payload of three reused buffers. At least 30 bytes is required and the kernel uses at most 1 MiB to keep each I/O and cancellation interval short |
+| `--max-buffer-bytes` | 262,144 | Reused buffer payload. Division requires 9 bytes. The other kernels require 30 bytes. Buffers use at most 1 MiB to keep I/O and cancellation intervals short |
 
 CLI errors go to stderr. Exit status 2 indicates invalid arguments and 1
 indicates an input, resource or filesystem failure. `--stats` writes JSON after
@@ -52,6 +61,8 @@ the output has been published. Host applications can use `FileError` to inspect
 quota denials, invalid decimal byte offsets and underlying OS errors.
 
 ## Arithmetic and file lifecycle
+
+Addition, subtraction and multiplication use the following sequence.
 
 1. Open and validate both regular files in forward chunks. Record the sign
    and count of significant digits. A subtraction of magnitudes with equal
@@ -108,6 +119,34 @@ shared or mutable data. A hard kill can leave a private scratch directory.
 The destination is installed only after the staged file is synced. Power-loss
 durability of the new directory entry, orphan recovery and resumption need
 separate platform-specific verification.
+
+### Streaming single-limb division
+
+After validating both operands, compare up to nine leading dividend digits
+with the divisor. For a dividend of at least the divisor's width, this gives
+the exact number of quotient digits and the dividend prefix that becomes
+the initial remainder. A dividend with smaller magnitude gives quotient
+`0` and its own value as the remainder. Check the exact signed quotient byte
+count against both output and temporary limits before creating a staging
+directory.
+
+Read the remaining significant digits forward in reusable blocks. For a
+group of `k` decimal digits, let `current = remainder * 10^k + group`. Divide
+`current` by the divisor magnitude, replace the input digits with the
+quotient group, and carry its remainder to the next group. Each full group
+contains nine digits. A final short group uses its own power of ten. The
+intermediate stays below `10^18` and fits in `u64`.
+
+Write each block directly to the staged quotient. Temporary file usage is
+exactly the quotient size, with zero limb scratch. The shared publication
+step syncs and closes the quotient, checks both inputs and links the file
+at the destination. Division's `arithmetic_ns` includes the forward read and
+staged writes. Its `output_ns` covers the final sync and publication.
+
+Rust hosts can call `divide` or `divide_with_progress` for the signed remainder
+and quotient statistics. Division reports `ReadInputs`, `WriteDecimal` and
+`Publish` progress. A failed stdout write after CLI publication can leave
+the quotient available at its destination.
 
 ## Repository baseline and design choices
 
@@ -179,6 +218,8 @@ python3 scripts/benchmarks/bigint-files.py target/release/scarp \
   --case sub --digits 100000000 --work-dir /path/to/existing-workspace
 python3 scripts/benchmarks/bigint-files.py target/release/scarp \
   --case mul --digits 100000000 --work-dir /path/to/existing-workspace
+python3 scripts/benchmarks/bigint-files.py target/release/scarp \
+  --case div --digits 100000000 --work-dir /path/to/existing-workspace
 ```
 
 The Python 3.9+ benchmark supplies deterministic dense digits, verifies every
@@ -238,6 +279,37 @@ filesystem. The process RSS measurement excludes that filesystem memory.
 The Rust tests cover seeded signed i128 products, interpreter parity,
 cross-block carry, exact quota boundaries, cancellation and the CLI.
 
+### Single-limb division
+
+The division benchmark starts from a seeded dense quotient and independently
+constructs the negative dividend as `-(quotient * 999999999 + 42424242)` with
+Python integers in 1,024-digit blocks. The verifier compares every signed
+quotient byte, verifies the signed remainder `-42424242` and hashes the
+quotient. The stored raw measurements include the hash and phase timings.
+
+The runs used one worker with Rust 1.100.0 on an AMD EPYC 9V74 Linux x86-64
+host. The [tested source](https://github.com/scarp-lang/scarp/commit/93292a328bab1cd8d63e229726e1aa4795eb53e2)
+matches tree `efa8472892bcb2f55df89925985a74f3681f7147`.
+[Raw benchmark records](../benchmarks/2026-11-26-bigint-file-division.json)
+
+| Dividend digits | Quotient digits | Filesystem | Elapsed | Buffer payload | Process peak RSS | Peak temporary bytes |
+| ---: | ---: | --- | ---: | ---: | ---: | ---: |
+| 100,000,000 | 99,999,991 | ext4 | 0.565 s | 262,143 B | 2,301,952 B | 99,999,992 B |
+| 500,000,000 | 499,999,991 | ext4 | 2.158 s | 262,143 B | 2,314,240 B | 499,999,992 B |
+| 1,000,000,000 | 999,999,991 | tmpfs | 3.860 s | 262,143 B | 2,281,472 B | 999,999,992 B |
+
+These are single runs, with elapsed time spanning the CLI process through
+publication. Each run used zero limb scratch. Peak temporary bytes include
+the minus sign in the staged quotient. The billion-digit fixture used
+about 2 GB of memory-backed filesystem space for the input and quotient.
+Process peak RSS excludes filesystem space.
+
+The automated suite covers signed i128 results and Scarp interpreter parity.
+A separate seeded Python check compared 84 signed quotients and remainders
+through 100,000 dividend digits. On Linux, an 8,192-byte OS file limit caused
+a staged output error on a 10,000-digit dividend, with neither a published
+quotient nor a printed remainder.
+
 ### In-memory baseline
 
 On the audited `main`, `cargo bench --locked --offline --bench bigint -- --large`
@@ -258,6 +330,6 @@ An additional Linux run lowered `RLIMIT_FSIZE` to 8,192 bytes while adding
 `9` repeated 10,000 times and `1`. The scratch file fit, the staged decimal
 write returned the OS file-size error, and cleanup left only the input files.
 
-File-backed multi-limb multiplication, division, modular/exact
-exponentiation, binary/hex I/O, automatic spilling and source-language
-file values are follow-up work.
+File-backed multiplication of two multi-limb operands, division by a
+multi-limb divisor, modular and exact exponentiation, binary/hex I/O,
+automatic spilling and source-language file values are follow-up work.
