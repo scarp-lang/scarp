@@ -1017,6 +1017,10 @@ impl<'a> Resolver<'a> {
                 }
                 let value = self.expression(value)?;
                 match operator {
+                    AssignmentOperator::Compound(BinaryOperator::Add)
+                        if expected_type == ValueType::String && value.kind == ValueType::String => {}
+                    AssignmentOperator::Compound(BinaryOperator::Multiply)
+                        if expected_type == ValueType::String && value.kind == ValueType::Integer => {}
                     AssignmentOperator::Compound(operator)
                         if operator.is_integer_only()
                             && !(operator == BinaryOperator::Remainder
@@ -2141,6 +2145,8 @@ fn resolve_expression(
                 operator_span,
             } => {
                 match operator {
+                    BinaryOperator::Add | BinaryOperator::Multiply
+                        if types[*left] == ValueType::String => {}
                     BinaryOperator::Equal | BinaryOperator::NotEqual => {
                         require_value(&types[*left], *operator_span)?;
                     }
@@ -2178,7 +2184,14 @@ fn resolve_expression(
                         }
                     }
                 }
-                require_type(&types[*right], &types[*left], *operator_span).map_err(|error| {
+                let right_type = if *operator == BinaryOperator::Multiply
+                    && types[*left] == ValueType::String
+                {
+                    SourceType::from(ValueType::Integer)
+                } else {
+                    types[*left].clone()
+                };
+                require_type(&types[*right], &right_type, *operator_span).map_err(|error| {
                     error
                         .with_related(
                             syntax.nodes()[*left].span,

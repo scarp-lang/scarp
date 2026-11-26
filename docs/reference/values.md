@@ -164,3 +164,7 @@ String assignment replaces a value without changing earlier copies. Pending
 print values also keep the contents captured when their statement was evaluated.
 See [variables](../variables.md) for mutation and scope examples, and
 [diagnostics](diagnostics.md) for type mismatch repairs.
+
+## Development string operators
+
+See [string operators](../string-operators.md) for the development candidate syntax and limits.

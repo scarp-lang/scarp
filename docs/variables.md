@@ -121,7 +121,8 @@ An arithmetic failure in the right-hand expression highlights that expression's
 operator instead. Any such failure prevents all program output.
 
 There are no implicit declarations, uninitialized bindings, increment/decrement
-operators, assignment expressions, string concatenation, or string mutation.
+operators, assignment expressions, or in-place string mutation. Development string
+bindings support `+=` concatenation and `*=` repetition by an integer.
 
 ## Lexical scopes and shadowing
 

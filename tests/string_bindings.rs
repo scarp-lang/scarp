@@ -79,9 +79,9 @@ fn mutable_bindings_cannot_change_their_inferred_type() {
 }
 
 #[test]
-fn arithmetic_does_not_concatenate_or_coerce_string_values() {
+fn unsupported_arithmetic_does_not_coerce_string_values() {
     for expression in [
-        r#""a" + "b""#,
+        r#""a" + 1"#,
         r#""a" - 1"#,
         r#"1 * "a""#,
         r#""a" / 1"#,
@@ -101,8 +101,8 @@ fn arithmetic_does_not_concatenate_or_coerce_string_values() {
 }
 
 #[test]
-fn compound_assignment_is_integer_only() {
-    for operator in ["+=", "-=", "*=", "/="] {
+fn compound_assignment_rejects_invalid_string_operands() {
+    for operator in ["-=", "*=", "/="] {
         let source = format!("var value = \"text\"; value {operator} \"other\";");
         let diagnostic = error(&source);
         assert_eq!(diagnostic.kind, DiagnosticKind::TypeMismatch);
@@ -125,7 +125,7 @@ fn type_errors_precede_arithmetic_and_leave_stdout_empty() {
         DiagnosticKind::TypeMismatch
     );
     assert_eq!(
-        scarp::check("bind text = \"hello\"; println(text * 2);")
+        scarp::check("bind text = \"hello\"; println(text * true);")
             .unwrap_err()
             .kind,
         DiagnosticKind::TypeMismatch

@@ -96,7 +96,7 @@ fn static_typing_checks_nested_and_short_circuited_operands() {
         "not 1",
         "true and 1",
         "1==1.0",
-        "\"a\"+\"b\"",
+        "\"a\"+1",
         "true or (1+(2.0*3.0)>0)",
     ] {
         let source = format!("pub bind bad={expression};");

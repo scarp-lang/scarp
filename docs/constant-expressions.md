@@ -48,7 +48,7 @@ constant expressions 42 84 true 0.75 42
 | `not`, `and`, `or` | Boolean operands and result |
 
 Precedence, integer division, overflow and finite-float rules match
-[runtime values and operators](reference/values.md). Strings have no concatenation.
+[runtime values and operators](reference/values.md). Development string constants support concatenation (`+`) and repetition (`*` with an integer right operand).
 Signed floating zero is preserved; division by either sign of zero is an error.
 Every evaluated intermediate result must fit its type.
 

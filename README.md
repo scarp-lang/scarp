@@ -438,8 +438,8 @@ print(-9223372036854775808); // the minimum signed 64-bit integer
 Integer overflow, division by zero, and out-of-range literals are errors in both
 debug and release builds. Grouping is limited to 64 nested parentheses; long
 binary chains use a flat syntax tree. Strings can be bound, copied, reassigned
-with the same type, and printed. Concatenation and mixed string/integer arithmetic
-are unsupported.
+with the same type, and printed. In the development compiler, strings support `+` concatenation and string-left
+`*` repetition by an integer; other mixed arithmetic is unsupported.
 
 Booleans use `true` and `false`. Comparisons support same-type `==` and `!=`,
 and same-type numeric `<`, `<=`, `>`, `>=`. Readable `not`, `and`, and `or` operators require

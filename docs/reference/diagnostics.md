@@ -146,8 +146,7 @@ bind label = "Scarp";
 print(label + 1);
 ```
 
-Use `print(label, 1);` to display separate values on one line. String
-concatenation and mixed string/integer arithmetic are unsupported.
+Use `print(label, 1);` to display separate values on one line. String concatenation with `+` requires two strings; repetition with `*` requires a string followed by an integer.
 
 ### Incomplete variable statements: E0004
 
