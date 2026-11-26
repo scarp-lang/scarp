@@ -635,11 +635,16 @@ impl Rewriter<'_> {
                     *name = self.nominal_reference(NominalKind::Record, name, *name_span)?;
                 }
                 ExpressionKind::Variant(constructor) => {
-                    constructor.name = self.nominal_reference(
-                        NominalKind::Variant,
-                        &constructor.name,
-                        constructor.name_span,
-                    )?;
+                    if let Some(application) = &mut constructor.application {
+                        *application =
+                            self.nominal_type(application, constructor.name_span, false)?;
+                    } else {
+                        constructor.name = self.nominal_reference(
+                            NominalKind::Variant,
+                            &constructor.name,
+                            constructor.name_span,
+                        )?;
+                    }
                 }
                 ExpressionKind::Array {
                     empty_element_type: Some(kind),

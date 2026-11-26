@@ -539,8 +539,13 @@ pub fn resolve_with_type_limits(
                 &mut registry,
                 function.name_span,
             )?;
-            let result =
-                generics::resolve_type(&layouts, &function.result, &bindings, function.name_span)?;
+            let result = generics::resolve_type(
+                &layouts,
+                &function.result,
+                &bindings,
+                &mut registry,
+                function.name_span,
+            )?;
             names.insert(function.name.clone(), metadata.len());
             metadata.push(FunctionInfo {
                 name: function.name.clone(),
@@ -552,7 +557,13 @@ pub fn resolve_with_type_limits(
                     .map(|p| {
                         Ok(ParameterInfo {
                             name: p.name.clone(),
-                            kind: generics::resolve_type(&layouts, &p.kind, &bindings, p.span)?,
+                            kind: generics::resolve_type(
+                                &layouts,
+                                &p.kind,
+                                &bindings,
+                                &mut registry,
+                                p.span,
+                            )?,
                             span: p.span,
                             default: p.default.as_ref().map(|e| e.nodes()[e.root()].span),
                         })
@@ -610,11 +621,19 @@ pub fn resolve_with_type_limits(
         instances.charge(original, &functions[instance.declaration], instance.span)?;
         let mut signature = original.clone();
         signature.type_parameters.clear();
-        signature.result =
-            generics::substitute(&signature.result, &instance.bindings, instance.span)?;
+        signature.result = generics::substitute(
+            &signature.result,
+            &instance.bindings,
+            &mut registry,
+            instance.span,
+        )?;
         for parameter in &mut signature.parameters {
-            parameter.kind =
-                generics::substitute(&parameter.kind, &instance.bindings, instance.span)?;
+            parameter.kind = generics::substitute(
+                &parameter.kind,
+                &instance.bindings,
+                &mut registry,
+                instance.span,
+            )?;
         }
         let mut resolver = Resolver::new(&metadata, &names, &layouts, &mut registry);
         resolver.type_bindings = &instance.bindings;
@@ -705,8 +724,8 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn annotation(&self, kind: &SourceType, span: Span) -> Result<SourceType, Diagnostic> {
-        generics::resolve_type(self.layouts, kind, self.type_bindings, span)
+    fn annotation(&mut self, kind: &SourceType, span: Span) -> Result<SourceType, Diagnostic> {
+        generics::resolve_type(self.layouts, kind, self.type_bindings, self.registry, span)
     }
 
     fn expression(&mut self, syntax: Expression) -> Result<ResolvedExpression, Diagnostic> {
@@ -1493,8 +1512,17 @@ fn resolve_expression(
         let mut call = None;
         let (kind, slot) = match &node.kind {
             ExpressionKind::Variant(constructor) => {
-                let (kind, operation) =
-                    variants::constructor(layouts, constructor, &types, &syntax)?;
+                let kind = if let Some(application) = &constructor.application {
+                    resolver.annotation(application, constructor.name_span)?
+                } else {
+                    nominal::lookup(
+                        layouts,
+                        crate::types::NominalKind::Variant,
+                        &constructor.name,
+                        constructor.name_span,
+                    )?
+                };
+                let (kind, operation) = variants::constructor(kind, constructor, &types, &syntax)?;
                 node_metadata.insert(index, operation);
                 (kind, None)
             }
@@ -2112,7 +2140,20 @@ fn resolve_expression(
                 let mut inference = (!function.type_parameters.is_empty()
                     || !type_arguments.is_empty())
                 .then(|| {
-                    generics::Inference::new(function, type_arguments, resolver, *function_span)
+                    generics::Inference::new(
+                        function,
+                        type_arguments,
+                        |annotation| {
+                            generics::resolve_type(
+                                layouts,
+                                &annotation.kind,
+                                resolver.type_bindings,
+                                resolver.registry,
+                                annotation.span,
+                            )
+                        },
+                        *function_span,
+                    )
                 })
                 .transpose()?;
                 let mut parameters = Vec::new();
@@ -2179,10 +2220,20 @@ fn resolve_expression(
                     for (&parameter, argument) in parameters.iter().zip(arguments) {
                         let parameter = &function.parameters[parameter];
                         let span = syntax.nodes()[argument.expression].span;
-                        let expected = generics::substitute(&parameter.kind, &bindings, span)?;
+                        let expected = generics::substitute(
+                            &parameter.kind,
+                            &bindings,
+                            resolver.registry,
+                            span,
+                        )?;
                         check_argument(parameter, &types[argument.expression], &expected, span)?;
                     }
-                    let result = generics::substitute(&function.result, &bindings, *function_span)?;
+                    let result = generics::substitute(
+                        &function.result,
+                        &bindings,
+                        resolver.registry,
+                        *function_span,
+                    )?;
                     let id = if let Some(instances) = &mut resolver.instances {
                         instances.request(
                             id,

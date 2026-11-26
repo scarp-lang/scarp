@@ -2,7 +2,7 @@
 use super::*;
 use crate::{
     ast::{GenericParameter, TypeAnnotation},
-    types::{DefinitionId, TypeConstraint, TypeKind, TypeParameter},
+    types::{BuiltinVariant, DefinitionId, TypeConstraint, TypeKind, TypeParameter},
 };
 use std::{collections::VecDeque, sync::Arc};
 
@@ -71,11 +71,12 @@ pub(super) fn resolve_type(
     layouts: &nominal::Layouts,
     kind: &SourceType,
     bindings: &[SourceType],
+    registry: &mut TypeRegistryBuilder,
     span: Span,
 ) -> Result<SourceType, Diagnostic> {
     let kind = nominal::resolve_type(layouts, kind, span)?;
     if kind.has_parameter() {
-        substitute(&kind, bindings, span)
+        substitute(&kind, bindings, registry, span)
     } else {
         Ok(kind)
     }
@@ -84,6 +85,7 @@ pub(super) fn resolve_type(
 pub(super) fn substitute(
     kind: &SourceType,
     bindings: &[SourceType],
+    registry: &mut TypeRegistryBuilder,
     span: Span,
 ) -> Result<SourceType, Diagnostic> {
     kind.map_parameters(
@@ -93,8 +95,50 @@ pub(super) fn substitute(
                 .cloned()
                 .ok_or_else(|| definition(span, format!("unknown type parameter {:?}", p.name)))
         },
+        &mut |family, first, second| resolve_builtin_variant(family, first, second, registry, span),
         &|| limit(span, "substituted type exceeds the composite type limits"),
     )
+}
+
+fn resolve_builtin_variant(
+    family: BuiltinVariant,
+    first: SourceType,
+    second: Option<SourceType>,
+    registry: &mut TypeRegistryBuilder,
+    span: Span,
+) -> Result<SourceType, Diagnostic> {
+    let error = || {
+        limit(
+            span,
+            "option or result application exceeds composite type or spelling limits",
+        )
+    };
+    let types = std::iter::once(&first).chain(second.iter());
+    if types.clone().map(SourceType::display_bytes).sum::<usize>() > 4096 {
+        return Err(error());
+    }
+    let arguments = types
+        .map(|kind| {
+            require_value(kind, span)?;
+            kind.intern(registry)
+                .map_err(|e| type_info::failure(e, span))
+        })
+        .collect::<Result<_, Diagnostic>>()?;
+    let name = if let Some(second) = &second {
+        format!("{}<{first}, {second}>", family.name())
+    } else {
+        format!("{}<{first}>", family.name())
+    };
+    if name.len() > 4096 {
+        return Err(error());
+    }
+    let id = registry
+        .intern(TypeKind::Applied {
+            constructor: family.definition(),
+            arguments,
+        })
+        .map_err(|e| type_info::failure(e, span))?;
+    SourceType::variant(id, span, name.into(), family.cases(first, second)).ok_or_else(error)
 }
 
 pub(super) struct Inference<'a> {
@@ -107,7 +151,7 @@ impl<'a> Inference<'a> {
     pub(super) fn new(
         function: &'a FunctionInfo,
         explicit: &[TypeAnnotation],
-        resolver: &Resolver<'_>,
+        resolve_annotation: impl FnMut(&TypeAnnotation) -> Result<SourceType, Diagnostic>,
         span: Span,
     ) -> Result<Self, Diagnostic> {
         if !explicit.is_empty() && explicit.len() != function.type_parameters.len() {
@@ -127,11 +171,9 @@ impl<'a> Inference<'a> {
         } else {
             explicit
                 .iter()
-                .map(|annotation| {
-                    resolver
-                        .annotation(&annotation.kind, annotation.span)
-                        .map(|kind| Some((kind, annotation.span)))
-                })
+                .map(resolve_annotation)
+                .zip(explicit)
+                .map(|(kind, annotation)| kind.map(|kind| Some((kind, annotation.span))))
                 .collect::<Result<Vec<_>, _>>()?
         };
         Ok(Self {
@@ -201,6 +243,28 @@ impl<'a> Inference<'a> {
             }
             (SourceType::Map(pattern), SourceType::Map(value)) if pattern.key() == value.key() => {
                 self.unify(pattern.value(), value.value(), span, from_context)?;
+            }
+            (SourceType::Variant(pattern), SourceType::Variant(actual_variant)) => {
+                if let (Some((family, first, second)), Some((other, actual_first, actual_second))) = (
+                    pattern.builtin_arguments(),
+                    actual_variant.builtin_arguments(),
+                ) {
+                    if family == other {
+                        self.unify(first, actual_first, span, from_context)?;
+                        if let Some((second, actual_second)) = second.zip(actual_second) {
+                            self.unify(second, actual_second, span, from_context)?;
+                        }
+                        return Ok(());
+                    }
+                }
+                if !from_context {
+                    return Err(arguments(
+                        span,
+                        format!(
+                            "cannot infer type arguments by matching {actual} against {template}"
+                        ),
+                    ));
+                }
             }
             _ if from_context => {}
             _ => {
@@ -380,7 +444,7 @@ pub(super) fn abstract_call_signature(
         .parameters
         .iter()
         .map(|p| {
-            substitute(&p.kind, bindings, span)?
+            substitute(&p.kind, bindings, registry, span)?
                 .intern(registry)
                 .map_err(|e| type_info::failure(e, span))
         })

@@ -346,6 +346,7 @@ pub struct ConditionalExpressionBranch {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariantConstructor {
     pub name: String,
+    pub application: Option<SourceType>,
     pub name_span: Span,
     pub tag: String,
     pub tag_span: Span,
