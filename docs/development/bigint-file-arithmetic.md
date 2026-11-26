@@ -1,4 +1,4 @@
-# File-backed BigInt addition and subtraction
+# File-backed BigInt arithmetic
 
 This phase adds an experimental file backend to
 [`scarp bigint`](../reference/cli.md#experimental-file-backed-bigint) and
@@ -15,22 +15,29 @@ printf '%s' '999999999999999999999' > left.txt
 printf '%s' '2' > right.txt
 scarp bigint add --stats left.txt right.txt sum.txt
 scarp bigint sub left.txt right.txt difference.txt
+scarp bigint mul left.txt right.txt product.txt
 ```
 
-`sum.txt` contains `1000000000000000000001`. `difference.txt` contains
-`999999999999999999997`. Both contain just the number, with no newline.
-The equivalent source operations use the existing syntax.
+The three files contain `1000000000000000000001`, `999999999999999999997`,
+and `1999999999999999999998`, respectively, with no trailing newline. The
+equivalent source operations use the existing syntax.
 
 ```scarp
 bind a = bigint("999999999999999999999");
 bind b = bigint("2");
-print(a + b, a - b);
+print(a + b, a - b, a * b);
 ```
 
 File inputs follow `[+-]?[0-9]+`. `-000` and `+0` normalize to `0`. Signs
 and leading zeros count toward input bytes, and a minus sign counts toward
 output bytes. Reusing one file as both operands is supported and counts its
 length twice toward the input budget.
+
+File multiplication accepts one factor with magnitude at most `999999999`
+in either operand position. Leading zeros and the sign do not count toward
+this bound. Multiplication by zero writes `0` after validating both inputs.
+When both magnitudes exceed the bound, the host API returns
+`FileError::FactorTooLarge`.
 
 | Option | Default | What it bounds |
 | --- | ---: | --- |
@@ -61,8 +68,16 @@ quota denials, invalid decimal byte offsets and underlying OS errors.
    private staging files. A competing destination, including a symlink, is
    preserved. Filesystems that cannot create a hard link report an I/O error.
 
-An addition reserves at most one extra carry limb. Scratch starts with the
-eight bytes `SCLIMB01` and two little-endian `u64` geometry fields for chunk
+Addition and multiplication reserve at most one extra carry limb. For
+multiplication by a nonzero factor `f`, the kernel reads `f` once after
+validation, then updates each result limb from `limb * f + carry`. The carry
+is less than `f` and `f < 10^9`, so the intermediate is below `10^18`.
+The checked lower bound for a nonzero product is `a + b - 1` digits for
+`a`- and `b`-digit inputs. The exact digit count comes from the highest
+nonzero limb before decimal staging.
+
+Scratch starts with the eight bytes `SCLIMB01` and two little-endian `u64`
+geometry fields for chunk
 length and total limb count. Records contain little-endian `u32` limbs and
 an eight-byte FNV-1a checksum that includes the record index. A checksum
 mismatch, invalid limb, short file or invalid header prevents publication.
@@ -77,12 +92,13 @@ RSS have separate costs. A full filesystem or an OS file-size limit produces
 an I/O error. The kernel leaves space admission against filesystem quotas to
 the host, since a free-space query cannot reserve space against other writers.
 
-Addition and subtraction take linear passes over the inputs and result.
+Addition, subtraction and single-limb multiplication take linear passes
+over the inputs and result.
 With `k` limbs per reusable block, the three buffers hold at most `22*k + 8`
 bytes. Memory for the arithmetic is independent of the operand digit count
 once the configured block size is reached. The scratch file holds four bytes
-per limb, eight bytes per block and a 24-byte header. Equal magnitudes can
-cancel directly and require no scratch file.
+per limb, eight bytes per block and a 24-byte header. A zero result from
+cancelling magnitudes or multiplying by zero requires no scratch file.
 
 Rust hosts can call `calculate_with_progress` and return `ControlFlow::Break`
 at a block boundary or before publication. Keep input files and parent paths
@@ -161,6 +177,8 @@ python3 scripts/benchmarks/bigint-files.py target/release/scarp \
   --case add --digits 100000000 --work-dir /path/to/existing-workspace
 python3 scripts/benchmarks/bigint-files.py target/release/scarp \
   --case sub --digits 100000000 --work-dir /path/to/existing-workspace
+python3 scripts/benchmarks/bigint-files.py target/release/scarp \
+  --case mul --digits 100000000 --work-dir /path/to/existing-workspace
 ```
 
 The Python 3.9+ benchmark supplies deterministic dense digits, verifies every
@@ -194,6 +212,34 @@ filesystem. The process RSS excludes the filesystem's memory. The ext4 runs
 used two distinct files and the benchmark recorded logical byte counts. The
 timings describe single runs under the observed cache and filesystem state.
 
+### Single-limb multiplication
+
+The multiplication fixture uses a seeded, repeated 1,024-digit pattern with
+a partial leading block when needed. An independent Python integer oracle
+verifies the carry and every output byte, including the minus sign. Its
+1,024-digit radix is independent of the Rust kernel's nine-digit radix.
+
+Both measurements used one worker on Linux x86-64 with Rust 1.100.0 on an
+AMD EPYC 9V74. The factor file contained `-999999999`. The
+[tested source](https://github.com/scarp-lang/scarp/commit/b825c206afdb77ba25f4f03d863004f443d2d02e)
+matches tree `a9ff5a8a1f2f90357a175f4d8fc96fec967ca31b`.
+[Raw benchmark records](../benchmarks/2026-11-26-bigint-file-multiplication.json)
+include phase timings, input and output sizes, and output SHA-256.
+
+| Main operand digits | Result digits | Filesystem | Elapsed | Buffer payload | Process peak RSS | Peak temporary bytes |
+| ---: | ---: | --- | ---: | ---: | ---: | ---: |
+| 100,000,000 | 100,000,009 | ext4 | 0.893 s | 262,138 B | 2,306,048 B | 144,451,950 B |
+| 1,000,000,000 | 1,000,000,009 | tmpfs | 5.979 s | 262,138 B | 2,297,856 B | 1,444,519,094 B |
+
+The timings are single runs and include input validation, scratch generation,
+output conversion, syncing and publication. The billion-digit workspace
+included roughly 2.45 GB of input and temporary files on a memory-backed
+filesystem. The process RSS measurement excludes that filesystem memory.
+The Rust tests cover seeded signed i128 products, interpreter parity,
+cross-block carry, exact quota boundaries, cancellation and the CLI.
+
+### In-memory baseline
+
 On the audited `main`, `cargo bench --locked --offline --bench bigint -- --large`
 completed. Its interpreter harness measured about 1.47 ms for schoolbook
 multiplication and 20.18 ms for general division at the 10,000-digit input
@@ -212,7 +258,6 @@ An additional Linux run lowered `RLIMIT_FSIZE` to 8,192 bytes while adding
 `9` repeated 10,000 times and `1`. The scratch file fit, the staged decimal
 write returned the OS file-size error, and cleanup left only the input files.
 
-File-backed multiplication, division, modular/exact exponentiation, binary/hex
-I/O, automatic spilling and the source-language file value are follow-up work.
-Establish those capabilities separately before using dense linear results to
-describe the capacity of other operations.
+File-backed multi-limb multiplication, division, modular/exact
+exponentiation, binary/hex I/O, automatic spilling and source-language
+file values are follow-up work.

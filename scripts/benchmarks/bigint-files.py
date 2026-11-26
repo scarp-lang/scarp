@@ -17,6 +17,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 SEED = 0x5CA4_2026
 TILE_BYTES = 1024 * 1024
+FACTOR_DIGITS = b"-999999999"
 
 
 def tiles(pattern, count, final_increment=0):
@@ -37,10 +38,40 @@ def write_operand(path, prefix, pattern, count):
             stream.write(block)
 
 
+def prepare_product(left, right, digits, rng):
+    sample = rng.randbytes(1024).translate(bytes(b"12345678"[i % 8] for i in range(256)))
+    full_chunks, leading = divmod(digits, len(sample))
+    head = sample[:leading]
+    copies = TILE_BYTES // len(sample)
+    write_operand(left, head, sample * copies, full_chunks * len(sample))
+    right.write_bytes(FACTOR_DIGITS)
+
+    # Compute the oracle with Python integers in 1,024-digit chunks.
+    # For this repeated fixture, verify that incoming carry cannot change
+    # outgoing carry. Each interior chunk then has the same expected bytes.
+    factor = abs(int(FACTOR_DIGITS))
+    radix = 10 ** len(sample)
+    carry, tail = divmod(int(sample) * factor, radix)
+    if tail + factor - 1 >= radix:
+        raise ValueError("fixture has an ambiguous carry")
+    top = int(head or b"0") * factor + (carry if full_chunks else 0)
+    prefix = b"-" + str(top).encode()
+
+    def oracle():
+        if full_chunks:
+            middle = f"{tail + carry:0{len(sample)}d}".encode()
+            yield from tiles(middle * copies, (full_chunks - 1) * len(sample))
+            yield f"{tail:0{len(sample)}d}".encode()
+
+    return left, right, "mul", prefix, oracle()
+
+
 def prepare(case, directory, digits):
     rng = random.Random(SEED)
     left = directory / "left"
     right = directory / "right"
+    if case == "mul":
+        return prepare_product(left, right, digits, rng)
     alphabet = b"1234" if case == "double" else b"12345678"
     sample = rng.randbytes(TILE_BYTES).translate(
         bytes(alphabet[index % len(alphabet)] for index in range(256))
@@ -119,8 +150,8 @@ def linux_host_field(file, key):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("scarp", type=Path, help="path to a release-mode scarp executable")
-    parser.add_argument("--digits", type=int, default=1_000_000, help="decimal digits in each operand")
-    parser.add_argument("--case", choices=("add", "sub", "double"), default="add")
+    parser.add_argument("--digits", type=int, default=1_000_000, help="decimal digits in the main operand")
+    parser.add_argument("--case", choices=("add", "sub", "double", "mul"), default="add")
     parser.add_argument("--buffer-bytes", type=int, default=256 * 1024)
     parser.add_argument("--work-dir", type=Path, default=Path(tempfile.gettempdir()))
     args = parser.parse_args()
@@ -128,12 +159,16 @@ def main():
         parser.error("provide at least two digits and a buffer budget of at least 30 bytes within the supported range")
 
     digits = args.digits
+    right_digits = len(FACTOR_DIGITS) - 1 if args.case == "mul" else digits
+    right_bytes = len(FACTOR_DIGITS) if args.case == "mul" else digits
+    output_bytes = digits + len(FACTOR_DIGITS) if args.case == "mul" else digits
     limb_count = (digits + 8) // 9
-    chunk_limbs = min(limb_count, (min(args.buffer_bytes, 1024 * 1024) - 8) // 22)
+    max_input_limbs = (max(digits, right_bytes) + 8) // 9
+    chunk_limbs = min(max_input_limbs, (min(args.buffer_bytes, 1024 * 1024) - 8) // 22)
     scratch_limbs = limb_count + (args.case != "sub")
     scratch_bytes = 24 + 4 * scratch_limbs + 8 * ((scratch_limbs + chunk_limbs - 1) // chunk_limbs)
-    temp_bytes = scratch_bytes + digits
-    operand_storage = digits if args.case == "double" else 2 * digits
+    temp_bytes = scratch_bytes + output_bytes
+    operand_storage = digits if args.case == "double" else digits + right_bytes
     free_before = shutil.disk_usage(args.work_dir).free
     if operand_storage + temp_bytes > free_before:
         parser.error(f"need {operand_storage + temp_bytes} logical bytes in the workspace, found {free_before} free")
@@ -144,24 +179,28 @@ def main():
         output = work / "output"
         command = [
             str(args.scarp.resolve()), "bigint", operation, "--stats",
-            "--max-input-bytes", str(digits * 2), "--max-output-bytes", str(digits),
+            "--max-input-bytes", str(digits + right_bytes), "--max-output-bytes", str(output_bytes),
             "--max-temp-bytes", str(temp_bytes), "--max-buffer-bytes", str(args.buffer_bytes),
             str(left), str(right), str(output),
         ]
         available = linux_host_field("meminfo", "MemAvailable")
         stats, elapsed, peak_rss = run_measured(command)
         digest, verified_bytes, verify_ns = verify_output(output, prefix, oracle)
-        if verified_bytes != digits or stats["peak_temp_bytes"] != temp_bytes:
+        if verified_bytes != output_bytes or stats["peak_temp_bytes"] != temp_bytes:
             raise ValueError("observed sizes differ from the benchmark plan")
         record = {
             "case": args.case,
             "operation": operation,
-            "operand_digits_each": digits,
+            "operand_digits": [digits, right_digits],
             "distinct_operand_files": 1 if left == right else 2,
             "persistent_input_bytes": operand_storage,
             "workers": 1,
             "backend": "seekable decimal input and little-endian limb scratch",
-            "algorithm": "base-10^9 carry" if operation == "add" else "base-10^9 borrow",
+            "algorithm": {
+                "add": "base-10^9 carry",
+                "sub": "base-10^9 borrow",
+                "mul": "base-10^9 single-limb multiplication",
+            }[operation],
             "fixture_seed": SEED,
             "elapsed_ns": elapsed,
             "launcher_observed_peak_rss_bytes": peak_rss,
@@ -179,6 +218,8 @@ def main():
             "checkout_sha": command_text("git", "rev-parse", "HEAD", cwd=REPO),
             **stats,
         }
+        if digits == right_digits:
+            record["operand_digits_each"] = digits
         print(json.dumps(record, indent=2, sort_keys=True))
 
 

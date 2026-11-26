@@ -33,11 +33,13 @@ a published prerelease.
 
 ## Experimental file-backed BigInt
 
-`scarp bigint add LEFT RIGHT OUTPUT` and `scarp bigint sub LEFT RIGHT OUTPUT`
-calculate with one signed decimal integer per regular file. Each input allows
-an optional sign and leading zeros. Use ASCII digits without whitespace or a
-trailing newline. The result is canonical decimal and the destination must
-be a new filename on a filesystem that supports hard links.
+`scarp bigint add LEFT RIGHT OUTPUT`, `scarp bigint sub LEFT RIGHT OUTPUT`, and
+`scarp bigint mul LEFT RIGHT OUTPUT` calculate with one signed decimal integer
+per regular file. Multiplication requires either operand's magnitude to be at
+most `999999999`. Each input allows an optional sign and leading zeros. Use
+ASCII digits without whitespace or a trailing newline. The result is canonical
+decimal and the destination must be a new filename on a filesystem that
+supports hard links.
 
 Use `scarp guide bigint` for byte budgets and `--stats`. See the
 [file-backed BigInt design and examples](../development/bigint-file-arithmetic.md).
