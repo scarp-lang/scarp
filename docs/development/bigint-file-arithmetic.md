@@ -76,8 +76,8 @@ The checked lower bound for a nonzero product is `a + b - 1` digits for
 `a`- and `b`-digit inputs. The exact digit count comes from the highest
 nonzero limb before decimal staging.
 
-Scratch starts with the
-eight bytes `SCLIMB01` and two little-endian `u64` geometry fields for chunk
+Scratch starts with the eight bytes `SCLIMB01` and two little-endian `u64`
+geometry fields for chunk
 length and total limb count. Records contain little-endian `u32` limbs and
 an eight-byte FNV-1a checksum that includes the record index. A checksum
 mismatch, invalid limb, short file or invalid header prevents publication.
@@ -211,6 +211,34 @@ The billion-digit run used one physical input file on a memory-backed
 filesystem. The process RSS excludes the filesystem's memory. The ext4 runs
 used two distinct files and the benchmark recorded logical byte counts. The
 timings describe single runs under the observed cache and filesystem state.
+
+### Single-limb multiplication
+
+The multiplication fixture uses a seeded, repeated 1,024-digit pattern with
+a partial leading block when needed. An independent Python integer oracle
+verifies the carry and every output byte, including the minus sign. Its
+1,024-digit radix is independent of the Rust kernel's nine-digit radix.
+
+Both measurements used one worker on Linux x86-64 with Rust 1.100.0 on an
+AMD EPYC 9V74. The factor file contained `-999999999`. The
+[tested source](https://github.com/scarp-lang/scarp/commit/b825c206afdb77ba25f4f03d863004f443d2d02e)
+matches tree `a9ff5a8a1f2f90357a175f4d8fc96fec967ca31b`.
+[Raw benchmark records](../benchmarks/2026-11-26-bigint-file-multiplication.json)
+include phase timings, input and output sizes, and output SHA-256.
+
+| Main operand digits | Result digits | Filesystem | Elapsed | Buffer payload | Process peak RSS | Peak temporary bytes |
+| ---: | ---: | --- | ---: | ---: | ---: | ---: |
+| 100,000,000 | 100,000,009 | ext4 | 0.893 s | 262,138 B | 2,306,048 B | 144,451,950 B |
+| 1,000,000,000 | 1,000,000,009 | tmpfs | 5.979 s | 262,138 B | 2,297,856 B | 1,444,519,094 B |
+
+The timings are single runs and include input validation, scratch generation,
+output conversion, syncing and publication. The billion-digit workspace
+included roughly 2.45 GB of input and temporary files on a memory-backed
+filesystem. The process RSS measurement excludes that filesystem memory.
+The Rust tests cover seeded signed i128 products, interpreter parity,
+cross-block carry, exact quota boundaries, cancellation and the CLI.
+
+### In-memory baseline
 
 On the audited `main`, `cargo bench --locked --offline --bench bigint -- --large`
 completed. Its interpreter harness measured about 1.47 ms for schoolbook
