@@ -391,3 +391,23 @@ fn generated_tuple_substitution_preserves_types_and_values() {
         assert!(run(&source).is_empty());
     }
 }
+
+#[test]
+fn nested_return_only_inference_uses_concrete_callee_and_assignment_types() {
+    let source = r#"
+        pure funcra empty<T>() -> list<T> { return [list: <T>]; }
+        pure funcra sort_key(values: list<integer>, tag: string) -> integer {
+            return list_len(values) + text_len(tag);
+        }
+        pure funcra unwrap(values: tuple<list<boolean>>) -> integer {
+            return list_len(values[0]);
+        }
+        var words = [list: "before"];
+        words = empty();
+        var group = ([list: 1], true);
+        group[0] = empty();
+        print(sort_key((empty()), "aa"), sort_key(tag: "b", values: empty()), unwrap((empty(),)));
+        print(list_len(words), list_len(group[0]));
+    "#;
+    assert_eq!(run(source), "2 1 0\n0 0\n");
+}

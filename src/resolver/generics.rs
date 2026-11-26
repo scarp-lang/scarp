@@ -481,15 +481,47 @@ pub(super) fn operation(
     ))
 }
 
-/// Pass an expected result through nodes that preserve an independently
-/// known type. Leave operands of overloaded operators and call arguments to
-/// ordinary bottom-up inference.
+/// Propagate a known result or ordinary callee parameter type through
+/// syntax that preserves the independently known type. Callers with their
+/// own unresolved parameters are checked by bottom-up inference instead.
 pub(super) fn call_expectations<'a>(
     syntax: &Expression,
-    expected: &'a SourceType,
+    expected: Option<&'a SourceType>,
+    functions: &'a [FunctionInfo],
+    names: &HashMap<String, usize>,
 ) -> std::collections::BTreeMap<usize, &'a SourceType> {
     let mut calls = std::collections::BTreeMap::new();
-    let mut pending = vec![(syntax.root(), expected)];
+    let mut pending = Vec::new();
+    if let Some(expected) = expected {
+        pending.push((syntax.root(), expected));
+    }
+    for node in syntax.nodes() {
+        let ExpressionKind::UserCall {
+            name,
+            arguments,
+            type_arguments: None,
+            ..
+        } = &node.kind
+        else {
+            continue;
+        };
+        let Some(&id) = names.get(name) else {
+            continue;
+        };
+        let function = &functions[id];
+        if !function.type_parameters.is_empty() {
+            continue;
+        }
+        for (index, argument) in arguments.iter().enumerate() {
+            let parameter = match &argument.label {
+                Some((label, _)) => function.parameters.iter().find(|p| &p.name == label),
+                None => function.parameters.get(index),
+            };
+            if let Some(parameter) = parameter {
+                pending.push((argument.expression, &parameter.kind));
+            }
+        }
+    }
     while let Some((index, kind)) = pending.pop() {
         match (&syntax.nodes()[index].kind, kind) {
             (ExpressionKind::UserCall { .. }, _) => {

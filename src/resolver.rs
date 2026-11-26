@@ -1124,7 +1124,7 @@ impl<'a> Resolver<'a> {
                         index_span,
                         "tuple assignment index must be a nonnegative integer literal within its arity",
                     ).with_help("use tuple[0] = value; dynamic and computed indices are not supported"))?;
-                    let value = self.expression(value)?;
+                    let value = self.expression_with_expected(value, Some(&element.1))?;
                     if value.kind != element.1 {
                         let span = value.syntax.nodes()[value.syntax.root()].span;
                         return Err(type_mismatch(span, element.1, value.kind)
@@ -1141,7 +1141,7 @@ impl<'a> Resolver<'a> {
                     );
                     return Ok(());
                 }
-                let value = self.expression(value)?;
+                let value = self.expression_with_expected(value, Some(&expected_type))?;
                 match operator {
                     AssignmentOperator::Compound(operator)
                         if operator.is_integer_only()
@@ -1463,8 +1463,8 @@ fn resolve_expression(
     resolver: &mut Resolver<'_>,
     expected: Option<&SourceType>,
 ) -> Result<ResolvedExpression, Diagnostic> {
-    let expectations = if let Some(expected) = expected.filter(|_| resolver.has_generics) {
-        generics::call_expectations(&syntax, expected)
+    let expectations = if resolver.has_generics {
+        generics::call_expectations(&syntax, expected, resolver.functions, resolver.names)
     } else {
         std::collections::BTreeMap::new()
     };
