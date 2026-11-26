@@ -149,12 +149,12 @@ impl ScalarProgramIr {
         id: usize,
         max_parameters: usize,
         bounded: bool,
-        call_arities: Option<&[usize]>,
+        call_targets: Option<&super::CallTargets>,
     ) -> Result<Self, Diagnostic> {
-        let signature = &program.functions()[id];
+        let signature = program.function_metadata(id);
         let function = &program.functions[id];
         let unsupported = |span| {
-            if call_arities.is_some() {
+            if call_targets.is_some() {
                 invalid(span).with_help("use pure integer functions with required integer parameters, scalar locals and integer returns")
             } else {
                 unsupported_function(span)
@@ -208,7 +208,7 @@ impl ScalarProgramIr {
             &function.statements,
             Some(parameters),
             bounded,
-            call_arities,
+            call_targets,
         )
     }
 
@@ -217,7 +217,7 @@ impl ScalarProgramIr {
         operations: &[crate::resolver::ResolvedOperation],
         function_parameters: Option<usize>,
         bounded: bool,
-        call_arities: Option<&[usize]>,
+        call_targets: Option<&super::CallTargets>,
     ) -> Result<Self, Diagnostic> {
         if slots.len() > MAX_PROGRAM_SLOTS || operations.len() > MAX_PROGRAM_STEPS {
             return Err(invalid(Span::default()));
@@ -225,7 +225,7 @@ impl ScalarProgramIr {
         let mut steps = Vec::with_capacity(operations.len());
         let mut total_nodes = 0usize;
         let mut literal_bytes = 0usize;
-        let lower_expression = |value| ScalarExpressionIr::lower(value, &slots, call_arities);
+        let lower_expression = |value| ScalarExpressionIr::lower(value, &slots, call_targets);
         for statement in operations {
             let kind = match &statement.kind {
                 ResolvedStatement::Return { value: Some(value) }
@@ -325,7 +325,7 @@ impl ScalarProgramIr {
             function_parameters,
             bounded,
         };
-        ir.verify_with_calls(call_arities)?;
+        ir.verify_with_calls(call_targets.map(|targets| targets.arities.as_slice()))?;
         Ok(ir)
     }
 

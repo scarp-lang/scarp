@@ -117,8 +117,11 @@ same runtime budgets and diagnostics as ordinary functions. Tooling can inspect
 source signatures and count retained instances with
 `ResolvedProgram::generic_specialization_count()`.
 
-Generic source calls currently run in the interpreter. Rust embedding can
-invoke a concrete Scarp wrapper. User-defined generic records, variants and
-aliases, callable values, user-defined constraints and native generic code generation remain
-future work. Concrete records and variants, including already concrete
+Generic source calls run in the interpreter. The experimental Linux x86-64
+ELF64 entry emitter can also lower pure, nonrecursive integer specializations
+through an ordinary pure integer entry wrapper. It validates every eligible
+concrete body against the existing scalar IR and native work and stack limits.
+Rust embedding can invoke a concrete Scarp wrapper. User-defined generic
+records, variants and aliases, callable values, user-defined constraints, and
+native composite specializations remain future work. Concrete records and variants, including already concrete
 `option<integer>` and `result<integer, string>`, can be passed as type arguments.

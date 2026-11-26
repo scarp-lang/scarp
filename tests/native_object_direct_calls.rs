@@ -258,6 +258,55 @@ fn direct_objects_enforce_a_closed_finite_call_graph() {
     assert!(error.message.contains("32 functions"), "{error:?}");
 }
 
+#[test]
+fn direct_objects_validate_generic_instantiations_and_reuse_concrete_bodies() {
+    let source = r#"
+        pure funcra identity<T>(value: T) -> T { return value; }
+        pure funcra integer_entry(x: integer) -> integer {
+            return identity(identity::<integer>(x));
+        }
+    "#;
+    let artifact = emit_elf64_bounded_integer_entry_with_layout(
+        source,
+        "integer_entry",
+        128,
+        BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES,
+    )
+    .unwrap();
+    assert_eq!(artifact.max_active_frames, 2);
+    assert_eq!(
+        artifact,
+        emit_elf64_bounded_integer_entry_with_layout(
+            source,
+            "integer_entry",
+            128,
+            BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES,
+        )
+        .unwrap()
+    );
+
+    // The source template is valid, but its decimal instance is outside
+    // the scalar ABI even if its result is immediately discarded.
+    let mixed = format!(
+        "{source}\npure funcra other(x: integer) -> integer {{ identity(0.1d); return x; }}"
+    );
+    assert_eq!(
+        emit_elf64_bounded_integer_entry(&mixed, "integer_entry", 128)
+            .unwrap_err()
+            .kind,
+        DiagnosticKind::NativeUnsupported,
+    );
+
+    let mut many = String::from("pure funcra marker<T>(x:integer)->integer{return x;} pure funcra entry(x:integer)->integer{");
+    for length in 0..32 {
+        many.push_str(&format!("marker::<array<integer,{length}>>(x);"));
+    }
+    many.push_str("return x;}");
+    let error = emit_elf64_bounded_integer_entry(&many, "entry", 128).unwrap_err();
+    assert_eq!(error.kind, DiagnosticKind::NativeUnsupported);
+    assert!(error.message.contains("32 concrete bodies"));
+}
+
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[test]
 fn native_direct_calls_share_meter_and_propagate_the_first_failure() {
@@ -359,6 +408,22 @@ int main(int argc, char **argv) {{
         assert_eq!(rows.len(), arguments.len().checked_div(arity).unwrap_or(2));
         rows
     };
+
+    let generic = r#"
+        pure funcra identity<T>(value: T) -> T { return value; }
+        pure funcra square<T: Numeric>(value: T) -> T { return identity(value * value); }
+        pure funcra entry(value: integer) -> integer {
+            return square(value) + identity::<integer>(7);
+        }
+    "#;
+    let kernel = emit_elf64_bounded_integer_entry(generic, "entry", 100).unwrap();
+    let rows = invoke(&kernel, 1, &[-3, 0, 8, i64::MAX]);
+    assert_eq!(rows[..3], [(16, 0, 0), (7, 0, 0), (71, 0, 0)]);
+    assert_eq!(rows[3].1, CHECKED_KERNEL_INTEGER_OVERFLOW);
+    let failure = kernel.failure_spans[rows[3].2];
+    assert_eq!(&generic[failure.start..failure.end], "*");
+    let kernel = emit_elf64_bounded_integer_entry(generic, "entry", 1).unwrap();
+    assert_eq!(invoke(&kernel, 1, &[4])[0].1, CHECKED_KERNEL_WORK_LIMIT);
 
     let source = definitions();
     let artifact = emit_elf64_bounded_integer_entry(source, "evaluate", 1000).unwrap();
