@@ -161,6 +161,11 @@ impl ScalarProgramIr {
             }
         };
         let parameters = signature.parameters.len();
+        if !signature.type_parameters.is_empty() {
+            return Err(
+                unsupported(signature.span).with_help("run generic functions in the interpreter")
+            );
+        }
         if !signature.pure || signature.result != ValueType::Integer || parameters > max_parameters
         {
             return Err(unsupported(signature.span));

@@ -197,7 +197,7 @@ impl<'a> Frame<'a> {
             // Postconditions can only inspect parameters and the result.
             // Release all other values at function completion, including
             // locals in blocks bypassed by an early return.
-            let parameter_count = program.functions()[id].parameters.len();
+            let parameter_count = program.function_metadata(id).parameters.len();
             let result_slot = program.functions[id].result_slot;
             for (index, slot) in self
                 .environment
@@ -291,7 +291,7 @@ fn run_plan<'a>(
                 "host callable target is missing from its compiled snapshot",
             )
         })?;
-        let span = program.functions()[id].span;
+        let span = program.function_metadata(id).span;
         if arguments.len() > function.defaults.len()
             || function
                 .defaults
@@ -481,6 +481,7 @@ fn run_plan<'a>(
                         let ResolvedCall::User {
                             function: id,
                             parameters,
+                            ..
                         } = call
                         else {
                             unreachable!("native kernels complete in the expression workspace")
@@ -745,7 +746,8 @@ fn run_plan<'a>(
                             }
                             Completion::Contract(post, span) => {
                                 if !value.require_boolean(span)? {
-                                    let name = &program.functions()[frame.function.unwrap()].name;
+                                    let name =
+                                        &program.function_metadata(frame.function.unwrap()).name;
                                     return Err(Diagnostic::new(
                                         DiagnosticKind::ContractViolation,
                                         span,
@@ -1066,7 +1068,7 @@ fn run_plan<'a>(
     outcome.map_err(|mut error| {
         let mut remaining = 16;
         for frame in frames.iter().rev().filter(|f| f.function.is_some()) {
-            let name = &program.functions()[frame.function.unwrap()].name;
+            let name = &program.function_metadata(frame.function.unwrap()).name;
             for span in
                 std::iter::once(frame.call_span).chain(frame.tail_sites.iter().rev().copied())
             {

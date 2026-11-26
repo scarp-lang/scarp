@@ -246,12 +246,20 @@ pub struct MatchArm {
 pub struct FunctionDeclaration {
     pub name: String,
     pub name_span: Span,
+    pub type_parameters: Vec<GenericParameter>,
     pub parameters: Vec<Parameter>,
     pub result: crate::types::SourceType,
     pub pure: bool,
     pub contracts: Vec<Contract>,
     pub statements: Vec<Statement>,
     pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GenericParameter {
+    pub name: String,
+    pub span: Span,
+    pub constraint: Option<crate::types::TypeConstraint>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -396,6 +404,7 @@ pub enum ExpressionKind {
     },
     UserCall {
         name: String,
+        type_arguments: Vec<TypeAnnotation>,
         arguments: Vec<CallArgument>,
         function_span: Span,
     },

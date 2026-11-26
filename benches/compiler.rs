@@ -376,4 +376,31 @@ fn main() {
         assert_eq!(registry.len(), PrimitiveType::ALL.len() + 1);
         black_box(registry.finish());
     });
+    let calls = (0..2048)
+        .map(|n| format!("sum += echo({n});\n"))
+        .collect::<String>();
+    let concrete = format!(
+        "pure funcra echo(value: integer) -> integer {{ return value; }}\nvar sum = 0;\n{calls}print(sum);"
+    );
+    let generic = format!(
+        "pure funcra echo<T>(value: T) -> T {{ return value; }}\nvar sum = 0;\n{calls}print(sum);"
+    );
+    for (name, source, specializations) in [
+        ("concrete_2048_calls", &concrete, 0),
+        ("generic_2048_calls", &generic, 1),
+    ] {
+        let plan = scarp::compile(source).unwrap();
+        assert_eq!(plan.generic_specialization_count(), specializations);
+        let mut output = Vec::new();
+        scarp::interpreter::execute(&plan, &mut output).unwrap();
+        assert_eq!(output, b"2096128\n");
+        measure(&format!("compile_{name}"), source.len(), iterations, || {
+            black_box(scarp::compile(black_box(source)).unwrap());
+        });
+        measure(&format!("execute_{name}"), source.len(), iterations, || {
+            output.clear();
+            scarp::interpreter::execute(black_box(&plan), &mut output).unwrap();
+            assert_eq!(output, b"2096128\n");
+        });
+    }
 }

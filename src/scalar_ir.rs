@@ -305,6 +305,7 @@ impl ScalarExpressionIr {
                         Some(ResolvedCall::User {
                             function,
                             parameters,
+                            ..
                         }),
                     ) = (&node.kind, &expression.calls[index])
                     else {

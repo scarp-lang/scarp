@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 mod callable;
 mod functions;
+mod generics;
 mod nominal;
 mod patterns;
 mod records;
@@ -41,14 +42,24 @@ pub struct ResolvedProgram {
     statement_count: usize,
     pub(crate) functions: Vec<ResolvedFunction>,
     metadata: Vec<FunctionInfo>,
+    source_function_count: usize,
     type_info: type_info::ProgramTypes,
 }
 
 impl ResolvedProgram {
     /// Source-ordered function metadata, produced without executing user code.
     pub fn functions(&self) -> &[FunctionInfo] {
-        &self.metadata
+        &self.metadata[..self.source_function_count]
     }
+
+    pub(crate) fn function_metadata(&self, id: usize) -> &FunctionInfo {
+        &self.metadata[id]
+    }
+    /// Number of private, concrete generic function bodies retained for execution.
+    pub fn generic_specialization_count(&self) -> usize {
+        self.functions.len() - self.source_function_count
+    }
+
     /// Number of executable operations, including branch guards and declarations,
     /// excluding block containers and unconditional bookkeeping jumps.
     pub fn statement_count(&self) -> usize {
@@ -310,6 +321,8 @@ pub(crate) enum ResolvedCall {
         function: usize,
         /// Parameter indices in the original explicit-argument order.
         parameters: Vec<usize>,
+        /// Substituted signature for calls in an abstract generic body.
+        signature: Option<TypeId>,
     },
     Builtin(Builtin),
     BigIntDivMod,
@@ -333,6 +346,7 @@ pub(crate) fn is_builtin_name(name: &str) -> bool {
 pub struct FunctionInfo {
     pub name: String,
     pub span: Span,
+    pub type_parameters: Vec<crate::ast::GenericParameter>,
     pub parameters: Vec<ParameterInfo>,
     pub result: SourceType,
     pub pure: bool,
@@ -355,6 +369,26 @@ pub struct ContractInfo {
     pub span: Span,
 }
 
+pub(crate) fn write_type_parameters(
+    output: &mut impl std::io::Write,
+    parameters: &[crate::ast::GenericParameter],
+) -> std::io::Result<()> {
+    if parameters.is_empty() {
+        return Ok(());
+    }
+    write!(output, "<")?;
+    for (index, parameter) in parameters.iter().enumerate() {
+        if index != 0 {
+            write!(output, ", ")?;
+        }
+        write!(output, "{}", parameter.name)?;
+        if let Some(constraint) = parameter.constraint {
+            write!(output, ": {constraint}")?;
+        }
+    }
+    write!(output, ">")
+}
+
 /// Deterministic human-readable static function information. Does not execute.
 pub fn write_function_insight(
     program: &ResolvedProgram,
@@ -364,10 +398,12 @@ pub fn write_function_insight(
     for function in program.functions() {
         write!(
             output,
-            "{} funcra {}(",
+            "{} funcra {}",
             if function.pure { "pure" } else { "impure" },
             function.name
         )?;
+        write_type_parameters(output, &function.type_parameters)?;
+        write!(output, "(")?;
         for (index, parameter) in function.parameters.iter().enumerate() {
             if index > 0 {
                 write!(output, ", ")?;
@@ -456,6 +492,7 @@ pub fn resolve_with_type_limits(
     let mut registry =
         TypeRegistryBuilder::new(limits).map_err(|e| type_info::failure(e, Span::default()))?;
     let mut declarations = Vec::new();
+    let mut generic_bindings = Vec::new();
     let mut statements = Vec::new();
     let mut metadata: Vec<FunctionInfo> = Vec::new();
     let mut names: HashMap<String, usize> = HashMap::new();
@@ -472,12 +509,7 @@ pub fn resolve_with_type_limits(
             )
             .with_help("use modules::compile_with_loader or modules::compile_file"));
         }
-        if let Statement::Function(mut function) = statement {
-            for parameter in &mut function.parameters {
-                parameter.kind = nominal::resolve_type(&layouts, &parameter.kind, parameter.span)?;
-            }
-            function.result =
-                nominal::resolve_type(&layouts, &function.result, function.name_span)?;
+        if let Statement::Function(function) = statement {
             check_name(&function.name, function.name_span)?;
             if function.name == "repeat" {
                 return Err(Diagnostic::new(
@@ -501,21 +533,32 @@ pub fn resolve_with_type_limits(
                     "function declarations exceed 4096 functions or 1024 parameters per function",
                 ));
             }
+            let bindings = generics::declare(
+                metadata.len(),
+                &function.type_parameters,
+                &mut registry,
+                function.name_span,
+            )?;
+            let result =
+                generics::resolve_type(&layouts, &function.result, &bindings, function.name_span)?;
             names.insert(function.name.clone(), metadata.len());
             metadata.push(FunctionInfo {
                 name: function.name.clone(),
                 span: function.span,
+                type_parameters: function.type_parameters.clone(),
                 parameters: function
                     .parameters
                     .iter()
-                    .map(|p| ParameterInfo {
-                        name: p.name.clone(),
-                        kind: p.kind.clone(),
-                        span: p.span,
-                        default: p.default.as_ref().map(|e| e.nodes()[e.root()].span),
+                    .map(|p| {
+                        Ok(ParameterInfo {
+                            name: p.name.clone(),
+                            kind: generics::resolve_type(&layouts, &p.kind, &bindings, p.span)?,
+                            span: p.span,
+                            default: p.default.as_ref().map(|e| e.nodes()[e.root()].span),
+                        })
                     })
-                    .collect(),
-                result: function.result.clone(),
+                    .collect::<Result<_, Diagnostic>>()?,
+                result,
                 pure: function.pure,
                 contracts: function
                     .contracts
@@ -528,19 +571,61 @@ pub fn resolve_with_type_limits(
                 callees: Vec::new(),
                 recursive: false,
             });
-            declarations.push(function);
+            declarations.push(Some(function));
+            generic_bindings.push(bindings);
         } else if !matches!(statement, Statement::Record(_) | Statement::Variant(_)) {
             statements.push(statement);
         }
     }
-    let functions = declarations
-        .into_iter()
-        .map(|f| resolve_function(f, &metadata, &names, &layouts, &mut registry))
-        .collect::<Result<Vec<_>, _>>()?;
-    let mut resolver = Resolver::new(&metadata, &names, &layouts, &mut registry);
-    resolver.statement_list(statements)?;
-    let statement_count = resolver
-        .statements
+    let source_function_count = metadata.len();
+    let mut instances = generics::Instances::new(source_function_count);
+    let mut functions = Vec::with_capacity(source_function_count);
+    for (id, (declaration, bindings)) in declarations.iter_mut().zip(&generic_bindings).enumerate()
+    {
+        let mut resolver = Resolver::new(&metadata, &names, &layouts, &mut registry);
+        resolver.type_bindings = bindings;
+        let function = if bindings.is_empty() {
+            resolver.instances = Some(&mut instances);
+            declaration.take().expect("source declaration")
+        } else {
+            declaration.as_ref().expect("generic declaration").clone()
+        };
+        functions.push(resolve_function(function, &metadata[id], resolver)?);
+    }
+    let (entry, slot_types) = {
+        let mut resolver = Resolver::new(&metadata, &names, &layouts, &mut registry);
+        resolver.instances = Some(&mut instances);
+        resolver.statement_list(statements)?;
+        (resolver.statements, resolver.slot_types)
+    };
+    let mut instance_metadata = Vec::new();
+    let mut instance_origins = Vec::new();
+    while let Some(instance) = instances.next() {
+        let original = &metadata[instance.declaration];
+        instances.charge(original, &functions[instance.declaration], instance.span)?;
+        let mut signature = original.clone();
+        signature.type_parameters.clear();
+        signature.result =
+            generics::substitute(&signature.result, &instance.bindings, instance.span)?;
+        for parameter in &mut signature.parameters {
+            parameter.kind =
+                generics::substitute(&parameter.kind, &instance.bindings, instance.span)?;
+        }
+        let mut resolver = Resolver::new(&metadata, &names, &layouts, &mut registry);
+        resolver.type_bindings = &instance.bindings;
+        resolver.instances = Some(&mut instances);
+        let template = declarations[instance.declaration]
+            .as_ref()
+            .expect("generic declaration");
+        let body = resolve_function(template.clone(), &signature, resolver).map_err(|error| {
+            error.with_related(instance.span, "generic specialization requested here")
+        })?;
+        functions.push(body);
+        instance_metadata.push(signature);
+        instance_origins.push(instance.declaration);
+    }
+    metadata.extend(instance_metadata);
+    let statement_count = entry
         .iter()
         .filter(|statement| {
             !matches!(
@@ -550,15 +635,16 @@ pub fn resolve_with_type_limits(
         })
         .count();
     let mut result = ResolvedProgram {
-        statements: resolver.statements,
-        slot_types: resolver.slot_types,
+        statements: entry,
+        slot_types,
         statement_count,
         functions,
         metadata,
+        source_function_count,
         type_info: type_info::ProgramTypes::default(),
     };
     result.type_info = type_info::build(&result, registry)?;
-    build_call_graph(&mut result);
+    build_call_graph(&mut result, &instance_origins);
     #[cfg(test)]
     if let Err(error) = retirement_audit::audit(&result) {
         panic!("resolved storage plan is invalid: {error}");
@@ -577,6 +663,8 @@ struct Resolver<'a> {
     layouts: &'a nominal::Layouts,
     result: Option<(SourceType, Span)>,
     pure: bool,
+    type_bindings: &'a [SourceType],
+    instances: Option<&'a mut generics::Instances>,
 }
 
 struct LoopContext {
@@ -604,19 +692,25 @@ impl<'a> Resolver<'a> {
             layouts,
             result: None,
             pure: false,
+            type_bindings: &[],
+            instances: None,
         }
     }
 
+    fn annotation(&self, kind: &SourceType, span: Span) -> Result<SourceType, Diagnostic> {
+        generics::resolve_type(self.layouts, kind, self.type_bindings, span)
+    }
+
     fn expression(&mut self, syntax: Expression) -> Result<ResolvedExpression, Diagnostic> {
-        resolve_expression(
-            syntax,
-            &self.scopes,
-            self.functions,
-            self.names,
-            self.pure,
-            self.layouts,
-            self.registry,
-        )
+        self.expression_with_expected(syntax, None)
+    }
+
+    fn expression_with_expected(
+        &mut self,
+        syntax: Expression,
+        expected: Option<&SourceType>,
+    ) -> Result<ResolvedExpression, Diagnostic> {
+        resolve_expression(syntax, self, expected)
     }
 
     fn binding_name(&self, name: &str, span: Span) -> Result<(), Diagnostic> {
@@ -703,7 +797,9 @@ impl<'a> Resolver<'a> {
                         "return is only valid inside funcra",
                     )
                 })?;
-                let value = value.map(|v| self.expression(v)).transpose()?;
+                let value = value
+                    .map(|v| self.expression_with_expected(v, Some(&expected)))
+                    .transpose()?;
                 match (&value, &expected) {
                     (None, kind) if *kind == ValueType::Unit => {}
                     (Some(value), kind) if *kind != ValueType::Unit && &value.kind == kind => {}
@@ -813,8 +909,18 @@ impl<'a> Resolver<'a> {
                     .with_related(previous.declaration, "the previous declaration is here")
                     .with_help("choose a different name or introduce a nested scope"));
                 }
+                let annotation = annotation
+                    .map(|mut annotation| {
+                        annotation.kind = self.annotation(&annotation.kind, annotation.span)?;
+                        Ok(annotation)
+                    })
+                    .transpose()?;
                 // Resolve before insertion: a shadowing initializer sees the outer name.
-                let value = self.expression(initializer)?;
+                let expected = annotation
+                    .as_ref()
+                    .filter(|_| propagate.is_none())
+                    .map(|a| &a.kind);
+                let value = self.expression_with_expected(initializer, expected)?;
                 let (kind, propagation) = if let Some(marker) = propagate {
                     if mutable {
                         return Err(Diagnostic::new(
@@ -879,13 +985,6 @@ impl<'a> Resolver<'a> {
                     (value.kind.clone(), None)
                 };
                 require_value(&kind, span)?;
-                let annotation = annotation
-                    .map(|mut annotation| {
-                        annotation.kind =
-                            nominal::resolve_type(self.layouts, &annotation.kind, annotation.span)?;
-                        Ok(annotation)
-                    })
-                    .transpose()?;
                 require_annotation(
                     annotation,
                     &kind,
@@ -1334,13 +1433,14 @@ fn lookup<'a>(scopes: &'a [Scope], name: &str) -> Option<&'a Binding> {
 
 fn resolve_expression(
     mut syntax: Expression,
-    scopes: &[Scope],
-    functions: &[FunctionInfo],
-    names: &HashMap<String, usize>,
-    pure: bool,
-    layouts: &nominal::Layouts,
-    registry: &mut TypeRegistryBuilder,
+    resolver: &mut Resolver<'_>,
+    expected: Option<&SourceType>,
 ) -> Result<ResolvedExpression, Diagnostic> {
+    let expectations = if let Some(expected) = expected {
+        generics::call_expectations(&syntax, expected)
+    } else {
+        std::collections::BTreeMap::new()
+    };
     let mut slots = Vec::with_capacity(syntax.nodes().len());
     let mut calls = Vec::with_capacity(syntax.nodes().len());
     let mut types: Vec<SourceType> = Vec::with_capacity(syntax.nodes().len());
@@ -1356,8 +1456,8 @@ fn resolve_expression(
             ..
         } = &mut node.kind
         {
-            if kind.has_nominal_ref() {
-                *kind = nominal::resolve_type(layouts, kind, node.span)?;
+            if kind.has_nominal_ref() || kind.has_parameter() {
+                *kind = resolver.annotation(kind, node.span)?;
             }
         }
         if let ExpressionKind::Map {
@@ -1366,13 +1466,22 @@ fn resolve_expression(
         } = &mut node.kind
         {
             if key.has_nominal_ref() {
-                *key = nominal::resolve_type(layouts, key, node.span)?;
+                *key = resolver.annotation(key, node.span)?;
             }
-            if value.has_nominal_ref() {
-                *value = nominal::resolve_type(layouts, value, node.span)?;
+            if value.has_nominal_ref() || value.has_parameter() {
+                *value = resolver.annotation(value, node.span)?;
             }
         }
         let node = &syntax.nodes[index];
+        let Resolver {
+            names,
+            layouts,
+            functions,
+            scopes,
+            pure,
+            ..
+        } = &*resolver;
+        let pure = *pure;
         let mut call = None;
         let (kind, slot) = match &node.kind {
             ExpressionKind::Variant(constructor) => {
@@ -1642,9 +1751,19 @@ fn resolve_expression(
             }
             ExpressionKind::UserCall {
                 name,
+                type_arguments,
                 arguments,
                 function_span,
             } => {
+                if let Some(argument) = type_arguments
+                    .first()
+                    .filter(|_| !names.contains_key(name) && is_builtin_name(name))
+                {
+                    return Err(generics::arguments(
+                        argument.span,
+                        format!("builtin {name:?} does not accept explicit type arguments"),
+                    ));
+                }
                 // Preserve existing user function names; kernels occupy call
                 // position only when no user declaration has this name.
                 if let Some(input) =
@@ -1979,6 +2098,8 @@ fn resolve_expression(
                         format!("pure expressions cannot call impure function {name:?}"),
                     ));
                 }
+                let mut inference =
+                    generics::Inference::new(function, type_arguments, resolver, *function_span)?;
                 let mut parameters = Vec::new();
                 let mut supplied = vec![false; function.parameters.len()];
                 let mut named = false;
@@ -2017,20 +2138,11 @@ fn resolve_expression(
                             ),
                         ));
                     }
-                    require_type(
+                    inference.infer_argument(
+                        &function.parameters[parameter],
                         &types[argument.expression],
-                        &function.parameters[parameter].kind,
                         syntax.nodes()[argument.expression].span,
-                    )
-                    .map_err(|error| {
-                        error.with_related(
-                            function.parameters[parameter].span,
-                            format!(
-                                "parameter {:?} is declared here",
-                                function.parameters[parameter].name
-                            ),
-                        )
-                    })?;
+                    )?;
                     supplied[parameter] = true;
                     parameters.push(parameter);
                 }
@@ -2043,11 +2155,49 @@ fn resolve_expression(
                         ));
                     }
                 }
+                let bindings =
+                    inference.finish(expectations.get(&index).copied(), *function_span)?;
+                for (&parameter, argument) in parameters.iter().zip(arguments) {
+                    let parameter = &function.parameters[parameter];
+                    let span = syntax.nodes()[argument.expression].span;
+                    let expected = generics::substitute(&parameter.kind, &bindings, span)?;
+                    require_type(&types[argument.expression], expected, span).map_err(|error| {
+                        error.with_related(
+                            parameter.span,
+                            format!("parameter {:?} is declared here", parameter.name),
+                        )
+                    })?;
+                }
+                let result = generics::substitute(&function.result, &bindings, *function_span)?;
+                let (id, signature) = match &mut resolver.instances {
+                    Some(instances) if !bindings.is_empty() => (
+                        instances.request(
+                            id,
+                            function,
+                            bindings,
+                            resolver.registry,
+                            *function_span,
+                        )?,
+                        None,
+                    ),
+                    None if !bindings.is_empty() => (
+                        id,
+                        Some(generics::abstract_call_signature(
+                            function,
+                            &bindings,
+                            &result,
+                            resolver.registry,
+                            *function_span,
+                        )?),
+                    ),
+                    _ => (id, None),
+                };
                 call = Some(ResolvedCall::User {
                     function: id,
                     parameters,
+                    signature,
                 });
-                (function.result.clone(), None)
+                (result, None)
             }
 
             ExpressionKind::Integer(_) => (SourceType::from(ValueType::Integer), None),
@@ -2109,6 +2259,13 @@ fn resolve_expression(
                 operator_span,
             } => {
                 if !types[*operand].is_numeric() {
+                    if let SourceType::Parameter(parameter) = &types[*operand] {
+                        return Err(generics::operation(
+                            parameter,
+                            crate::types::TypeConstraint::Numeric,
+                            *operator_span,
+                        ));
+                    }
                     return Err(type_mismatch(
                         *operator_span,
                         ValueType::Integer,
@@ -2150,7 +2307,7 @@ fn resolve_expression(
                     | BinaryOperator::GreaterEqual
                         if types[*left].tuple_elements().is_some() =>
                     {
-                        if !numeric_tuple_members(&types[*left]) {
+                        if !types[*left].is_ordered() {
                             return Err(Diagnostic::new(
                                 DiagnosticKind::TypeMismatch,
                                 *operator_span,
@@ -2161,6 +2318,7 @@ fn resolve_expression(
                             ));
                         }
                     }
+                    operator if operator.is_comparison() && types[*left].is_ordered() => {}
                     operator
                         if operator.is_integer_only()
                             && !(*operator == BinaryOperator::Remainder
@@ -2170,6 +2328,18 @@ fn resolve_expression(
                     }
                     _ => {
                         if !types[*left].is_numeric() {
+                            if let SourceType::Parameter(parameter) = &types[*left] {
+                                let constraint = if operator.is_comparison() {
+                                    crate::types::TypeConstraint::Comparable
+                                } else {
+                                    crate::types::TypeConstraint::Numeric
+                                };
+                                return Err(generics::operation(
+                                    parameter,
+                                    constraint,
+                                    *operator_span,
+                                ));
+                            }
                             return Err(type_mismatch(
                                 *operator_span,
                                 ValueType::Integer,
@@ -2206,7 +2376,7 @@ fn resolve_expression(
         .iter()
         .zip(syntax.nodes())
         .map(|(kind, node)| {
-            kind.intern(registry)
+            kind.intern(resolver.registry)
                 .map_err(|e| type_info::failure(e, node.span))
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -2230,16 +2400,15 @@ pub(crate) fn resolve_standalone(
 pub(crate) fn resolve_closed_expression(
     syntax: Expression,
 ) -> Result<ResolvedExpression, Diagnostic> {
-    resolve_expression(
-        syntax,
-        &[],
+    let mut registry = TypeRegistryBuilder::new(TypeLimits::default())
+        .map_err(|e| type_info::failure(e, Span::default()))?;
+    Resolver::new(
         &[],
         &HashMap::new(),
-        false,
         &nominal::Layouts::new(),
-        &mut TypeRegistryBuilder::new(TypeLimits::default())
-            .map_err(|e| type_info::failure(e, Span::default()))?,
+        &mut registry,
     )
+    .expression(syntax)
 }
 
 pub(crate) fn require_type(
@@ -2364,16 +2533,6 @@ fn loop_control(span: Span) -> Diagnostic {
         "loop control used outside a while or repeat body",
     )
     .with_help("put break; or continue; inside the while or repeat loop it should control")
-}
-
-/// Tuple order is defined only when every leaf has existing scalar numeric
-/// ordering. Keep boolean/text and collection ordering out of this feature.
-fn numeric_tuple_members(ty: &SourceType) -> bool {
-    ty.tuple_elements().is_some_and(|members| {
-        members
-            .iter()
-            .all(|member| member.is_numeric() || numeric_tuple_members(member))
-    })
 }
 
 #[cfg(test)]

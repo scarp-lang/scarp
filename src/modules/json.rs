@@ -163,6 +163,7 @@ impl ModuleProgram {
                     SymbolKind::Function { pure, result, .. } => {
                         let (_, function) = functions.next().unwrap();
                         write!(out,",\"kind\":\"function\",\"pure\":{pure},\"result\":\"{result}\",\"parameters\":[")?;
+
                         for (index, parameter) in function.parameters.iter().enumerate() {
                             if index != 0 {
                                 out.write_all(b",")?;
@@ -179,6 +180,26 @@ impl ModuleProgram {
                             out.write_all(b"}")?;
                         }
                         out.write_all(b"]")?;
+                        if !function.type_parameters.is_empty() {
+                            out.write_all(b",\"type_parameters\":[")?;
+                            for (index, parameter) in function.type_parameters.iter().enumerate() {
+                                if index != 0 {
+                                    out.write_all(b",")?;
+                                }
+                                out.write_all(b"{\"name\":")?;
+                                string(out, &parameter.name)?;
+                                out.write_all(b",\"constraint\":")?;
+                                if let Some(constraint) = parameter.constraint {
+                                    string(out, &constraint.to_string())?;
+                                } else {
+                                    out.write_all(b"null")?;
+                                }
+                                out.write_all(b",\"span\":")?;
+                                span(out, file, parameter.span)?;
+                                out.write_all(b"}")?;
+                            }
+                            out.write_all(b"]")?;
+                        }
                     }
                 }
                 out.write_all(b"}")?;

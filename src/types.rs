@@ -1,12 +1,29 @@
 //! Semantic type identities. Source-language legality is checked separately.
 mod source;
 pub use source::{
-    ArrayType, ListType, MapType, RecordType, SourceType, TupleType, VariantType, MAX_ARRAY_LENGTH,
-    MAX_COMPOSITE_DEPTH, MAX_EXPANDED_VALUE_NODES, MAX_LIST_LENGTH, MAX_MAP_ENTRIES,
-    MAX_RECORD_FIELDS, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH, MAX_VARIANT_CASES,
+    ArrayType, ListType, MapType, RecordType, SourceType, TupleType, TypeParameter, VariantType,
+    MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_EXPANDED_VALUE_NODES, MAX_LIST_LENGTH,
+    MAX_MAP_ENTRIES, MAX_RECORD_FIELDS, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH,
+    MAX_VARIANT_CASES,
 };
 
 pub(crate) use source::NominalKind;
+
+/// Built-in requirements that can be checked without implicit conversions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TypeConstraint {
+    Numeric,
+    Comparable,
+}
+
+impl fmt::Display for TypeConstraint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Numeric => "Numeric",
+            Self::Comparable => "Comparable",
+        })
+    }
+}
 
 use std::{
     collections::HashMap,
@@ -296,6 +313,7 @@ pub enum TypeRegistryError {
     UnknownType(TypeId),
     UnresolvedRecord,
     UnresolvedVariant,
+    UnresolvedParameter,
     Limit {
         resource: TypeResource,
         limit: usize,
@@ -311,6 +329,7 @@ impl fmt::Display for TypeRegistryError {
             ),
             Self::UnresolvedRecord => f.write_str("record type was not resolved"),
             Self::UnresolvedVariant => f.write_str("variant type was not resolved"),
+            Self::UnresolvedParameter => f.write_str("type parameter binder was not resolved"),
             Self::UnknownType(_) => f.write_str("type handle does not belong to this registry"),
             Self::Limit { resource, limit } => {
                 write!(f, "semantic type {resource:?} limit of {limit} exceeded")

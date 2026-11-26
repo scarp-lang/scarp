@@ -217,6 +217,8 @@ Use immutable `bind` and mutable `var` declarations, checked integers, finite fl
 booleans, conditionals, while/repeat loops, and explicit output streams.
 [Typed `funcra` functions](docs/functions.md) support named/default arguments,
 recursion, unit returns, purity, contracts, and bounded heap call frames.
+The current source also supports [generic functions](docs/generic-functions.md)
+in the interpreter.
 See the [migration guide](docs/syntax-migration.md) for older declaration syntax.
 
 ```scarp

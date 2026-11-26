@@ -39,6 +39,12 @@ impl ScalarCallGraph {
                 "a native entry object requires function declarations only",
             ));
         }
+        if let Some(generic) = signatures.iter().find(|f| !f.type_parameters.is_empty()) {
+            return Err(unsupported(
+                generic.span,
+                "generic functions require the interpreter",
+            ));
+        }
         if signatures.len() > MAX_FUNCTIONS || signatures.len() != resolved.functions.len() {
             return Err(unsupported(
                 Span::default(),

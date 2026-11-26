@@ -55,9 +55,14 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                 ExpressionKind::UserCall {
                     function_span,
                     arguments,
+                    type_arguments,
                     ..
                 } => {
                     span(function_span, base, to_local);
+                    for argument in type_arguments {
+                        span(&mut argument.span, base, to_local);
+                        *nodes = nodes.saturating_add(argument.kind.node_count());
+                    }
                     for argument in arguments {
                         if let Some((_, label_span)) = &mut argument.label {
                             span(label_span, base, to_local);
@@ -163,6 +168,7 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                 Statement::Function(FunctionDeclaration {
                     name_span,
                     parameters,
+                    type_parameters,
                     contracts,
                     statements: body,
                     span: whole,
@@ -170,6 +176,10 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                 }) => {
                     span(name_span, base, to_local);
                     span(whole, base, to_local);
+                    *nodes = nodes.saturating_add(type_parameters.len());
+                    for parameter in type_parameters {
+                        span(&mut parameter.span, base, to_local);
+                    }
                     for parameter in parameters {
                         span(&mut parameter.span, base, to_local);
                         if let Some(default) = &mut parameter.default {

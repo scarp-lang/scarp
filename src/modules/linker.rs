@@ -428,6 +428,7 @@ impl Rewriter<'_> {
                 name,
                 arguments,
                 function_span,
+                ..
             } => {
                 let declaration = self
                     .symbol(name, *function_span)?
@@ -660,8 +661,13 @@ impl Rewriter<'_> {
                 ExpressionKind::UserCall {
                     name,
                     function_span,
+                    type_arguments,
                     ..
                 } => {
+                    for annotation in type_arguments {
+                        annotation.kind =
+                            self.nominal_type(&annotation.kind, annotation.span, false)?;
+                    }
                     if let Some(symbol) = self.symbol(name, *function_span)? {
                         if let Some(target) = &symbol.target {
                             let size = target.charged_bytes;
