@@ -70,11 +70,9 @@ pub fn divide_with_progress(
         return Err(divisor_file.changed());
     }
 
-    let plan = QuotientPlan::new(&mut dividend, &divisor_file, divisor, &mut buffer)?;
-    let result_digits = plan.digits.max(1);
-    let output_bytes = result_digits
-        .checked_add(u64::from(plan.negative))
-        .ok_or(FileError::SizeOverflow)?;
+    let (plan, mut remainder) =
+        single_limb_plan(&mut dividend, &divisor_file, divisor, &mut buffer)?;
+    let output_bytes = plan.output_bytes()?;
     let peak_temp_bytes = check_output_sizes(output_bytes, 0, limits)?;
     let input_time = start.elapsed();
 
@@ -84,12 +82,16 @@ pub fn divide_with_progress(
     let mut staged = stage
         .open_output()
         .map_err(io_error("create staged decimal output"))?;
-    let remainder = plan.write(
+    plan.write(
         &mut dividend,
-        divisor,
         &mut buffer,
         &mut staged,
         &mut progress,
+        |group, radix| {
+            let current = remainder * radix + u64::from(group);
+            remainder = current % divisor;
+            (current / divisor) as u32
+        },
     )?;
     let arithmetic_time = arithmetic_start.elapsed();
 
@@ -98,7 +100,7 @@ pub fn divide_with_progress(
     Ok(DivisionUsage {
         quotient: FileUsage {
             input_bytes,
-            result_digits,
+            result_digits: plan.result_digits(),
             output_bytes,
             scratch_bytes: 0,
             peak_temp_bytes,
@@ -107,68 +109,80 @@ pub fn divide_with_progress(
             arithmetic_time,
             output_time: output_start.elapsed(),
         },
-        remainder: if dividend.negative {
-            -remainder
-        } else {
-            remainder
-        },
+        remainder: (remainder as i32) * if dividend.negative { -1 } else { 1 },
     })
 }
 
-struct QuotientPlan {
+pub(super) struct QuotientPlan {
     offset: u64,
     digits: u64,
     negative: bool,
-    remainder: u64,
+}
+
+fn single_limb_plan(
+    dividend: &mut DecimalInput,
+    divisor_file: &DecimalInput,
+    divisor: u64,
+    buffer: &mut [u8],
+) -> Result<(QuotientPlan, u64), FileError> {
+    let prefix = &mut buffer[..dividend.digits.min(divisor_file.digits) as usize];
+    dividend.read_magnitude(0, prefix)?;
+    if prefix.first() == Some(&b'0') {
+        return Err(dividend.changed());
+    }
+    let first = u64::from(parse_limb(prefix));
+    // The first quotient digit appears when the dividend prefix reaches
+    // the divisor. The digits before it form the initial remainder.
+    let skipped = prefix.len() - usize::from(first >= divisor);
+    Ok((
+        QuotientPlan::new(dividend, divisor_file, skipped as u64),
+        u64::from(parse_limb(&prefix[..skipped])),
+    ))
 }
 
 impl QuotientPlan {
-    fn new(
-        dividend: &mut DecimalInput,
-        divisor_file: &DecimalInput,
-        divisor: u64,
-        buffer: &mut [u8],
-    ) -> Result<Self, FileError> {
-        let prefix = &mut buffer[..dividend.digits.min(divisor_file.digits) as usize];
-        dividend.read_magnitude(0, prefix)?;
-        if prefix.first() == Some(&b'0') {
-            return Err(dividend.changed());
-        }
-        let first = u64::from(parse_limb(prefix));
-        // The first quotient digit appears when the dividend prefix reaches
-        // the divisor. The digits before it form the initial remainder.
-        let skipped = prefix.len() - usize::from(first >= divisor);
-        let offset = skipped as u64;
+    pub(super) fn new(dividend: &DecimalInput, divisor: &DecimalInput, offset: u64) -> Self {
         let digits = dividend.digits - offset;
-        Ok(Self {
+        Self {
             offset,
             digits,
-            negative: digits != 0 && dividend.negative != divisor_file.negative,
-            remainder: u64::from(parse_limb(&prefix[..skipped])),
-        })
+            negative: digits != 0 && dividend.negative != divisor.negative,
+        }
     }
 
-    fn write(
-        self,
+    pub(super) fn groups(&self) -> u64 {
+        self.digits.div_ceil(LIMB_DIGITS as u64)
+    }
+
+    pub(super) fn result_digits(&self) -> u64 {
+        self.digits.max(1)
+    }
+
+    pub(super) fn output_bytes(&self) -> Result<u64, FileError> {
+        self.result_digits()
+            .checked_add(u64::from(self.negative))
+            .ok_or(FileError::SizeOverflow)
+    }
+
+    pub(super) fn write(
+        &self,
         dividend: &mut DecimalInput,
-        divisor: u64,
         buffer: &mut [u8],
         output: &mut impl Write,
         progress: &mut impl FnMut(FileProgress) -> ControlFlow<()>,
-    ) -> Result<i32, FileError> {
+        mut divide_group: impl FnMut(u32, u64) -> u32,
+    ) -> Result<(), FileError> {
         let sign = u64::from(self.negative);
-        let total = self.digits.max(1) + sign;
+        let total = self.output_bytes()?;
         let context = io_error("staged decimal output");
         checkpoint(progress, FilePhase::WriteDecimal, 0, total)?;
         if self.digits == 0 {
             output.write_all(b"0").map_err(context)?;
-            checkpoint(progress, FilePhase::WriteDecimal, 1, total)?;
-            return Ok(self.remainder as i32);
+            return checkpoint(progress, FilePhase::WriteDecimal, 1, total);
         }
         if self.negative {
             output.write_all(b"-").map_err(context)?;
         }
-        let mut remainder = self.remainder;
         let mut position = 0;
         while position < self.digits {
             let count = (self.digits - position).min(buffer.len() as u64) as usize;
@@ -180,11 +194,7 @@ impl QuotientPlan {
                 } else {
                     10_u64.pow(digits.len() as u32)
                 };
-                // The remainder is below the divisor. Both the divisor and
-                // radix are at most BASE, so this product fits in u64.
-                let current = remainder * radix + u64::from(parse_limb(digits));
-                let quotient = (current / divisor) as u32;
-                remainder = current % divisor;
+                let quotient = divide_group(parse_limb(digits), radix);
                 write_limb(quotient, digits);
             }
             if position == 0 && block[0] == b'0' {
@@ -194,6 +204,6 @@ impl QuotientPlan {
             position += count as u64;
             checkpoint(progress, FilePhase::WriteDecimal, position + sign, total)?;
         }
-        Ok(remainder as i32)
+        Ok(())
     }
 }

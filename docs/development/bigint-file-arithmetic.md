@@ -48,12 +48,18 @@ as `0`. The remainder has the dividend's sign when nonzero. For dividend
 stdout after publication. With `--stats`, the signed integer is the
 `remainder` field in the JSON record.
 
+`scarp bigint div-wide LEFT RIGHT QUOTIENT` accepts a nonzero divisor that
+fits its configured limb workspace. It uses the same signed quotient and
+remainder rules. With `--stats`, the wide remainder is a JSON string so
+consumers can retain its exact decimal value.
+
 | Option | Default | What it bounds |
 | --- | ---: | --- |
 | `--max-input-bytes` | 67,108,864 | The exact sum of the two input file lengths, checked before the content scan |
 | `--max-output-bytes` | 33,554,432 | Final decimal file size. Division knows its exact quotient size before staging. The other kernels check a lower bound before arithmetic and the exact size before staging decimal bytes |
 | `--max-temp-bytes` | 67,108,864 | Peak logical byte length of scratch plus staged output. The scratch length is computed before arithmetic |
-| `--max-buffer-bytes` | 262,144 | Reused buffer payload. Division requires 9 bytes. The other kernels require 30 bytes. Buffers use at most 1 MiB to keep I/O and cancellation intervals short |
+| `--max-buffer-bytes` | 262,144 | Reused buffer payload. Single-limb division requires 9 bytes. Wide division requires at least `8*m + 13` bytes for `m` divisor limbs. Addition, subtraction and multiplication require 30 bytes. Each I/O block uses at most 1 MiB |
+| `--max-limb-steps` | 100,000,000 | Conservative arithmetic work bound for `div-wide` |
 
 CLI errors go to stderr. Exit status 2 indicates invalid arguments and 1
 indicates an input, resource or filesystem failure. `--stats` writes JSON after
@@ -148,6 +154,37 @@ and quotient statistics. Division reports `ReadInputs`, `WriteDecimal` and
 `Publish` progress. A failed stdout write after CLI publication can leave
 the quotient available at its destination.
 
+### Streaming division by a multi-limb divisor
+
+`div-wide` holds the divisor in big-endian base-`10^9` limbs and keeps a
+rolling remainder in a window one limb wider than the divisor. Validation
+and quotient production stream the dividend. Comparing the leading dividend
+prefix to the divisor gives the exact signed quotient size before staging.
+The staged quotient consumes exactly its file length and uses zero limb
+scratch. The remainder is returned as retained limbs and formatted directly.
+
+Multiply the divisor and remainder by the same normalization factor so the
+divisor's leading limb is at least half the base. Advancing the rolling
+window by one decimal group then yields one trial quotient digit. The
+two-leading-limb estimate can need up to two decrements against the next
+limb. Subtract the trial product and add back the divisor once if that
+subtraction borrows across the entire window. At the end, divide out the
+normalization factor exactly. [GMP basecase division, section 15.2.2](https://gmplib.org/gmp-man-6.3.0.pdf)
+
+The algorithm uses `O(m)` arithmetic memory plus a reusable decimal buffer
+and `O(m*q)` arithmetic work for an `m`-limb divisor and `q` quotient
+groups when `q > 0`. A final partial group uses its own power of ten. The
+work budget checks the upper bound `9*m + 4 + q*(3*m + 4)`. A group can visit
+the window once to extend it, once to subtract, and once to add back. The
+linear preparation term includes loading, comparing, normalizing and
+recovering the remainder. Input scan and file I/O are bounded separately by
+byte quotas. The work count is an upper bound, independent of elapsed time.
+
+Rust hosts can call `divide_wide` or `divide_wide_with_progress`. Progress
+includes `CompareMagnitudes` while loading the divisor and prefix. During
+quotient output, the kernel reduces the I/O block size for large divisors
+so it checks cancellation between shorter arithmetic batches.
+
 ## Repository baseline and design choices
 
 The audit started at `638dc4c227f34f1c660be66834bcc0cbdb22dec8` on `main`.
@@ -220,6 +257,8 @@ python3 scripts/benchmarks/bigint-files.py target/release/scarp \
   --case mul --digits 100000000 --work-dir /path/to/existing-workspace
 python3 scripts/benchmarks/bigint-files.py target/release/scarp \
   --case div --digits 100000000 --work-dir /path/to/existing-workspace
+python3 scripts/benchmarks/bigint-files.py target/release/scarp \
+  --case div-wide --digits 100000000 --divisor-digits 180 --work-dir /path/to/existing-workspace
 ```
 
 The Python 3.9+ benchmark supplies deterministic dense digits, verifies every
@@ -330,6 +369,6 @@ An additional Linux run lowered `RLIMIT_FSIZE` to 8,192 bytes while adding
 `9` repeated 10,000 times and `1`. The scratch file fit, the staged decimal
 write returned the OS file-size error, and cleanup left only the input files.
 
-File-backed multiplication of two multi-limb operands, division by a
-multi-limb divisor, modular and exact exponentiation, binary/hex I/O,
+File-backed multiplication of two multi-limb operands, divisors larger than
+the in-memory workspace, modular and exact exponentiation, binary/hex I/O,
 automatic spilling and source-language file values are follow-up work.
