@@ -98,7 +98,9 @@ fn main() {
         ),
     ] {
         let script = format!(
-            "{signature} {{ return x * x; }}\n             pure funcra entry(x: integer) -> integer {{ return square(x); }}\n             print(entry(9));"
+            "{signature} {{ return x * x; }}\n\
+             pure funcra entry(x: integer) -> integer {{ return square(x); }}\n\
+             print(entry(9));"
         );
         run(name, &script, "entry", b"81\n", samples, batch);
     }
