@@ -481,7 +481,6 @@ fn run_plan<'a>(
                         let ResolvedCall::User {
                             function: id,
                             parameters,
-                            ..
                         } = call
                         else {
                             unreachable!("native kernels complete in the expression workspace")

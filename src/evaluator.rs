@@ -347,8 +347,8 @@ impl Workspace {
                     }
                 }
                 Task::Variant(node, has_payload, span) => {
-                    let resolver::CompositeOperation::Variant { kind, tag } =
-                        &expression.composites[&node]
+                    let resolver::NodeMetadata::Variant { kind, tag } =
+                        &expression.node_metadata[&node]
                     else {
                         unreachable!("resolved variant constructor");
                     };
@@ -369,8 +369,8 @@ impl Workspace {
                     )));
                 }
                 Task::Record(node, span) => {
-                    let resolver::CompositeOperation::Record { kind, order } =
-                        &expression.composites[&node]
+                    let resolver::NodeMetadata::Record { kind, order } =
+                        &expression.node_metadata[&node]
                     else {
                         unreachable!("resolved record constructor");
                     };
@@ -399,7 +399,7 @@ impl Workspace {
                     )));
                 }
                 Task::Field(node, _) => {
-                    let resolver::CompositeOperation::Field(offset) = expression.composites[&node]
+                    let resolver::NodeMetadata::Field(offset) = expression.node_metadata[&node]
                     else {
                         unreachable!("resolved record field");
                     };

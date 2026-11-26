@@ -272,8 +272,10 @@ fn linked_generic_calls_resolve_type_arguments_and_byte_spans() {
     else {
         panic!("expected binding");
     };
-    let ExpressionKind::UserCall { type_arguments, .. } =
-        &expression.nodes()[expression.root()].kind
+    let ExpressionKind::UserCall {
+        type_arguments: Some(type_arguments),
+        ..
+    } = &expression.nodes()[expression.root()].kind
     else {
         panic!("expected call");
     };

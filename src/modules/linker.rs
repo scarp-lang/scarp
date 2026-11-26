@@ -664,9 +664,11 @@ impl Rewriter<'_> {
                     type_arguments,
                     ..
                 } => {
-                    for annotation in type_arguments {
-                        annotation.kind =
-                            self.nominal_type(&annotation.kind, annotation.span, false)?;
+                    if let Some(type_arguments) = type_arguments {
+                        for annotation in std::sync::Arc::make_mut(type_arguments) {
+                            annotation.kind =
+                                self.nominal_type(&annotation.kind, annotation.span, false)?;
+                        }
                     }
                     if let Some(symbol) = self.symbol(name, *function_span)? {
                         if let Some(target) = &symbol.target {

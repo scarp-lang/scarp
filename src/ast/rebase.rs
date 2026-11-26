@@ -59,9 +59,11 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                     ..
                 } => {
                     span(function_span, base, to_local);
-                    for argument in type_arguments {
-                        span(&mut argument.span, base, to_local);
-                        *nodes = nodes.saturating_add(argument.kind.node_count());
+                    if let Some(type_arguments) = type_arguments {
+                        for argument in std::sync::Arc::make_mut(type_arguments) {
+                            span(&mut argument.span, base, to_local);
+                            *nodes = nodes.saturating_add(argument.kind.node_count());
+                        }
                     }
                     for argument in arguments {
                         if let Some((_, label_span)) = &mut argument.label {
@@ -165,15 +167,16 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                         span(&mut ty.span, base, to_local);
                     }
                 }
-                Statement::Function(FunctionDeclaration {
-                    name_span,
-                    parameters,
-                    type_parameters,
-                    contracts,
-                    statements: body,
-                    span: whole,
-                    ..
-                }) => {
+                Statement::Function(function) => {
+                    let FunctionDeclaration {
+                        name_span,
+                        parameters,
+                        type_parameters,
+                        contracts,
+                        statements: body,
+                        span: whole,
+                        ..
+                    } = function.as_mut();
                     span(name_span, base, to_local);
                     span(whole, base, to_local);
                     *nodes = nodes.saturating_add(type_parameters.len());

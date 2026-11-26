@@ -29,7 +29,7 @@ pub enum Statement {
         declaration: Box<Statement>,
         span: Span,
     },
-    Function(FunctionDeclaration),
+    Function(Box<FunctionDeclaration>),
     Record(Box<RecordDeclaration>),
     Variant(Box<VariantDeclaration>),
     Match(Box<MatchStatement>),
@@ -404,7 +404,7 @@ pub enum ExpressionKind {
     },
     UserCall {
         name: String,
-        type_arguments: Vec<TypeAnnotation>,
+        type_arguments: Option<std::sync::Arc<Vec<TypeAnnotation>>>,
         arguments: Vec<CallArgument>,
         function_span: Span,
     },

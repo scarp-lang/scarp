@@ -63,11 +63,15 @@ impl TypedExpression<'_> {
             .enumerate()
             .map(|(index, node)| {
                 let call_signature = match self.expression.calls[index] {
-                    Some(ResolvedCall::User {
-                        function,
-                        signature,
-                        ..
-                    }) => signature.or_else(|| self.types.functions.get(function).copied()),
+                    Some(ResolvedCall::User { function, .. }) => {
+                        if let Some(NodeMetadata::GenericCall(signature)) =
+                            self.expression.node_metadata.get(&index)
+                        {
+                            Some(*signature)
+                        } else {
+                            self.types.functions.get(function).copied()
+                        }
+                    }
                     Some(ResolvedCall::Builtin(builtin)) => {
                         let ExpressionKind::UserCall { arguments, .. } = &node.kind else {
                             unreachable!("resolved builtin must be a call");

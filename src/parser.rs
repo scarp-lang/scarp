@@ -275,7 +275,7 @@ impl Parser<'_> {
             })
         } else {
             let declaration = if self.keyword("funcra") || self.keyword("pure") {
-                Statement::Function(self.function()?)
+                Statement::Function(Box::new(self.function()?))
             } else if self.keyword_then_identifier("variant") {
                 Statement::Variant(Box::new(self.variant_declaration()?))
             } else if self.keyword_then_identifier("record") {
@@ -583,7 +583,7 @@ impl Parser<'_> {
                         "nested function declarations are not supported",
                     ));
                 }
-                Ok(Statement::Function(self.function()?))
+                Ok(Statement::Function(Box::new(self.function()?)))
             }
             TokenKind::Identifier(name) if name == "if" => self.conditional(depth),
             TokenKind::Identifier(name) if name == "repeat" => self.repeat_loop(depth),
@@ -2195,47 +2195,56 @@ impl Parser<'_> {
         ))
     }
 
+    // Keep type parsing off the common recursive expression call stack.
+    #[inline(never)]
+    fn call_type_arguments(
+        &mut self,
+    ) -> Result<std::sync::Arc<Vec<crate::ast::TypeAnnotation>>, ParseError> {
+        self.cursor += 3;
+        let mut types = Vec::new();
+        let mut remaining = MAX_SOURCE_TYPE_NODES;
+        loop {
+            let start = self
+                .current()
+                .ok_or_else(|| self.expected("a type argument"))?
+                .span
+                .start;
+            if types.len() == MAX_TYPE_PARAMETERS {
+                return Err(ParseError::new(
+                    DiagnosticKind::GenericLimit,
+                    Span::new(start, start),
+                    "a call can supply at most 64 type arguments",
+                ));
+            }
+            let kind = self.source_type(false, 0, &mut remaining, false)?;
+            types.push(crate::ast::TypeAnnotation {
+                kind,
+                span: Span::new(start, self.type_end),
+            });
+            if !self.at(&TokenKind::Comma) {
+                break;
+            }
+            self.advance();
+            if self.current().is_some_and(|t| is_type_close(&t.kind)) {
+                break;
+            }
+        }
+        self.type_close()?;
+        Ok(std::sync::Arc::new(types))
+    }
+
     fn call_expression(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
         depth: usize,
     ) -> Result<usize, ParseError> {
         let (name, function_span) = self.qualified_identifier()?;
-        let type_arguments = if self.explicit_type_arguments_at(self.cursor) {
-            self.cursor += 3;
-            let mut types = Vec::new();
-            let mut remaining = MAX_SOURCE_TYPE_NODES;
-            loop {
-                let start = self
-                    .current()
-                    .ok_or_else(|| self.expected("a type argument"))?
-                    .span
-                    .start;
-                if types.len() == MAX_TYPE_PARAMETERS {
-                    return Err(ParseError::new(
-                        DiagnosticKind::GenericLimit,
-                        Span::new(start, start),
-                        "a call can supply at most 64 type arguments",
-                    ));
-                }
-                let kind = self.source_type(false, 0, &mut remaining, false)?;
-                types.push(crate::ast::TypeAnnotation {
-                    kind,
-                    span: Span::new(start, self.type_end),
-                });
-                if !self.at(&TokenKind::Comma) {
-                    break;
-                }
-                self.advance();
-                if self.current().is_some_and(|t| is_type_close(&t.kind)) {
-                    break;
-                }
-            }
-            self.type_close()?;
-            types
-        } else {
-            Vec::new()
-        };
+        let type_arguments =
+            if self.at(&TokenKind::Colon) && self.explicit_type_arguments_at(self.cursor) {
+                Some(self.call_type_arguments()?)
+            } else {
+                None
+            };
         let opening = self.punctuation(TokenKind::LeftParen, "'('")?;
         self.expression_depth(depth, opening)?;
         let mut arguments = Vec::new();

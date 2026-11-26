@@ -193,7 +193,7 @@ pub(crate) struct ResolvedExpression {
     pub kind: SourceType,
     pub types: Vec<TypeId>,
     pub calls: Vec<Option<ResolvedCall>>,
-    pub composites: std::collections::BTreeMap<usize, CompositeOperation>,
+    pub node_metadata: std::collections::BTreeMap<usize, NodeMetadata>,
 }
 
 #[derive(Debug, Clone)]
@@ -204,7 +204,9 @@ pub(crate) struct PropagationPlan {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum CompositeOperation {
+pub(crate) enum NodeMetadata {
+    /// Substituted signature for calls in an abstract generic body.
+    GenericCall(TypeId),
     Record {
         kind: SourceType,
         order: Box<[usize]>,
@@ -321,8 +323,6 @@ pub(crate) enum ResolvedCall {
         function: usize,
         /// Parameter indices in the original explicit-argument order.
         parameters: Vec<usize>,
-        /// Substituted signature for calls in an abstract generic body.
-        signature: Option<TypeId>,
     },
     Builtin(Builtin),
     BigIntDivMod,
@@ -578,23 +578,28 @@ pub fn resolve_with_type_limits(
         }
     }
     let source_function_count = metadata.len();
+    let has_generics = generic_bindings
+        .iter()
+        .any(|parameters| !parameters.is_empty());
     let mut instances = generics::Instances::new(source_function_count);
     let mut functions = Vec::with_capacity(source_function_count);
     for (id, (declaration, bindings)) in declarations.iter_mut().zip(&generic_bindings).enumerate()
     {
         let mut resolver = Resolver::new(&metadata, &names, &layouts, &mut registry);
         resolver.type_bindings = bindings;
+        resolver.has_generics = has_generics;
         let function = if bindings.is_empty() {
             resolver.instances = Some(&mut instances);
             declaration.take().expect("source declaration")
         } else {
             declaration.as_ref().expect("generic declaration").clone()
         };
-        functions.push(resolve_function(function, &metadata[id], resolver)?);
+        functions.push(resolve_function(*function, &metadata[id], resolver)?);
     }
     let (entry, slot_types) = {
         let mut resolver = Resolver::new(&metadata, &names, &layouts, &mut registry);
         resolver.instances = Some(&mut instances);
+        resolver.has_generics = has_generics;
         resolver.statement_list(statements)?;
         (resolver.statements, resolver.slot_types)
     };
@@ -613,11 +618,12 @@ pub fn resolve_with_type_limits(
         }
         let mut resolver = Resolver::new(&metadata, &names, &layouts, &mut registry);
         resolver.type_bindings = &instance.bindings;
+        resolver.has_generics = true;
         resolver.instances = Some(&mut instances);
         let template = declarations[instance.declaration]
             .as_ref()
             .expect("generic declaration");
-        let body = resolve_function(template.clone(), &signature, resolver).map_err(|error| {
+        let body = resolve_function(*template.clone(), &signature, resolver).map_err(|error| {
             error.with_related(instance.span, "generic specialization requested here")
         })?;
         functions.push(body);
@@ -663,6 +669,7 @@ struct Resolver<'a> {
     layouts: &'a nominal::Layouts,
     result: Option<(SourceType, Span)>,
     pure: bool,
+    has_generics: bool,
     type_bindings: &'a [SourceType],
     instances: Option<&'a mut generics::Instances>,
 }
@@ -692,6 +699,7 @@ impl<'a> Resolver<'a> {
             layouts,
             result: None,
             pure: false,
+            has_generics: false,
             type_bindings: &[],
             instances: None,
         }
@@ -1436,7 +1444,7 @@ fn resolve_expression(
     resolver: &mut Resolver<'_>,
     expected: Option<&SourceType>,
 ) -> Result<ResolvedExpression, Diagnostic> {
-    let expectations = if let Some(expected) = expected {
+    let expectations = if let Some(expected) = expected.filter(|_| resolver.has_generics) {
         generics::call_expectations(&syntax, expected)
     } else {
         std::collections::BTreeMap::new()
@@ -1444,7 +1452,7 @@ fn resolve_expression(
     let mut slots = Vec::with_capacity(syntax.nodes().len());
     let mut calls = Vec::with_capacity(syntax.nodes().len());
     let mut types: Vec<SourceType> = Vec::with_capacity(syntax.nodes().len());
-    let mut composite_operations = std::collections::BTreeMap::new();
+    let mut node_metadata = std::collections::BTreeMap::new();
     for index in 0..syntax.nodes.len() {
         let node = &mut syntax.nodes[index];
         if let ExpressionKind::Array {
@@ -1487,7 +1495,7 @@ fn resolve_expression(
             ExpressionKind::Variant(constructor) => {
                 let (kind, operation) =
                     variants::constructor(layouts, constructor, &types, &syntax)?;
-                composite_operations.insert(index, operation);
+                node_metadata.insert(index, operation);
                 (kind, None)
             }
             ExpressionKind::Record {
@@ -1498,7 +1506,7 @@ fn resolve_expression(
                 let kind =
                     nominal::lookup(layouts, crate::types::NominalKind::Record, name, *name_span)?;
                 let operation = records::constructor(&kind, fields, &types, &syntax, node.span)?;
-                composite_operations.insert(index, operation);
+                node_metadata.insert(index, operation);
                 (kind, None)
             }
             ExpressionKind::Field {
@@ -1524,7 +1532,7 @@ fn resolve_expression(
                             format!("{} has no field {name:?}", record.name()),
                         )
                     })?;
-                composite_operations.insert(index, CompositeOperation::Field(index_in_layout));
+                node_metadata.insert(index, NodeMetadata::Field(index_in_layout));
                 (field_type.clone(), None)
             }
             ExpressionKind::Tuple { elements } => {
@@ -1755,6 +1763,9 @@ fn resolve_expression(
                 arguments,
                 function_span,
             } => {
+                let type_arguments = type_arguments
+                    .as_ref()
+                    .map_or(&[][..], |types| types.as_slice());
                 if let Some(argument) = type_arguments
                     .first()
                     .filter(|_| !names.contains_key(name) && is_builtin_name(name))
@@ -2098,8 +2109,12 @@ fn resolve_expression(
                         format!("pure expressions cannot call impure function {name:?}"),
                     ));
                 }
-                let mut inference =
-                    generics::Inference::new(function, type_arguments, resolver, *function_span)?;
+                let mut inference = (!function.type_parameters.is_empty()
+                    || !type_arguments.is_empty())
+                .then(|| {
+                    generics::Inference::new(function, type_arguments, resolver, *function_span)
+                })
+                .transpose()?;
                 let mut parameters = Vec::new();
                 let mut supplied = vec![false; function.parameters.len()];
                 let mut named = false;
@@ -2138,11 +2153,14 @@ fn resolve_expression(
                             ),
                         ));
                     }
-                    inference.infer_argument(
-                        &function.parameters[parameter],
-                        &types[argument.expression],
-                        syntax.nodes()[argument.expression].span,
-                    )?;
+                    let parameter_info = &function.parameters[parameter];
+                    let kind = &types[argument.expression];
+                    let span = syntax.nodes()[argument.expression].span;
+                    if let Some(inference) = &mut inference {
+                        inference.infer_argument(parameter_info, kind, span)?;
+                    } else {
+                        check_argument(parameter_info, kind, &parameter_info.kind, span)?;
+                    }
                     supplied[parameter] = true;
                     parameters.push(parameter);
                 }
@@ -2155,47 +2173,42 @@ fn resolve_expression(
                         ));
                     }
                 }
-                let bindings =
-                    inference.finish(expectations.get(&index).copied(), *function_span)?;
-                for (&parameter, argument) in parameters.iter().zip(arguments) {
-                    let parameter = &function.parameters[parameter];
-                    let span = syntax.nodes()[argument.expression].span;
-                    let expected = generics::substitute(&parameter.kind, &bindings, span)?;
-                    require_type(&types[argument.expression], expected, span).map_err(|error| {
-                        error.with_related(
-                            parameter.span,
-                            format!("parameter {:?} is declared here", parameter.name),
-                        )
-                    })?;
-                }
-                let result = generics::substitute(&function.result, &bindings, *function_span)?;
-                let (id, signature) = match &mut resolver.instances {
-                    Some(instances) if !bindings.is_empty() => (
+                let (id, result) = if let Some(inference) = inference {
+                    let bindings =
+                        inference.finish(expectations.get(&index).copied(), *function_span)?;
+                    for (&parameter, argument) in parameters.iter().zip(arguments) {
+                        let parameter = &function.parameters[parameter];
+                        let span = syntax.nodes()[argument.expression].span;
+                        let expected = generics::substitute(&parameter.kind, &bindings, span)?;
+                        check_argument(parameter, &types[argument.expression], &expected, span)?;
+                    }
+                    let result = generics::substitute(&function.result, &bindings, *function_span)?;
+                    let id = if let Some(instances) = &mut resolver.instances {
                         instances.request(
                             id,
                             function,
                             bindings,
                             resolver.registry,
                             *function_span,
-                        )?,
-                        None,
-                    ),
-                    None if !bindings.is_empty() => (
-                        id,
-                        Some(generics::abstract_call_signature(
+                        )?
+                    } else {
+                        let signature = generics::abstract_call_signature(
                             function,
                             &bindings,
                             &result,
                             resolver.registry,
                             *function_span,
-                        )?),
-                    ),
-                    _ => (id, None),
+                        )?;
+                        node_metadata.insert(index, NodeMetadata::GenericCall(signature));
+                        id
+                    };
+                    (id, result)
+                } else {
+                    (id, function.result.clone())
                 };
                 call = Some(ResolvedCall::User {
                     function: id,
                     parameters,
-                    signature,
                 });
                 (result, None)
             }
@@ -2386,7 +2399,7 @@ fn resolve_expression(
         kind,
         types,
         calls,
-        composites: composite_operations,
+        node_metadata: node_metadata,
     })
 }
 
@@ -2409,6 +2422,20 @@ pub(crate) fn resolve_closed_expression(
         &mut registry,
     )
     .expression(syntax)
+}
+
+fn check_argument(
+    parameter: &ParameterInfo,
+    found: &SourceType,
+    expected: &SourceType,
+    span: Span,
+) -> Result<(), Diagnostic> {
+    require_type(found, expected, span).map_err(|error| {
+        error.with_related(
+            parameter.span,
+            format!("parameter {:?} is declared here", parameter.name),
+        )
+    })
 }
 
 pub(crate) fn require_type(

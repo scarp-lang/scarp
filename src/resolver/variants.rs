@@ -16,7 +16,7 @@ pub(super) fn constructor(
     constructor: &VariantConstructor,
     types: &[SourceType],
     syntax: &Expression,
-) -> Result<(SourceType, CompositeOperation), Diagnostic> {
+) -> Result<(SourceType, NodeMetadata), Diagnostic> {
     let kind = nominal::lookup(
         layout,
         NominalKind::Variant,
@@ -52,7 +52,7 @@ pub(super) fn constructor(
     }
     Ok((
         kind.clone(),
-        CompositeOperation::Variant {
+        NodeMetadata::Variant {
             kind,
             tag: tag as u8,
         },
