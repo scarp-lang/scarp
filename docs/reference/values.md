@@ -44,8 +44,8 @@ Use [local type annotations](../variables.md) to declare an exact binding type.
 | Grouping | `(expression)` | Evaluate the grouped expression |
 | Indexing | `expression[index]` | Zero-based checked collection access before unary minus. Tuple indices must be literals. |
 | Unary minus/bit complement | `-primary`, `~primary` | Numeric negation; `~` is integer-only |
-| Multiplication/division/remainder | `*`, `/`, `%` | Left-associative; `%` requires integers |
-| Addition/subtraction | `+`, `-` | Left-associative same-type numeric arithmetic |
+| Multiplication/division/remainder | `*`, `/`, `%` | Left-associative; development string `*` takes an integer count |
+| Addition/subtraction | `+`, `-` | Left-associative same-type numeric arithmetic; development string `+` concatenates |
 | Integer shifts | `<<`, `>>`, `>>>` | Left-associative; shift count from 0 to 63 |
 | Bitwise AND | `&` | Signed 64-bit bit patterns |
 | Bitwise XOR | `^` | Signed 64-bit bit patterns |
@@ -124,9 +124,9 @@ already exist and be declared with `var`.
 | Operator | Effect |
 | --- | --- |
 | `=` | Replace the value with another value of the same inferred type |
-| `+=` | Add a same-kind numeric value to the previous value |
+| `+=` | Add a same-kind numeric value or append a string to a string (development) |
 | `-=` | Subtract a same-kind numeric value from the previous value |
-| `*=` | Multiply by a same-kind numeric value |
+| `*=` | Multiply by a same-kind numeric value or repeat a string by an integer (development) |
 | `/=` | Divide by a same-kind nonzero numeric value |
 | `%=` | Integer remainder, error on zero divisor |
 | `&=`, `|=`, `^=` | Integer-only bitwise updates |
@@ -140,11 +140,10 @@ inside the right-hand expression identify that expression's operator instead.
 
 ## Strings, copies, and output
 
-Strings support `\\`, `\"`, `\n`, `\t`, and `\r` in v0.0.3. Other escapes are errors. A physical CR or LF
-inside a string is invalid. Parenthesized strings are supported in development.
+Ordinary strings support `\\`, `\"`, `\n`, `\t`, `\r` and `\u{HEX}`. Physical line breaks require development triple-quoted literals.
 
-Arithmetic and compound assignment accept same-type integer or float operands. There is no string
-concatenation, indexing, interpolation, or automatic formatting of placeholders.
+Development strings support concatenation and repetition with matching compound
+assignments. Interpolation and automatic placeholder formatting remain unsupported.
 Print labels and values with separate statements:
 
 ```scarp

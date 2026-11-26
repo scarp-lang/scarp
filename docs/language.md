@@ -153,8 +153,9 @@ and postorder within each expression, stopping at the first arithmetic error.
 Grouping is limited to 64 nested pairs of parentheses, excluding the `print`
 call itself. Greater depth produces `E0009`. Flat operator chains have no fixed
 language limit and are processed without recursive evaluation or destruction.
-Available memory still limits the size of a program. Numeric separators,
-base prefixes, strings as arithmetic operands, and string concatenation are unsupported.
+Available memory still limits the size of a program. The development compiler
+supports string concatenation with `+` and string-left repetition with `*`.
+See [string operators](string-operators.md) for exact types and limits.
 
 ## Finite floats (alpha)
 

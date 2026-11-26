@@ -1170,7 +1170,12 @@ pub(crate) fn apply_binary_with_budget(
         _ => None,
     };
     if let Some(function) = text_operator {
-        return numeric::evaluate_with_budget(function, &[left.clone(), right.clone()], budget, span);
+        return numeric::evaluate_with_budget(
+            function,
+            &[left.clone(), right.clone()],
+            budget,
+            span,
+        );
     }
     if let (Some(left), Some(right)) = (left.as_bigint(), right.as_bigint()) {
         return crate::bigint::binary(operator, left, right, budget, span);

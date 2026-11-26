@@ -43,6 +43,7 @@ constant expressions 42 84 true 0.75 42
 | --- | --- |
 | Scalar literals, constant references, groups | Preserve integer/finite-float/boolean/string type |
 | Numeric unary `-`, binary `+`, `-`, `*`, `/` | Same numeric kind; no implicit integer/float mixing |
+| Development string `+`, `*` | String concatenation or string-left repetition by integer |
 | `<`, `<=`, `>`, `>=` | Same numeric kind; boolean result |
 | `==`, `!=` | Same scalar kind; boolean result, including string equality |
 | `not`, `and`, `or` | Boolean operands and result |

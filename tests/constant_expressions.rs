@@ -615,3 +615,15 @@ fn constant_division_errors_keep_the_operator_source_location() {
     assert_eq!(error.diagnostic.kind.code(), "E0008");
     assert_eq!(error.diagnostic.span, scarp::diagnostics::Span::new(14, 15));
 }
+
+#[test]
+fn string_operators_fold_exported_constants() {
+    let files = [
+        ("main.srp", r#"import "lib.srp" as lib; print(lib.label);"#),
+        (
+            "lib.srp",
+            r#"bind name="é"; pub bind label="[" + name*2 + "]";"#,
+        ),
+    ];
+    assert_eq!(output(&files), "[éé]\n".as_bytes());
+}

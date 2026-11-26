@@ -1017,10 +1017,19 @@ impl<'a> Resolver<'a> {
                 }
                 let value = self.expression(value)?;
                 match operator {
-                    AssignmentOperator::Compound(BinaryOperator::Add)
-                        if expected_type == ValueType::String && value.kind == ValueType::String => {}
-                    AssignmentOperator::Compound(BinaryOperator::Multiply)
-                        if expected_type == ValueType::String && value.kind == ValueType::Integer => {}
+                    AssignmentOperator::Compound(operator)
+                        if expected_type == ValueType::String
+                            && matches!(operator, BinaryOperator::Add | BinaryOperator::Multiply) =>
+                    {
+                        let right_type = if operator == BinaryOperator::Add {
+                            ValueType::String
+                        } else {
+                            ValueType::Integer
+                        };
+                        require_type(&value.kind, right_type, operator_span).map_err(|error| {
+                            error.with_related(declaration, "the target binding is declared here")
+                        })?;
+                    }
                     AssignmentOperator::Compound(operator)
                         if operator.is_integer_only()
                             && !(operator == BinaryOperator::Remainder
@@ -2184,13 +2193,12 @@ fn resolve_expression(
                         }
                     }
                 }
-                let right_type = if *operator == BinaryOperator::Multiply
-                    && types[*left] == ValueType::String
-                {
-                    SourceType::from(ValueType::Integer)
-                } else {
-                    types[*left].clone()
-                };
+                let right_type =
+                    if *operator == BinaryOperator::Multiply && types[*left] == ValueType::String {
+                        SourceType::from(ValueType::Integer)
+                    } else {
+                        types[*left].clone()
+                    };
                 require_type(&types[*right], &right_type, *operator_span).map_err(|error| {
                     error
                         .with_related(
