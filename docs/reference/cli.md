@@ -113,7 +113,7 @@ Published v0.0.6-alpha.1 adds static `inspect symbols` and `inspect references`
 commands, which are absent from older alpha.5 packages.
 
 The latest published prerelease is
-[v0.0.7-alpha.1](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.1).
+[v0.0.7-alpha.2](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.2).
 `scarp exec` enables bounded input calls automatically, including
 `input_integer(prompt)` and `input_boolean(prompt)`; the latter accepts
 lowercase `true` and `false`. Legacy `run` keeps its explicit
@@ -143,7 +143,7 @@ not alpha.3 packages. Confirm the exact release tag/commit and use
 | `scarp guide inspect modules` | Show checked-module inspection help |
 | `scarp version` | Print the same actual package version as `--version` |
 | `scarp exec [budgets] FILE` | Execute using the existing interpreter with the same diagnostics and budgets as the historical `run` command |
-| `scarp native-object [--json] TARGET MODE … -o FILE` | In the v0.0.7-alpha.2 candidate, emit an [experimental x86-64 relocatable object](../native-object-output.md) at a new path |
+| `scarp native-object [--json] TARGET MODE … -o FILE` | From v0.0.7-alpha.2, emit an [experimental x86-64 relocatable object](../native-object-output.md) at a new path |
 | `scarp verify FILE` | Statically resolve source/imports, names and types without executing runtime statements |
 | `scarp verify DIRECTORY` | From alpha.4: validate `Scarp.project` and check its entrypoint statically |
 | `scarp inspect tokens FILE` | List lexer tokens and real source locations |

@@ -391,7 +391,7 @@ reported bound emits the same ELF bytes as the original entry API.
 Run `scarp exec examples/native_direct_calls.srp` for an interpreter
 example. For native emission, use the [standalone call chain](../examples/native_bounded_entry.srp)
 with the [bounded-entry object command](native-object-output.md).
-This experimental entry ABI is part of the v0.0.7-alpha.2 candidate.
+This experimental entry ABI is part of the v0.0.7-alpha.2 prerelease.
 
 The [wide-call example](../examples/native_wide_calls.srp) exercises two
 stack-passed arguments to a private helper. The independent Linux x86-64 host

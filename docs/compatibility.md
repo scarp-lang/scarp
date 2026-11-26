@@ -5,9 +5,11 @@ accepts up to sixteen integer arguments and bounded scalar loops.
 [Public notes](releases/v0.0.7-alpha.1-publication.md) ·
 [Publication verification](releases/v0.0.7-alpha.1-validation.md)
 
-`0.0.7-alpha.2` candidate binaries add `native-object` for a single source file.
-The output target is x86-64 ELF64 on all supported compiler hosts.
-See the [experimental command and ABI metadata](native-object-output.md).
+`0.0.7-alpha.2` is **a published GitHub prerelease**. Its binaries add
+`native-object` for a single source file. The output target is x86-64 ELF64
+on all supported compiler hosts.
+[Experimental command and ABI metadata](native-object-output.md) ·
+[Publication verification](releases/v0.0.7-alpha.2-validation.md)
 
 `0.0.6-alpha.20` is **a published GitHub prerelease**. Its experimental
 Linux x86-64 object API accepts one to six required integer arguments.
@@ -164,7 +166,7 @@ The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.7-alpha.1](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.1).
+[0.0.7-alpha.2](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.2).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a
