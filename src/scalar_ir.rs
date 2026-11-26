@@ -27,6 +27,12 @@ fn invalid(span: Span) -> Diagnostic {
     .with_help("only bounded, well-typed integer/boolean scalar expressions are supported")
 }
 
+/// Map resolver function identities to the compact native call table.
+struct CallTargets {
+    indices: Vec<Option<usize>>,
+    arities: Vec<usize>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Unary {
     Negate,
@@ -208,7 +214,7 @@ impl ScalarExpressionIr {
     fn lower(
         expression: &ResolvedExpression,
         slots: &[ValueType],
-        call_arities: Option<&[usize]>,
+        call_targets: Option<&CallTargets>,
     ) -> Result<Self, Diagnostic> {
         let nodes = expression.syntax.nodes();
         if nodes.is_empty()
@@ -289,7 +295,7 @@ impl ScalarExpressionIr {
                                 exits: Vec::new(),
                             });
                         }
-                        ExpressionKind::UserCall { arguments, .. } if call_arities.is_some() => {
+                        ExpressionKind::UserCall { arguments, .. } if call_targets.is_some() => {
                             tasks.push(Task::FinishCall(index));
                             for argument in arguments.iter().rev() {
                                 tasks.push(Task::Visit(argument.expression));
@@ -310,9 +316,14 @@ impl ScalarExpressionIr {
                     else {
                         return Err(invalid(node.span));
                     };
-                    let arity = call_arities
-                        .and_then(|counts| counts.get(*function).copied())
+                    let targets = call_targets.ok_or_else(|| invalid(node.span))?;
+                    let callee = targets
+                        .indices
+                        .get(*function)
+                        .copied()
+                        .flatten()
                         .ok_or_else(|| invalid(node.span))?;
+                    let arity = targets.arities[callee];
                     if arguments.len() != arity || parameters.len() != arity {
                         return Err(invalid(node.span));
                     }
@@ -334,7 +345,7 @@ impl ScalarExpressionIr {
                         node.span,
                         Operation::Call {
                             dst: index,
-                            callee: *function,
+                            callee,
                             arguments,
                         },
                     )?;
@@ -545,7 +556,7 @@ impl ScalarExpressionIr {
                 }
             }
         }
-        ir.verify_with_calls(call_arities)?;
+        ir.verify_with_calls(call_targets.map(|targets| targets.arities.as_slice()))?;
         Ok(ir)
     }
 

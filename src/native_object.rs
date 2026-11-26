@@ -114,6 +114,9 @@ pub fn emit_elf64_bounded_integer_function(
 /// uses the selected function's arity and the checked integer result layout.
 /// Calls are statically resolved, nonrecursive, and confined to this object.
 /// Named argument expressions are evaluated in written order.
+/// Generic declaration bodies are checked by the resolver. Their concrete
+/// specializations can participate when they fit these same scalar rules.
+/// The selected exported entry must be an ordinary function.
 ///
 /// One native work allowance is initialized at the external entry and debited
 /// by every active function. Callee errors return the original status and

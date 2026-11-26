@@ -359,15 +359,15 @@ fn specialized_collection_shape_failure_precedes_execution() {
 }
 
 #[test]
-fn existing_native_emitter_rejects_interpreter_generic_plans() {
+fn native_entry_requires_a_concrete_integer_wrapper() {
     let source = r#"
         pure funcra generic<T>(x:T)->T {return x;}
         pure funcra entry(x:integer)->integer {return generic(x);}
     "#;
     let error =
-        scarp::native_object::emit_elf64_bounded_integer_entry(source, "entry", 100).unwrap_err();
+        scarp::native_object::emit_elf64_bounded_integer_entry(source, "generic", 100).unwrap_err();
     assert_eq!(error.kind, Kind::NativeUnsupported);
-    assert!(error.message.contains("interpreter"));
+    assert!(error.message.contains("integer wrapper"));
 }
 
 #[test]

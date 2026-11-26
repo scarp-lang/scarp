@@ -5,7 +5,7 @@ use crate::{
     diagnostics::{Diagnostic, DiagnosticKind},
     native_object::BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES,
     resolver::ResolvedProgram,
-    scalar_ir::Operation,
+    scalar_ir::{CallTargets, Operation},
 };
 
 const MAX_FUNCTIONS: usize = 32;
@@ -39,13 +39,7 @@ impl ScalarCallGraph {
                 "a native entry object requires function declarations only",
             ));
         }
-        if let Some(generic) = signatures.iter().find(|f| !f.type_parameters.is_empty()) {
-            return Err(unsupported(
-                generic.span,
-                "generic functions require the interpreter",
-            ));
-        }
-        if signatures.len() > MAX_FUNCTIONS || signatures.len() != resolved.functions.len() {
+        if signatures.len() > MAX_FUNCTIONS {
             return Err(unsupported(
                 Span::default(),
                 "a native entry object supports up to 32 functions",
@@ -60,29 +54,52 @@ impl ScalarCallGraph {
                     "the selected native entry function was not declared",
                 )
             })?;
-        let mut arities = Vec::with_capacity(signatures.len());
-        let mut spans = Vec::with_capacity(signatures.len());
-        for signature in signatures {
+        if !signatures[entry].type_parameters.is_empty() {
+            return Err(unsupported(
+                signatures[entry].span,
+                "the native entry needs an ordinary pure integer wrapper for a generic function",
+            ));
+        }
+        let mut targets = CallTargets {
+            indices: vec![None; resolved.functions.len()],
+            arities: Vec::new(),
+        };
+        let mut source_ids = Vec::new();
+        let mut spans = Vec::new();
+        for id in 0..resolved.functions.len() {
+            let signature = resolved.function_metadata(id);
+            if !signature.type_parameters.is_empty() {
+                continue;
+            }
+            if source_ids.len() >= MAX_FUNCTIONS {
+                return Err(unsupported(
+                    signature.span,
+                    "a native entry object supports up to 32 concrete bodies including generic instances",
+                ));
+            }
             if signature.parameters.len() > max_parameters {
                 return Err(unsupported(
                     signature.span,
                     "this native call convention supports at most sixteen integer arguments",
                 ));
             }
-            arities.push(signature.parameters.len());
+            targets.indices[id] = Some(source_ids.len());
+            targets.arities.push(signature.parameters.len());
+            source_ids.push(id);
             spans.push(signature.span);
         }
 
-        let mut bodies = Vec::with_capacity(signatures.len());
-        let mut edges = Vec::with_capacity(signatures.len());
+        let entry = targets.indices[entry].expect("checked concrete entry");
+        let mut bodies = Vec::with_capacity(source_ids.len());
+        let mut edges = Vec::with_capacity(source_ids.len());
         let mut remaining = MAX_IR_STEPS;
-        for (id, &span) in spans.iter().enumerate() {
+        for (id, &span) in source_ids.into_iter().zip(&spans) {
             let body = ScalarProgramIr::lower_selected_function(
                 resolved,
                 id,
                 max_parameters,
                 true,
-                Some(&arities),
+                Some(&targets),
             )?;
             remaining = remaining
                 .checked_sub(body.operations().len())
