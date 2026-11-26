@@ -279,6 +279,37 @@ filesystem. The process RSS measurement excludes that filesystem memory.
 The Rust tests cover seeded signed i128 products, interpreter parity,
 cross-block carry, exact quota boundaries, cancellation and the CLI.
 
+### Single-limb division
+
+The division benchmark starts from a seeded dense quotient and independently
+constructs the negative dividend as `-(quotient * 999999999 + 42424242)` with
+Python integers in 1,024-digit blocks. The verifier compares every signed
+quotient byte, verifies the signed remainder `-42424242` and hashes the
+quotient. The stored raw measurements include the hash and phase timings.
+
+The runs used one worker with Rust 1.100.0 on an AMD EPYC 9V74 Linux x86-64
+host. The [tested source](https://github.com/scarp-lang/scarp/commit/93292a328bab1cd8d63e229726e1aa4795eb53e2)
+matches tree `efa8472892bcb2f55df89925985a74f3681f7147`.
+[Raw benchmark records](../benchmarks/2026-11-26-bigint-file-division.json)
+
+| Dividend digits | Quotient digits | Filesystem | Elapsed | Buffer payload | Process peak RSS | Peak temporary bytes |
+| ---: | ---: | --- | ---: | ---: | ---: | ---: |
+| 100,000,000 | 99,999,991 | ext4 | 0.565 s | 262,143 B | 2,301,952 B | 99,999,992 B |
+| 500,000,000 | 499,999,991 | ext4 | 2.158 s | 262,143 B | 2,314,240 B | 499,999,992 B |
+| 1,000,000,000 | 999,999,991 | tmpfs | 3.860 s | 262,143 B | 2,281,472 B | 999,999,992 B |
+
+These are single runs, with elapsed time spanning the CLI process through
+publication. Each run used zero limb scratch. Peak temporary bytes include
+the minus sign in the staged quotient. The billion-digit fixture used
+about 2 GB of memory-backed filesystem space for the input and quotient.
+Process peak RSS excludes filesystem space.
+
+The automated suite covers signed i128 results and Scarp interpreter parity.
+A separate seeded Python check compared 84 signed quotients and remainders
+through 100,000 dividend digits. On Linux, an 8,192-byte OS file limit caused
+a staged output error on a 10,000-digit dividend, with neither a published
+quotient nor a printed remainder.
+
 ### In-memory baseline
 
 On the audited `main`, `cargo bench --locked --offline --bench bigint -- --large`
