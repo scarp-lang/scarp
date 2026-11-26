@@ -37,8 +37,9 @@ concrete key type. Array lengths, tuple arity and map keys must agree. Repeated
 uses of a type parameter must infer the same type. Numerical types preserve
 their own precision and overflow behavior.
 
-A declared binding type, return type or parameter default can supply any
-remaining type arguments from the expected result. That expected type is also
+A declared binding type, assignment target, return type or parameter default
+can supply remaining type arguments from the expected result. An ordinary
+callee's declared parameter type also guides the inference of an argument call. That expected type is also
 available inside grouping, conditional result branches, and corresponding
 collection elements when the surrounding type is known. Omitted value
 arguments are evaluated as usual after the concrete type is selected.
@@ -55,8 +56,8 @@ bind counts = empty::<integer>();
 Use an explicit type argument for a call such as `print(empty());`, where
 neither a value argument nor an expected result determines `T`. Supply either
 all type arguments or none. Scarp resolves input expressions from the inside
-out. A surrounding call's parameter type currently cannot infer a missing type
-argument in another call, so use `outer(empty::<integer>())` in this case.
+out. For a generic outer call whose parameter type still depends on its own
+type arguments, use `outer(empty::<integer>())` to resolve the inner call.
 
 ## Constraints
 
