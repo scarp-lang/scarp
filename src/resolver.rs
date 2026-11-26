@@ -2399,7 +2399,7 @@ fn resolve_expression(
         kind,
         types,
         calls,
-        node_metadata: node_metadata,
+        node_metadata,
     })
 }
 
