@@ -1,6 +1,9 @@
 # Changelog
 
-## 0.0.7-alpha.2 — development candidate
+## 0.0.7-alpha.2 — published GitHub prerelease, 2026-11-26
+
+Published from [`638dc4c`](https://github.com/scarp-lang/scarp/commit/638dc4c227f34f1c660be66834bcc0cbdb22dec8).
+[Release and downloads](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.2)
 
 - Emit bounded, nonrecursive direct calls between pure integer functions in
   one x86-64 ELF64 object. Pass up to sixteen signed integer arguments across

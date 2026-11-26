@@ -1,14 +1,11 @@
 # Preparing a prerelease
 
 The latest published prerelease is
-[v0.0.7-alpha.1](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.1),
-published from exact source `996bd5b83c8cb26e98637563729f67bdacc61cd4`.
-The [publication verification record](releases/v0.0.7-alpha.1-validation.md)
-links the tag, package checks and published archive digests.
+[v0.0.7-alpha.2](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.2),
+published from exact source `638dc4c227f34f1c660be66834bcc0cbdb22dec8`.
+The [publication verification record](releases/v0.0.7-alpha.2-validation.md)
+links the tag, package checks and published asset digests.
 Future publication requires separate maintainer approval for its full source SHA.
-
-See the [v0.0.7-alpha.2 candidate validation record](releases/v0.0.7-alpha.2-validation.md)
-for the systems-foundation scope and the checks required on the final source.
 
 See [Alpha.20 preparation](releases/v0.0.6-alpha.20-preparation.md) for the
 candidate scope and qualification requirements.

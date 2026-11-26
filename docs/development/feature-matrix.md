@@ -1,7 +1,8 @@
 # Feature completeness and development roadmap
 
-The `0.0.7-alpha.2` candidate adds bounded native direct calls and an ELF64
-object command. [Command and ABI metadata](../native-object-output.md)
+Published `0.0.7-alpha.2` adds bounded native direct calls and an ELF64
+object command. [Command and ABI metadata](../native-object-output.md) ·
+[Publication verification](../releases/v0.0.7-alpha.2-validation.md)
 
 Published `0.0.7-alpha.1` adds typed fixed-array concatenation, variadic
 integer GCD, HCF and LCM, and bounded native loops in the Rust API.

@@ -19,16 +19,16 @@ See the [compiler documentation index](docs/README.md) for those records.
 ## Compiler releases
 
 The latest published prerelease is
-[0.0.7-alpha.1](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.1).
-It adds bounded native counted loops in the Rust API, fixed-array
-concatenation, stable vector `softplus`, and multi-operand integer reductions.
+[0.0.7-alpha.2](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.2).
+It adds verified native direct calls and the experimental object command
+for x86-64 ELF64. [Object CLI](docs/native-object-output.md) ·
+[Release notes](docs/releases/v0.0.7-alpha.2-publication.md) ·
+[Publication verification](docs/releases/v0.0.7-alpha.2-validation.md)
+
+**0.0.7-alpha.1** adds bounded native counted loops in the Rust API,
+fixed-array concatenation, stable vector `softplus`, and multi-operand integer reductions.
 [Release notes](docs/releases/v0.0.7-alpha.1-publication.md) ·
 [Publication verification](docs/releases/v0.0.7-alpha.1-validation.md)
-
-The **0.0.7-alpha.2 candidate** adds verified native direct calls and the
-experimental `scarp native-object` command for x86-64 ELF64.
-[Object CLI](docs/native-object-output.md) ·
-[Candidate validation](docs/releases/v0.0.7-alpha.2-validation.md)
 
 **0.0.6-alpha.20** adds exact decimal literals, numeric tuple ordering,
 persistent indexed tuple assignment, and initial checked ELF64 functions.
