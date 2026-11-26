@@ -4,8 +4,11 @@
 //! are accepted. The result is canonical decimal with no newline. Workspace
 //! lives beside the output and is dropped on success, error or cancellation.
 
+mod division;
 mod input;
 mod scratch;
+
+pub use division::{divide, divide_with_progress, DivisionUsage};
 
 use super::BASE;
 use crate::output_stage::OutputStage;
@@ -45,8 +48,8 @@ pub struct FileLimits {
     pub max_output_bytes: u64,
     /// Peak combined byte length of the limb scratch and staged decimal files.
     pub max_temp_bytes: u64,
-    /// Total payload of the three reusable processing buffers. The kernel
-    /// selects at most 1 MiB to keep each I/O and cancellation interval short.
+    /// Total payload of reusable processing buffers. The kernel selects at
+    /// most 1 MiB to keep each I/O and cancellation interval short.
     pub max_buffer_bytes: usize,
 }
 
@@ -87,6 +90,8 @@ pub enum FileError {
         operand: &'static str,
     },
     FactorTooLarge,
+    DivisionByZero,
+    DivisorTooLarge,
     Limit {
         resource: FileResource,
         required: u64,
@@ -112,6 +117,14 @@ impl fmt::Display for FileError {
                 write!(
                     out,
                     "file multiplication requires one operand with magnitude at most {maximum}"
+                )
+            }
+            Self::DivisionByZero => out.write_str("file division by zero"),
+            Self::DivisorTooLarge => {
+                let maximum = BASE - 1;
+                write!(
+                    out,
+                    "file division requires a divisor with magnitude at most {maximum}"
                 )
             }
             Self::Limit {
@@ -178,9 +191,9 @@ pub struct FileUsage {
     pub buffer_bytes: usize,
     /// Opening, validating and comparing the operands.
     pub input_time: Duration,
-    /// Computing result limbs and writing them to scratch storage.
+    /// Computing result limbs and writing either scratch or a staged quotient.
     pub arithmetic_time: Duration,
-    /// Verifying scratch, writing the decimal output, syncing and publishing.
+    /// Formatting scratch-backed results, if any, then syncing and publishing.
     pub output_time: Duration,
 }
 
@@ -214,18 +227,8 @@ pub fn calculate_with_progress(
 ) -> Result<FileUsage, FileError> {
     let start = Instant::now();
     let output = output.as_ref();
-    ensure_absent(output)?;
-    let mut left = DecimalInput::open(left.as_ref(), "left operand")?;
-    let mut right = DecimalInput::open(right.as_ref(), "right operand")?;
-    let input_bytes = left
-        .len
-        .checked_add(right.len)
-        .ok_or(FileError::SizeOverflow)?;
-    require(
-        FileResource::InputBytes,
-        input_bytes,
-        limits.max_input_bytes,
-    )?;
+    let (mut left, mut right, input_bytes) =
+        open_operands(left.as_ref(), right.as_ref(), output, limits)?;
     let mut buffers = Buffers::new(limits.max_buffer_bytes, left.len.max(right.len))?;
     left.scan(&mut buffers.left, 0, input_bytes, &mut progress)?;
     right.scan(&mut buffers.right, left.len, input_bytes, &mut progress)?;
@@ -301,16 +304,7 @@ pub fn calculate_with_progress(
             .map_err(io_error("staged decimal output"))?;
         checkpoint(&mut progress, FilePhase::WriteDecimal, 1, 1)?;
     }
-    staged
-        .sync_all()
-        .map_err(io_error("sync staged decimal output"))?;
-    drop(staged);
-    checkpoint(&mut progress, FilePhase::Publish, 0, 1)?;
-    left.check_unchanged()?;
-    right.check_unchanged()?;
-    stage
-        .publish()
-        .map_err(io_error("publish decimal output"))?;
+    publish_decimal(&stage, staged, (&left, &right), &mut progress)?;
     Ok(FileUsage {
         input_bytes,
         result_digits,
@@ -322,6 +316,43 @@ pub fn calculate_with_progress(
         arithmetic_time,
         output_time: output_start.elapsed(),
     })
+}
+
+fn open_operands(
+    left: &Path,
+    right: &Path,
+    output: &Path,
+    limits: FileLimits,
+) -> Result<(DecimalInput, DecimalInput, u64), FileError> {
+    ensure_absent(output)?;
+    let left = DecimalInput::open(left, "left operand")?;
+    let right = DecimalInput::open(right, "right operand")?;
+    let input_bytes = left
+        .len
+        .checked_add(right.len)
+        .ok_or(FileError::SizeOverflow)?;
+    require(
+        FileResource::InputBytes,
+        input_bytes,
+        limits.max_input_bytes,
+    )?;
+    Ok((left, right, input_bytes))
+}
+
+fn publish_decimal(
+    stage: &OutputStage,
+    staged: File,
+    operands: (&DecimalInput, &DecimalInput),
+    progress: &mut impl FnMut(FileProgress) -> ControlFlow<()>,
+) -> Result<(), FileError> {
+    staged
+        .sync_all()
+        .map_err(io_error("sync staged decimal output"))?;
+    drop(staged);
+    checkpoint(progress, FilePhase::Publish, 0, 1)?;
+    operands.0.check_unchanged()?;
+    operands.1.check_unchanged()?;
+    stage.publish().map_err(io_error("publish decimal output"))
 }
 
 #[derive(Clone, Copy)]
@@ -446,18 +477,10 @@ impl Buffers {
         let max_limbs =
             (limit.min(MAX_BLOCK_BUFFER_BYTES) - CHECKSUM_BYTES) / BUFFER_BYTES_PER_LIMB;
         let limbs = (max_limbs as u64).min(useful) as usize;
-        let allocate = |capacity| -> Result<Vec<u8>, FileError> {
-            let mut buffer = Vec::new();
-            buffer
-                .try_reserve_exact(capacity)
-                .map_err(|_| FileError::Allocation)?;
-            buffer.resize(capacity, 0);
-            Ok(buffer)
-        };
         Ok(Self {
-            left: allocate(limbs * LIMB_DIGITS)?,
-            right: allocate(limbs * LIMB_DIGITS)?,
-            scratch: allocate(limbs * LIMB_BYTES + CHECKSUM_BYTES)?,
+            left: reserve_buffer(limbs * LIMB_DIGITS)?,
+            right: reserve_buffer(limbs * LIMB_DIGITS)?,
+            scratch: reserve_buffer(limbs * LIMB_BYTES + CHECKSUM_BYTES)?,
         })
     }
 
@@ -468,6 +491,15 @@ impl Buffers {
     fn payload_bytes(&self) -> usize {
         self.left.len() + self.right.len() + self.scratch.len()
     }
+}
+
+fn reserve_buffer(capacity: usize) -> Result<Vec<u8>, FileError> {
+    let mut buffer = Vec::new();
+    buffer
+        .try_reserve_exact(capacity)
+        .map_err(|_| FileError::Allocation)?;
+    buffer.resize(capacity, 0);
+    Ok(buffer)
 }
 
 #[derive(Default)]
@@ -581,16 +613,13 @@ fn write_decimal(
             .min(count as u64) as usize;
         let limbs = layout.read_block(scratch, block, &mut buffers.scratch)?;
         let mut length = 0;
-        for mut limb in limbs.rev().skip(count - used) {
+        for limb in limbs.rev().skip(count - used) {
             let width = if written == u64::from(negative) && length == 0 {
                 shape.top.ilog10() as usize + 1
             } else {
                 LIMB_DIGITS
             };
-            for digit in buffers.left[length..length + width].iter_mut().rev() {
-                *digit = b'0' + (limb % 10) as u8;
-                limb /= 10;
-            }
+            write_limb(limb, &mut buffers.left[length..length + width]);
             length += width;
         }
         output.write_all(&buffers.left[..length]).map_err(context)?;
@@ -599,6 +628,13 @@ fn write_decimal(
     }
     debug_assert_eq!(written, output_bytes);
     Ok(())
+}
+
+fn write_limb(mut limb: u32, digits: &mut [u8]) {
+    for digit in digits.iter_mut().rev() {
+        *digit = b'0' + (limb % 10) as u8;
+        limb /= 10;
+    }
 }
 
 fn checkpoint(

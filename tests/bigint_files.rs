@@ -1,6 +1,6 @@
 use scarp::bigint::file::{
-    calculate, calculate_with_progress, FileError, FileLimits, FileOperation, FilePhase,
-    FileResource,
+    calculate, calculate_with_progress, divide, divide_with_progress, FileError, FileLimits,
+    FileOperation, FilePhase, FileResource,
 };
 use std::{
     fs::{self, OpenOptions},
@@ -305,6 +305,260 @@ fn multiplication_cli_uses_the_shared_output_and_error_contract() {
         .unwrap()
         .contains("999999999"));
     assert!(!output.exists());
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn signed_division_matches_interpreter_across_decimal_block_boundaries() {
+    let dir = Directory::new("division");
+    let large = format!("-0001{}876543210", "0246813579".repeat(27));
+    for (left, right) in [
+        (large.as_str(), "-000999999999"),
+        (large.as_str(), "+000987654321"),
+        (large.as_str(), "1"),
+        ("9999999981234567890", "999999999"),
+        ("9999999991234567890", "999999999"),
+        ("-999999998", "999999999"),
+        ("-000", "-1"),
+        ("+000999999999", "-999999999"),
+    ] {
+        let [a, b, output] = dir.operands(left, right);
+        let source = format!(
+            "bind a = bigint(\"{left}\"); bind b = bigint(\"{right}\"); print(a / b); print(a % b);"
+        );
+        let mut expected = Vec::new();
+        scarp::run(&source, &mut expected).unwrap();
+        for max_buffer_bytes in [9, 17, 18, 27, 81, 256 * 1024] {
+            let limits = FileLimits {
+                max_buffer_bytes,
+                ..FileLimits::default()
+            };
+            let result = divide(&a, &b, &output, limits).unwrap();
+            let quotient = fs::read_to_string(&output).unwrap();
+            assert_eq!(
+                format!("{quotient}\n{}\n", result.remainder).as_bytes(),
+                expected
+            );
+            assert_eq!(result.quotient.scratch_bytes, 0);
+            assert_eq!(result.quotient.peak_temp_bytes, quotient.len() as u64);
+            assert_eq!(result.quotient.output_bytes, quotient.len() as u64);
+            assert_eq!(
+                result.quotient.result_digits,
+                quotient.trim_start_matches('-').len() as u64
+            );
+            assert!(result.quotient.buffer_bytes <= max_buffer_bytes);
+            fs::remove_file(&output).unwrap();
+        }
+    }
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn seeded_file_division_matches_i128() {
+    let dir = Directory::new("division-oracle");
+    let mut seed = 0x5307_b12e_929e_a170_u64;
+    let mut sample = || {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+        i128::from(seed as i64)
+    };
+    for case in 0..96 {
+        let dividend = sample() * 1_000_000_001 / (case % 11 + 1) + 3;
+        let divisor = sample() % 999_999_999;
+        let divisor = if divisor == 0 { 1 } else { divisor };
+        let [a, b, output] = dir.operands(dividend.to_string(), divisor.to_string());
+        let result = divide(&a, &b, &output, FileLimits::default()).unwrap();
+        assert_eq!(
+            fs::read_to_string(&output).unwrap(),
+            (dividend / divisor).to_string()
+        );
+        assert_eq!(i128::from(result.remainder), dividend % divisor);
+        fs::remove_file(output).unwrap();
+    }
+}
+
+#[test]
+fn division_preflights_exact_output_and_temporary_sizes() {
+    let dir = Directory::new("division-quota");
+    let [left, right, output] = dir.operands("-0001234567890123", "000999999999");
+    let exact = FileLimits {
+        max_input_bytes: 29,
+        max_output_bytes: 5,
+        max_temp_bytes: 5,
+        max_buffer_bytes: 9,
+    };
+    for (limits, kind) in [
+        (
+            FileLimits {
+                max_input_bytes: 28,
+                ..exact
+            },
+            FileResource::InputBytes,
+        ),
+        (
+            FileLimits {
+                max_output_bytes: 4,
+                ..exact
+            },
+            FileResource::OutputBytes,
+        ),
+        (
+            FileLimits {
+                max_temp_bytes: 4,
+                ..exact
+            },
+            FileResource::TemporaryBytes,
+        ),
+        (
+            FileLimits {
+                max_buffer_bytes: 8,
+                ..exact
+            },
+            FileResource::BufferBytes,
+        ),
+    ] {
+        let error = divide_with_progress(&left, &right, &output, limits, |progress| {
+            assert_eq!(progress.phase, FilePhase::ReadInputs);
+            ControlFlow::Continue(())
+        })
+        .unwrap_err();
+        assert!(
+            matches!(
+                error,
+                FileError::Limit { resource, required, limit } if resource == kind && required == limit + 1
+            ),
+            "{error}"
+        );
+        assert!(!output.exists());
+        dir.assert_staging_clean();
+    }
+    let usage = divide(left, right, &output, exact).unwrap();
+    assert_eq!(fs::read_to_string(output).unwrap(), "-1234");
+    assert_eq!(usage.quotient.peak_temp_bytes, 5);
+    assert_eq!(usage.remainder, -567891357);
+}
+
+#[test]
+fn invalid_division_operands_leave_no_result() {
+    let dir = Directory::new("division-invalid");
+    let [left, right, output] = dir.operands("1", "-0000000");
+    let run = || divide(&left, &right, &output, FileLimits::default());
+    assert!(matches!(run(), Err(FileError::DivisionByZero)));
+    fs::write(&right, "0001000000000").unwrap();
+    assert!(matches!(run(), Err(FileError::DivisorTooLarge)));
+    fs::write(&right, "00010\n").unwrap();
+    assert!(matches!(
+        run(),
+        Err(FileError::InvalidDecimal {
+            operand: "right operand",
+            offset: 5
+        })
+    ));
+    fs::write(&left, "0q").unwrap();
+    fs::write(&right, "0").unwrap();
+    assert!(matches!(
+        run(),
+        Err(FileError::InvalidDecimal {
+            operand: "left operand",
+            offset: 1
+        })
+    ));
+    assert!(!output.exists());
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn cancelled_or_conflicting_division_cleans_up_staged_quotient() {
+    let dir = Directory::new("division-cancel");
+    let [left, right, output] = dir.operands("123456789".repeat(9), "23");
+    let limits = FileLimits {
+        max_buffer_bytes: 9,
+        ..FileLimits::default()
+    };
+    for phase in [
+        FilePhase::ReadInputs,
+        FilePhase::WriteDecimal,
+        FilePhase::Publish,
+    ] {
+        let result = divide_with_progress(&left, &right, &output, limits, |progress| {
+            assert!(!output.exists());
+            assert!(progress.completed <= progress.total);
+            if progress.phase == phase && (progress.completed == 9 || phase == FilePhase::Publish) {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        });
+        assert!(matches!(result, Err(FileError::Cancelled)));
+        assert!(!output.exists());
+        dir.assert_staging_clean();
+    }
+    let result = divide_with_progress(&left, &right, &output, limits, |progress| {
+        if progress.phase == FilePhase::Publish {
+            OpenOptions::new()
+                .append(true)
+                .open(&right)
+                .unwrap()
+                .write_all(b"0")
+                .unwrap();
+        }
+        ControlFlow::Continue(())
+    });
+    assert!(matches!(
+        result,
+        Err(FileError::InputChanged {
+            operand: "right operand"
+        })
+    ));
+    assert!(!output.exists());
+    dir.assert_staging_clean();
+    let result = divide_with_progress(left, right, &output, limits, |progress| {
+        if progress.phase == FilePhase::Publish {
+            fs::write(&output, "other writer").unwrap();
+        }
+        ControlFlow::Continue(())
+    });
+    assert!(
+        matches!(result, Err(FileError::Io { source, .. }) if source.kind() == io::ErrorKind::AlreadyExists)
+    );
+    assert_eq!(fs::read_to_string(output).unwrap(), "other writer");
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn division_cli_publishes_quotient_and_prints_signed_remainder() {
+    let dir = Directory::new("division-cli");
+    let [_, right, output] = dir.operands("-0010000", "+00033");
+    let result = dir.cli(&["bigint", "div", "left", "right", "out"]);
+    assert!(result.status.success(), "{:?}", result.stderr);
+    assert_eq!(result.stdout, b"-1\n");
+    assert_eq!(fs::read_to_string(&output).unwrap(), "-303");
+    fs::remove_file(&output).unwrap();
+    let args = [
+        "bigint",
+        "div",
+        "--stats",
+        "--max-buffer-bytes",
+        "9",
+        "left",
+        "right",
+        "out",
+    ];
+    let result = dir.cli(&args);
+    assert!(result.status.success(), "{:?}", result.stderr);
+    let stats = String::from_utf8(result.stdout).unwrap();
+    assert!(stats.ends_with(",\"remainder\":-1}\n"));
+    assert!(stats.contains("\"scratch_bytes\":0") && stats.contains("\"buffer_bytes\":9"));
+    let conflict = dir.cli(&args);
+    assert_eq!(conflict.status.code(), Some(1));
+    assert!(conflict.stdout.is_empty());
+    fs::remove_file(&output).unwrap();
+    fs::write(right, "0").unwrap();
+    let error = dir.cli(&args);
+    assert_eq!(error.status.code(), Some(1));
+    assert!(String::from_utf8(error.stderr)
+        .unwrap()
+        .contains("division by zero"));
+    assert!(error.stdout.is_empty() && !output.exists());
     dir.assert_staging_clean();
 }
 

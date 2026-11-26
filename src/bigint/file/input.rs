@@ -118,8 +118,8 @@ impl DecimalInput {
             let count = (self.digits - position).min(left_buffer.len() as u64) as usize;
             let left = &mut left_buffer[..count];
             let right = &mut right_buffer[..count];
-            self.read_digits(self.len - self.digits + position, left)?;
-            other.read_digits(other.len - other.digits + position, right)?;
+            self.read_magnitude(position, left)?;
+            other.read_magnitude(position, right)?;
             position += count as u64;
             checkpoint(
                 progress,
@@ -133,6 +133,15 @@ impl DecimalInput {
             }
         }
         Ok(Ordering::Equal)
+    }
+
+    pub(super) fn read_magnitude(
+        &mut self,
+        offset: u64,
+        bytes: &mut [u8],
+    ) -> Result<(), FileError> {
+        debug_assert!(offset <= self.digits && bytes.len() as u64 <= self.digits - offset);
+        self.read_digits(self.len - self.digits + offset, bytes)
     }
 
     pub(super) fn read_low<'a>(

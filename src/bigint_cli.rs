@@ -1,15 +1,17 @@
 use crate::write_output;
-use scarp::bigint::file::{calculate, FileLimits, FileOperation, FileUsage};
+use scarp::bigint::file::{calculate, divide, FileLimits, FileOperation, FileUsage};
 use std::{
     ffi::OsString,
     io::{self, Write},
 };
 
 pub(super) const HELP: &str =
-    "Usage: scarp bigint <add|sub|mul> [options] [--] <left> <right> <new-output>
+    "Usage: scarp bigint <add|sub|mul|div> [options] [--] <left> <right> <new-output>
 
 Experimental exact arithmetic on seekable decimal files.
 Multiplication requires either operand to have magnitude at most 999999999.
+Division requires a nonzero right operand with magnitude at most 999999999.
+The file receives the truncated quotient and stdout receives the signed remainder.
 Each input contains one optionally signed ASCII integer with no newline.
 Output is canonical decimal with no newline and must be at a new path.
 
@@ -17,11 +19,16 @@ Output is canonical decimal with no newline and must be at a new path.
   --max-output-bytes N  Canonical decimal file size (default 33554432)
   --max-temp-bytes N    Scratch and staged output together (default 67108864)
   --max-buffer-bytes N  Processing buffer payload (default 262144)
-  --stats              Print JSON sizes and phase timings after publication
+  --stats              Print JSON sizes, phase timings and any remainder
 
 Options precede paths. Use -- before a path beginning with a dash.
 Staging takes place beside the output, on a filesystem that supports hard links.
 ";
+
+enum Operation {
+    Arithmetic(FileOperation),
+    Divide,
+}
 
 pub(super) fn run(args: &[OsString], output: &mut impl Write, errors: &mut impl Write) -> u8 {
     if matches!(args, [flag] if flag == "--help" || flag == "-h") {
@@ -35,8 +42,18 @@ pub(super) fn run(args: &[OsString], output: &mut impl Write, errors: &mut impl 
         }
     };
     let [left, right, destination] = paths;
-    match calculate(operation, left, right, destination, limits) {
-        Ok(usage) if stats => write_output(write_stats(output, usage), errors),
+    let result = match operation {
+        Operation::Arithmetic(operation) => {
+            calculate(operation, left, right, destination, limits).map(|usage| (usage, None))
+        }
+        Operation::Divide => divide(left, right, destination, limits)
+            .map(|usage| (usage.quotient, Some(usage.remainder))),
+    };
+    match result {
+        Ok((usage, remainder)) if stats => {
+            write_output(write_stats(output, usage, remainder), errors)
+        }
+        Ok((_, Some(remainder))) => write_output(writeln!(output, "{remainder}"), errors),
         Ok(_) => 0,
         Err(error) => {
             let _ = writeln!(errors, "error: {error}");
@@ -45,12 +62,13 @@ pub(super) fn run(args: &[OsString], output: &mut impl Write, errors: &mut impl 
     }
 }
 
-fn parse(args: &[OsString]) -> Result<(FileOperation, FileLimits, bool, &[OsString; 3]), String> {
+fn parse(args: &[OsString]) -> Result<(Operation, FileLimits, bool, &[OsString; 3]), String> {
     let operation = match args.first().and_then(|arg| arg.to_str()) {
-        Some("add") => FileOperation::Add,
-        Some("sub") => FileOperation::Subtract,
-        Some("mul") => FileOperation::Multiply,
-        _ => return Err("expected bigint add, sub or mul".into()),
+        Some("add") => Operation::Arithmetic(FileOperation::Add),
+        Some("sub") => Operation::Arithmetic(FileOperation::Subtract),
+        Some("mul") => Operation::Arithmetic(FileOperation::Multiply),
+        Some("div") => Operation::Divide,
+        _ => return Err("expected bigint add, sub, mul or div".into()),
     };
     let mut limits = FileLimits::default();
     let mut stats = false;
@@ -96,13 +114,20 @@ fn parse(args: &[OsString]) -> Result<(FileOperation, FileLimits, bool, &[OsStri
     Ok((operation, limits, stats, paths))
 }
 
-fn write_stats(output: &mut impl Write, usage: FileUsage) -> io::Result<()> {
+fn write_stats(
+    output: &mut impl Write,
+    usage: FileUsage,
+    remainder: Option<i32>,
+) -> io::Result<()> {
+    let remainder = remainder
+        .map(|value| format!(",\"remainder\":{value}"))
+        .unwrap_or_default();
     writeln!(
         output,
         concat!(
             "{{\"input_bytes\":{},\"result_digits\":{},\"output_bytes\":{},",
             "\"scratch_bytes\":{},\"peak_temp_bytes\":{},\"buffer_bytes\":{},",
-            "\"input_ns\":{},\"arithmetic_ns\":{},\"output_ns\":{},\"peak_rss_bytes\":{}}}"
+            "\"input_ns\":{},\"arithmetic_ns\":{},\"output_ns\":{},\"peak_rss_bytes\":{}{}}}"
         ),
         usage.input_bytes,
         usage.result_digits,
@@ -113,7 +138,8 @@ fn write_stats(output: &mut impl Write, usage: FileUsage) -> io::Result<()> {
         usage.input_time.as_nanos(),
         usage.arithmetic_time.as_nanos(),
         usage.output_time.as_nanos(),
-        peak_rss_bytes().map_or_else(|| "null".to_owned(), |bytes| bytes.to_string())
+        peak_rss_bytes().map_or_else(|| "null".to_owned(), |bytes| bytes.to_string()),
+        remainder,
     )
 }
 
