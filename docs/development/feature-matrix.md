@@ -1,5 +1,9 @@
 # Feature completeness and development roadmap
 
+Published `0.0.7-alpha.3` adds generic functions, generic Option and Result,
+bounded string operations, and verified native aggregate locals.
+[Publication verification](../releases/v0.0.7-alpha.3-validation.md)
+
 Published `0.0.7-alpha.2` adds bounded native direct calls and an ELF64
 object command. [Command and ABI metadata](../native-object-output.md) ·
 [Publication verification](../releases/v0.0.7-alpha.2-validation.md)

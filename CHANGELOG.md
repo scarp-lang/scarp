@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.0.7-alpha.3 — published GitHub prerelease, 2026-11-27
+
+Published from [`44a3bb0`](https://github.com/scarp-lang/scarp/commit/44a3bb0a91e67570e46ce058a3f6211f8e5db0f5).
+[Release and downloads](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.3)
+
+- Add bounded generic function specialization, contextual inference, and
+  generic Option and Result payloads.
+- Compile concrete generic integer calls and checked flat array, tuple, and
+  record locals to experimental x86-64 ELF64 objects.
+- Fold verified native constants while preserving checked failures and work
+  accounting.
+- Add bounded string concatenation, repetition, raw literals, and multiline
+  literals.
+- Retire unneeded interpreter frame values and move contract-checked results
+  out of their frame slot.
+
 ## 0.0.7-alpha.2 — published GitHub prerelease, 2026-11-26
 
 Published from [`638dc4c`](https://github.com/scarp-lang/scarp/commit/638dc4c227f34f1c660be66834bcc0cbdb22dec8).
