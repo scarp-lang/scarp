@@ -99,10 +99,10 @@ impl ScalarExpressionIr {
         let dst = ranges[index].clone();
         match &node.kind {
             ExpressionKind::Tuple { elements } | ExpressionKind::Array { elements, .. } => {
-                // The interpreter charges construction after evaluating every
-                // element, including the size of the scalar array type.
+                // Charge the interpreter's finish task and each component.
+                // Arrays also account for their scalar type node and header.
                 let array = matches!(node.kind, ExpressionKind::Array { .. });
-                for _ in 0..elements.len() + 2 * usize::from(array) {
+                for _ in 0..1 + elements.len() + 2 * usize::from(array) {
                     self.emit(span, Operation::Work)?;
                 }
                 self.copy_components(dst, elements.iter().copied(), ranges, span)?;
@@ -112,7 +112,7 @@ impl ScalarExpressionIr {
                 else {
                     return Err(invalid(span));
                 };
-                for _ in 0..order.len() {
+                for _ in 0..1 + order.len() {
                     self.emit(span, Operation::Work)?;
                 }
                 self.copy_components(
@@ -123,6 +123,7 @@ impl ScalarExpressionIr {
                 )?;
             }
             ExpressionKind::Field { receiver, .. } => {
+                self.emit(span, Operation::Work)?;
                 let Some(NodeMetadata::Field(offset)) = expression.node_metadata.get(&index) else {
                     return Err(invalid(span));
                 };
@@ -132,8 +133,10 @@ impl ScalarExpressionIr {
             ExpressionKind::Index {
                 vector,
                 index: subscript,
+                operator_span,
                 ..
             } => {
+                self.emit(*operator_span, Operation::Work)?;
                 let source = &ranges[*vector];
                 match registry.get(expression.types[*vector]) {
                     Some(TypeKind::Tuple(_)) => {

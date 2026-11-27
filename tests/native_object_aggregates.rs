@@ -56,6 +56,7 @@ fn local_aggregates_use_the_existing_bounded_entry_and_stack_gate() {
 #[test]
 fn linked_aggregates_agree_with_interpreter_and_keep_failure_order() {
     use scarp::{
+        limits::{ExecutionLimits, ExecutionOptions},
         native_object::{
             emit_elf64_bounded_integer_entry, CHECKED_KERNEL_ARRAY_INDEX,
             CHECKED_KERNEL_INTEGER_OVERFLOW, CHECKED_KERNEL_WORK_LIMIT,
@@ -96,7 +97,7 @@ int main(int argc, char **argv) {
 "#,
     )
     .unwrap();
-    for max_work in [200, 1] {
+    for max_work in [1, 16, 19, 30, 35, 45, 55, 65, 75, 200] {
         let artifact = emit_elf64_bounded_integer_entry(SOURCE, "entry", max_work).unwrap();
         fs::write(&object, &artifact.object).unwrap();
         let link = Command::new(&cc)
@@ -133,16 +134,31 @@ int main(int argc, char **argv) {
             let value = fields.next().unwrap().parse::<i64>().unwrap();
             let status = fields.next().unwrap().parse::<u32>().unwrap();
             let span_id = fields.next().unwrap().parse::<usize>().unwrap();
-            if max_work == 1 {
-                assert_eq!(status, CHECKED_KERNEL_WORK_LIMIT);
-                let span = artifact.failure_spans[span_id];
-                assert_eq!(&SOURCE[span.start..span.end], "[array: n, n + 1, n + 2]");
-                continue;
-            }
+            let script = format!("{SOURCE}\nprint(entry({index}, {input}));");
+            let options = |max_steps| ExecutionOptions {
+                limits: ExecutionLimits {
+                    max_steps,
+                    ..ExecutionLimits::default()
+                },
+                ..ExecutionOptions::default()
+            };
+            // Remove interpreter work for the print wrapper, its argument
+            // expressions, and frame entry. These are outside the native ABI.
+            let wrapper_work = (1..32)
+                .find(|&work| {
+                    matches!(
+                        scarp::run_with_options(&script, &mut Vec::new(), options(work)),
+                        Err(RunError::Diagnostic(diag))
+                            if diag.kind == DiagnosticKind::ExecutionLimit
+                                && diag.span.end <= SOURCE.len()
+                    )
+                })
+                .expect("interpreter reaches the first metered operation");
             let mut interpreted = Vec::new();
-            match scarp::run(
-                &format!("{SOURCE}\nprint(entry({index}, {input}));"),
+            match scarp::run_with_options(
+                &script,
                 &mut interpreted,
+                options(wrapper_work + u64::from(max_work)),
             ) {
                 Ok(()) => {
                     assert_eq!(status, 0);
@@ -152,6 +168,7 @@ int main(int argc, char **argv) {
                 Err(RunError::Diagnostic(diag)) => {
                     assert_eq!(value, 0);
                     let expected = match diag.kind {
+                        DiagnosticKind::ExecutionLimit => CHECKED_KERNEL_WORK_LIMIT,
                         DiagnosticKind::ArrayIndex => CHECKED_KERNEL_ARRAY_INDEX,
                         DiagnosticKind::ArithmeticOverflow => CHECKED_KERNEL_INTEGER_OVERFLOW,
                         other => panic!("unexpected interpreter error {other:?}: {diag:?}"),
