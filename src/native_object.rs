@@ -83,6 +83,9 @@ pub const CHECKED_KERNEL_WORK_LIMIT: u32 = 4;
 /// A counted repeat evaluated a negative iteration count.
 pub const CHECKED_KERNEL_REPEAT_COUNT: u32 = 5;
 
+/// A bounded native fixed-array index was negative or reached the length.
+pub const CHECKED_KERNEL_ARRAY_INDEX: u32 = 6;
+
 /// Hard limit for an emitted direct-call chain, including return addresses.
 pub const BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES: u32 = 64 * 1024;
 
@@ -114,6 +117,9 @@ pub fn emit_elf64_bounded_integer_function(
 /// uses the selected function's arity and the checked integer result layout.
 /// Calls are statically resolved, nonrecursive, and confined to this object.
 /// Named argument expressions are evaluated in written order.
+/// Generic declaration bodies are checked by the resolver. Their concrete
+/// specializations can participate when they fit these same scalar rules.
+/// The selected exported entry must be an ordinary function.
 ///
 /// One native work allowance is initialized at the external entry and debited
 /// by every active function. Callee errors return the original status and

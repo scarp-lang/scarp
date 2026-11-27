@@ -18,11 +18,12 @@ use crate::{
     ast::BinaryOperator,
     diagnostics::{Diagnostic, Span},
     native_object::{
-        CheckedElf64Kernel, FreestandingCallLayout, FreestandingEntry,
+        CheckedElf64Kernel, FreestandingCallLayout, FreestandingEntry, CHECKED_KERNEL_ARRAY_INDEX,
         CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_INTEGER_OVERFLOW,
         CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_REPEAT_COUNT, CHECKED_KERNEL_WORK_LIMIT,
     },
 };
+use std::borrow::Cow;
 
 // Bound both the public signature and the number of caller-stack loads.
 pub(super) const MAX_INTEGER_ARGUMENTS: usize = 16;
@@ -49,6 +50,7 @@ struct Code {
 enum Condition {
     Overflow = 0x80,
     Below = 0x82,
+    AboveEqual = 0x83,
     Equal = 0x84,
     NotEqual = 0x85,
     Above = 0x87,
@@ -463,7 +465,7 @@ fn text(program: &ScalarProgramIr, checked_arithmetic: bool) -> Result<Code, Dia
         temporary_base: slot_count,
     };
     for (slot, expr) in program.integer_stores() {
-        expression(&mut code, expr, slots, checked_arithmetic, None)?;
+        expression(&mut code, expr, slots, checked_arithmetic, None, None)?;
         code.store_rax(slot)?;
     }
 
@@ -480,6 +482,7 @@ fn expression(
     slots: StackSlots,
     checked: bool,
     layout: Option<&TemporaryLayout>,
+    destination: Option<usize>,
 ) -> Result<(), Diagnostic> {
     let mut offsets = Vec::new();
     let mut branches = Vec::new();
@@ -547,6 +550,24 @@ fn expression(
                 }
                 code.store_temporary(home(dst)?)?;
             }
+            Operation::Index {
+                dst,
+                index,
+                ref elements,
+            } if code.metered => {
+                code.load_temporary(home(index)?, 1)?;
+                // Unsigned comparison also rejects negative signed indices.
+                code.push(&[0x48, 0x83, 0xf9, elements.len() as u8])?; // cmp rcx, len
+                let span_id = code.record_failure_span(step.span)?;
+                code.branch_to_failure(Condition::AboveEqual, CHECKED_KERNEL_ARRAY_INDEX, span_id)?;
+                code.load_temporary(home(elements[0])?, 0)?;
+                for (position, &element) in elements.iter().enumerate().skip(1) {
+                    code.load_temporary(home(element)?, 2)?;
+                    code.push(&[0x48, 0x83, 0xf9, position as u8])?; // cmp rcx, position
+                    code.push(&[0x48, 0x0f, 0x44, 0xc2])?; // cmove rax, rdx
+                }
+                code.store_temporary(home(dst)?)?;
+            }
             Operation::Branch {
                 condition,
                 when_true,
@@ -598,7 +619,15 @@ fn expression(
         offsets.push(code.data.len());
         resolve_branches(&mut code.data, &offsets, branches)?;
     }
-    code.load_temporary(home(expr.root)?, 0)
+    if let Some(destination) = destination {
+        for (offset, register) in expr.results().enumerate() {
+            code.load_temporary(home(register)?, 0)?;
+            code.store_rax(slots.local(destination + offset)?)?;
+        }
+        Ok(())
+    } else {
+        code.load_temporary(home(expr.root)?, 0)
+    }
 }
 
 fn resolve_branches(
@@ -614,16 +643,16 @@ fn resolve_branches(
 }
 
 struct FunctionLayout<'a> {
-    expressions: Vec<Option<(&'a ScalarExpressionIr, TemporaryLayout)>>,
+    expressions: Vec<Option<(Cow<'a, ScalarExpressionIr>, TemporaryLayout)>>,
     slots: StackSlots,
     frame_bytes: u32,
     estimated_steps: usize,
 }
 
-fn plan_function(
-    program: &ScalarProgramIr,
-    register_temporaries: bool,
-) -> Result<FunctionLayout<'_>, Diagnostic> {
+fn plan_function<'a>(
+    program: &'a ScalarProgramIr,
+    call_arities: Option<&[usize]>,
+) -> Result<FunctionLayout<'a>, Diagnostic> {
     if !program.is_function() || program.parameters() > MAX_INTEGER_ARGUMENTS {
         return Err(failure());
     }
@@ -636,9 +665,10 @@ fn plan_function(
             expressions.push(None);
             continue;
         };
-        let mut layout = TemporaryLayout::plan_verified(value)?;
-        if register_temporaries {
-            layout.allocate_r11(value);
+        let value = value.optimize_verified(call_arities)?;
+        let mut layout = TemporaryLayout::plan_verified(&value)?;
+        if call_arities.is_some() {
+            layout.allocate_r11(&value);
         }
         max_registers = max_registers.max(layout.count());
         for instruction in &value.steps {
@@ -702,12 +732,14 @@ fn append_function(
             code.charge_work(step.span)?;
         }
         if let Some((value, layout)) = planned {
-            expression(code, value, slots, true, Some(layout))?;
+            let destination = match step.kind {
+                ProgramOp::Store { slot, .. } => Some(slot),
+                _ => None,
+            };
+            expression(code, value, slots, true, Some(layout), destination)?;
         }
         match &step.kind {
-            ProgramOp::Store { slot, .. } => {
-                code.store_rax(slots.local(*slot)?)?;
-            }
+            ProgramOp::Store { .. } => {}
             ProgramOp::Update {
                 slot,
                 operator,
@@ -790,7 +822,7 @@ fn function_text(
     budget: Option<u32>,
 ) -> Result<(Code, FreestandingCallLayout), Diagnostic> {
     program.verify()?;
-    let layout = plan_function(program, false)?;
+    let layout = plan_function(program, None)?;
     let mut code = Code::new(layout.estimated_steps, true)?;
     code.metered = budget.is_some();
     append_function(&mut code, program, &layout, budget)?;
@@ -901,9 +933,10 @@ pub(super) fn emit_bounded_entry(
 ) -> Result<FreestandingEntry, Diagnostic> {
     let bodies = graph.bodies();
     let entry = graph.entry();
+    let arities: Vec<_> = bodies.iter().map(ScalarProgramIr::parameters).collect();
     let layouts = bodies
         .iter()
-        .map(|body| plan_function(body, true))
+        .map(|body| plan_function(body, Some(&arities)))
         .collect::<Result<Vec<_>, _>>()?;
     let frame_sizes = layouts
         .iter()

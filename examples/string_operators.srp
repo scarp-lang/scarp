@@ -1,0 +1,7 @@
+bind name: string = "Sanskar";
+bind programming_language: string = "Scarp Programming Language";
+print(name + "\n" + programming_language);
+print("Scarp " * 2);
+print(r"literal\n");
+print("""first
+second""");

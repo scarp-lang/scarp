@@ -115,7 +115,13 @@ impl ScalarProgramIr {
             let mut next = states[pc].ok_or_else(|| invalid(self.steps[pc].span))?;
             let branch = match &self.steps[pc].kind {
                 ProgramOp::Return { .. } => continue,
-                ProgramOp::Store { slot, .. } | ProgramOp::Update { slot, .. } => {
+                ProgramOp::Store { slot, value } => {
+                    for local in *slot..*slot + value.result_width {
+                        next.insert(local);
+                    }
+                    None
+                }
+                ProgramOp::Update { slot, .. } => {
                     next.insert(*slot);
                     None
                 }

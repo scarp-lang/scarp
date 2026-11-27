@@ -169,7 +169,7 @@ fn entry_stack_layout_separates_external_arguments_from_internal_outgoing_areas(
 
 #[test]
 fn straight_line_entry_uses_r11_and_a_smaller_frame() {
-    let source = "pure funcra f() -> integer { return 2 + 1; }";
+    let source = "pure funcra f(x: integer) -> integer { return ~x; }";
     let artifact = emit_elf64_bounded_integer_entry_with_layout(source, "f", 100, 32).unwrap();
     assert_eq!(artifact.entry_layout.frame_bytes, 24);
     assert_eq!(artifact.peak_stack_bytes, 32);
@@ -182,6 +182,16 @@ fn straight_line_entry_uses_r11_and_a_smaller_frame() {
     assert_eq!(&code[6..13], &[0x48, 0x81, 0xec, 24, 0, 0, 0]); // sub rsp, 24
     assert!(code.windows(3).any(|bytes| bytes == [0x49, 0x89, 0xc3])); // mov r11, rax
     assert!(code.windows(3).any(|bytes| bytes == [0x4c, 0x89, 0xd8])); // mov rax, r11
+}
+
+#[test]
+fn constant_entry_fits_the_exact_reduced_stack_budget() {
+    let source = "pure funcra f() -> integer { return (2 * 3) + 1; }";
+    let artifact = emit_elf64_bounded_integer_entry_with_layout(source, "f", 100, 16).unwrap();
+    assert_eq!(artifact.entry_layout.frame_bytes, 8);
+    assert_eq!(artifact.peak_stack_bytes, 16);
+    let error = emit_elf64_bounded_integer_entry_with_layout(source, "f", 100, 15).unwrap_err();
+    assert!(error.message.contains("requires 16 stack bytes"));
 }
 
 #[test]
@@ -256,6 +266,55 @@ fn direct_objects_enforce_a_closed_finite_call_graph() {
     declarations.push_str("pure funcra f32() -> integer { return 32; }");
     let error = emit_elf64_bounded_integer_entry(&declarations, "f0", 1000).unwrap_err();
     assert!(error.message.contains("32 functions"), "{error:?}");
+}
+
+#[test]
+fn direct_objects_validate_generic_instantiations_and_reuse_concrete_bodies() {
+    let source = r#"
+        pure funcra identity<T>(value: T) -> T { return value; }
+        pure funcra integer_entry(x: integer) -> integer {
+            return identity(identity::<integer>(x));
+        }
+    "#;
+    let artifact = emit_elf64_bounded_integer_entry_with_layout(
+        source,
+        "integer_entry",
+        128,
+        BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES,
+    )
+    .unwrap();
+    assert_eq!(artifact.max_active_frames, 2);
+    assert_eq!(
+        artifact,
+        emit_elf64_bounded_integer_entry_with_layout(
+            source,
+            "integer_entry",
+            128,
+            BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES,
+        )
+        .unwrap()
+    );
+
+    // The source template is valid, but its decimal instance is outside
+    // the scalar ABI even if its result is immediately discarded.
+    let mixed = format!(
+        "{source}\npure funcra other(x: integer) -> integer {{ identity(0.1d); return x; }}"
+    );
+    assert_eq!(
+        emit_elf64_bounded_integer_entry(&mixed, "integer_entry", 128)
+            .unwrap_err()
+            .kind,
+        DiagnosticKind::NativeUnsupported,
+    );
+
+    let mut many = String::from("pure funcra marker<T>(x:integer)->integer{return x;} pure funcra entry(x:integer)->integer{");
+    for length in 0..32 {
+        many.push_str(&format!("marker::<array<integer,{length}>>(x);"));
+    }
+    many.push_str("return x;}");
+    let error = emit_elf64_bounded_integer_entry(&many, "entry", 128).unwrap_err();
+    assert_eq!(error.kind, DiagnosticKind::NativeUnsupported);
+    assert!(error.message.contains("32 concrete bodies"));
 }
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
@@ -359,6 +418,22 @@ int main(int argc, char **argv) {{
         assert_eq!(rows.len(), arguments.len().checked_div(arity).unwrap_or(2));
         rows
     };
+
+    let generic = r#"
+        pure funcra identity<T>(value: T) -> T { return value; }
+        pure funcra square<T: Numeric>(value: T) -> T { return identity(value * value); }
+        pure funcra entry(value: integer) -> integer {
+            return square(value) + identity::<integer>(7);
+        }
+    "#;
+    let kernel = emit_elf64_bounded_integer_entry(generic, "entry", 100).unwrap();
+    let rows = invoke(&kernel, 1, &[-3, 0, 8, i64::MAX]);
+    assert_eq!(rows[..3], [(16, 0, 0), (7, 0, 0), (71, 0, 0)]);
+    assert_eq!(rows[3].1, CHECKED_KERNEL_INTEGER_OVERFLOW);
+    let failure = kernel.failure_spans[rows[3].2];
+    assert_eq!(&generic[failure.start..failure.end], "*");
+    let kernel = emit_elf64_bounded_integer_entry(generic, "entry", 1).unwrap();
+    assert_eq!(invoke(&kernel, 1, &[4])[0].1, CHECKED_KERNEL_WORK_LIMIT);
 
     let source = definitions();
     let artifact = emit_elf64_bounded_integer_entry(source, "evaluate", 1000).unwrap();
@@ -501,4 +576,19 @@ int main(int argc, char **argv) {{
     }
     let artifact = emit_elf64_bounded_integer_entry(metered, "twice", trace.len() as u32).unwrap();
     assert_eq!(invoke(&artifact, 0, &[]), [(4, 0, 0), (4, 0, 0)]);
+
+    let folded = "pure funcra f(n: integer) -> integer {
+        return add(second: (2 * 3) + 1, first: n) + (6 / 2);
+    }
+    pure funcra add(first: integer, second: integer) -> integer {
+        return first + second;
+    }";
+    let artifact = emit_elf64_bounded_integer_entry(folded, "f", 100).unwrap();
+    let inputs = [-5, 0, 3, i64::MIN];
+    for (row, input) in invoke(&artifact, 1, &inputs).into_iter().zip(inputs) {
+        let mut expected = Vec::new();
+        scarp::run(&format!("{folded}\nprint(f({input}));"), &mut expected).unwrap();
+        assert_eq!(format!("{}\n", row.0).as_bytes(), expected);
+        assert_eq!((row.1, row.2), (0, 0));
+    }
 }

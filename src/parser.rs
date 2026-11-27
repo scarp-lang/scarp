@@ -1,8 +1,8 @@
 //! Parse declarations, assignments, blocks, and print statements without execution.
 
 use crate::types::{
-    SourceType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_LIST_LENGTH, MAX_MAP_ENTRIES,
-    MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY,
+    SourceType, TypeConstraint, TypeParameter, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH,
+    MAX_LIST_LENGTH, MAX_MAP_ENTRIES, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY,
 };
 use std::collections::{BTreeMap, VecDeque};
 
@@ -13,8 +13,8 @@ use crate::{
     ast::{
         AssignmentOperator, BinaryOperator, CallArgument, ConditionalBranch,
         ConditionalExpressionBranch, Contract, Expression, ExpressionKind, ExpressionNode,
-        FunctionDeclaration, LogicalOperator, OutputTarget, Parameter, PrintArgument, Program,
-        Statement, MAX_ASSERT_MESSAGE_BYTES,
+        FunctionDeclaration, GenericParameter, LogicalOperator, OutputTarget, Parameter,
+        PrintArgument, Program, Statement, MAX_ASSERT_MESSAGE_BYTES,
     },
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     lexer::{Token, TokenKind},
@@ -30,6 +30,8 @@ pub const MAX_BLOCK_DEPTH: usize = 64;
 /// Maximum immediate members in one fixed-array destructuring group.
 pub const MAX_DESTRUCTURE_BINDINGS: usize = 128;
 
+pub(crate) const MAX_TYPE_PARAMETERS: usize = 64;
+
 /// Parse a token stream. An omitted EOF token is treated as the end of input.
 pub fn parse(tokens: &[Token]) -> Result<Program, Diagnostic> {
     Parser {
@@ -38,6 +40,7 @@ pub fn parse(tokens: &[Token]) -> Result<Program, Diagnostic> {
         pending: VecDeque::new(),
         type_end: 0,
         builtin_variants: BTreeMap::new(),
+        type_parameters: Vec::new(),
     }
     .program()
     .map_err(|error| *error.0)
@@ -63,6 +66,7 @@ struct Parser<'a> {
     pending: VecDeque<Token>,
     type_end: usize,
     builtin_variants: BTreeMap<String, crate::ast::VariantDeclaration>,
+    type_parameters: Vec<(GenericParameter, SourceType)>,
 }
 
 impl Parser<'_> {
@@ -271,7 +275,7 @@ impl Parser<'_> {
             })
         } else {
             let declaration = if self.keyword("funcra") || self.keyword("pure") {
-                Statement::Function(self.function()?)
+                Statement::Function(Box::new(self.function()?))
             } else if self.keyword_then_identifier("variant") {
                 Statement::Variant(Box::new(self.variant_declaration()?))
             } else if self.keyword_then_identifier("record") {
@@ -449,6 +453,12 @@ impl Parser<'_> {
 
     // Qualified names add owned text only on this leaf path, not on each nested
     // grouping/call frame in atom.
+    fn explicit_type_arguments_at(&self, cursor: usize) -> bool {
+        matches!(self.tokens.get(cursor..cursor.saturating_add(3)), Some([first, second, third])
+            if first.kind == TokenKind::Colon && second.kind == TokenKind::Colon
+                && third.kind == TokenKind::Less)
+    }
+
     fn qualified_atom(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
@@ -458,6 +468,7 @@ impl Parser<'_> {
             .tokens
             .get(self.cursor + 3)
             .is_some_and(|t| t.kind == TokenKind::LeftParen)
+            || self.explicit_type_arguments_at(self.cursor + 3)
         {
             self.call_expression(nodes, depth)
         } else {
@@ -572,7 +583,7 @@ impl Parser<'_> {
                         "nested function declarations are not supported",
                     ));
                 }
-                Ok(Statement::Function(self.function()?))
+                Ok(Statement::Function(Box::new(self.function()?)))
             }
             TokenKind::Identifier(name) if name == "if" => self.conditional(depth),
             TokenKind::Identifier(name) if name == "repeat" => self.repeat_loop(depth),
@@ -770,6 +781,7 @@ impl Parser<'_> {
                         .tokens
                         .get(self.cursor + 1)
                         .is_some_and(|t| matches!(t.kind, TokenKind::LeftParen | TokenKind::Dot))
+                        || self.explicit_type_arguments_at(self.cursor + 1)
                     {
                         let start = token.span.start;
                         let expression = self.expression()?;
@@ -1160,10 +1172,22 @@ impl Parser<'_> {
             self.type_end = span.end;
             return Ok(SourceType::RecordRef(name.into()));
         }
+        if let Some((_, parameter)) = self.type_parameters.iter().find(|(p, _)| p.name == name) {
+            return Ok(parameter.clone());
+        }
         if let Some(kind) =
             ValueType::from_name(&name).filter(|kind| result || *kind != ValueType::Unit)
         {
             return Ok(kind.into());
+        }
+        if !self.type_parameters.is_empty() && name != "unit" && name != "funcra" && name != "pure"
+        {
+            return Err(ParseError::new(
+                DiagnosticKind::GenericDefinition,
+                span,
+                format!("unknown type or type parameter {name:?}"),
+            )
+            .with_help("declare type parameters after the funcra name"));
         }
         match name.as_str() {
             "funcra" | "pure" => Err(ParseError::new(
@@ -1222,6 +1246,20 @@ impl Parser<'_> {
                 Span::new(opening.start, end),
                 "option and result payload types cannot be unit",
             ));
+        }
+        if first.has_parameter() || second.as_ref().is_some_and(SourceType::has_parameter) {
+            let family = if family == "option" {
+                crate::types::BuiltinVariant::Option
+            } else {
+                crate::types::BuiltinVariant::Result
+            };
+            return SourceType::variant_application(family, first, second).ok_or_else(|| {
+                ParseError::new(
+                    DiagnosticKind::VariantDefinition,
+                    Span::new(opening.start, end),
+                    "option or result application exceeds type shape limits",
+                )
+            });
         }
         let name = match &second {
             Some(error) => format!("result<{first}, {error}>"),
@@ -1346,6 +1384,89 @@ impl Parser<'_> {
         .with_help("write a nonnegative base-10 length, such as array<integer, 2>")
     }
 
+    fn generic_parameters(&mut self) -> Result<(), ParseError> {
+        self.advance(); // '<'
+        loop {
+            let (name, span) = self.identifier()?;
+            if self.type_parameters.len() == MAX_TYPE_PARAMETERS {
+                return Err(ParseError::new(
+                    DiagnosticKind::GenericLimit,
+                    span,
+                    "a function can declare at most 64 type parameters",
+                ));
+            }
+            if self.type_parameters.iter().any(|(p, _)| p.name == name) {
+                return Err(ParseError::new(
+                    DiagnosticKind::GenericDefinition,
+                    span,
+                    format!("duplicate type parameter {name:?}"),
+                ));
+            }
+            if ValueType::from_name(&name).is_some()
+                || matches!(
+                    name.as_str(),
+                    "tuple"
+                        | "array"
+                        | "list"
+                        | "map"
+                        | "option"
+                        | "result"
+                        | "record"
+                        | "variant"
+                        | "funcra"
+                        | "pure"
+                )
+            {
+                return Err(ParseError::new(
+                    DiagnosticKind::GenericDefinition,
+                    span,
+                    format!("{name:?} is reserved as a type name"),
+                ));
+            }
+            let constraint = if self.at(&TokenKind::Colon) {
+                self.advance();
+                let (constraint, span) = self.identifier()?;
+                Some(match constraint.as_str() {
+                    "Numeric" => TypeConstraint::Numeric,
+                    "Comparable" => TypeConstraint::Comparable,
+                    _ => {
+                        return Err(ParseError::new(
+                            DiagnosticKind::GenericDefinition,
+                            span,
+                            format!("unknown constraint {constraint:?}"),
+                        )
+                        .with_help("use Numeric or Comparable"))
+                    }
+                })
+            } else {
+                None
+            };
+            let ty = SourceType::Parameter(std::sync::Arc::new(TypeParameter {
+                id: None,
+                index: self.type_parameters.len(),
+                name: name.as_str().into(),
+                constraint,
+            }));
+            self.type_parameters.push((
+                GenericParameter {
+                    name,
+                    span,
+                    constraint,
+                },
+                ty,
+            ));
+            if !self.at(&TokenKind::Comma) {
+                break;
+            }
+            self.advance();
+            if self.current().is_some_and(|t| is_type_close(&t.kind)) {
+                break;
+            }
+        }
+        self.type_close()?;
+        Ok(())
+    }
+
     fn function(&mut self) -> Result<FunctionDeclaration, ParseError> {
         let start = self.current().unwrap().span.start;
         let pure = self.keyword("pure");
@@ -1357,6 +1478,9 @@ impl Parser<'_> {
         }
         self.advance();
         let (name, name_span) = self.identifier()?;
+        if self.at(&TokenKind::Less) {
+            self.generic_parameters()?;
+        }
         self.punctuation(TokenKind::LeftParen, "'('")?;
         let mut parameters = Vec::new();
         while !self.at(&TokenKind::RightParen) {
@@ -1402,6 +1526,7 @@ impl Parser<'_> {
         Ok(FunctionDeclaration {
             name,
             name_span,
+            type_parameters: self.type_parameters.drain(..).map(|(p, _)| p).collect(),
             parameters,
             result,
             pure,
@@ -1869,7 +1994,8 @@ impl Parser<'_> {
         let tagged = self
             .tokens
             .get(self.cursor + 1)
-            .is_some_and(|token| token.kind == TokenKind::Colon);
+            .is_some_and(|token| token.kind == TokenKind::Colon)
+            && !self.explicit_type_arguments_at(self.cursor + 1);
         if tagged && self.keyword("array") {
             self.advance();
             self.advance();
@@ -2076,12 +2202,56 @@ impl Parser<'_> {
         ))
     }
 
+    // Keep type parsing off the common recursive expression call stack.
+    #[inline(never)]
+    fn call_type_arguments(
+        &mut self,
+    ) -> Result<std::sync::Arc<Vec<crate::ast::TypeAnnotation>>, ParseError> {
+        self.cursor += 3;
+        let mut types = Vec::new();
+        let mut remaining = MAX_SOURCE_TYPE_NODES;
+        loop {
+            let start = self
+                .current()
+                .ok_or_else(|| self.expected("a type argument"))?
+                .span
+                .start;
+            if types.len() == MAX_TYPE_PARAMETERS {
+                return Err(ParseError::new(
+                    DiagnosticKind::GenericLimit,
+                    Span::new(start, start),
+                    "a call can supply at most 64 type arguments",
+                ));
+            }
+            let kind = self.source_type(false, 0, &mut remaining, false)?;
+            types.push(crate::ast::TypeAnnotation {
+                kind,
+                span: Span::new(start, self.type_end),
+            });
+            if !self.at(&TokenKind::Comma) {
+                break;
+            }
+            self.advance();
+            if self.current().is_some_and(|t| is_type_close(&t.kind)) {
+                break;
+            }
+        }
+        self.type_close()?;
+        Ok(std::sync::Arc::new(types))
+    }
+
     fn call_expression(
         &mut self,
         nodes: &mut Vec<ExpressionNode>,
         depth: usize,
     ) -> Result<usize, ParseError> {
         let (name, function_span) = self.qualified_identifier()?;
+        let type_arguments =
+            if self.at(&TokenKind::Colon) && self.explicit_type_arguments_at(self.cursor) {
+                Some(self.call_type_arguments()?)
+            } else {
+                None
+            };
         let opening = self.punctuation(TokenKind::LeftParen, "'('")?;
         self.expression_depth(depth, opening)?;
         let mut arguments = Vec::new();
@@ -2090,6 +2260,7 @@ impl Parser<'_> {
                 .tokens
                 .get(self.cursor + 1)
                 .is_some_and(|t| t.kind == TokenKind::Colon)
+                && !self.explicit_type_arguments_at(self.cursor + 1)
             {
                 let label = self.identifier()?;
                 self.advance();
@@ -2109,6 +2280,7 @@ impl Parser<'_> {
             nodes,
             ExpressionKind::UserCall {
                 name,
+                type_arguments,
                 arguments,
                 function_span,
             },
@@ -2147,10 +2319,11 @@ impl Parser<'_> {
                 if !matches!(
                     name.as_str(),
                     "funcra" | "pure" | "print" | "println" | "write" | "eprint" | "ewrite"
-                ) && self
+                ) && (self
                     .tokens
                     .get(self.cursor + 1)
-                    .is_some_and(|t| t.kind == TokenKind::LeftParen) =>
+                    .is_some_and(|t| t.kind == TokenKind::LeftParen)
+                    || self.explicit_type_arguments_at(self.cursor + 1)) =>
             {
                 self.call_expression(nodes, depth)
             }

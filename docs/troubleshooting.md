@@ -93,8 +93,7 @@ write("done");
 ```
 
 Exact stdout is `count: 3\ndone`. Arguments display with one ASCII space;
-`write` does not add a final newline. `+=` is integer arithmetic, not string
-append. Output statements cannot be called inside an expression.
+`write` does not add a final newline. In the development compiler, `+=` also appends a string to a mutable string binding. Output statements cannot be called inside an expression.
 
 Beta.1 and beta.2 support `\\`, `\"`, `\n`, `\t`, and `\r` escapes. To represent a line break inside a string,
 write `\n` rather than placing a physical newline between its quotes.

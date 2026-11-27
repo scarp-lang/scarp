@@ -54,6 +54,7 @@ pub struct NamedCallableRef {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CallableBindError {
     UnknownFunction(usize),
+    GenericFunction(usize),
     Registry(TypeRegistryError),
     IncompatibleSignature { expected: TypeId, actual: TypeId },
 }
@@ -64,6 +65,7 @@ impl fmt::Display for CallableBindError {
             Self::UnknownFunction(index) => {
                 write!(f, "no named function at declaration index {index}")
             }
+            Self::GenericFunction(index) => write!(f, "generic function at declaration index {index} requires a concrete Scarp wrapper for host invocation"),
             Self::Registry(error) => error.fmt(f),
             Self::IncompatibleSignature { expected, actual } => {
                 write!(
@@ -107,6 +109,12 @@ impl CallableCatalog {
             .program
             .function_type_id(declaration)
             .ok_or(CallableBindError::UnknownFunction(declaration))?;
+        if !self.program.functions()[declaration]
+            .type_parameters
+            .is_empty()
+        {
+            return Err(CallableBindError::GenericFunction(declaration));
+        }
         Ok(NamedCallableRef {
             program: Arc::clone(&self.program),
             declaration,
@@ -122,10 +130,8 @@ impl CallableCatalog {
         declaration: usize,
         required: TypeId,
     ) -> Result<NamedCallableRef, CallableBindError> {
-        let candidate = self
-            .program
-            .function_type_id(declaration)
-            .ok_or(CallableBindError::UnknownFunction(declaration))?;
+        let target = self.bind_exact(declaration)?;
+        let candidate = target.signature();
         if !self
             .program
             .type_registry()
@@ -136,7 +142,7 @@ impl CallableCatalog {
                 actual: candidate,
             });
         }
-        self.bind_exact(declaration)
+        Ok(target)
     }
 }
 

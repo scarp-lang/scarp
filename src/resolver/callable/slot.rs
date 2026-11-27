@@ -30,6 +30,7 @@ pub enum CallableSlotError {
     Registry(TypeRegistryError),
     NotCallable(TypeId),
     UnknownFunction(usize),
+    GenericFunction(usize),
     ForeignProgram,
     IncompatibleSignature { required: TypeId, actual: TypeId },
 }
@@ -42,6 +43,7 @@ impl fmt::Display for CallableSlotError {
             Self::UnknownFunction(index) => {
                 write!(f, "no named function at declaration index {index}")
             }
+            Self::GenericFunction(index) => write!(f, "generic function at declaration index {index} requires a concrete Scarp wrapper for host invocation"),
             Self::ForeignProgram => {
                 f.write_str("callable target belongs to a different compiled snapshot")
             }
@@ -125,6 +127,7 @@ impl CallableCatalog {
         let mut slot = self.slot(required)?;
         let target = self.bind_exact(declaration).map_err(|error| match error {
             CallableBindError::UnknownFunction(index) => CallableSlotError::UnknownFunction(index),
+            CallableBindError::GenericFunction(index) => CallableSlotError::GenericFunction(index),
             CallableBindError::Registry(error) => CallableSlotError::Registry(error),
             CallableBindError::IncompatibleSignature { expected, actual } => {
                 CallableSlotError::IncompatibleSignature {

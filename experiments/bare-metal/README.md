@@ -7,6 +7,8 @@ the existing Rust example emits its standalone relocatable machine code.
 A second example emits a bounded integer loop from `bounded_sum.srp`.
 The `native-object` CLI compiles the [three-function call chain](../../examples/native_bounded_entry.srp)
 with a 512-byte stack budget below the caller's aligned stack pointer.
+A second CLI-emitted entry exercises [aggregate locals](../../examples/native_aggregate_locals.srp)
+and checked array indexing.
 
 ## Run on a Linux development host
 
@@ -51,9 +53,11 @@ The QEMU debug console captures one character per completed stage:
 | 6 | Subsequent invocation returns 6 with a fresh allowance and restored stack |
 | 7 | Three Scarp frames pass two arguments on the stack and return 30 |
 | 8 | Division by zero in the innermost frame returns status 2 and restores the stack |
+| 9 | Aggregate locals yield 17 and restore the stack |
+| A | Negative array index returns status 6 and restores the stack |
 | X / F | Invalid boot magic / failed function check |
 
-Success requires exactly `BGPEVLS12345678` and exit status 33.
+Success requires exactly `BGPEVLS123456789A` and exit status 33.
 On failure the runner prints the last 80 lines of QEMU exception and reset
 diagnostics. A CPU triple fault is not kept running by `-no-shutdown`.
 No marker means the assembly entry was not reached or the boot magic failed

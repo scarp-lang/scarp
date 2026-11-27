@@ -281,7 +281,18 @@ The [mixed loop example](../examples/native_bounded_loops.srp) nests
 both forms and runs with `scarp exec examples/native_bounded_loops.srp`.
 Pass its function definition alone to the native API.
 
-## Experimental temporary lifetime reuse
+## Constant expressions and temporary lifetime reuse
+
+The three native function modes fold integer and Boolean operations when all
+operands are known and the checked result succeeds. At an expression branch
+join, a known value must agree across both paths. The compiler removes unused
+literal and copy instructions, then verifies the rewritten expression before
+planning its stack slots.
+
+Runtime work charges still occur in source order on the selected path.
+Operations that would fail retain their original diagnostic status and byte
+span. Match native failure span IDs to the metadata for the object that
+produced them.
 
 PR #366 adds deterministic stack layouts for checked and bounded function
 expressions. Straight-line expressions use first/last-access intervals.
@@ -292,8 +303,7 @@ and the root remains live through the final load on every path. Simultaneous
 operands and destinations remain distinct.
 
 Each plan is computed once per expression and used both to size the frame and
-to encode stack accesses. Work events, operation order, failure spans and the
-published binding-only kernel encodings are preserved.
+to encode stack accesses.
 
 A regression with 200 successive additions and a second regression with a
 200-branch short-circuit chain each verify a 40-byte aligned frame. Both
@@ -443,3 +453,29 @@ described in [bare-metal smoke harness](../experiments/bare-metal/README.md).
 
 The development CLI can save these relocatable objects through the explicit
 [`native-object` command](native-object-output.md#experimental-cli).
+
+## Bounded aggregate locals
+
+Bounded integer functions and entries can use fixed arrays, tuples, and
+records with one to 32 integer or Boolean components. Supported operations
+include construction, copying to a binding, replacing a mutable binding,
+literal tuple subscripts, record field access, and integer array subscripts.
+Conditional expressions can select aggregate values of the same type.
+Record initializer expressions run in written order. The compiler places
+the results in declaration order after all initializers succeed.
+
+The compiler checks each shape against the canonical x86-64 layout planner.
+Private frame storage uses one eight-byte lane per component. The existing
+IR verifier checks initialized lanes at joins and retires every lane when the
+source binding goes out of scope. Aggregate lanes and temporaries count
+toward the normal frame and entry stack limits. Aggregates have no external
+calling convention in this release. Integer parameters and results retain
+the checked SysV AMD64 ABI.
+
+A negative array index or one at or above the array length returns status
+`CHECKED_KERNEL_ARRAY_INDEX` (6), with the subscript's source byte span.
+Aggregate construction preserves interpreter work charges. Native values use
+the stack and do not consume interpreter heap-allocation allowances. Empty,
+nested, or heap-backed aggregate shapes and tuple component assignment are
+outside this slice. Scarp emits relocatable ELF64 objects for an external
+linker.

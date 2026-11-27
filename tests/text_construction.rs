@@ -46,7 +46,7 @@ fn construction_is_explicit_typed_and_preserves_unicode() {
         failure(source, 100, Kind::TypeMismatch);
     }
     failure("print(text_concat(\"a\"));", 100, Kind::CallArguments);
-    failure("print(\"a\"+\"b\");", 100, Kind::TypeMismatch);
+    assert_eq!(run("print(\"a\"+\"b\");", 100), b"ab\n");
 }
 #[test]
 fn slices_cover_scalar_boundaries_without_normalization() {

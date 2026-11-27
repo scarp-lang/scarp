@@ -12,7 +12,7 @@ pub(super) fn constructor(
     types: &[SourceType],
     syntax: &Expression,
     span: Span,
-) -> Result<CompositeOperation, Diagnostic> {
+) -> Result<NodeMetadata, Diagnostic> {
     let layout = kind.as_record().expect("record lookup returns a layout");
     let mut order = vec![None; layout.fields().len()];
     for (input, field) in fields.iter().enumerate() {
@@ -48,7 +48,7 @@ pub(super) fn constructor(
             position.ok_or_else(|| field_error(span, format!("missing field {name:?}")))
         })
         .collect::<Result<Box<[_]>, _>>()?;
-    Ok(CompositeOperation::Record {
+    Ok(NodeMetadata::Record {
         kind: kind.clone(),
         order,
     })

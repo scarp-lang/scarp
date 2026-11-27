@@ -70,6 +70,27 @@ impl ScalarExpressionIr {
                     let right = register(&values, *right, span)?;
                     values[*dst] = evaluator::apply_binary(*op, &left, &right, span)?;
                 }
+                super::super::Operation::Index {
+                    dst,
+                    index,
+                    elements,
+                } => {
+                    let index = register(&values, *index, span)?.require_integer(span)?;
+                    let element = usize::try_from(index)
+                        .ok()
+                        .and_then(|index| elements.get(index))
+                        .ok_or_else(|| {
+                            Diagnostic::new(
+                                DiagnosticKind::ArrayIndex,
+                                span,
+                                format!(
+                                    "index {index} is outside fixed array length {}",
+                                    elements.len()
+                                ),
+                            )
+                        })?;
+                    values[*dst] = register(&values, *element, span)?;
+                }
                 super::super::Operation::Branch {
                     condition,
                     when_true,
@@ -344,6 +365,44 @@ mod tests {
                         assert_eq!((actual.kind, actual.span), (error.kind, error.span));
                     }
                     Err(error) => panic!("{error:?}"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn optimized_expressions_match_the_unoptimized_ir_at_each_work_boundary() {
+        for expression in [
+            "(if x < 0 { 2 * 3 } else { 1 + 5 }) + 4",
+            "(if x < 0 { 2 * 3 } else { 1 + 6 }) + 4",
+            "(not false or ((2 * 3) / 0 == 42)) and (x < ((1 << 3) - 1))",
+            "if x < 0 { (2 * 3) + (-9223372036854775808 % -1) } else { 2 * 3 }",
+            "(2 * 3) + (if x < 0 { 1 << 64 } else { 5 / 0 })",
+        ] {
+            let source = format!("// चयन\r\nbind x = 0; print({expression});");
+            let ir = ScalarProgramIr::lower(&compile(&source).unwrap()).unwrap();
+            let original = ir
+                .operations()
+                .iter()
+                .find_map(|step| match &step.kind {
+                    ProgramOp::PrintValue { value } => Some(value),
+                    _ => None,
+                })
+                .unwrap();
+            let optimized = original.optimize_verified(None).unwrap();
+            assert!(optimized.steps.len() < original.steps.len());
+            for input in [-1, 0, 7] {
+                let storage = [Value::Integer(input)];
+                for max_work in 0..=40 {
+                    let evaluate = |ir: &ScalarExpressionIr| {
+                        ir.execute(&storage, &mut Budget::new(max_work))
+                            .map_err(|error| (error.kind, error.span))
+                    };
+                    assert_eq!(
+                        evaluate(&optimized),
+                        evaluate(original),
+                        "{expression}, input {input}, work {max_work}"
+                    );
                 }
             }
         }

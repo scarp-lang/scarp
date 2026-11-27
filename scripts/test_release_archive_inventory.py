@@ -31,7 +31,7 @@ def valid_entries():
 
 class ArchiveInventoryTests(unittest.TestCase):
     def test_alpha7_candidates_require_exact_git_source_for_full_inventory(self):
-        for version in ("0.0.7-alpha.1", "0.0.7-alpha.2"):
+        for version in ("0.0.7-alpha.1", "0.0.7-alpha.2", "0.0.7-alpha.3"):
             with self.subTest(version=version):
                 with self.assertRaisesRegex(ValueError, "requires the exact Git source directory"):
                     release.verify(Path("unused"), version, "a" * 40)

@@ -202,7 +202,7 @@ fn rejects_malformed_expressions_and_deferred_syntax() {
         "1_000",
         "(1,, 2)",
         "1 %",
-        "\"a\" + \"b\"",
+        "\"a\" + 2",
         "1 + \"text\"",
         "1 /* block */ 2",
     ] {

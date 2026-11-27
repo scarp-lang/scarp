@@ -2,17 +2,15 @@ use super::*;
 
 pub(super) fn resolve_function(
     function: FunctionDeclaration,
-    signatures: &[FunctionInfo],
-    names: &HashMap<String, usize>,
-    layouts: &nominal::Layouts,
-    registry: &mut TypeRegistryBuilder,
+    signature: &FunctionInfo,
+    mut resolver: Resolver<'_>,
 ) -> Result<ResolvedFunction, Diagnostic> {
-    let mut resolver = Resolver::new(signatures, names, layouts, registry);
-    resolver.result = Some((function.result.clone(), function.name_span));
+    resolver.result = Some((signature.result.clone(), function.name_span));
     resolver.pure = true;
     let mut defaults = Vec::new();
     let mut optional = false;
-    for parameter in function.parameters {
+    for (mut parameter, checked) in function.parameters.into_iter().zip(&signature.parameters) {
+        parameter.kind = checked.kind.clone();
         resolver.binding_name(&parameter.name, parameter.span)?;
         if parameter.name == "result" || parameter.kind == ValueType::Unit {
             return Err(Diagnostic::new(
@@ -31,7 +29,8 @@ pub(super) fn resolve_function(
         }
         let default = if let Some(expression) = parameter.default {
             optional = true;
-            let expression = resolver.expression(expression)?;
+            let expression =
+                resolver.expression_with_expected(expression, Some(&parameter.kind))?;
             let initializer_span = expression.syntax.nodes()[expression.syntax.root()].span;
             require_type(&expression.kind, &parameter.kind, initializer_span).map_err(|error| {
                 error.with_related(parameter.span, "the parameter's type is declared here")
@@ -62,9 +61,9 @@ pub(super) fn resolve_function(
         );
         defaults.push(default);
     }
-    let result_slot = (function.result != ValueType::Unit).then_some(resolver.slot_types.len());
+    let result_slot = (signature.result != ValueType::Unit).then_some(resolver.slot_types.len());
     if result_slot.is_some() {
-        resolver.slot_types.push(function.result.clone());
+        resolver.slot_types.push(signature.result.clone());
     }
     let mut contracts = Vec::new();
     for contract in function.contracts {
@@ -74,7 +73,7 @@ pub(super) fn resolve_function(
                     "result".into(),
                     Binding {
                         slot,
-                        kind: function.result.clone(),
+                        kind: signature.result.clone(),
                         mutable: false,
                         repeat_index: false,
                         parameter: false,
@@ -92,13 +91,13 @@ pub(super) fn resolve_function(
             span: contract.span,
         });
     }
-    if function.result != ValueType::Unit && !definitely_returns(&function.statements, 0) {
+    if signature.result != ValueType::Unit && !definitely_returns(&function.statements, 0) {
         return Err(Diagnostic::new(
             DiagnosticKind::MissingReturn,
             function.span,
             format!(
                 "function {:?} must return {} on every path",
-                function.name, function.result
+                function.name, signature.result
             ),
         )
         .with_help("provide a return after loops and cover every conditional branch"));
@@ -164,9 +163,10 @@ fn definitely_returns(statements: &[Statement], depth: usize) -> bool {
     false
 }
 
-pub(super) fn build_call_graph(program: &mut ResolvedProgram) {
-    let mut graph = vec![Vec::new(); program.functions.len()];
-    for (id, function) in program.functions.iter().enumerate() {
+pub(super) fn build_call_graph(program: &mut ResolvedProgram, instance_origins: &[usize]) {
+    let count = program.source_function_count;
+    let mut graph = vec![Vec::new(); count];
+    for (id, function) in program.functions[..count].iter().enumerate() {
         let mut expressions = Vec::new();
         expressions.extend(function.defaults.iter().flatten());
         expressions.extend(function.contracts.iter().map(|c| &c.expression));
@@ -197,8 +197,13 @@ pub(super) fn build_call_graph(program: &mut ResolvedProgram) {
         for expression in expressions {
             for call in expression.calls.iter().flatten() {
                 if let super::ResolvedCall::User { function, .. } = call {
-                    graph[id].push(*function);
-                    callees.push(program.metadata[*function].name.clone());
+                    let declaration = if *function < count {
+                        *function
+                    } else {
+                        instance_origins[*function - count]
+                    };
+                    graph[id].push(declaration);
+                    callees.push(program.metadata[declaration].name.clone());
                 }
             }
         }

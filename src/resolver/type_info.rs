@@ -64,7 +64,13 @@ impl TypedExpression<'_> {
             .map(|(index, node)| {
                 let call_signature = match self.expression.calls[index] {
                     Some(ResolvedCall::User { function, .. }) => {
-                        self.types.functions.get(function).copied()
+                        if let Some(NodeMetadata::GenericCall(signature)) =
+                            self.expression.node_metadata.get(&index)
+                        {
+                            Some(*signature)
+                        } else {
+                            self.types.functions.get(function).copied()
+                        }
                     }
                     Some(ResolvedCall::Builtin(builtin)) => {
                         let ExpressionKind::UserCall { arguments, .. } = &node.kind else {
@@ -93,7 +99,7 @@ impl TypedExpression<'_> {
     }
 }
 
-fn operation_expressions(
+pub(super) fn operation_expressions(
     operation: &ResolvedOperation,
 ) -> impl Iterator<Item = &ResolvedExpression> {
     let (single, arguments): (Option<&ResolvedExpression>, &[ResolvedArgument]) =
@@ -122,6 +128,7 @@ fn operation_expressions(
 
 fn expressions(
     program: &ResolvedProgram,
+    function_count: usize,
 ) -> impl Iterator<Item = (ExpressionContext, &ResolvedExpression)> {
     let entry = program
         .statements
@@ -129,8 +136,7 @@ fn expressions(
         .flat_map(operation_expressions)
         .map(|expression| (ExpressionContext::Entry, expression));
     entry.chain(
-        program
-            .functions
+        program.functions[..function_count]
             .iter()
             .enumerate()
             .flat_map(|(function, body)| {
@@ -183,10 +189,12 @@ impl ResolvedProgram {
         &self.type_info.bindings
     }
     pub fn function_type_id(&self, function: usize) -> Option<TypeId> {
-        self.type_info.functions.get(function).copied()
+        self.type_info.functions[..self.source_function_count]
+            .get(function)
+            .copied()
     }
     pub fn function_binding_type_ids(&self, function: usize) -> Option<&[TypeId]> {
-        self.functions
+        self.functions[..self.source_function_count]
             .get(function)
             .map(|body| body.slot_types.as_slice())
     }
@@ -207,7 +215,7 @@ impl ResolvedProgram {
     // Plan order: entry operations, then each function's defaults, contracts and
     // body. Node indices are local postorder indices within one expression.
     pub fn typed_expressions(&self) -> impl Iterator<Item = TypedExpression<'_>> {
-        expressions(self).map(|(context, expression)| TypedExpression {
+        expressions(self, self.source_function_count).map(|(context, expression)| TypedExpression {
             expression,
             types: &self.type_info,
             context,
@@ -257,7 +265,7 @@ pub(super) fn build(
     let mut builtins = BTreeMap::new();
     let mut divmod = None;
     let mut input = BTreeMap::new();
-    for (_, expression) in expressions(program) {
+    for (_, expression) in expressions(program, program.functions.len()) {
         for (index, call) in expression.calls.iter().enumerate() {
             let span = expression.syntax.nodes()[index].span;
             match call {

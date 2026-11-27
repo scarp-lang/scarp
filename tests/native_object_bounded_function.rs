@@ -41,7 +41,7 @@ fn bounded_native_rejects_unsupported_effects_and_calls() {
     for source in [
         "funcra f() -> integer { return 1; }",
         "pure funcra f(n: integer) -> integer { return f(n); }",
-        "pure funcra f() -> integer { bind a = [array: 1, 2]; return 1; }",
+        "pure funcra f() -> integer { bind a = [array: (1, 2)]; return 1; }",
         "pure funcra f() -> integer { return 1; } print(f());",
     ] {
         assert!(

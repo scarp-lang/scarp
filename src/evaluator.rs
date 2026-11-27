@@ -347,8 +347,8 @@ impl Workspace {
                     }
                 }
                 Task::Variant(node, has_payload, span) => {
-                    let resolver::CompositeOperation::Variant { kind, tag } =
-                        &expression.composites[&node]
+                    let resolver::NodeMetadata::Variant { kind, tag } =
+                        &expression.node_metadata[&node]
                     else {
                         unreachable!("resolved variant constructor");
                     };
@@ -369,8 +369,8 @@ impl Workspace {
                     )));
                 }
                 Task::Record(node, span) => {
-                    let resolver::CompositeOperation::Record { kind, order } =
-                        &expression.composites[&node]
+                    let resolver::NodeMetadata::Record { kind, order } =
+                        &expression.node_metadata[&node]
                     else {
                         unreachable!("resolved record constructor");
                     };
@@ -399,7 +399,7 @@ impl Workspace {
                     )));
                 }
                 Task::Field(node, _) => {
-                    let resolver::CompositeOperation::Field(offset) = expression.composites[&node]
+                    let resolver::NodeMetadata::Field(offset) = expression.node_metadata[&node]
                     else {
                         unreachable!("resolved record field");
                     };
@@ -1159,6 +1159,24 @@ pub(crate) fn apply_binary_with_budget(
     budget: &mut Budget,
     span: Span,
 ) -> Result<Value, Diagnostic> {
+    // Reuse the bounded text kernels, independent of source-level builtin shadowing.
+    let text_operator = match operator {
+        BinaryOperator::Add if left.as_str().is_some() && right.as_str().is_some() => {
+            Some(Builtin::TextConcat)
+        }
+        BinaryOperator::Multiply if left.as_str().is_some() && right.as_integer().is_some() => {
+            Some(Builtin::TextRepeat)
+        }
+        _ => None,
+    };
+    if let Some(function) = text_operator {
+        return numeric::evaluate_with_budget(
+            function,
+            &[left.clone(), right.clone()],
+            budget,
+            span,
+        );
+    }
     if let (Some(left), Some(right)) = (left.as_bigint(), right.as_bigint()) {
         return crate::bigint::binary(operator, left, right, budget, span);
     }

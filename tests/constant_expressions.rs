@@ -96,7 +96,7 @@ fn static_typing_checks_nested_and_short_circuited_operands() {
         "not 1",
         "true and 1",
         "1==1.0",
-        "\"a\"+\"b\"",
+        "\"a\"+1",
         "true or (1+(2.0*3.0)>0)",
     ] {
         let source = format!("pub bind bad={expression};");
@@ -614,4 +614,16 @@ fn constant_division_errors_keep_the_operator_source_location() {
     let error = compile(&[("main.srp", "pub bind bad=1/0;")]).unwrap_err();
     assert_eq!(error.diagnostic.kind.code(), "E0008");
     assert_eq!(error.diagnostic.span, scarp::diagnostics::Span::new(14, 15));
+}
+
+#[test]
+fn string_operators_fold_exported_constants() {
+    let files = [
+        ("main.srp", r#"import "lib.srp" as lib; print(lib.label);"#),
+        (
+            "lib.srp",
+            r#"bind name="é"; pub bind label="[" + name*2 + "]";"#,
+        ),
+    ];
+    assert_eq!(output(&files), "[éé]\n".as_bytes());
 }

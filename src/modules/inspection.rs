@@ -209,10 +209,12 @@ impl ModuleProgram {
                         let (_, function) = functions.next().unwrap();
                         write!(
                             out,
-                            "  {visibility} {}funcra {}(",
+                            "  {visibility} {}funcra {}",
                             if *pure { "pure " } else { "" },
                             symbol.name
                         )?;
+                        crate::resolver::write_type_parameters(out, &function.type_parameters)?;
+                        write!(out, "(")?;
                         for (index, parameter) in function.parameters.iter().enumerate() {
                             if index != 0 {
                                 write!(out, ", ")?;

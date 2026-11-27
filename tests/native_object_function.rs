@@ -24,7 +24,9 @@ fn generated_example_matches_its_oracle_and_object_is_deterministic() {
         .iter()
         .map(|span| &source[span.start..span.end])
         .collect::<Vec<_>>();
-    assert_eq!(failure_tokens, ["-", "*"]);
+    // Negating the literal 1 succeeds at compile time. Only the
+    // multiplication of runtime arguments still needs an overflow guard.
+    assert_eq!(failure_tokens, ["*"]);
 }
 
 #[test]

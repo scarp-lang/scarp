@@ -1,0 +1,14 @@
+record Pair {
+    valid: boolean,
+    number: integer,
+}
+
+pure funcra entry(i: integer, n: integer) -> integer {
+    var numbers = [array: n, n + 1, n + 2];
+    bind snapshot = numbers;
+    numbers = [array: numbers[2], numbers[0], numbers[1]];
+    bind pair = new Pair { number: numbers[i], valid: i == 1 };
+    bind selected = if pair->valid { (pair->number, true) } else { (snapshot[0], false) };
+    if selected[(1)] { return selected[0] + 10; }
+    return selected[0];
+}
