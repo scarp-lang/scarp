@@ -724,6 +724,22 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    fn variant_constructor_type(
+        &mut self,
+        constructor: &crate::ast::VariantConstructor,
+    ) -> Result<SourceType, Diagnostic> {
+        if let Some(application) = &constructor.application {
+            self.annotation(application, constructor.name_span)
+        } else {
+            nominal::lookup(
+                self.layouts,
+                crate::types::NominalKind::Variant,
+                &constructor.name,
+                constructor.name_span,
+            )
+        }
+    }
+
     fn annotation(&mut self, kind: &SourceType, span: Span) -> Result<SourceType, Diagnostic> {
         generics::resolve_type(self.layouts, kind, self.type_bindings, self.registry, span)
     }
@@ -1464,7 +1480,7 @@ fn resolve_expression(
     expected: Option<&SourceType>,
 ) -> Result<ResolvedExpression, Diagnostic> {
     let expectations = if resolver.has_generics {
-        generics::call_expectations(&syntax, expected, resolver.functions, resolver.names)
+        generics::call_expectations(&syntax, expected, resolver)?
     } else {
         std::collections::BTreeMap::new()
     };
@@ -1512,16 +1528,7 @@ fn resolve_expression(
         let mut call = None;
         let (kind, slot) = match &node.kind {
             ExpressionKind::Variant(constructor) => {
-                let kind = if let Some(application) = &constructor.application {
-                    resolver.annotation(application, constructor.name_span)?
-                } else {
-                    nominal::lookup(
-                        layouts,
-                        crate::types::NominalKind::Variant,
-                        &constructor.name,
-                        constructor.name_span,
-                    )?
-                };
+                let kind = resolver.variant_constructor_type(constructor)?;
                 let (kind, operation) = variants::constructor(kind, constructor, &types, &syntax)?;
                 node_metadata.insert(index, operation);
                 (kind, None)
@@ -2215,8 +2222,7 @@ fn resolve_expression(
                     }
                 }
                 let (id, result) = if let Some(inference) = inference {
-                    let bindings =
-                        inference.finish(expectations.get(&index).copied(), *function_span)?;
+                    let bindings = inference.finish(expectations.get(&index), *function_span)?;
                     for (&parameter, argument) in parameters.iter().zip(arguments) {
                         let parameter = &function.parameters[parameter];
                         let span = syntax.nodes()[argument.expression].span;

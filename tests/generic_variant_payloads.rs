@@ -168,3 +168,81 @@ fn a_public_generic_signature_cannot_expose_a_private_nominal_payload() {
         modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap_err();
     assert_eq!(error.diagnostic.kind, Kind::ModuleVisibility);
 }
+
+#[test]
+fn declared_record_fields_and_variant_payloads_guide_inner_calls() {
+    let source = r#"
+        pure funcra empty<T>() -> list<T> { return [list: <T>]; }
+        record Rows { words: list<string>, flags: tuple<list<boolean>> }
+        variant Event { Rows(list<integer>), Idle }
+        bind rows = new Rows { flags: (empty(),), words: (empty()) };
+        assert(rows->words == [list: <string>]);
+        assert(rows->flags == ([list: <boolean>],));
+        assert(new Event::Rows(empty()) == new Event::Rows([list: <integer>]));
+        assert(new option<list<boolean>>::Some(empty()) == new option<list<boolean>>::Some([list: <boolean>]));
+        pure funcra outcome<A, B>() -> result<list<A>, list<B>> {
+            return new result<list<A>, list<B>>::Err(empty());
+        }
+        assert(outcome::<integer,string>() == new result<list<integer>, list<string>>::Err([list: <string>]));
+    "#;
+    assert!(run(source).is_empty());
+}
+
+#[test]
+fn imported_constructor_context_preserves_nominal_identity() {
+    let mut loader = MemorySourceLoader::new();
+    loader
+        .insert(
+            "lib.srp",
+            r#"
+        pub record Item { value: integer }
+        pub record Boxed { items: list<record Item> }
+        pub variant Event { Box(list<record Item>) }
+    "#,
+        )
+        .unwrap();
+    loader
+        .insert(
+            "main.srp",
+            r#"
+        import "lib.srp" as lib;
+        record Item { value: string }
+        pure funcra empty<T>() -> list<T> { return [list: <T>]; }
+        bind boxed = new lib.Boxed { items: empty() };
+        bind typed: list<record lib.Item> = boxed->items;
+        assert(new lib.Event::Box(empty()) == new lib.Event::Box(typed));
+    "#,
+        )
+        .unwrap();
+    let program =
+        modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap();
+    program
+        .execute(
+            &mut Vec::new(),
+            &mut Vec::new(),
+            ExecutionOptions::default(),
+        )
+        .unwrap();
+}
+
+#[test]
+fn constructor_context_keeps_explicit_types_and_constraints() {
+    let empty = "pure funcra empty<T: Numeric>() -> list<T> { return [list: <T>]; }";
+    let cases = [
+        (
+            "record R { xs: list<string> } bind r = new R { xs: empty() };",
+            Kind::GenericArguments,
+        ),
+        (
+            "variant V { X(list<boolean>) } bind v = new V::X(empty::<integer>());",
+            Kind::TypeMismatch,
+        ),
+    ];
+    for (program, kind) in cases {
+        let error = scarp::compile(&format!("{empty} {program}")).unwrap_err();
+        assert_eq!(error.kind, kind);
+        if kind == Kind::GenericArguments {
+            assert!(error.message.contains("Numeric"), "{error:?}");
+        }
+    }
+}

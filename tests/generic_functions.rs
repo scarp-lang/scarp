@@ -411,3 +411,15 @@ fn nested_return_only_inference_uses_concrete_callee_and_assignment_types() {
     "#;
     assert_eq!(run(source), "2 1 0\n0 0\n");
 }
+
+#[test]
+fn a_fixed_parameter_of_a_generic_function_guides_a_named_argument() {
+    let source = r#"
+        pure funcra empty<T>() -> list<T> { return [list: <T>]; }
+        pure funcra take<T>(value: T, ids: list<integer>) -> T {
+            return value;
+        }
+        print(take(ids: empty(), value: "inferred"), take::<boolean>(true, empty()));
+    "#;
+    assert_eq!(run(source), "inferred true\n");
+}
