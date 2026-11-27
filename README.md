@@ -19,8 +19,12 @@ See the [compiler documentation index](docs/README.md) for those records.
 ## Compiler releases
 
 The latest published prerelease is
-[0.0.7-alpha.2](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.2).
-It adds verified native direct calls and the experimental object command
+[0.0.7-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.3).
+It adds generic functions, bounded string operators, and checked native
+array, tuple, and record locals. [Release notes](docs/releases/v0.0.7-alpha.3-publication.md) ·
+[Publication verification](docs/releases/v0.0.7-alpha.3-validation.md)
+
+**0.0.7-alpha.2** adds verified native direct calls and the experimental object command
 for x86-64 ELF64. [Object CLI](docs/native-object-output.md) ·
 [Release notes](docs/releases/v0.0.7-alpha.2-publication.md) ·
 [Publication verification](docs/releases/v0.0.7-alpha.2-validation.md)
