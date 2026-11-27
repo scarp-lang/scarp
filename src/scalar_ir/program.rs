@@ -7,13 +7,15 @@ mod definite_slots;
 #[cfg(test)]
 mod execute;
 
-use super::{invalid, ScalarExpressionIr};
+use super::{aggregates, invalid, ScalarExpressionIr};
 use crate::{
     ast::{BinaryOperator, OutputTarget},
     diagnostics::{Diagnostic, Span},
     resolver::{ResolvedArgument, ResolvedProgram, ResolvedStatement},
+    types::TypeRegistry,
     value::ValueType,
 };
+use std::ops::Range;
 
 pub(super) use self::calls::ScalarCallGraph;
 
@@ -100,6 +102,7 @@ impl ProgramOp {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ScalarProgramIr {
     slots: Vec<ValueType>,
+    slot_widths: Vec<usize>,
     steps: Vec<ProgramStep>,
     // None is a script; Some(0) is a genuine zero-argument function.
     function_parameters: Option<usize>,
@@ -113,7 +116,7 @@ impl ScalarProgramIr {
             .iter()
             .map(|kind| kind.as_primitive().ok_or_else(|| invalid(Span::default())))
             .collect::<Result<Vec<_>, _>>()?;
-        Self::lower_operations(slots, &program.statements, None, false, None)
+        Self::lower_operations(slots, &program.statements, None, false, None, None)
     }
 
     pub(super) fn lower_integer_function(
@@ -149,18 +152,23 @@ impl ScalarProgramIr {
         id: usize,
         max_parameters: usize,
         bounded: bool,
-        call_arities: Option<&[usize]>,
+        call_targets: Option<&super::CallTargets>,
     ) -> Result<Self, Diagnostic> {
-        let signature = &program.functions()[id];
+        let signature = program.function_metadata(id);
         let function = &program.functions[id];
         let unsupported = |span| {
-            if call_arities.is_some() {
-                invalid(span).with_help("use pure integer functions with required integer parameters, scalar locals and integer returns")
+            if call_targets.is_some() {
+                invalid(span).with_help("use pure integer functions with required integer parameters, bounded locals and integer returns")
             } else {
                 unsupported_function(span)
             }
         };
         let parameters = signature.parameters.len();
+        if !signature.type_parameters.is_empty() {
+            return Err(
+                unsupported(signature.span).with_help("run generic functions in the interpreter")
+            );
+        }
         if !signature.pure || signature.result != ValueType::Integer || parameters > max_parameters
         {
             return Err(unsupported(signature.span));
@@ -190,20 +198,30 @@ impl ScalarProgramIr {
                 _ => return Err(unsupported(step.span)),
             }
         }
-        let slots = function
-            .slot_types
-            .iter()
-            .map(|kind| match kind.primitive() {
-                Some(kind @ (ValueType::Integer | ValueType::Boolean)) => Ok(kind),
-                _ => Err(unsupported(signature.span)),
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let registry = program.type_registry();
+        let mut slots = Vec::new();
+        let mut ranges = Vec::new();
+        for &kind in &function.slot_types {
+            let start = slots.len();
+            if let Some(kind) = aggregates::scalar(kind) {
+                slots.push(kind);
+            } else if bounded {
+                slots.extend(aggregates::lanes(Some(registry), kind, signature.span)?);
+            } else {
+                return Err(unsupported(signature.span));
+            }
+            if slots.len() > MAX_PROGRAM_SLOTS {
+                return Err(unsupported(signature.span));
+            }
+            ranges.push(start..slots.len());
+        }
         Self::lower_operations(
             slots,
             &function.statements,
             Some(parameters),
             bounded,
-            call_arities,
+            call_targets,
+            bounded.then_some((&ranges, registry)),
         )
     }
 
@@ -212,7 +230,8 @@ impl ScalarProgramIr {
         operations: &[crate::resolver::ResolvedOperation],
         function_parameters: Option<usize>,
         bounded: bool,
-        call_arities: Option<&[usize]>,
+        call_targets: Option<&super::CallTargets>,
+        frame: Option<(&[Range<usize>], &TypeRegistry)>,
     ) -> Result<Self, Diagnostic> {
         if slots.len() > MAX_PROGRAM_SLOTS || operations.len() > MAX_PROGRAM_STEPS {
             return Err(invalid(Span::default()));
@@ -220,8 +239,32 @@ impl ScalarProgramIr {
         let mut steps = Vec::with_capacity(operations.len());
         let mut total_nodes = 0usize;
         let mut literal_bytes = 0usize;
-        let lower_expression = |value| ScalarExpressionIr::lower(value, &slots, call_arities);
+        let lower_expression =
+            |value| ScalarExpressionIr::lower(value, &slots, call_targets, frame);
         for statement in operations {
+            let local = |slot| -> Result<Range<usize>, Diagnostic> {
+                match frame {
+                    Some((ranges, _)) => ranges
+                        .get(slot)
+                        .cloned()
+                        .ok_or_else(|| invalid(statement.span)),
+                    None => Ok(slot..slot + 1),
+                }
+            };
+            let scalar_local = |slot| {
+                let range = local(slot)?;
+                if range.len() != 1 {
+                    return Err(invalid(statement.span));
+                }
+                Ok(range.start)
+            };
+            let retired = |slots: &[usize]| -> Result<Vec<usize>, Diagnostic> {
+                let mut retire = Vec::new();
+                for &slot in slots {
+                    retire.extend(local(slot)?);
+                }
+                Ok(retire)
+            };
             let kind = match &statement.kind {
                 ResolvedStatement::Return { value: Some(value) }
                     if function_parameters.is_some() =>
@@ -231,7 +274,7 @@ impl ScalarProgramIr {
                     }
                 }
                 ResolvedStatement::Store { slot, value } => ProgramOp::Store {
-                    slot: *slot,
+                    slot: local(*slot)?.start,
                     value: lower_expression(value)?,
                 },
                 ResolvedStatement::Update {
@@ -240,7 +283,7 @@ impl ScalarProgramIr {
                     operator_span,
                     value,
                 } => ProgramOp::Update {
-                    slot: *slot,
+                    slot: scalar_local(*slot)?,
                     operator: *operator,
                     operator_span: *operator_span,
                     value: lower_expression(value)?,
@@ -251,20 +294,20 @@ impl ScalarProgramIr {
                     index_slot,
                 } => ProgramOp::RepeatInit {
                     count: lower_expression(count)?,
-                    count_slot: *count_slot,
-                    index_slot: *index_slot,
+                    count_slot: scalar_local(*count_slot)?,
+                    index_slot: scalar_local(*index_slot)?,
                 },
                 ResolvedStatement::RepeatGuard {
                     count_slot,
                     index_slot,
                     target,
                 } => ProgramOp::RepeatGuard {
-                    count_slot: *count_slot,
-                    index_slot: *index_slot,
+                    count_slot: scalar_local(*count_slot)?,
+                    index_slot: scalar_local(*index_slot)?,
                     target: *target,
                 },
                 ResolvedStatement::RepeatNext { index_slot } => ProgramOp::RepeatNext {
-                    index_slot: *index_slot,
+                    index_slot: scalar_local(*index_slot)?,
                 },
                 ResolvedStatement::JumpIfFalse { condition, target } => ProgramOp::JumpIfFalse {
                     condition: lower_expression(condition)?,
@@ -273,10 +316,10 @@ impl ScalarProgramIr {
                 ResolvedStatement::Jump { target } => ProgramOp::Jump { target: *target },
                 ResolvedStatement::LoopControl { target, retire } => ProgramOp::LoopControl {
                     target: *target,
-                    retire: retire.clone(),
+                    retire: retired(retire)?,
                 },
                 ResolvedStatement::Retire { slots } => ProgramOp::Retire {
-                    slots: slots.clone(),
+                    slots: retired(slots)?,
                 },
                 ResolvedStatement::Output {
                     arguments,
@@ -314,13 +357,21 @@ impl ScalarProgramIr {
                 kind,
             });
         }
+        let mut slot_widths = vec![1; slots.len()];
+        if let Some((ranges, _)) = frame {
+            for range in ranges {
+                slot_widths[range.start] = range.len();
+                slot_widths[range.start + 1..range.end].fill(0);
+            }
+        }
         let ir = Self {
             slots,
+            slot_widths,
             steps,
             function_parameters,
             bounded,
         };
-        ir.verify_with_calls(call_arities)?;
+        ir.verify_with_calls(call_targets.map(|targets| targets.arities.as_slice()))?;
         Ok(ir)
     }
 
@@ -374,7 +425,7 @@ impl ScalarProgramIr {
     }
 
     fn check_slot(&self, slot: usize, kind: ValueType, span: Span) -> Result<(), Diagnostic> {
-        if self.slots.get(slot) == Some(&kind) {
+        if self.slots.get(slot) == Some(&kind) && self.slot_widths.get(slot) == Some(&1) {
             Ok(())
         } else {
             Err(invalid(span))
@@ -395,7 +446,9 @@ impl ScalarProgramIr {
             }
         }
         if expression.slots != self.slots
-            || kind.is_some_and(|expected| expression.registers[expression.root] != expected)
+            || kind.is_some_and(|expected| {
+                expression.result_width != 1 || expression.registers[expression.root] != expected
+            })
         {
             return Err(invalid(span));
         }
@@ -416,11 +469,25 @@ impl ScalarProgramIr {
             || (call_arities.is_some() && !self.bounded)
             || len > MAX_PROGRAM_STEPS
             || self.slots.len() > MAX_PROGRAM_SLOTS
+            || self.slot_widths.len() != self.slots.len()
             || self.slots.get(..parameters).map_or(true, |kinds| {
                 kinds.iter().any(|kind| *kind != ValueType::Integer)
             })
         {
             return Err(invalid(Span::default()));
+        }
+        let mut local = 0;
+        while local < self.slot_widths.len() {
+            let width = self.slot_widths[local];
+            let tail = self.slot_widths.get(local + 1..local.saturating_add(width));
+            if width == 0
+                || width > aggregates::MAX_AGGREGATE_LANES
+                || (local < parameters && width != 1)
+                || !tail.is_some_and(|tail| tail.iter().all(|&width| width == 0))
+            {
+                return Err(invalid(Span::default()));
+            }
+            local += width;
         }
         let mut literal_bytes = 0usize;
         let mut total_nodes = 0usize;
@@ -465,7 +532,12 @@ impl ScalarProgramIr {
                 ProgramOp::Return { .. } => return Err(invalid(span)),
                 ProgramOp::Store { slot, value } => {
                     self.check_expression(value, None, span, call_arities)?;
-                    self.check_slot(*slot, value.registers[value.root], span)?;
+                    let range = *slot..slot.saturating_add(value.result_width);
+                    if self.slot_widths.get(*slot) != Some(&value.result_width)
+                        || self.slots.get(range) != Some(&value.registers[value.results()])
+                    {
+                        return Err(invalid(span));
+                    }
                     Some(value)
                 }
                 ProgramOp::Update {

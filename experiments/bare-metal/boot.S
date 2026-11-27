@@ -24,6 +24,7 @@ header_end:
 .extern scarp_checked_integer_function
 .extern scarp_bounded_integer_function
 .extern scarp_bounded_integer_entry
+.extern scarp_bounded_aggregate_entry
 _start:
     cli
     cld
@@ -144,6 +145,28 @@ long_mode:
     cmpl $2, %edx
     jne failed
     mark '8'
+    /* Exercise record and tuple projections and a dynamic array subscript. */
+    movl $1, %edi
+    movl $7, %esi
+    call scarp_bounded_aggregate_entry
+    cmpq %r12, %rsp
+    jne failed
+    cmpq $17, %rax
+    jne failed
+    testq %rdx, %rdx
+    jne failed
+    mark '9'
+    /* A negative array subscript unwinds through the same checked ABI. */
+    movq $-1, %rdi
+    movl $7, %esi
+    call scarp_bounded_aggregate_entry
+    cmpq %r12, %rsp
+    jne failed
+    testq %rax, %rax
+    jne failed
+    cmpl $6, %edx
+    jne failed
+    mark 'A'
     movl $0x10, %eax            /* QEMU exit status 33 */
     jmp finish
 failed:

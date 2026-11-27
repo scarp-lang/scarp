@@ -170,3 +170,10 @@ fixed frame shape. The evaluator retires its value stack and task stack
 individually. A stack with capacity above 128 entries drops its backing
 allocation at the transfer, so a wide expression early in the recursion cannot
 hold that allocation through later, smaller calls.
+
+In the bounded ELF64 backend, aggregate locals containing integer or Boolean
+values live in verified stack lanes. Their components cannot escape through
+the integer-only call signature. Replacing a mutable binding copies the
+completed value into its own frame lanes, preserving earlier immutable
+aliases. Expression temporaries use the existing liveness-based stack and
+register planner. Scope retirement ends reads of the local's lanes.

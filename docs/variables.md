@@ -42,7 +42,7 @@ Declarations require `bind` or `var`, an ASCII identifier, `=`, a value expressi
 `print`, `println`, `write`, `eprint`, `ewrite`, `true`, `false`, `and`, `or`,
 `not`, `if`, `elif`, `else`, `while`, `break`, and `continue` are reserved binding names. A binding
 infers `integer`, `float` (alpha), `string`, or `boolean` from its initializer. Parenthesized values and names are value
-expressions; arithmetic requires matching numeric kinds.
+expressions; numeric arithmetic requires matching numeric kinds. Development string operators have separate strict operand rules.
 
 A declaration becomes visible after its initializer. Initializers and print
 expressions can reference earlier bindings. Forward and self-references are
@@ -121,7 +121,8 @@ An arithmetic failure in the right-hand expression highlights that expression's
 operator instead. Any such failure prevents all program output.
 
 There are no implicit declarations, uninitialized bindings, increment/decrement
-operators, assignment expressions, string concatenation, or string mutation.
+operators, assignment expressions, or in-place string mutation. Development string
+bindings support `+=` concatenation and `*=` repetition by an integer.
 
 ## Lexical scopes and shadowing
 
@@ -194,7 +195,7 @@ Strings preserve Unicode, escapes, and empty values. Their storage is shared
 immutably; replacing a binding never changes earlier copies or pending prints.
 Arithmetic, negation, and compound assignment accept integers and, in the alpha,
 finite floats. Binary numeric operands must have the same type.
-There is no implicit conversion or string concatenation, including with `+=`.
+There is no implicit conversion. Development string bindings support `+`, `*`, `+=` and `*=` with the operand types described in [string operators](string-operators.md).
 
 Name resolution and primitive type inference complete before arithmetic
 evaluation. A later type mismatch can therefore be reported before an earlier

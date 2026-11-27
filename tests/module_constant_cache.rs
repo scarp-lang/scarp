@@ -496,3 +496,25 @@ fn live_constant_quotas_evict_fifo_and_preserve_existing_programs() {
     cached(&first, &mut cache);
     assert_eq!(cache.stats().entries, 1);
 }
+
+#[test]
+fn computed_text_uses_expansion_bytes_even_without_constant_references() {
+    let source = r#"pub bind literal = (("🌍")); pub bind joined = ("é" + "!"); pub bind repeated = ("🌍" * 2);"#;
+    let sources = loader(&[("main.srp", source)]);
+    let mut cache = ConstantCache::new(ConstantCacheLimits::default());
+    let limits = |bytes| ModuleLimits {
+        max_expansion_bytes: bytes,
+        ..ModuleLimits::default()
+    };
+    let constants = ConstantLimits::default();
+    // 3 bytes for joined and 8 for repeated. Grouped literals use source storage.
+    compile(&sources, limits(11), constants, Some(&mut cache)).unwrap();
+    compile(&sources, limits(11), constants, None).unwrap();
+    for (bytes, name) in [(2, "joined"), (10, "repeated")] {
+        let warm = compile(&sources, limits(bytes), constants, Some(&mut cache)).unwrap_err();
+        let cold = compile(&sources, limits(bytes), constants, None).unwrap_err();
+        assert_same_error(&warm, &cold, Kind::ModuleLimit);
+        let span = cold.diagnostic.span;
+        assert_eq!(&source[span.start..span.end], name);
+    }
+}

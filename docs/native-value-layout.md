@@ -50,3 +50,20 @@ assert_eq!(layout.shape, NativeLayoutShape::Fields { offsets: vec![0, 8] });
 The value planner describes target storage for future aggregate code
 generation. The ELF64 emitter accepts scalar values through its existing
 calling convention. Interpreter values use their existing representations.
+
+## Freestanding memory design
+
+The next design step is to define integer widths, address spaces, and memory
+operations in the resolved type registry before adding new native instructions.
+The existing `integer` stays signed 64-bit. A width-specific type needs an
+explicit signedness, a fixed byte width, and checked conversions where values
+may not fit. Arithmetic and shifts need boundary tests for each width.
+
+Keep a memory address distinct from an integer. Address arithmetic should check
+the offset against the region extent before addition and verify alignment
+before a typed access. A memory region should identify its origin, bounds, and
+permitted access. Separate platform-provided memory regions from ordinary
+Scarp stack values, and require a distinct operation for volatile device I/O.
+The first verification target is one aligned region with bounded reads and
+writes. Freestanding linking and raw address creation need their own target
+and ABI decisions.

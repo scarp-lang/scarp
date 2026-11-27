@@ -262,6 +262,12 @@ impl Lexer<'_> {
                     self.bump();
                     TokenKind::Semicolon
                 }
+                '"' if self.source[self.cursor..].starts_with("\"\"\"") => {
+                    TokenKind::String(self.literal_text(3, "\"\"\"", true)?)
+                }
+                'r' if self.source[self.cursor..].starts_with("r\"") => {
+                    TokenKind::String(self.literal_text(2, "\"", false)?)
+                }
                 '"' => TokenKind::String(self.string()?),
                 '+' | '-' | '*' | '/' => {
                     self.bump();
@@ -441,6 +447,35 @@ impl Lexer<'_> {
             .with_help("write a complete float such as 1.0, 0.5, or 1e3"));
         }
         Ok(())
+    }
+
+    // Raw and triple-quoted literals retain their bytes, without escape decoding.
+    fn literal_text(
+        &mut self,
+        prefix: usize,
+        delimiter: &str,
+        multiline: bool,
+    ) -> Result<String, Diagnostic> {
+        let start = self.cursor;
+        self.cursor += prefix;
+        let body = self.cursor;
+        while self.cursor < self.source.len() {
+            if self.source[self.cursor..].starts_with(delimiter) {
+                let value = self.source[body..self.cursor].to_string();
+                self.cursor += delimiter.len();
+                return Ok(value);
+            }
+            if !multiline && matches!(self.peek(), Some('\n' | '\r')) {
+                break;
+            }
+            self.bump();
+        }
+        Err(Diagnostic::new(
+            DiagnosticKind::UnterminatedString,
+            Span::new(start, self.cursor),
+            "unterminated raw or multiline string literal",
+        )
+        .with_help("close the literal with its opening quote delimiter"))
     }
 
     fn string(&mut self) -> Result<String, Diagnostic> {

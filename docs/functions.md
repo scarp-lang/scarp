@@ -89,7 +89,8 @@ when every call supplies that argument. Each invocation proceeds in this order:
 5. Resume the caller with the result, or propagate a diagnostic.
 
 Providing an argument skips its default at runtime. Defaults are not cached.
-There are no user-defined variadic arguments, overloads, or generic functions.
+The current source supports [generic functions](generic-functions.md). Variadic
+user arguments and overloads remain future language features.
 
 ## Purity and executable contracts
 

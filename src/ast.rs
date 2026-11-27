@@ -29,7 +29,7 @@ pub enum Statement {
         declaration: Box<Statement>,
         span: Span,
     },
-    Function(FunctionDeclaration),
+    Function(Box<FunctionDeclaration>),
     Record(Box<RecordDeclaration>),
     Variant(Box<VariantDeclaration>),
     Match(Box<MatchStatement>),
@@ -246,12 +246,20 @@ pub struct MatchArm {
 pub struct FunctionDeclaration {
     pub name: String,
     pub name_span: Span,
+    pub type_parameters: Vec<GenericParameter>,
     pub parameters: Vec<Parameter>,
     pub result: crate::types::SourceType,
     pub pure: bool,
     pub contracts: Vec<Contract>,
     pub statements: Vec<Statement>,
     pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GenericParameter {
+    pub name: String,
+    pub span: Span,
+    pub constraint: Option<crate::types::TypeConstraint>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -338,6 +346,7 @@ pub struct ConditionalExpressionBranch {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariantConstructor {
     pub name: String,
+    pub application: Option<SourceType>,
     pub name_span: Span,
     pub tag: String,
     pub tag_span: Span,
@@ -396,6 +405,7 @@ pub enum ExpressionKind {
     },
     UserCall {
         name: String,
+        type_arguments: Option<std::sync::Arc<Vec<TypeAnnotation>>>,
         arguments: Vec<CallArgument>,
         function_span: Span,
     },

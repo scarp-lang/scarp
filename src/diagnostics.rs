@@ -186,6 +186,9 @@ diagnostic_catalogue! {
     MapKey => ("E0082", "Duplicate map key in a source map literal, or map key not found where a key is required. Use unique keys; order is canonical rather than insertion based."),
     MapAllocation => ("E0083", "Map payload exceeded the existing shared array/list/map byte quota, or its storage could not be reserved."),
     InvalidBooleanInput => ("E0084", "Invalid boolean input. Enter the lowercase literal true or false without surrounding whitespace."),
+    GenericDefinition => ("E0085", "Invalid generic declaration or parameter. Declare distinct type parameters after the function name and use a supported constraint."),
+    GenericArguments => ("E0086", "Type arguments could not be inferred or checked. Supply explicit arguments with name::<type>(...) or pass values of a consistent type that satisfies the declared constraints."),
+    GenericLimit => ("E0087", "Generic specialization exceeded a compiler budget or produced an oversized type. Reduce the number and size of distinct instantiations, or keep recursive type arguments unchanged."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

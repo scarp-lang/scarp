@@ -75,25 +75,6 @@ impl RegisterSet {
     }
 }
 
-fn accesses(operation: &Operation) -> (Option<usize>, [Option<usize>; 2], &[usize]) {
-    match *operation {
-        Operation::Work | Operation::Jump { .. } => (None, [None, None], &[]),
-        Operation::Integer { dst, .. }
-        | Operation::Boolean { dst, .. }
-        | Operation::Load { dst, .. } => (Some(dst), [None, None], &[]),
-        Operation::Move { dst, src } | Operation::Unary { dst, src, .. } => {
-            (Some(dst), [Some(src), None], &[])
-        }
-        Operation::Binary {
-            dst, left, right, ..
-        } => (Some(dst), [Some(left), Some(right)], &[]),
-        Operation::Branch { condition, .. } => (None, [Some(condition), None], &[]),
-        Operation::Call {
-            dst, ref arguments, ..
-        } => (Some(dst), [None, None], arguments),
-    }
-}
-
 fn register_sets(len: usize) -> Result<Vec<RegisterSet>, Diagnostic> {
     let mut sets = Vec::new();
     sets.try_reserve_exact(len).map_err(|_| failure())?;
@@ -129,7 +110,7 @@ impl TemporaryLayout {
                 }
                 Ok(())
             };
-            let (write, reads, arguments) = accesses(&step.kind);
+            let (write, reads, arguments) = step.kind.register_accesses();
             for register in reads
                 .into_iter()
                 .flatten()
@@ -139,12 +120,13 @@ impl TemporaryLayout {
                 touch(register)?;
             }
         }
-        // The emitter reloads the root after the last IR operation.
-        intervals
-            .get_mut(expression.root)
-            .and_then(Option::as_mut)
-            .ok_or_else(failure)?
-            .last = expression.steps.len();
+        for register in expression.results() {
+            intervals
+                .get_mut(register)
+                .and_then(Option::as_mut)
+                .ok_or_else(failure)?
+                .last = expression.steps.len();
+        }
 
         let mut ordered = intervals.into_iter().flatten().collect::<Vec<_>>();
         ordered.sort_unstable_by_key(|interval| (interval.first, interval.register));
@@ -200,7 +182,9 @@ impl TemporaryLayout {
         let mut written = RegisterSet::EMPTY;
         // Include the implicit read performed when the emitter loads the result.
         let mut fallthrough = RegisterSet::EMPTY;
-        fallthrough.insert(expression.root);
+        for register in expression.results() {
+            fallthrough.insert(register);
+        }
         if let Some(state) = target_states[expression.steps.len()] {
             live_targets[state] = fallthrough;
         }
@@ -220,7 +204,7 @@ impl TemporaryLayout {
                 outgoing.union(live_at(target)?);
             }
 
-            let (write, reads, arguments) = accesses(&step.kind);
+            let (write, reads, arguments) = step.kind.register_accesses();
             let inputs = reads.into_iter().flatten().chain(arguments.iter().copied());
             if let Some(dst) = write {
                 written.insert(dst);
@@ -300,7 +284,8 @@ impl TemporaryLayout {
                 | Operation::Load { .. }
                 | Operation::Move { .. }
                 | Operation::Unary { .. }
-                | Operation::Binary { .. } => true,
+                | Operation::Binary { .. }
+                | Operation::Index { .. } => true,
             });
     }
 
@@ -422,6 +407,7 @@ mod tests {
             registers: vec![ValueType::Boolean; 5],
             slots: Vec::new(),
             root: 0,
+            result_width: 1,
             steps: [
                 Operation::Boolean {
                     dst: 0,

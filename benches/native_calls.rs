@@ -87,4 +87,32 @@ fn main() {
         samples,
         batch,
     );
+    run(
+        "aggregate_locals",
+        concat!(
+            include_str!("../examples/native_aggregate_locals.srp"),
+            "\nprint(entry(1, 7));"
+        ),
+        "entry",
+        b"17\n",
+        samples,
+        batch,
+    );
+    for (name, signature) in [
+        (
+            "concrete_integer_call",
+            "pure funcra square(x: integer) -> integer",
+        ),
+        (
+            "generic_integer_call",
+            "pure funcra square<T: Numeric>(x: T) -> T",
+        ),
+    ] {
+        let script = format!(
+            "{signature} {{ return x * x; }}\n\
+             pure funcra entry(x: integer) -> integer {{ return square(x); }}\n\
+             print(entry(9));"
+        );
+        run(name, &script, "entry", b"81\n", samples, batch);
+    }
 }

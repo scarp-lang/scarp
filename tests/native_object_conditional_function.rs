@@ -30,7 +30,7 @@ fn scalar_conditional_functions_emit_deterministically() {
 }
 
 #[test]
-fn conditional_does_not_extend_native_types_or_binding_kernels() {
+fn conditional_aggregate_projections_require_the_bounded_function_api() {
     let source = "pure funcra f() -> integer {
         return if true { 1 } else { (2, 3)[0] };
     }";
@@ -41,12 +41,7 @@ fn conditional_does_not_extend_native_types_or_binding_kernels() {
             .kind,
         DiagnosticKind::NativeUnsupported
     );
-    assert_eq!(
-        emit_elf64_bounded_integer_function(source, 100)
-            .unwrap_err()
-            .kind,
-        DiagnosticKind::NativeUnsupported
-    );
+    assert!(emit_elf64_bounded_integer_function(source, 100).is_ok());
 
     let kernel = "bind number = if true { 1 } else { 2 };";
     for error in [
@@ -194,8 +189,8 @@ int main(int argc, char **argv) {
         }
     }
 
-    let source = "// चयन\npure funcra f(x: integer) -> integer {
-        return if x == 0 { 7 } else { 1 / 0 };
+    let source = "// चयन\r\npure funcra f(x: integer) -> integer {
+        return if x == 0 { 6 * 7 } else { 1 / 0 };
     }";
     let at = |text: &str| {
         let start = source.find(text).unwrap();
@@ -205,9 +200,12 @@ int main(int argc, char **argv) {
     let slash = Span::new(slash.start + 1, slash.end - 1);
     for (allowance, input, value, status, span) in [
         (6, 0, 0, CHECKED_KERNEL_WORK_LIMIT, Some(at("x == 0"))),
-        (7, 0, 0, CHECKED_KERNEL_WORK_LIMIT, Some(at("7"))),
+        (7, 0, 0, CHECKED_KERNEL_WORK_LIMIT, Some(at("6 * 7"))),
+        (8, 0, 0, CHECKED_KERNEL_WORK_LIMIT, Some(at("6"))),
+        (9, 0, 0, CHECKED_KERNEL_WORK_LIMIT, Some(at("7"))),
+        (10, 0, 0, CHECKED_KERNEL_WORK_LIMIT, Some(at("*"))),
+        (11, 0, 42, 0, None),
         (7, 1, 0, CHECKED_KERNEL_WORK_LIMIT, Some(at("1 / 0"))),
-        (8, 0, 7, 0, None),
         (10, 1, 0, CHECKED_KERNEL_WORK_LIMIT, Some(slash)),
         (11, 1, 0, CHECKED_KERNEL_DIVISION_BY_ZERO, Some(slash)),
     ] {

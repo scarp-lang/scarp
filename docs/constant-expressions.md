@@ -43,12 +43,13 @@ constant expressions 42 84 true 0.75 42
 | --- | --- |
 | Scalar literals, constant references, groups | Preserve integer/finite-float/boolean/string type |
 | Numeric unary `-`, binary `+`, `-`, `*`, `/` | Same numeric kind; no implicit integer/float mixing |
+| Development string `+`, `*` | String concatenation or string-left repetition by integer |
 | `<`, `<=`, `>`, `>=` | Same numeric kind; boolean result |
 | `==`, `!=` | Same scalar kind; boolean result, including string equality |
 | `not`, `and`, `or` | Boolean operands and result |
 
 Precedence, integer division, overflow and finite-float rules match
-[runtime values and operators](reference/values.md). Strings have no concatenation.
+[runtime values and operators](reference/values.md). Development string constants support concatenation (`+`) and repetition (`*` with an integer right operand).
 Signed floating zero is preserved; division by either sign of zero is an error.
 Every evaluated intermediate result must fit its type.
 
@@ -94,9 +95,10 @@ evaluation uses a separate budget: a literal takes one task, `1 + 2` four, and
 deterministic work/storage allowances, not physical process heap caps.
 
 Runtime `ExecutionOptions` and CLI runtime flags do not alter compile-time limits.
-Existing expansion limits charge constant-reference string copies and new
-reference-derived folded strings before cloning. Direct literal storage remains
-covered by source limits, preserving previous literal-only expansion boundaries.
+The module expansion limit counts the UTF-8 bytes of each computed string
+constant, including concatenation and repetition of literals. Substituting a
+string constant at a reference also counts its bytes. Source limits cover
+direct string literals, including literals enclosed in parentheses.
 
 ```rust
 use scarp::modules::{self, ConstantLimits, MemorySourceLoader, ModuleLimits};

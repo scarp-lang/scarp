@@ -186,31 +186,44 @@ impl<'a> Frame<'a> {
         self.completion = completion;
     }
     fn finish(&mut self, program: &ResolvedProgram, value: Value) {
-        if let Some(slot) = self
+        let Some(id) = self.function else {
+            self.result = value;
+            self.stage = Stage::Done;
+            return;
+        };
+        let function = &program.functions[id];
+        let postconditions = function
+            .contracts
+            .iter()
+            .any(|contract| contract.postcondition);
+        let preserved_parameters = if postconditions {
+            program.function_metadata(id).parameters.len()
+        } else {
+            0
+        };
+        // Contracts can inspect only parameters and the result. Release all
+        // other values, including locals bypassed by an early return.
+        for slot in &mut self.environment[preserved_parameters..] {
+            *slot = Value::Unit;
+        }
+        if let Some(slot) = function.result_slot {
+            self.environment[slot] = value;
+        } else {
+            self.result = value;
+        }
+        self.stage = if postconditions {
+            Stage::Ensures(0)
+        } else {
+            Stage::Done
+        };
+    }
+
+    fn take_result(&mut self, program: &ResolvedProgram) -> Value {
+        let result = self
             .function
             .and_then(|id| program.functions[id].result_slot)
-        {
-            self.environment[slot] = value.clone();
-        }
-        self.result = value;
-        if let Some(id) = self.function {
-            // Postconditions can only inspect parameters and the result.
-            // Release all other values at function completion, including
-            // locals in blocks bypassed by an early return.
-            let parameter_count = program.functions()[id].parameters.len();
-            let result_slot = program.functions[id].result_slot;
-            for (index, slot) in self
-                .environment
-                .iter_mut()
-                .enumerate()
-                .skip(parameter_count)
-            {
-                if Some(index) != result_slot {
-                    *slot = Value::Unit;
-                }
-            }
-        }
-        self.stage = Stage::Ensures(0);
+            .map_or(&mut self.result, |slot| &mut self.environment[slot]);
+        std::mem::replace(result, Value::Unit)
     }
 }
 
@@ -291,7 +304,7 @@ fn run_plan<'a>(
                 "host callable target is missing from its compiled snapshot",
             )
         })?;
-        let span = program.functions()[id].span;
+        let span = program.function_metadata(id).span;
         if arguments.len() > function.defaults.len()
             || function
                 .defaults
@@ -745,7 +758,8 @@ fn run_plan<'a>(
                             }
                             Completion::Contract(post, span) => {
                                 if !value.require_boolean(span)? {
-                                    let name = &program.functions()[frame.function.unwrap()].name;
+                                    let name =
+                                        &program.function_metadata(frame.function.unwrap()).name;
                                     return Err(Diagnostic::new(
                                         DiagnosticKind::ContractViolation,
                                         span,
@@ -1042,14 +1056,14 @@ fn run_plan<'a>(
                 Stage::Done => {
                     let mut finished = frames.pop().unwrap();
                     live_slots -= finished.environment.len();
+                    let result = finished.take_result(program);
                     if let Some(caller) = frames.last_mut() {
-                        let result = std::mem::replace(&mut finished.result, Value::Unit);
                         if let Some(storage) = finished.take_spare_storage() {
                             spare = Some(storage);
                         }
                         caller.workspace.accept(result);
                     } else {
-                        final_result = finished.result;
+                        final_result = result;
                     }
                 }
             }
@@ -1066,7 +1080,7 @@ fn run_plan<'a>(
     outcome.map_err(|mut error| {
         let mut remaining = 16;
         for frame in frames.iter().rev().filter(|f| f.function.is_some()) {
-            let name = &program.functions()[frame.function.unwrap()].name;
+            let name = &program.function_metadata(frame.function.unwrap()).name;
             for span in
                 std::iter::once(frame.call_span).chain(frame.tail_sites.iter().rev().copied())
             {
@@ -1238,12 +1252,19 @@ mod retirement_runtime_tests {
             result: Value::Unit,
         };
         assert_eq!(Arc::strong_count(&owned_local), 2);
-        frame.finish(&program, Value::from("parameter"));
+        let returned: Arc<str> = Arc::from("parameter");
+        frame.finish(&program, Value::String(returned.clone()));
         assert_eq!(Arc::strong_count(&owned_local), 1);
+        // Only the contract result slot owns the returned payload in the frame.
+        assert_eq!(Arc::strong_count(&returned), 2);
         assert_eq!(frame.environment[0].as_str(), Some("parameter"));
         assert_eq!(frame.environment[1].as_str(), Some("parameter"));
         assert_eq!(frame.environment[2], Value::Unit);
         assert!(matches!(frame.stage, Stage::Ensures(0)));
+        let result = frame.take_result(&program);
+        assert_eq!(result.as_str(), Some("parameter"));
+        assert_eq!(frame.environment[1], Value::Unit);
+        assert_eq!(Arc::strong_count(&returned), 2);
         let slots_pointer = frame.environment.as_ptr();
         let supplied_pointer = frame.supplied.as_ptr();
         let (environment, supplied, _) = frame.recycle_storage();
@@ -1251,5 +1272,36 @@ mod retirement_runtime_tests {
         assert_eq!(supplied.as_ptr(), supplied_pointer);
         assert!(environment.iter().all(|value| *value == Value::Unit));
         assert!(supplied.iter().all(|&supplied| !supplied));
+        assert_eq!(result.as_str(), Some("parameter"));
+    }
+
+    #[test]
+    fn no_postconditions_release_parameters_before_reuse() {
+        let program = crate::compile("funcra f(s: string) -> string { return s; }").unwrap();
+        let function = &program.functions[0];
+        let returned: Arc<str> = Arc::from("returned through an immutable alias");
+        let mut frame = Frame {
+            function: Some(0),
+            call_span: Span::default(),
+            tail_sites: Vec::new(),
+            operations: &function.statements,
+            environment: vec![Value::String(returned.clone()), Value::Unit],
+            supplied: vec![true],
+            pc: 0,
+            stage: Stage::Body,
+            expression: None,
+            completion: Completion::Discard,
+            workspace: Workspace::default(),
+            output: None,
+            result: Value::Unit,
+        };
+        frame.finish(&program, Value::String(returned.clone()));
+        assert!(matches!(frame.stage, Stage::Done));
+        assert_eq!(frame.environment[0], Value::Unit);
+        assert_eq!(Arc::strong_count(&returned), 2);
+        let result = frame.take_result(&program);
+        let (slots, _, _) = frame.take_spare_storage().unwrap();
+        assert_eq!(slots, [Value::Unit, Value::Unit]);
+        assert_eq!(result.as_str(), Some(returned.as_ref()));
     }
 }

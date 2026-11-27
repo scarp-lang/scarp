@@ -243,13 +243,13 @@ fn collect(
                         .map_err(|error| error.with_related(*name_span, "constant initialized here"))?;
                     let kind = value.kind();
                     if let Value::String(text) = &value {
-                        // Reference-derived strings consume folded storage in
-                        // addition to the substitution text charged above.
-                        if initializer
-                            .nodes()
-                            .iter()
-                            .any(|node| matches!(&node.kind, ExpressionKind::Name(_)))
-                        {
+                        // Direct literals are covered by the source budget. All
+                        // other string results occupy folded expansion storage.
+                        let mut root = &initializer.nodes()[initializer.root()].kind;
+                        while let ExpressionKind::Group { expression } = root {
+                            root = &initializer.nodes()[*expression].kind;
+                        }
+                        if !matches!(root, ExpressionKind::String(_)) {
                             consume(remaining, text.len(), *name_span)?;
                         }
                     }
@@ -428,6 +428,7 @@ impl Rewriter<'_> {
                 name,
                 arguments,
                 function_span,
+                ..
             } => {
                 let declaration = self
                     .symbol(name, *function_span)?
@@ -634,11 +635,16 @@ impl Rewriter<'_> {
                     *name = self.nominal_reference(NominalKind::Record, name, *name_span)?;
                 }
                 ExpressionKind::Variant(constructor) => {
-                    constructor.name = self.nominal_reference(
-                        NominalKind::Variant,
-                        &constructor.name,
-                        constructor.name_span,
-                    )?;
+                    if let Some(application) = &mut constructor.application {
+                        *application =
+                            self.nominal_type(application, constructor.name_span, false)?;
+                    } else {
+                        constructor.name = self.nominal_reference(
+                            NominalKind::Variant,
+                            &constructor.name,
+                            constructor.name_span,
+                        )?;
+                    }
                 }
                 ExpressionKind::Array {
                     empty_element_type: Some(kind),
@@ -660,8 +666,15 @@ impl Rewriter<'_> {
                 ExpressionKind::UserCall {
                     name,
                     function_span,
+                    type_arguments,
                     ..
                 } => {
+                    if let Some(type_arguments) = type_arguments {
+                        for annotation in std::sync::Arc::make_mut(type_arguments) {
+                            annotation.kind =
+                                self.nominal_type(&annotation.kind, annotation.span, false)?;
+                        }
+                    }
                     if let Some(symbol) = self.symbol(name, *function_span)? {
                         if let Some(target) = &symbol.target {
                             let size = target.charged_bytes;

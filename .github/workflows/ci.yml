@@ -72,6 +72,7 @@ jobs:
           cargo bench --locked --offline --bench compiler -- --quick
           cargo bench --locked --offline --bench bigint -- --quick
           cargo bench --locked --offline --bench lifetime -- --quick
+          cargo bench --locked --offline --bench native_calls -- --quick
       - name: Verify release and branch-maintenance tools
         if: runner.os == 'Linux'
         run: |
@@ -122,6 +123,7 @@ jobs:
           cargo bench --locked --offline --bench compiler -- --quick
           cargo bench --locked --offline --bench bigint -- --quick
           cargo bench --locked --offline --bench lifetime -- --quick
+          cargo bench --locked --offline --bench native_calls -- --quick
 
   lifetime_comparison:
     name: Lifetime / baseline comparison

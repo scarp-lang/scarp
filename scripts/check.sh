@@ -57,7 +57,7 @@ cargo run --locked -- verify examples/order_statistics.srp
 cargo run --locked -- exec examples/order_statistics.srp
 cargo run --locked -- run examples/typed_declarations.srp
 cargo run --locked -- check examples/typed_declarations.srp
-for example in scalar_conversions unicode_text symbol_navigation text_construction integer_collections bit_fields numerical_kernels root_mean_square collection_module topk_scores temperature_softmax sampled_calculus sample_cumulative_area cosine_similarity nucleus_selection pearson_correlation text_foundations bigint_arithmetic bigint_sequences bigint_module; do
+for example in scalar_conversions unicode_text symbol_navigation text_construction string_operators integer_collections bit_fields numerical_kernels root_mean_square collection_module topk_scores temperature_softmax sampled_calculus sample_cumulative_area cosine_similarity nucleus_selection pearson_correlation text_foundations bigint_arithmetic bigint_sequences bigint_module; do
     cargo run --locked -- run "examples/$example.srp"
     cargo run --locked -- check "examples/$example.srp"
 done

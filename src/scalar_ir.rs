@@ -1,19 +1,21 @@
-//! Private, target-neutral scalar expression IR (first native IR slice).
+//! Private, target-neutral scalar expression IR.
 //!
 //! This lowers already-resolved integer/boolean expressions, never reparses
-//! source, and does not emit machine code or introduce a public ABI. Future
-//! statement and object lowering will build on its checked control-flow form.
+//! source, and verifies the typed control flow before native code generation.
 
+mod aggregates;
 mod elf64;
+mod optimize;
 mod program;
 
 use crate::{
     ast::{BinaryOperator, ExpressionKind, LogicalOperator, Statement},
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     resolver::{ResolvedCall, ResolvedExpression, ResolvedProgram},
+    types::TypeRegistry,
     value::ValueType,
 };
-use std::borrow::Cow;
+use std::{borrow::Cow, ops::Range};
 
 const MAX_IR_REGISTERS: usize = 1024;
 const MAX_IR_STEPS: usize = 8192;
@@ -25,6 +27,12 @@ fn invalid(span: Span) -> Diagnostic {
         "the private scalar IR cannot verify this resolved expression",
     )
     .with_help("only bounded, well-typed integer/boolean scalar expressions are supported")
+}
+
+/// Map resolver function identities to the compact native call table.
+struct CallTargets {
+    indices: Vec<Option<usize>>,
+    arities: Vec<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,6 +80,11 @@ enum Operation {
         right: usize,
         op: BinaryOperator,
     },
+    Index {
+        dst: usize,
+        index: usize,
+        elements: Vec<usize>,
+    },
     /// Arguments are already evaluated in source order. This list is in ABI
     /// parameter order, using the resolver's explicit-argument mapping.
     Call {
@@ -93,6 +106,30 @@ enum Operation {
 }
 
 impl Operation {
+    fn register_accesses(&self) -> (Option<usize>, [Option<usize>; 2], &[usize]) {
+        match *self {
+            Self::Work | Self::Jump { .. } => (None, [None, None], &[]),
+            Self::Integer { dst, .. } | Self::Boolean { dst, .. } | Self::Load { dst, .. } => {
+                (Some(dst), [None, None], &[])
+            }
+            Self::Move { dst, src } | Self::Unary { dst, src, .. } => {
+                (Some(dst), [Some(src), None], &[])
+            }
+            Self::Binary {
+                dst, left, right, ..
+            } => (Some(dst), [Some(left), Some(right)], &[]),
+            Self::Branch { condition, .. } => (None, [Some(condition), None], &[]),
+            Self::Index {
+                dst,
+                index,
+                ref elements,
+            } => (Some(dst), [Some(index), None], elements),
+            Self::Call {
+                dst, ref arguments, ..
+            } => (Some(dst), [None, None], arguments),
+        }
+    }
+
     fn successors(&self, pc: usize) -> (usize, Option<usize>) {
         match *self {
             Self::Branch { target, .. } => (pc + 1, Some(target)),
@@ -107,6 +144,7 @@ struct ScalarExpressionIr {
     registers: Vec<ValueType>,
     slots: Vec<ValueType>,
     root: usize,
+    result_width: usize,
     steps: Vec<Instruction>,
 }
 
@@ -177,6 +215,10 @@ fn join(destination: &mut Option<Vec<bool>>, incoming: Cow<'_, [bool]>) {
 }
 
 impl ScalarExpressionIr {
+    fn results(&self) -> Range<usize> {
+        self.root..self.root + self.result_width
+    }
+
     fn patch_target(
         &mut self,
         step: usize,
@@ -208,7 +250,8 @@ impl ScalarExpressionIr {
     fn lower(
         expression: &ResolvedExpression,
         slots: &[ValueType],
-        call_arities: Option<&[usize]>,
+        call_targets: Option<&CallTargets>,
+        frame: Option<(&[Range<usize>], &TypeRegistry)>,
     ) -> Result<Self, Diagnostic> {
         let nodes = expression.syntax.nodes();
         if nodes.is_empty()
@@ -220,24 +263,33 @@ impl ScalarExpressionIr {
         {
             return Err(invalid(Span::default()));
         }
-        let mut registers = Vec::with_capacity(nodes.len());
+        let registry = frame.map(|(_, registry)| registry);
+        let mut registers = vec![ValueType::Integer; nodes.len()];
+        let mut ranges = Vec::with_capacity(nodes.len());
         for (index, node) in nodes.iter().enumerate() {
-            let kind = if expression.types[index] == ValueType::Integer.id() {
-                ValueType::Integer
-            } else if expression.types[index] == ValueType::Boolean.id() {
-                ValueType::Boolean
+            let kind = expression.types[index];
+            if let Some(scalar) = aggregates::scalar(kind) {
+                registers[index] = scalar;
+                ranges.push(index..index + 1);
             } else {
-                return Err(invalid(node.span));
-            };
-            registers.push(kind);
+                let lanes = aggregates::lanes(registry, kind, node.span)?;
+                let start = registers.len();
+                if start + lanes.len() > MAX_IR_REGISTERS {
+                    return Err(invalid(node.span));
+                }
+                registers.extend(lanes);
+                ranges.push(start..registers.len());
+            }
         }
+        let root = expression.syntax.root();
         let mut ir = Self {
             registers,
             slots: slots.to_vec(),
-            root: expression.syntax.root(),
+            root: ranges[root].start,
+            result_width: ranges[root].len(),
             steps: Vec::new(),
         };
-        let mut tasks = vec![Task::Visit(ir.root)];
+        let mut tasks = vec![Task::Visit(root)];
         while let Some(task) = tasks.pop() {
             match task {
                 Task::Visit(index) => {
@@ -264,7 +316,20 @@ impl ScalarExpressionIr {
                         }
                         ExpressionKind::Name(_) => {
                             let slot = expression.slots[index].ok_or_else(|| invalid(node.span))?;
-                            ir.emit(node.span, Operation::Load { dst: index, slot })?;
+                            let source = match frame {
+                                Some((ranges, _)) => ranges
+                                    .get(slot)
+                                    .cloned()
+                                    .ok_or_else(|| invalid(node.span))?,
+                                None => slot..slot + 1,
+                            };
+                            let dest = ranges[index].clone();
+                            if source.len() != dest.len() {
+                                return Err(invalid(node.span));
+                            }
+                            for (dst, slot) in dest.zip(source) {
+                                ir.emit(node.span, Operation::Load { dst, slot })?;
+                            }
                         }
                         ExpressionKind::Group { expression: child }
                         | ExpressionKind::Negate { operand: child, .. }
@@ -274,6 +339,11 @@ impl ScalarExpressionIr {
                             tasks.push(Task::Visit(*child));
                         }
                         ExpressionKind::Binary { left, right, .. } => {
+                            if aggregates::scalar(expression.types[*left]).is_none()
+                                || aggregates::scalar(expression.types[*right]).is_none()
+                            {
+                                return Err(invalid(node.span));
+                            }
                             tasks.push(Task::Finish(index));
                             tasks.push(Task::Visit(*right));
                             tasks.push(Task::Visit(*left));
@@ -289,7 +359,36 @@ impl ScalarExpressionIr {
                                 exits: Vec::new(),
                             });
                         }
-                        ExpressionKind::UserCall { arguments, .. } if call_arities.is_some() => {
+                        ExpressionKind::Tuple { elements }
+                        | ExpressionKind::Array { elements, .. }
+                            if registry.is_some() =>
+                        {
+                            tasks.push(Task::Finish(index));
+                            tasks.extend(elements.iter().rev().copied().map(Task::Visit));
+                        }
+                        ExpressionKind::Record { fields, .. } if registry.is_some() => {
+                            tasks.push(Task::Finish(index));
+                            tasks.extend(
+                                fields
+                                    .iter()
+                                    .rev()
+                                    .map(|field| Task::Visit(field.expression)),
+                            );
+                        }
+                        ExpressionKind::Field { receiver, .. } if registry.is_some() => {
+                            tasks.push(Task::Finish(index));
+                            tasks.push(Task::Visit(*receiver));
+                        }
+                        ExpressionKind::Index {
+                            vector,
+                            index: subscript,
+                            ..
+                        } if registry.is_some() => {
+                            tasks.push(Task::Finish(index));
+                            tasks.push(Task::Visit(*subscript));
+                            tasks.push(Task::Visit(*vector));
+                        }
+                        ExpressionKind::UserCall { arguments, .. } if call_targets.is_some() => {
                             tasks.push(Task::FinishCall(index));
                             for argument in arguments.iter().rev() {
                                 tasks.push(Task::Visit(argument.expression));
@@ -310,9 +409,14 @@ impl ScalarExpressionIr {
                     else {
                         return Err(invalid(node.span));
                     };
-                    let arity = call_arities
-                        .and_then(|counts| counts.get(*function).copied())
+                    let targets = call_targets.ok_or_else(|| invalid(node.span))?;
+                    let callee = targets
+                        .indices
+                        .get(*function)
+                        .copied()
+                        .flatten()
                         .ok_or_else(|| invalid(node.span))?;
+                    let arity = targets.arities[callee];
                     if arguments.len() != arity || parameters.len() != arity {
                         return Err(invalid(node.span));
                     }
@@ -334,7 +438,7 @@ impl ScalarExpressionIr {
                         node.span,
                         Operation::Call {
                             dst: index,
-                            callee: *function,
+                            callee,
                             arguments,
                         },
                     )?;
@@ -343,12 +447,10 @@ impl ScalarExpressionIr {
                     let node = &nodes[index];
                     match &node.kind {
                         ExpressionKind::Group { expression: child } => {
-                            ir.emit(
+                            ir.copy_lanes(
+                                ranges[index].clone(),
+                                ranges[*child].clone(),
                                 node.span,
-                                Operation::Move {
-                                    dst: index,
-                                    src: *child,
-                                },
                             )?;
                         }
                         ExpressionKind::Negate {
@@ -410,7 +512,12 @@ impl ScalarExpressionIr {
                                 },
                             )?;
                         }
-                        _ => return Err(invalid(node.span)),
+                        _ => ir.finish_aggregate(
+                            expression,
+                            &ranges,
+                            index,
+                            registry.ok_or_else(|| invalid(node.span))?,
+                        )?,
                     }
                 }
                 Task::Logical(index) => {
@@ -526,13 +633,7 @@ impl ScalarExpressionIr {
                     let span = nodes[node].span;
                     // The selected result defines the root on this path. Moving
                     // it and skipping other arms add no source work events.
-                    ir.emit(
-                        span,
-                        Operation::Move {
-                            dst: node,
-                            src: result,
-                        },
-                    )?;
+                    ir.copy_lanes(ranges[node].clone(), ranges[result].clone(), span)?;
                     if let Some((arm, skip)) = next_arm {
                         exits.push(ir.emit(span, Operation::Jump { target: usize::MAX })?);
                         ir.patch_target(skip, ir.steps.len(), span)?;
@@ -545,7 +646,7 @@ impl ScalarExpressionIr {
                 }
             }
         }
-        ir.verify_with_calls(call_arities)?;
+        ir.verify_with_calls(call_targets.map(|targets| targets.arities.as_slice()))?;
         Ok(ir)
     }
 
@@ -559,7 +660,10 @@ impl ScalarExpressionIr {
         if self.registers.is_empty()
             || self.registers.len() > MAX_IR_REGISTERS
             || self.steps.len() > MAX_IR_STEPS
-            || self.root >= self.registers.len()
+            || self.result_width == 0
+            || self.result_width > aggregates::MAX_AGGREGATE_LANES
+            || self.root > self.registers.len().saturating_sub(self.result_width)
+            || self.result_width > self.registers.len()
             || self.slots.len() > 256
             || self
                 .registers
@@ -636,6 +740,21 @@ impl ScalarExpressionIr {
                 Operation::Branch { condition, .. } => {
                     require_read(&initialized, types, *condition, ValueType::Boolean, span)?;
                 }
+                Operation::Index {
+                    dst,
+                    index,
+                    elements,
+                } => {
+                    let kind = *types.get(*dst).ok_or_else(|| invalid(span))?;
+                    if !(1..=aggregates::MAX_AGGREGATE_LANES).contains(&elements.len()) {
+                        return Err(invalid(span));
+                    }
+                    require_read(&initialized, types, *index, ValueType::Integer, span)?;
+                    for &element in elements {
+                        require_read(&initialized, types, element, kind, span)?;
+                    }
+                    initialized[*dst] = true;
+                }
                 Operation::Call {
                     dst,
                     callee,
@@ -662,11 +781,9 @@ impl ScalarExpressionIr {
             }
             join(&mut incoming[next], Cow::Owned(initialized));
         }
-        if incoming[self.steps.len()]
+        if !incoming[self.steps.len()]
             .as_ref()
-            .and_then(|known| known.get(self.root))
-            .copied()
-            != Some(true)
+            .is_some_and(|known| known[self.results()].iter().all(|&initialized| initialized))
         {
             return Err(invalid(Span::default()));
         }
@@ -792,6 +909,7 @@ mod tests {
                 .map(|kind| kind.as_primitive().expect("scalar test type"))
                 .collect::<Vec<_>>(),
             None,
+            None,
         )
         .unwrap()
     }
@@ -877,6 +995,7 @@ mod tests {
             registers: vec![ValueType::Boolean, ValueType::Integer],
             slots: Vec::new(),
             root: 1,
+            result_width: 1,
             steps: vec![
                 instruction(Operation::Boolean {
                     dst: 0,
