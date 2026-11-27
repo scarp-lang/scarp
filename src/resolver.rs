@@ -1019,7 +1019,10 @@ impl<'a> Resolver<'a> {
                 match operator {
                     AssignmentOperator::Compound(operator)
                         if expected_type == ValueType::String
-                            && matches!(operator, BinaryOperator::Add | BinaryOperator::Multiply) =>
+                            && matches!(
+                                operator,
+                                BinaryOperator::Add | BinaryOperator::Multiply
+                            ) =>
                     {
                         let right_type = if operator == BinaryOperator::Add {
                             ValueType::String

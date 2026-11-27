@@ -243,13 +243,13 @@ fn collect(
                         .map_err(|error| error.with_related(*name_span, "constant initialized here"))?;
                     let kind = value.kind();
                     if let Value::String(text) = &value {
-                        // Reference-derived strings consume folded storage in
-                        // addition to the substitution text charged above.
-                        if initializer
-                            .nodes()
-                            .iter()
-                            .any(|node| matches!(&node.kind, ExpressionKind::Name(_)))
-                        {
+                        // Direct literals are covered by the source budget. All
+                        // other string results occupy folded expansion storage.
+                        let mut root = &initializer.nodes()[initializer.root()].kind;
+                        while let ExpressionKind::Group { expression } = root {
+                            root = &initializer.nodes()[*expression].kind;
+                        }
+                        if !matches!(root, ExpressionKind::String(_)) {
                             consume(remaining, text.len(), *name_span)?;
                         }
                     }

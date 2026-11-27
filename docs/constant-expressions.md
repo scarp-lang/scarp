@@ -95,9 +95,10 @@ evaluation uses a separate budget: a literal takes one task, `1 + 2` four, and
 deterministic work/storage allowances, not physical process heap caps.
 
 Runtime `ExecutionOptions` and CLI runtime flags do not alter compile-time limits.
-Existing expansion limits charge constant-reference string copies and new
-reference-derived folded strings before cloning. Direct literal storage remains
-covered by source limits, preserving previous literal-only expansion boundaries.
+The module expansion limit counts the UTF-8 bytes of each computed string
+constant, including concatenation and repetition of literals. Substituting a
+string constant at a reference also counts its bytes. Source limits cover
+direct string literals, including literals enclosed in parentheses.
 
 ```rust
 use scarp::modules::{self, ConstantLimits, MemorySourceLoader, ModuleLimits};
