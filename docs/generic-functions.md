@@ -38,9 +38,11 @@ uses of a type parameter must infer the same type. Numerical types preserve
 their own precision and overflow behavior.
 
 A declared binding type, assignment target, return type or parameter default
-can supply remaining type arguments from the expected result. An ordinary
-callee's declared parameter type also guides the inference of an argument call. That expected type is also
-available inside grouping, conditional result branches, and corresponding
+can supply remaining type arguments from the expected result. A function
+parameter whose type is independent of the callee's type parameters can guide
+an argument call. Record fields and variant case payloads also supply their
+declared types, including the payloads of Option and Result. The expected type
+passes through grouping, conditional result branches, and corresponding
 collection elements when the surrounding type is known. Omitted value
 arguments are evaluated as usual after the concrete type is selected.
 
@@ -51,6 +53,9 @@ pure funcra empty<T>() -> list<T> {
 
 bind names: list<string> = empty();
 bind counts = empty::<integer>();
+
+record Names { values: list<string> }
+bind initial = new Names { values: empty() };
 ```
 
 Use an explicit type argument for a call such as `print(empty());`, where

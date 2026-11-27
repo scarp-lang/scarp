@@ -4,7 +4,10 @@ use crate::{
     ast::{GenericParameter, TypeAnnotation},
     types::{BuiltinVariant, DefinitionId, TypeConstraint, TypeKind, TypeParameter},
 };
-use std::{collections::VecDeque, sync::Arc};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    sync::Arc,
+};
 
 const MAX_INSTANCES: usize = 256;
 const MAX_EXPANDED_SOURCE_BYTES: usize = 4 * 1024 * 1024;
@@ -481,49 +484,86 @@ pub(super) fn operation(
     ))
 }
 
-/// Propagate a known result or ordinary callee parameter type through
-/// syntax that preserves the independently known type. Callers with their
-/// own unresolved parameters are checked by bottom-up inference instead.
-pub(super) fn call_expectations<'a>(
+/// A constructor or callee can supply the result type of a nested generic
+/// call before the ordinary bottom-up pass checks its arguments.
+pub(super) fn call_expectations(
     syntax: &Expression,
-    expected: Option<&'a SourceType>,
-    functions: &'a [FunctionInfo],
-    names: &HashMap<String, usize>,
-) -> std::collections::BTreeMap<usize, &'a SourceType> {
-    let mut calls = std::collections::BTreeMap::new();
-    let mut pending = Vec::new();
-    if let Some(expected) = expected {
-        pending.push((syntax.root(), expected));
-    }
-    for node in syntax.nodes() {
+    expected: Option<&SourceType>,
+    resolver: &mut Resolver<'_>,
+) -> Result<BTreeMap<usize, SourceType>, Diagnostic> {
+    let mut calls = BTreeMap::new();
+    let needs_inference = syntax.nodes().iter().any(|node| {
         let ExpressionKind::UserCall {
             name,
-            arguments,
             type_arguments: None,
             ..
         } = &node.kind
         else {
-            continue;
+            return false;
         };
-        let Some(&id) = names.get(name) else {
-            continue;
-        };
-        let function = &functions[id];
-        if !function.type_parameters.is_empty() {
-            continue;
-        }
-        for (index, argument) in arguments.iter().enumerate() {
-            let parameter = match &argument.label {
-                Some((label, _)) => function.parameters.iter().find(|p| &p.name == label),
-                None => function.parameters.get(index),
-            };
-            if let Some(parameter) = parameter {
-                pending.push((argument.expression, &parameter.kind));
+        resolver
+            .names
+            .get(name)
+            .is_some_and(|&id| !resolver.functions[id].type_parameters.is_empty())
+    });
+    if !needs_inference {
+        return Ok(calls);
+    }
+    let mut pending = Vec::new();
+    if let Some(kind) = expected {
+        pending.push((syntax.root(), kind.clone()));
+    }
+    for node in syntax.nodes() {
+        match &node.kind {
+            ExpressionKind::Record { name, fields, .. } => {
+                let Some(record) = resolver.layouts.get(name).and_then(SourceType::as_record)
+                else {
+                    continue;
+                };
+                for field in fields {
+                    let (name, _) = field.label.as_ref().expect("record fields have names");
+                    if let Some((_, kind)) = record.fields().iter().find(|(field, _)| field == name)
+                    {
+                        pending.push((field.expression, kind.clone()));
+                    }
+                }
             }
+            ExpressionKind::Variant(constructor) => {
+                let Some(payload) = constructor.payload else {
+                    continue;
+                };
+                let kind = resolver.variant_constructor_type(constructor)?;
+                let variant = kind.as_variant().expect("variant constructor type");
+                if let Some((_, Some(kind))) = variant
+                    .cases()
+                    .iter()
+                    .find(|(case, _)| case == &constructor.tag)
+                {
+                    pending.push((payload, kind.clone()));
+                }
+            }
+            ExpressionKind::UserCall {
+                name, arguments, ..
+            } => {
+                let Some(&id) = resolver.names.get(name) else {
+                    continue;
+                };
+                let function = &resolver.functions[id];
+                for (index, argument) in arguments.iter().enumerate() {
+                    let parameter = match &argument.label {
+                        Some((label, _)) => function.parameters.iter().find(|p| &p.name == label),
+                        None => function.parameters.get(index),
+                    };
+                    if let Some(parameter) = parameter.filter(|p| !p.kind.has_parameter()) {
+                        pending.push((argument.expression, parameter.kind.clone()));
+                    }
+                }
+            }
+            _ => {}
         }
     }
     while let Some((index, kind)) = pending.pop() {
-        match (&syntax.nodes()[index].kind, kind) {
+        match (&syntax.nodes()[index].kind, &kind) {
             (ExpressionKind::UserCall { .. }, _) => {
                 calls.insert(index, kind);
             }
@@ -535,30 +575,35 @@ pub(super) fn call_expectations<'a>(
                 },
                 _,
             ) => {
-                pending.extend(branches.iter().map(|b| (b.result, kind)));
+                pending.extend(branches.iter().map(|b| (b.result, kind.clone())));
                 pending.push((*otherwise, kind));
             }
             (ExpressionKind::Tuple { elements }, SourceType::Tuple(tuple))
                 if elements.len() == tuple.elements().len() =>
             {
-                pending.extend(elements.iter().copied().zip(tuple.elements()));
+                pending.extend(
+                    elements
+                        .iter()
+                        .copied()
+                        .zip(tuple.elements().iter().cloned()),
+                );
             }
             (ExpressionKind::List { elements, .. }, SourceType::List(list)) => {
-                pending.extend(elements.iter().map(|&i| (i, list.element())));
+                pending.extend(elements.iter().map(|&i| (i, list.element().clone())));
             }
             (ExpressionKind::Array { elements, .. }, SourceType::Array(array))
                 if elements.len() == array.len() =>
             {
-                pending.extend(elements.iter().map(|&i| (i, array.element())));
+                pending.extend(elements.iter().map(|&i| (i, array.element().clone())));
             }
             (ExpressionKind::Map { entries, .. }, SourceType::Map(map)) => {
                 for &(key, value) in entries {
-                    pending.push((key, map.key()));
-                    pending.push((value, map.value()));
+                    pending.push((key, map.key().clone()));
+                    pending.push((value, map.value().clone()));
                 }
             }
             _ => {}
         }
     }
-    calls
+    Ok(calls)
 }
