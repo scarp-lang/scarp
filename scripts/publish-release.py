@@ -66,11 +66,11 @@ def selected_runs(runs, commit):
 
 def validate_jobs(path, jobs):
     required = WORKFLOWS[path]
-    # CI creates the conditional Lifetime baseline job on every push, but
-    # intentionally skips it on protected main (its comparison only applies
-    # to matching pull requests). It is not a required publication gate.
+    # These conditional jobs appear in protected-main push runs as skipped.
+    # Lifetime runs for matching PRs. The extended BigInt gate runs for
+    # its dedicated PR branch or a manual dispatch.
     optional_skipped = (
-        {"Lifetime / baseline comparison"}
+        {"Lifetime / baseline comparison", "BigInt / 100 million digits (64-bit Linux)"}
         if path == ".github/workflows/ci.yml" else set()
     )
     names = [job["name"] for job in jobs]

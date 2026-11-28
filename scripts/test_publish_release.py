@@ -182,7 +182,7 @@ class PublicationGates(unittest.TestCase):
                 newer = dict(runs[0], id=10, status=status, conclusion=conclusion)
                 self.assertIsNone(publisher.selected_runs([newer, *runs], COMMIT))
 
-    def test_optional_skipped_lifetime_comparison_matches_real_main_ci(self):
+    def test_optional_skipped_jobs_match_real_main_ci(self):
         path = ".github/workflows/ci.yml"
         required = [
             dict(name=name, status="completed", conclusion="success")
@@ -190,9 +190,10 @@ class PublicationGates(unittest.TestCase):
         ]
         conditional = dict(name="Lifetime / baseline comparison",
                            status="completed", conclusion="skipped")
-        # Main branch intentionally skips the PR-only Lifetime comparison.
+        capacity = dict(conditional, name="BigInt / 100 million digits (64-bit Linux)")
+        publisher.validate_jobs(path, [*required, conditional, capacity])
         publisher.validate_jobs(path, [*required, conditional])
-        # The old matrix without the optional comparison remains valid too.
+        # Older exact-source runs may predate both conditional jobs.
         publisher.validate_jobs(path, required)
         for changed in (
             [*required[:-1], conditional],  # missing required stable job
@@ -201,6 +202,8 @@ class PublicationGates(unittest.TestCase):
             [*required, dict(conditional, conclusion="failure")],
             [*required, dict(conditional, status="in_progress")],
             [*required, dict(conditional, name="unknown skipped job")],
+            [*required, conditional, capacity, capacity],
+            [*required, conditional, dict(capacity, conclusion="failure")],
         ):
             with self.subTest(changed=changed), self.assertRaises(ValueError):
                 publisher.validate_jobs(path, changed)
@@ -210,8 +213,9 @@ class PublicationGates(unittest.TestCase):
             dict(name=name, status="completed", conclusion="success")
             for name in publisher.WORKFLOWS[package]
         ]
-        with self.assertRaises(ValueError):
-            publisher.validate_jobs(package, [*packages, conditional])
+        for job in (conditional, capacity):
+            with self.assertRaises(ValueError):
+                publisher.validate_jobs(package, [*packages, job])
 
     def test_every_required_native_and_rust_job_must_succeed(self):
         for path, names in publisher.WORKFLOWS.items():
