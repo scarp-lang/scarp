@@ -115,3 +115,31 @@ extracted native-package smoke tests:
 cargo run --locked --offline -- run examples/matrix_forward.srp
 cargo run --locked --offline -- check --max-vector-bytes 1024 examples/tile_windows.srp
 ```
+
+## Development: explicit matrix training primitives
+
+These functions are development-only and preserve the immutable tile/vector model.
+
+| Call | Result | Shape and semantics |
+| --- | --- | --- |
+| `outer(a, b)` | tile | `(len(a), len(b))`, products of every pair |
+| `matvec_transpose(t, v)` | vector | `T^T v`, requires `height(t) == len(v)` |
+| `tile_bias(t, v)` | tile | Add the same width-matched vector to each row |
+| `tile_sub(a, b)` | tile | Equal shapes, corresponding subtraction |
+| `tile_hadamard(a, b)` | tile | Equal shapes, corresponding multiplication |
+| `row_sums(t)` | vector | One compensated sum per row |
+| `column_sums(t)` | vector | One compensated sum per column |
+
+`tile_bias` is a deliberately explicit row-wise operation, not general tensor
+broadcasting. A zero-cell result retains its dimensions. Shape validation
+precedes work and payload charges; the outer product is limited to 65,536
+cells. An empty reduced axis produces explicit positive zeros. Nonfinite
+intermediate products or sums fail using the existing numeric diagnostics.
+
+For `outer`, tile subtraction, tile multiplication and bias addition the work
+fee equals output cell count. Axis sums cost input cell count plus output
+length. `matvec_transpose` costs `width*(2*height+1)`, without allocating a
+transpose. All operations prepay eight cumulative payload bytes per output
+cell or vector element; input storage is not modified. See the example
+[linear layer backpropagation](../examples/linear_layer_training.srp) for a
+manual gradient computation, without automatic differentiation.

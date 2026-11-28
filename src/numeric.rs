@@ -77,6 +77,8 @@ pub enum Builtin {
     Dot,
     Mse,
     Add,
+    VectorSub,
+    Hadamard,
     Scale,
     Clamp,
     Fill,
@@ -113,6 +115,13 @@ pub enum Builtin {
     MatMul,
     TileAdd,
     TileScale,
+    Outer,
+    MatVecTranspose,
+    TileBias,
+    TileSub,
+    TileHadamard,
+    RowSums,
+    ColumnSums,
     IntegerToText,
     FloatToText,
     TextToInteger,
@@ -320,6 +329,8 @@ impl Builtin {
             "dot" => Self::Dot,
             "mse" => Self::Mse,
             "add" => Self::Add,
+            "vector_sub" => Self::VectorSub,
+            "hadamard" => Self::Hadamard,
             "scale" => Self::Scale,
             "clamp" => Self::Clamp,
             "fill" => Self::Fill,
@@ -356,6 +367,13 @@ impl Builtin {
             "matmul" => Self::MatMul,
             "tileadd" => Self::TileAdd,
             "tilescale" => Self::TileScale,
+            "outer" => Self::Outer,
+            "matvec_transpose" => Self::MatVecTranspose,
+            "tile_bias" => Self::TileBias,
+            "tile_sub" => Self::TileSub,
+            "tile_hadamard" => Self::TileHadamard,
+            "row_sums" => Self::RowSums,
+            "column_sums" => Self::ColumnSums,
             _ => return None,
         })
     }
@@ -502,6 +520,8 @@ impl Builtin {
             Self::Dot
             | Self::Mse
             | Self::Add
+            | Self::VectorSub
+            | Self::Hadamard
             | Self::Stitch
             | Self::CosineSimilarity
             | Self::PearsonCorrelation => &[Vector, Vector],
@@ -517,11 +537,17 @@ impl Builtin {
             }
             Self::OneHot => &[Integer, Integer],
             Self::Tile => &[Vector, Integer, Integer],
-            Self::Height | Self::Width | Self::Unroll | Self::Turn => &[Tile],
+            Self::Height
+            | Self::Width
+            | Self::Unroll
+            | Self::Turn
+            | Self::RowSums
+            | Self::ColumnSums => &[Tile],
             Self::Cell => &[Tile, Integer, Integer],
             Self::Lane => &[Tile, Integer],
-            Self::MatVec => &[Tile, Vector],
-            Self::MatMul | Self::TileAdd => &[Tile, Tile],
+            Self::MatVec | Self::MatVecTranspose | Self::TileBias => &[Tile, Vector],
+            Self::MatMul | Self::TileAdd | Self::TileSub | Self::TileHadamard => &[Tile, Tile],
+            Self::Outer => &[Vector, Vector],
             Self::TileScale => &[Tile, Float],
         }
     }
@@ -641,9 +667,15 @@ impl Builtin {
             | Self::LogProb
             | Self::CrossEntropy
             | Self::Cell => ValueType::Float,
-            Self::Tile | Self::Turn | Self::MatMul | Self::TileAdd | Self::TileScale => {
-                ValueType::Tile
-            }
+            Self::Tile
+            | Self::Turn
+            | Self::MatMul
+            | Self::TileAdd
+            | Self::TileScale
+            | Self::Outer
+            | Self::TileBias
+            | Self::TileSub
+            | Self::TileHadamard => ValueType::Tile,
             _ => ValueType::Vector,
         }
     }
@@ -662,6 +694,13 @@ impl Builtin {
                 | Self::MatMul
                 | Self::TileAdd
                 | Self::TileScale
+                | Self::Outer
+                | Self::MatVecTranspose
+                | Self::TileBias
+                | Self::TileSub
+                | Self::TileHadamard
+                | Self::RowSums
+                | Self::ColumnSums
         )
     }
 
@@ -1191,7 +1230,10 @@ pub(crate) fn evaluate_with_spans(
     if function == Builtin::Length {
         return Ok(Value::Integer(left.len() as i64));
     }
-    let right = if matches!(function, Builtin::Dot | Builtin::Mse | Builtin::Add) {
+    let right = if matches!(
+        function,
+        Builtin::Dot | Builtin::Mse | Builtin::Add | Builtin::VectorSub | Builtin::Hadamard
+    ) {
         let right = args[1].require_vector(span)?;
         if left.len() != right.len() {
             return Err(length_error(span));
@@ -1376,7 +1418,7 @@ pub(crate) fn evaluate_with_spans(
                 .and_then(|v| finite_number(v, span))
                 .map(Value::Float)
         }
-        Builtin::Add | Builtin::Scale | Builtin::Clamp => {
+        Builtin::Add | Builtin::VectorSub | Builtin::Hadamard | Builtin::Scale | Builtin::Clamp => {
             let factor = if function == Builtin::Scale {
                 args[1].require_float(span)?
             } else {
@@ -1394,6 +1436,8 @@ pub(crate) fn evaluate_with_spans(
             for (index, value) in floats().enumerate() {
                 let result = match function {
                     Builtin::Add => value + right.unwrap().as_slice()[index].get(),
+                    Builtin::VectorSub => value - right.unwrap().as_slice()[index].get(),
+                    Builtin::Hadamard => value * right.unwrap().as_slice()[index].get(),
                     Builtin::Scale => value * factor,
                     _ => {
                         if value < low {
@@ -1561,6 +1605,13 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::MatVec
         | Builtin::MatMul
         | Builtin::TileAdd
-        | Builtin::TileScale => unreachable!("handled before vector kernels"),
+        | Builtin::TileScale
+        | Builtin::Outer
+        | Builtin::MatVecTranspose
+        | Builtin::TileBias
+        | Builtin::TileSub
+        | Builtin::TileHadamard
+        | Builtin::RowSums
+        | Builtin::ColumnSums => unreachable!("handled before vector kernels"),
     }
 }

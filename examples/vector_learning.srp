@@ -1,0 +1,29 @@
+// Explicit vector operations and a single-neuron gradient update.
+pure funcra manual_dot(a: vector, b: vector) -> float
+    needs len(a) == len(b);
+{
+    var total = 0.0;
+    repeat len(a) as i {
+        total += a[i] * b[i];
+    }
+    return total;
+}
+
+bind a = [1.0, 2.0, 3.0];
+bind b = [4.0, 5.0, 6.0];
+print(manual_dot(a, b), dot(a, b));
+print(hadamard(a, b));
+
+bind features = [1.0, 2.0];
+bind target = 4.0;
+bind weights = [0.0, 0.0];
+bind residual = dot(weights, features) - target;
+bind gradient = scale(features, residual);
+bind updated = vector_sub(weights, scale(gradient, 0.125));
+bind next_residual = dot(updated, features) - target;
+print(updated);
+print(residual * residual, next_residual * next_residual);
+
+bind left = tile([1.0, 2.0, 3.0, 4.0], 2, 2);
+bind right = tile([5.0, 6.0, 7.0, 8.0], 2, 2);
+print(matmul(left, right));
