@@ -106,7 +106,10 @@ fn disconnected_invalid_operations_are_not_executed() {
     assert_eq!(tape.value(&later), None);
     assert_eq!(tape.gradient(&y), Some(0.0));
     assert_eq!(
-        graph.evaluate(&invalid, &[3.0, -2.0], 1.0, LIMITS).unwrap_err().kind,
+        graph
+            .evaluate(&invalid, &[3.0, -2.0], 1.0, LIMITS)
+            .unwrap_err()
+            .kind,
         Kind::NumericDomain
     );
 }
@@ -147,13 +150,21 @@ fn all_unary_derivatives_match_finite_differences() {
         let f = |v| graph.evaluate(&y, &[v], 0.0, LIMITS).unwrap().output();
         let h = 1e-5;
         let tape = graph.evaluate(&y, &[input], 1.0, LIMITS).unwrap();
-        close(tape.gradient(&x).unwrap(), (f(input + h) - f(input - h)) / (2.0 * h));
+        close(
+            tape.gradient(&x).unwrap(),
+            (f(input + h) - f(input - h)) / (2.0 * h),
+        );
     }
 }
 
 #[test]
 fn all_binary_derivatives_match_finite_differences() {
-    for op in [Binary::Add, Binary::Subtract, Binary::Multiply, Binary::Divide] {
+    for op in [
+        Binary::Add,
+        Binary::Subtract,
+        Binary::Multiply,
+        Binary::Divide,
+    ] {
         let mut graph = Graph::new(3).unwrap();
         let x = graph.input().unwrap();
         let y = graph.input().unwrap();
@@ -163,8 +174,14 @@ fn all_binary_derivatives_match_finite_differences() {
         let b = -0.75;
         let h = 1e-5;
         let tape = graph.evaluate(&out, &[a, b], 1.0, LIMITS).unwrap();
-        close(tape.gradient(&x).unwrap(), (f(a + h, b) - f(a - h, b)) / (2.0 * h));
-        close(tape.gradient(&y).unwrap(), (f(a, b + h) - f(a, b - h)) / (2.0 * h));
+        close(
+            tape.gradient(&x).unwrap(),
+            (f(a + h, b) - f(a - h, b)) / (2.0 * h),
+        );
+        close(
+            tape.gradient(&y).unwrap(),
+            (f(a, b + h) - f(a, b - h)) / (2.0 * h),
+        );
     }
 }
 
@@ -176,7 +193,10 @@ fn shape_and_finite_validation_precede_computation() {
     let out = graph.binary(Binary::Divide, &x, &y).unwrap();
     for b in [0.0, -0.0] {
         assert_eq!(
-            graph.evaluate(&out, &[1.0, b], 1.0, LIMITS).unwrap_err().kind,
+            graph
+                .evaluate(&out, &[1.0, b], 1.0, LIMITS)
+                .unwrap_err()
+                .kind,
             Kind::NumericDomain
         );
     }
@@ -186,11 +206,17 @@ fn shape_and_finite_validation_precede_computation() {
     );
     for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
         assert_eq!(
-            graph.evaluate(&x, &[1.0, value], 1.0, LIMITS).unwrap_err().kind,
+            graph
+                .evaluate(&x, &[1.0, value], 1.0, LIMITS)
+                .unwrap_err()
+                .kind,
             Kind::NonFiniteNumber
         );
         assert_eq!(
-            graph.evaluate(&x, &[1.0, 2.0], value, LIMITS).unwrap_err().kind,
+            graph
+                .evaluate(&x, &[1.0, 2.0], value, LIMITS)
+                .unwrap_err()
+                .kind,
             Kind::NonFiniteNumber
         );
     }
@@ -202,34 +228,52 @@ fn failed_forward_or_reverse_evaluation_does_not_mutate_graph() {
     let x = graph.input().unwrap();
     let square = graph.unary(Unary::Square, &x).unwrap();
     assert_eq!(
-        graph.evaluate(&square, &[1e308], 1.0, LIMITS).unwrap_err().kind,
+        graph
+            .evaluate(&square, &[1e308], 1.0, LIMITS)
+            .unwrap_err()
+            .kind,
         Kind::NonFiniteNumber
     );
     let half_max = f64::MAX / 2.0;
     let out = graph.binary(Binary::Add, &x, &x).unwrap();
     assert_eq!(
-        graph.evaluate(&out, &[1.0], f64::MAX, LIMITS).unwrap_err().kind,
+        graph
+            .evaluate(&out, &[1.0], f64::MAX, LIMITS)
+            .unwrap_err()
+            .kind,
         Kind::NonFiniteNumber
     );
     assert_eq!(
-        graph.evaluate(&out, &[1.0], half_max, LIMITS).unwrap().gradient(&x),
+        graph
+            .evaluate(&out, &[1.0], half_max, LIMITS)
+            .unwrap()
+            .gradient(&x),
         Some(f64::MAX)
     );
 }
 
 #[test]
 fn graph_capacity_and_failed_edits_are_atomic() {
-    assert_eq!(Graph::new(MAX_VECTOR_LENGTH + 1).unwrap_err().kind, Kind::VectorLength);
+    assert_eq!(
+        Graph::new(MAX_VECTOR_LENGTH + 1).unwrap_err().kind,
+        Kind::VectorLength
+    );
     let mut empty = Graph::new(0).unwrap();
     assert_eq!(empty.input().unwrap_err().kind, Kind::VectorLength);
     assert_eq!(empty.input_count(), 0);
     let mut graph = Graph::new(1).unwrap();
-    assert_eq!(graph.constant(f64::NAN).unwrap_err().kind, Kind::NonFiniteNumber);
+    assert_eq!(
+        graph.constant(f64::NAN).unwrap_err().kind,
+        Kind::NonFiniteNumber
+    );
     assert!(graph.is_empty());
     let x = graph.input().unwrap();
     assert_eq!(graph.input().unwrap_err().kind, Kind::VectorLength);
     assert_eq!(graph.input_count(), 1);
-    assert_eq!(graph.unary(Unary::Negate, &x).unwrap_err().kind, Kind::VectorLength);
+    assert_eq!(
+        graph.unary(Unary::Negate, &x).unwrap_err().kind,
+        Kind::VectorLength
+    );
 }
 
 #[test]
@@ -244,13 +288,33 @@ fn exact_tape_work_and_payload_boundaries() {
     };
     graph.evaluate(&out, &[1.0, 2.0], 1.0, exact).unwrap();
     assert_eq!(
-        graph.evaluate(&out, &[1.0, 2.0], 1.0, GraphLimits { max_steps: 49, ..exact })
-            .unwrap_err().kind,
+        graph
+            .evaluate(
+                &out,
+                &[1.0, 2.0],
+                1.0,
+                GraphLimits {
+                    max_steps: 49,
+                    ..exact
+                }
+            )
+            .unwrap_err()
+            .kind,
         Kind::ExecutionLimit
     );
     assert_eq!(
-        graph.evaluate(&out, &[1.0, 2.0], 1.0, GraphLimits { max_vector_bytes: 50, ..exact })
-            .unwrap_err().kind,
+        graph
+            .evaluate(
+                &out,
+                &[1.0, 2.0],
+                1.0,
+                GraphLimits {
+                    max_vector_bytes: 50,
+                    ..exact
+                }
+            )
+            .unwrap_err()
+            .kind,
         Kind::VectorBudget
     );
 }
@@ -290,7 +354,9 @@ fn reusable_graph_trains_scalar_linear_regression() {
     let feature = graph.input().unwrap();
     let target = graph.input().unwrap();
     let prediction = graph.binary(Binary::Multiply, &weight, &feature).unwrap();
-    let error = graph.binary(Binary::Subtract, &prediction, &target).unwrap();
+    let error = graph
+        .binary(Binary::Subtract, &prediction, &target)
+        .unwrap();
     let loss = graph.unary(Unary::Square, &error).unwrap();
     let mut w = 0.0;
     for _ in 0..32 {

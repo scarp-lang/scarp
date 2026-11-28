@@ -270,12 +270,7 @@ impl Graph {
         self.append(Node::Unary(op, x))
     }
 
-    pub fn binary(
-        &mut self,
-        op: Binary,
-        a: &NodeId,
-        b: &NodeId,
-    ) -> Result<NodeId, Diagnostic> {
+    pub fn binary(&mut self, op: Binary, a: &NodeId, b: &NodeId) -> Result<NodeId, Diagnostic> {
         let a = self.index(a)?;
         let b = self.index(b)?;
         self.append(Node::Binary(op, a, b))
