@@ -8,7 +8,7 @@ mod local_storage;
 #[cfg(test)]
 mod execute;
 
-use super::{aggregates, invalid, ScalarExpressionIr};
+use super::{aggregates, invalid, IntegerWidth, ScalarExpressionIr};
 use crate::{
     ast::{BinaryOperator, OutputTarget},
     diagnostics::{Diagnostic, DiagnosticKind, Span},
@@ -263,7 +263,9 @@ impl ScalarProgramIr {
         let mut ranges = Vec::new();
         for &kind in &function.slot_types {
             let start = slots.len();
-            if let Some(kind) = aggregates::scalar(kind) {
+            if let Some(kind) = aggregates::scalar(kind)
+                .filter(|kind| bounded || IntegerWidth::fixed(*kind).is_none())
+            {
                 slots.push(kind);
             } else if bounded {
                 slots.extend_from_slice(layouts.lanes(kind, signature.span)?);
@@ -504,6 +506,10 @@ impl ScalarProgramIr {
         }
     }
 
+    pub(super) fn slot_kind(&self, slot: usize) -> Option<ValueType> {
+        self.slots.get(slot).copied()
+    }
+
     fn check_expression(
         &self,
         expression: &ScalarExpressionIr,
@@ -629,8 +635,17 @@ impl ScalarProgramIr {
                     {
                         return Err(invalid(*operator_span));
                     }
-                    self.check_slot(*slot, ValueType::Integer, span)?;
-                    self.check_expression(value, Some(ValueType::Integer), span, call_arities)?;
+                    let kind = self
+                        .slot_kind(*slot)
+                        .filter(|&kind| IntegerWidth::of(kind).is_some())
+                        .ok_or_else(|| invalid(*operator_span))?;
+                    self.check_slot(*slot, kind, span)?;
+                    let rhs = if crate::value::fixed_integer::is_shift(*operator) {
+                        ValueType::Integer
+                    } else {
+                        kind
+                    };
+                    self.check_expression(value, Some(rhs), span, call_arities)?;
                     Some(value)
                 }
                 ProgramOp::RepeatInit {

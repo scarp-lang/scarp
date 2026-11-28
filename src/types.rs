@@ -55,6 +55,10 @@ pub enum PrimitiveType {
     U32,
     I64,
     U64,
+    I128,
+    U128,
+    Isize,
+    Usize,
 }
 
 impl PrimitiveType {
@@ -77,6 +81,10 @@ impl PrimitiveType {
         Self::U32,
         Self::I64,
         Self::U64,
+        Self::I128,
+        Self::U128,
+        Self::Isize,
+        Self::Usize,
     ];
     pub const fn id(self) -> TypeId {
         TypeId(self as u64)
@@ -101,6 +109,10 @@ impl PrimitiveType {
             "u32" => Self::U32,
             "i64" => Self::I64,
             "u64" => Self::U64,
+            "i128" => Self::I128,
+            "u128" => Self::U128,
+            "isize" => Self::Isize,
+            "usize" => Self::Usize,
             _ => return None,
         })
     }
@@ -119,8 +131,10 @@ impl PrimitiveType {
             Self::U16 => (16, false),
             Self::I32 => (32, true),
             Self::U32 => (32, false),
-            Self::I64 => (64, true),
-            Self::U64 => (64, false),
+            Self::I64 | Self::Isize => (64, true),
+            Self::U64 | Self::Usize => (64, false),
+            Self::I128 => (128, true),
+            Self::U128 => (128, false),
             _ => return None,
         })
     }
@@ -145,6 +159,10 @@ impl PrimitiveType {
             Self::U32 => "u32",
             Self::I64 => "i64",
             Self::U64 => "u64",
+            Self::I128 => "i128",
+            Self::U128 => "u128",
+            Self::Isize => "isize",
+            Self::Usize => "usize",
         }
     }
 }
@@ -330,7 +348,7 @@ impl TypeKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TypeLimits {
-    /// Unique types, including the eighteen universal primitives.
+    /// Unique types, including the primitives listed by `PrimitiveType::ALL`.
     pub max_types: usize,
     /// Retained child references and tensor axis descriptors, not process bytes.
     pub max_components: usize,
@@ -407,6 +425,10 @@ static PRIMITIVES: [TypeKind; PrimitiveType::ALL.len()] = [
     TypeKind::Primitive(PrimitiveType::U32),
     TypeKind::Primitive(PrimitiveType::I64),
     TypeKind::Primitive(PrimitiveType::U64),
+    TypeKind::Primitive(PrimitiveType::I128),
+    TypeKind::Primitive(PrimitiveType::U128),
+    TypeKind::Primitive(PrimitiveType::Isize),
+    TypeKind::Primitive(PrimitiveType::Usize),
 ];
 static NEXT_ARENA: AtomicU32 = AtomicU32::new(1);
 

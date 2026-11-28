@@ -12,7 +12,8 @@ use crate::diagnostics::{Diagnostic, Span};
 mod artifact;
 
 pub use artifact::{
-    write_elf64_linux_executable_new, write_elf64_object_new, write_pe32plus_uefi_application_new,
+    write_elf64_linux_executable_new, write_elf64_object_new, write_flat_entry_new,
+    write_pe32plus_uefi_application_new,
 };
 
 /// Experimental compiler-owned standalone Linux x86-64 image.
@@ -115,6 +116,8 @@ pub const CHECKED_KERNEL_DEBUG_BYTE: u32 = 11;
 pub const CHECKED_KERNEL_UNHANDLED_TRAP: u32 = 12;
 /// A CPU query used an invalid operand or an unavailable feature.
 pub const CHECKED_KERNEL_CPU_QUERY: u32 = 13;
+/// A native fixed-width integer conversion cannot represent its operand.
+pub const CHECKED_KERNEL_FIXED_INTEGER_CONVERSION: u32 = 14;
 
 /// Emit a deterministic ELF64 relocatable object from integer bindings.
 ///
@@ -405,6 +408,29 @@ pub struct FreestandingEntry {
     /// Includes active return addresses and outgoing arguments inside the
     /// object's frames. Sequential calls reuse the same stack space.
     pub peak_stack_bytes: u32,
+}
+
+/// A position-independent x86-64 code segment with its callable entry at zero.
+#[derive(Debug, PartialEq, Eq)]
+pub struct FlatEntry {
+    pub bytes: Vec<u8>,
+    pub failure_spans: Vec<Span>,
+    pub entry_layout: FreestandingCallLayout,
+    pub max_active_frames: usize,
+    pub peak_stack_bytes: u32,
+}
+
+/// Emit a bounded nonrecursive entry with the same checked SysV integer ABI
+/// as the relocatable object. The caller maps the entire segment executable
+/// and calls its first byte using the returned layout. Relative calls stay
+/// inside the segment, so the image has no loader fixups or import symbols.
+pub fn emit_x86_64_flat_entry(
+    source: &str,
+    entry: &str,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<FlatEntry, Diagnostic> {
+    crate::scalar_ir::emit_flat_entry(source, entry, max_work, max_stack_bytes)
 }
 
 /// Target and ABI metadata travel with the existing checked object bytes.

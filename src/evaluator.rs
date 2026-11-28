@@ -96,6 +96,7 @@ enum NumericTask {
     Optimizer(numeric::source_optimizer::TensorOptimizer, usize),
     ScalarUnary(numeric::autodiff::Unary),
     FixedCast(ValueType),
+    FixedIntrinsic(crate::value::fixed_integer::intrinsics::Intrinsic),
 }
 
 impl Workspace {
@@ -257,6 +258,10 @@ impl Workspace {
                                 Some(ResolvedCall::FixedCast(kind)) => {
                                     Task::Numeric(NumericTask::FixedCast(*kind), node.span)
                                 }
+                                Some(ResolvedCall::FixedIntrinsic(operation)) => Task::Numeric(
+                                    NumericTask::FixedIntrinsic(*operation),
+                                    node.span,
+                                ),
                                 Some(ResolvedCall::ScalarUnary(op)) => {
                                     Task::Numeric(NumericTask::ScalarUnary(*op), node.span)
                                 }
@@ -1154,8 +1159,8 @@ impl Workspace {
                 }
                 Task::BitNot(span) => {
                     let value = values.pop().unwrap();
-                    values.push(match value.as_fixed_integer() {
-                        Some(value) => value.invert(),
+                    values.push(match crate::value::fixed_integer::invert(&value) {
+                        Some(value) => value,
                         None => Value::Integer(!value.require_integer(span)?),
                     });
                 }
@@ -1164,7 +1169,9 @@ impl Workspace {
                     values.push(match value {
                         Value::Float(value) => finite(-value.get(), span)?,
                         Value::BigInt(value) => Value::BigInt(value.negated()),
-                        Value::FixedInteger(value) => value.negate(span)?,
+                        value @ (Value::FixedInteger(_) | Value::WideFixedInteger(_)) => {
+                            crate::value::fixed_integer::negate(&value, span)?
+                        }
                         Value::Decimal(value) => Value::Decimal(
                             crate::decimal::Decimal::new(-value.coefficient(), value.scale())
                                 .expect("bounded canonical decimal negation"),
@@ -1275,6 +1282,7 @@ fn finish_numeric(
             return Ok(());
         }
         NumericTask::ScalarUnary(_) | NumericTask::FixedCast(_) => 1,
+        NumericTask::FixedIntrinsic(operation) => operation.arity(),
         NumericTask::Tensor(_, count) | NumericTask::Optimizer(_, count) => count,
     };
     let start = values.len() - count;
@@ -1284,6 +1292,18 @@ fn finish_numeric(
         NumericTask::Optimizer(operation, _) => operation.evaluate(args, budget, span)?,
         NumericTask::FixedCast(kind) => {
             crate::value::fixed_integer::cast(kind, &args[0], budget, span)?
+        }
+        NumericTask::FixedIntrinsic(operation) => {
+            use crate::value::fixed_integer::intrinsics::ResultValue;
+            match operation.evaluate(args, budget, span)? {
+                ResultValue::Scalar(value) => value,
+                ResultValue::Overflow(value, overflow) => {
+                    let components = [value, Value::Boolean(overflow)];
+                    let mut elements = reserve_tuple(&components, budget, span)?;
+                    elements.extend(components);
+                    checked_tuple(elements, span)?
+                }
+            }
         }
         NumericTask::ScalarUnary(operation) => {
             numeric::source_autodiff::unary(operation, &args[0], budget, span)?
@@ -1353,8 +1373,8 @@ pub(crate) fn apply_binary_with_budget(
             return operation.evaluate(&[left.clone(), right.clone()], budget, span);
         }
     }
-    if let Some(left) = left.as_fixed_integer() {
-        return left.binary(operator, right, span);
+    if let Some(result) = crate::value::fixed_integer::binary(operator, left, right, span) {
+        return result;
     }
     if let (Some(left), Some(right)) = (left.as_bigint(), right.as_bigint()) {
         return crate::bigint::binary(operator, left, right, budget, span);
@@ -1610,7 +1630,10 @@ fn numeric_tuple_cmp(left: &TupleValue, right: &TupleValue) -> Option<std::cmp::
     for (a, b) in left.elements().iter().zip(right.elements()) {
         let order = match (a, b) {
             (Value::Integer(a), Value::Integer(b)) => a.cmp(b),
-            (Value::FixedInteger(a), Value::FixedInteger(b)) => a.value().cmp(&b.value()),
+            (Value::FixedInteger(_), Value::FixedInteger(_))
+            | (Value::WideFixedInteger(_), Value::WideFixedInteger(_)) => {
+                crate::value::fixed_integer::compare(a, b)?
+            }
             (Value::Float(a), Value::Float(b)) => a.get().partial_cmp(&b.get())?,
             (Value::BigInt(a), Value::BigInt(b)) => a.cmp(b),
             (Value::Decimal(a), Value::Decimal(b)) => a.cmp(b),

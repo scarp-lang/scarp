@@ -78,6 +78,12 @@ same program has no direct way to overwrite the page table, IDT, or firmware
 pointers, or access arbitrary ports or MMIO. The emulated kernel fixture is
 single-core and masks external interrupts.
 
+The kernel example builds an aligned bump allocator in Scarp over the
+scratch page. A compare-and-exchange publishes each cursor change.
+The example checks alignment, disjoint placement, capacity exhaustion,
+and independent reads from two allocated ranges. Its reserved page is
+retained for the life of this kernel invocation.
+
 Native failure status 9 covers an invalid region offset, 10 covers a map
 index, 11 covers a debug byte, and 13 covers a CPU query operand or an
 unavailable CPU feature. Existing arithmetic and work status codes retain

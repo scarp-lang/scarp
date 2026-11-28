@@ -2,6 +2,7 @@
 //! Production emission uses only safe Rust, no external compiler or linker.
 
 mod executable;
+mod fixed_width;
 mod layout;
 mod temporaries;
 mod uefi;
@@ -15,13 +16,13 @@ use self::temporaries::{TemporaryHome, TemporaryLayout};
 use super::{
     invalid,
     program::{LocalStorage, ProgramOp, ScalarCallGraph, ScalarProgramIr},
-    Operation, ScalarExpressionIr, Unary,
+    IntegerWidth, Operation, ScalarExpressionIr, Unary,
 };
 use crate::{
     ast::BinaryOperator,
     diagnostics::{Diagnostic, Span},
     native_object::{
-        CheckedElf64Kernel, FreestandingCallLayout, FreestandingEntry, LinuxExecutable,
+        CheckedElf64Kernel, FlatEntry, FreestandingCallLayout, FreestandingEntry, LinuxExecutable,
         UefiApplication, UefiKernel, UefiKernelError, CHECKED_KERNEL_ARRAY_INDEX,
         CHECKED_KERNEL_CALL_DEPTH, CHECKED_KERNEL_DIVISION_BY_ZERO,
         CHECKED_KERNEL_INTEGER_OVERFLOW, CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_REPEAT_COUNT,
@@ -327,17 +328,21 @@ impl Code {
         Ok(displacement)
     }
 
-    fn signed_division(&mut self, remainder: bool, span: Span) -> Result<(), Diagnostic> {
+    fn signed_division(
+        &mut self,
+        remainder: bool,
+        minimum: i64,
+        span: Span,
+    ) -> Result<(), Diagnostic> {
         let span_id = self.record_failure_span(span)?;
         self.push(&[0x48, 0x85, 0xc9])?; // test rcx, rcx
         self.branch_to_failure(Condition::Equal, CHECKED_KERNEL_DIVISION_BY_ZERO, span_id)?;
 
-        // A 64-bit signed quotient can overflow only for i64::MIN / -1.
-        // IDIV also requires the quotient to fit when only RDX is wanted.
+        // The quotient must fit the source width even when only RDX is used.
         self.push(&[0x48, 0x83, 0xf9, 0xff])?; // cmp rcx, -1
         let ordinary_divisor = self.near_branch(Condition::NotEqual)?;
         self.push(&[0x48, 0xba])?; // movabs rdx, i64::MIN
-        self.push(&i64::MIN.to_le_bytes())?;
+        self.push(&minimum.to_le_bytes())?;
         self.push(&[0x48, 0x39, 0xd0])?; // cmp rax, rdx
         self.branch_to_failure(Condition::Equal, CHECKED_KERNEL_INTEGER_OVERFLOW, span_id)?;
         let division = self.data.len();
@@ -359,11 +364,11 @@ impl Code {
             BinaryOperator::Subtract if checked => (&[0x48, 0x29, 0xc8], true),
             BinaryOperator::Multiply if checked => (&[0x48, 0x0f, 0xaf, 0xc1], true),
             BinaryOperator::Divide | BinaryOperator::Remainder if checked => {
-                return self.signed_division(op == BinaryOperator::Remainder, span);
+                return self.signed_division(op == BinaryOperator::Remainder, i64::MIN, span);
             }
-            BinaryOperator::ShiftLeft if checked => return self.shift(0xe0, span), // shl rax, cl
-            BinaryOperator::ShiftRight if checked => return self.shift(0xf8, span), // sar rax, cl
-            BinaryOperator::UnsignedRight if checked => return self.shift(0xe8, span), // shr rax, cl
+            BinaryOperator::ShiftLeft if checked => return self.shift(0xe0, 63, span), // shl rax, cl
+            BinaryOperator::ShiftRight if checked => return self.shift(0xf8, 63, span), // sar rax, cl
+            BinaryOperator::UnsignedRight if checked => return self.shift(0xe8, 63, span), // shr rax, cl
             _ => return Err(invalid(span)),
         };
         self.push(instruction)?;
@@ -373,23 +378,27 @@ impl Code {
         Ok(())
     }
 
-    fn shift(&mut self, mod_rm: u8, span: Span) -> Result<(), Diagnostic> {
+    fn shift(&mut self, mod_rm: u8, max_count: u8, span: Span) -> Result<(), Diagnostic> {
         let span_id = self.record_failure_span(span)?;
-        // Compare the full count as unsigned. Negative counts also exceed
-        // 63, and the guard runs before x86 can mask the count to six bits.
-        self.push(&[0x48, 0x83, 0xf9, 63])?; // cmp rcx, 63
+        // The unsigned comparison also rejects negative counts before
+        // the hardware masks the count to six bits.
+        self.push(&[0x48, 0x83, 0xf9, max_count])?;
         self.branch_to_failure(Condition::Above, CHECKED_KERNEL_INVALID_SHIFT, span_id)?;
         self.push(&[0x48, 0xd3, mod_rm])
     }
 
-    fn compare(&mut self, op: BinaryOperator, span: Span) -> Result<(), Diagnostic> {
-        let opcode = match op {
-            BinaryOperator::Equal => 0x94,
-            BinaryOperator::NotEqual => 0x95,
-            BinaryOperator::Less => 0x9c,
-            BinaryOperator::LessEqual => 0x9e,
-            BinaryOperator::Greater => 0x9f,
-            BinaryOperator::GreaterEqual => 0x9d,
+    fn compare(&mut self, op: BinaryOperator, signed: bool, span: Span) -> Result<(), Diagnostic> {
+        let opcode = match (op, signed) {
+            (BinaryOperator::Equal, _) => 0x94,
+            (BinaryOperator::NotEqual, _) => 0x95,
+            (BinaryOperator::Less, true) => 0x9c,
+            (BinaryOperator::LessEqual, true) => 0x9e,
+            (BinaryOperator::Greater, true) => 0x9f,
+            (BinaryOperator::GreaterEqual, true) => 0x9d,
+            (BinaryOperator::Less, false) => 0x92,
+            (BinaryOperator::LessEqual, false) => 0x96,
+            (BinaryOperator::Greater, false) => 0x97,
+            (BinaryOperator::GreaterEqual, false) => 0x93,
             _ => return Err(invalid(span)),
         };
         self.push(&[0x48, 0x39, 0xc8])?; // cmp rax, rcx
@@ -553,8 +562,21 @@ fn expression(
                 code.load_temporary(home(src)?, 0)?;
                 code.store_temporary(home(dst)?)?;
             }
+            Operation::FixedCast { dst, src } if code.metered => {
+                let from =
+                    IntegerWidth::of(expr.registers[src]).ok_or_else(|| invalid(step.span))?;
+                let to = IntegerWidth::of(expr.registers[dst]).ok_or_else(|| invalid(step.span))?;
+                code.load_temporary(home(src)?, 0)?;
+                code.fixed_cast(from, to, step.span)?;
+                code.store_temporary(home(dst)?)?;
+            }
             Operation::Unary { dst, src, op } => {
                 code.load_temporary(home(src)?, 0)?;
+                if let Some(width) = IntegerWidth::fixed(expr.registers[src]) {
+                    code.fixed_unary(op, width, step.span)?;
+                    code.store_temporary(home(dst)?)?;
+                    continue;
+                }
                 match op {
                     Unary::BitNot => code.push(&[0x48, 0xf7, 0xd0])?, // not rax
                     Unary::Negate if checked => {
@@ -575,8 +597,10 @@ fn expression(
             } => {
                 code.load_temporary(home(left)?, 0)?;
                 code.load_temporary(home(right)?, 1)?;
-                if control_flow && op.is_comparison() {
-                    code.compare(op, step.span)?;
+                if let Some(width) = IntegerWidth::fixed(expr.registers[left]) {
+                    code.fixed_binary(op, width, step.span)?;
+                } else if control_flow && op.is_comparison() {
+                    code.compare(op, true, step.span)?;
                 } else {
                     code.binary(op, checked, step.span)?;
                 }
@@ -813,10 +837,15 @@ fn append_function(
                 // Pure calls cannot write their caller's slots. Reading the
                 // LHS here yields the same value as the interpreter snapshot.
                 code.push(&[0x48, 0x89, 0xc1])?; // mov rcx, rax
-                let slot = slots.local(*slot)?;
-                code.load_rax(slot)?;
-                code.binary(*operator, true, *operator_span)?;
-                code.store_rax(slot)?;
+                let kind = program.slot_kind(*slot).ok_or_else(|| invalid(step.span))?;
+                let home = slots.local(*slot)?;
+                code.load_rax(home)?;
+                if let Some(width) = IntegerWidth::fixed(kind) {
+                    code.fixed_binary(*operator, width, *operator_span)?;
+                } else {
+                    code.binary(*operator, true, *operator_span)?;
+                }
+                code.store_rax(home)?;
             }
             ProgramOp::Return { .. } => {
                 returns.push(code.jump()?);
@@ -1040,6 +1069,21 @@ pub(super) fn emit_linux_executable(
     }
     Ok(LinuxExecutable {
         image: executable::image(&lowered.code.data)?,
+        max_active_frames: lowered.stack.frames,
+        peak_stack_bytes: lowered.stack.bytes,
+    })
+}
+
+pub(super) fn emit_flat_entry(
+    graph: &ScalarCallGraph,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<FlatEntry, Diagnostic> {
+    let lowered = bounded_entry_text(graph, max_work, max_stack_bytes, NativeProfile::Scalar, 0)?;
+    Ok(FlatEntry {
+        bytes: lowered.code.data,
+        failure_spans: lowered.code.failure_spans,
+        entry_layout: lowered.layout,
         max_active_frames: lowered.stack.frames,
         peak_stack_bytes: lowered.stack.bytes,
     })

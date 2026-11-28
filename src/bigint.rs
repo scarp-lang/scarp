@@ -72,6 +72,21 @@ impl BigInt {
             magnitude.checked_mul(BASE)?.checked_add(u64::from(limb))
         })
     }
+
+    pub(crate) fn magnitude_u128(&self) -> Option<u128> {
+        // Five base-10^9 limbs cover the 39 decimal digits of u128.
+        if self.limbs.len() > 5 {
+            return None;
+        }
+        self.limbs
+            .iter()
+            .rev()
+            .try_fold(0_u128, |magnitude, &limb| {
+                magnitude
+                    .checked_mul(u128::from(BASE))?
+                    .checked_add(u128::from(limb))
+            })
+    }
     pub(crate) fn negated(&self) -> Self {
         Self {
             negative: !self.negative && !self.is_zero(),

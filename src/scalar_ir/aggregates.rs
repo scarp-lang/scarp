@@ -13,10 +13,8 @@ use std::{collections::HashMap, ops::Range};
 pub(super) const MAX_AGGREGATE_LANES: usize = 32;
 
 pub(super) fn scalar(id: TypeId) -> Option<ValueType> {
-    match id.primitive() {
-        Some(kind @ (ValueType::Integer | ValueType::Boolean)) => Some(kind),
-        _ => None,
-    }
+    id.primitive()
+        .filter(|&kind| super::integer_width::scalar(kind))
 }
 
 /// Each logical component occupies a contiguous range of scalar lanes.

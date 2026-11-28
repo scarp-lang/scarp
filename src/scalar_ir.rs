@@ -5,6 +5,7 @@
 
 mod aggregates;
 mod elf64;
+mod integer_width;
 mod optimize;
 mod program;
 
@@ -16,6 +17,7 @@ use crate::{
     types::TypeRegistry,
     value::ValueType,
 };
+use integer_width::IntegerWidth;
 use std::{borrow::Cow, ops::Range};
 
 const MAX_IR_REGISTERS: usize = 1024;
@@ -71,6 +73,10 @@ enum Operation {
         dst: usize,
         src: usize,
     },
+    FixedCast {
+        dst: usize,
+        src: usize,
+    },
     Unary {
         dst: usize,
         src: usize,
@@ -121,9 +127,9 @@ impl Operation {
             Self::Integer { dst, .. } | Self::Boolean { dst, .. } | Self::Load { dst, .. } => {
                 (Some(dst), [None, None], &[])
             }
-            Self::Move { dst, src } | Self::Unary { dst, src, .. } => {
-                (Some(dst), [Some(src), None], &[])
-            }
+            Self::Move { dst, src }
+            | Self::FixedCast { dst, src }
+            | Self::Unary { dst, src, .. } => (Some(dst), [Some(src), None], &[]),
             Self::Binary {
                 dst, left, right, ..
             } => (Some(dst), [Some(left), Some(right)], &[]),
@@ -164,6 +170,7 @@ enum Task {
     Visit(usize),
     Finish(usize),
     FinishCall(usize),
+    FinishCast(usize, usize),
     Logical(usize),
     CloseLogical {
         node: usize,
@@ -281,7 +288,9 @@ impl ScalarExpressionIr {
         let mut ranges = Vec::with_capacity(nodes.len());
         for (index, node) in nodes.iter().enumerate() {
             let kind = expression.types[index];
-            if let Some(scalar) = aggregates::scalar(kind) {
+            if let Some(scalar) = aggregates::scalar(kind)
+                .filter(|scalar| frame.is_some() || IntegerWidth::fixed(*scalar).is_none())
+            {
                 registers[index] = scalar;
                 ranges.push(index..index + 1);
             } else {
@@ -404,6 +413,19 @@ impl ScalarExpressionIr {
                             tasks.push(Task::Visit(*subscript));
                             tasks.push(Task::Visit(*vector));
                         }
+                        ExpressionKind::UserCall { arguments, .. }
+                            if frame.is_some()
+                                && matches!(
+                                    expression.calls[index],
+                                    Some(ResolvedCall::FixedCast(_))
+                                ) =>
+                        {
+                            let [argument] = arguments.as_slice() else {
+                                return Err(invalid(node.span));
+                            };
+                            tasks.push(Task::FinishCast(index, argument.expression));
+                            tasks.push(Task::Visit(argument.expression));
+                        }
                         ExpressionKind::UserCall { arguments, .. } if call_targets.is_some() => {
                             tasks.push(Task::FinishCall(index));
                             for argument in arguments.iter().rev() {
@@ -412,6 +434,11 @@ impl ScalarExpressionIr {
                         }
                         _ => return Err(invalid(node.span)),
                     }
+                }
+                Task::FinishCast(dst, src) => {
+                    let span = nodes[dst].span;
+                    ir.emit(span, Operation::Work)?;
+                    ir.emit(span, Operation::FixedCast { dst, src })?;
                 }
                 Task::FinishCall(index) => {
                     let node = &nodes[index];
@@ -702,7 +729,7 @@ impl ScalarExpressionIr {
                 .registers
                 .iter()
                 .chain(self.slots.iter())
-                .any(|kind| !matches!(kind, ValueType::Integer | ValueType::Boolean))
+                .any(|&kind| !integer_width::scalar(kind))
         {
             return Err(invalid(Span::default()));
         }
@@ -738,12 +765,22 @@ impl ScalarExpressionIr {
                     require_read(&initialized, types, *src, kind, span)?;
                     initialized[*dst] = true;
                 }
+                Operation::FixedCast { dst, src } => {
+                    let from = *types.get(*src).ok_or_else(|| invalid(span))?;
+                    let to = *types.get(*dst).ok_or_else(|| invalid(span))?;
+                    if IntegerWidth::of(from).is_none() || IntegerWidth::of(to).is_none() {
+                        return Err(invalid(span));
+                    }
+                    require_read(&initialized, types, *src, from, span)?;
+                    initialized[*dst] = true;
+                }
                 Operation::Unary { dst, src, op } => {
-                    let kind = if *op == Unary::Not {
-                        ValueType::Boolean
-                    } else {
-                        ValueType::Integer
-                    };
+                    let kind = *types.get(*src).ok_or_else(|| invalid(span))?;
+                    if (*op == Unary::Not && kind != ValueType::Boolean)
+                        || (*op != Unary::Not && IntegerWidth::of(kind).is_none())
+                    {
+                        return Err(invalid(span));
+                    }
                     register_type(types, *dst, kind, span)?;
                     require_read(&initialized, types, *src, kind, span)?;
                     initialized[*dst] = true;
@@ -756,16 +793,21 @@ impl ScalarExpressionIr {
                 } => {
                     let kind = *types.get(*left).ok_or_else(|| invalid(span))?;
                     if !matches!(op, BinaryOperator::Equal | BinaryOperator::NotEqual)
-                        && kind != ValueType::Integer
+                        && IntegerWidth::of(kind).is_none()
                     {
                         return Err(invalid(span));
                     }
                     require_read(&initialized, types, *left, kind, span)?;
-                    require_read(&initialized, types, *right, kind, span)?;
+                    let right_kind = if crate::value::fixed_integer::is_shift(*op) {
+                        ValueType::Integer
+                    } else {
+                        kind
+                    };
+                    require_read(&initialized, types, *right, right_kind, span)?;
                     let result_kind = if op.is_comparison() {
                         ValueType::Boolean
                     } else {
-                        ValueType::Integer
+                        kind
                     };
                     register_type(types, *dst, result_kind, span)?;
                     initialized[*dst] = true;
@@ -891,14 +933,32 @@ pub(crate) fn emit_bounded_integer_entry(
     max_stack_bytes: u32,
     recursion_frames: Option<usize>,
 ) -> Result<crate::native_object::FreestandingEntry, Diagnostic> {
+    let ir = lower_entry(source, entry, recursion_frames)?;
+    elf64::emit_bounded_entry(&ir, max_work, max_stack_bytes)
+}
+
+pub(crate) fn emit_flat_entry(
+    source: &str,
+    entry: &str,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<crate::native_object::FlatEntry, Diagnostic> {
+    let ir = lower_entry(source, entry, None)?;
+    elf64::emit_flat_entry(&ir, max_work, max_stack_bytes)
+}
+
+fn lower_entry(
+    source: &str,
+    entry: &str,
+    recursion_frames: Option<usize>,
+) -> Result<program::ScalarCallGraph, Diagnostic> {
     let resolved = crate::compile(source)?;
-    let ir = program::ScalarCallGraph::lower(
+    program::ScalarCallGraph::lower(
         &resolved,
         entry,
         elf64::MAX_INTEGER_ARGUMENTS,
         recursion_frames,
-    )?;
-    elf64::emit_bounded_entry(&ir, max_work, max_stack_bytes)
+    )
 }
 
 pub(crate) fn emit_linux_executable(
@@ -906,9 +966,7 @@ pub(crate) fn emit_linux_executable(
     max_work: u32,
     max_stack_bytes: u32,
 ) -> Result<crate::native_object::LinuxExecutable, Diagnostic> {
-    let resolved = crate::compile(source)?;
-    let ir =
-        program::ScalarCallGraph::lower(&resolved, "main", elf64::MAX_INTEGER_ARGUMENTS, None)?;
+    let ir = lower_entry(source, "main", None)?;
     elf64::emit_linux_executable(&ir, max_work, max_stack_bytes)
 }
 

@@ -1,3 +1,21 @@
+// Word 8 is the atomic bump cursor. Words 0 and 4088 belong to the ABI test.
+funcra arena_allocate(length: integer, alignment: integer) -> integer {
+    if length <= 0 or alignment < 8 or alignment > 4096 { return -1; }
+    if (alignment & (alignment - 1)) != 0 { return -1; }
+    var old = kernel_load64(8);
+    repeat 32 as attempt {
+        var start = old;
+        if start < 16 { start = 16; }
+        if start > 4088 { return -1; }
+        bind aligned = (start + alignment - 1) & -alignment;
+        if aligned > 4088 or length > 4088 - aligned { return -1; }
+        bind observed = kernel_compare_exchange64(8, old, aligned + length);
+        if observed == old { return aligned; }
+        old = observed;
+    }
+    return -1;
+}
+
 funcra kernel() -> integer {
     bind count = kernel_map_count();
     var pages = 0;
@@ -17,8 +35,18 @@ funcra kernel() -> integer {
     if original != 0 or wrong != 41 or observed != 41 or boundary != 0 {
         return 2;
     }
-    if kernel_load64(0) != 42 or kernel_load64(4088) != pages { return 3; }
+    var answer: u8 = to_u8(40);
+    answer += to_u8(2);
+    if kernel_load64(0) != to_integer(answer) or kernel_load64(4088) != pages { return 3; }
     if x86_read_tsc() < begin { return 5; }
+    bind first = arena_allocate(24, 16);
+    bind second = arena_allocate(8, 32);
+    if first != 16 or second != 64 or arena_allocate(4096, 8) != -1 {
+        return 6;
+    }
+    kernel_exchange64(first, 101);
+    kernel_exchange64(second, 202);
+    if kernel_load64(first) != 101 or kernel_load64(second) != 202 { return 7; }
 
     // SCARP KERNEL PASS followed by LF on the QEMU debug console.
     bind message = [array: 83, 67, 65, 82, 80, 32, 75, 69, 82, 78, 69, 76, 32, 80, 65, 83, 83, 10];
