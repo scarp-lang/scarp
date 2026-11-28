@@ -17,7 +17,7 @@ use crate::{
 };
 use std::ops::Range;
 
-pub(super) use self::calls::ScalarCallGraph;
+pub(super) use self::calls::{ScalarCallGraph, StackBound};
 
 const MAX_PROGRAM_SLOTS: usize = 256;
 const MAX_PROGRAM_STEPS: usize = 4096;

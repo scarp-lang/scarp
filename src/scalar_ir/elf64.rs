@@ -1,6 +1,7 @@
 //! Self-contained x86-64 SysV integer-kernel code and ELF64 ET_REL encoding.
 //! Production emission uses only safe Rust, no external compiler or linker.
 
+mod executable;
 mod layout;
 mod temporaries;
 
@@ -18,8 +19,8 @@ use crate::{
     ast::BinaryOperator,
     diagnostics::{Diagnostic, Span},
     native_object::{
-        CheckedElf64Kernel, FreestandingCallLayout, FreestandingEntry, CHECKED_KERNEL_ARRAY_INDEX,
-        CHECKED_KERNEL_CALL_DEPTH, CHECKED_KERNEL_DIVISION_BY_ZERO,
+        CheckedElf64Kernel, FreestandingCallLayout, FreestandingEntry, LinuxExecutable,
+        CHECKED_KERNEL_ARRAY_INDEX, CHECKED_KERNEL_CALL_DEPTH, CHECKED_KERNEL_DIVISION_BY_ZERO,
         CHECKED_KERNEL_INTEGER_OVERFLOW, CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_REPEAT_COUNT,
         CHECKED_KERNEL_WORK_LIMIT,
     },
@@ -966,6 +967,55 @@ pub(super) fn emit_bounded_entry(
     max_work: u32,
     max_stack_bytes: u32,
 ) -> Result<FreestandingEntry, Diagnostic> {
+    let lowered = bounded_entry_text(graph, max_work, max_stack_bytes)?;
+    let object = object_with_entry(
+        &lowered.code.data,
+        b"\0scarp_bounded_integer_entry\0",
+        lowered.entry_bytes,
+    )?;
+    Ok(FreestandingEntry {
+        kernel: CheckedElf64Kernel {
+            object,
+            failure_spans: lowered.code.failure_spans,
+        },
+        entry_layout: lowered.layout,
+        max_active_frames: lowered.stack.frames,
+        peak_stack_bytes: lowered.stack.bytes,
+    })
+}
+
+pub(super) fn emit_linux_executable(
+    graph: &ScalarCallGraph,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<LinuxExecutable, Diagnostic> {
+    let lowered = bounded_entry_text(graph, max_work, max_stack_bytes)?;
+    if lowered.layout.integer_arguments != 0 {
+        return Err(crate::diagnostics::Diagnostic::new(
+            crate::diagnostics::DiagnosticKind::NativeUnsupported,
+            Span::default(),
+            "Linux executable entry must have zero parameters",
+        ));
+    }
+    Ok(LinuxExecutable {
+        image: executable::image(&lowered.code.data)?,
+        max_active_frames: lowered.stack.frames,
+        peak_stack_bytes: lowered.stack.bytes,
+    })
+}
+
+struct BoundedEntryText {
+    code: Code,
+    layout: FreestandingCallLayout,
+    stack: super::program::StackBound,
+    entry_bytes: usize,
+}
+
+fn bounded_entry_text(
+    graph: &ScalarCallGraph,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<BoundedEntryText, Diagnostic> {
     let bodies = graph.bodies();
     let entry = graph.entry();
     let recursion_frames = graph.recursion_frames();
@@ -1009,19 +1059,15 @@ pub(super) fn emit_bounded_entry(
             entry_bytes = code.data.len();
         }
     }
-    for (displacement, callee) in code.call_fixups {
+    for &(displacement, callee) in &code.call_fixups {
         let target = targets.get(callee).copied().flatten().ok_or_else(failure)?;
         patch_relative_branch(&mut code.data, displacement, target)?;
     }
-    let object = object_with_entry(&code.data, b"\0scarp_bounded_integer_entry\0", entry_bytes)?;
-    Ok(FreestandingEntry {
-        kernel: CheckedElf64Kernel {
-            object,
-            failure_spans: code.failure_spans,
-        },
-        entry_layout,
-        max_active_frames: stack.frames,
-        peak_stack_bytes: stack.bytes,
+    Ok(BoundedEntryText {
+        code,
+        layout: entry_layout,
+        stack,
+        entry_bytes,
     })
 }
 

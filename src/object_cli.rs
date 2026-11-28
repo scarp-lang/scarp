@@ -2,9 +2,9 @@
 use super::{read_frontend_source, report_diagnostic, write_output};
 use scarp::diagnostics::Diagnostic;
 use scarp::native_object::{
-    emit_elf64_bounded_integer_entry_with_layout, emit_freestanding_function,
-    write_elf64_object_new, CheckedElf64Kernel, FreestandingCallLayout, FreestandingFunctionMode,
-    FreestandingTarget,
+    emit_elf64_bounded_integer_entry_with_layout, emit_elf64_linux_executable,
+    emit_freestanding_function, write_elf64_linux_executable_new, write_elf64_object_new,
+    CheckedElf64Kernel, FreestandingCallLayout, FreestandingFunctionMode, FreestandingTarget,
 };
 use std::{
     ffi::{OsStr, OsString},
@@ -26,6 +26,68 @@ below the aligned caller stack pointer immediately before CALL.
 The -o destination must be new and its parent directory must exist.
 --json prints ABI, stack and failure-span metadata after writing the object.
 ";
+
+pub(super) const EXECUTABLE_HELP: &str = "Usage:
+  scarp native-exe linux-x86_64 <max-work> <max-stack-bytes> <source.srp> -o <new-executable>
+
+Emit a standalone, statically linked Linux x86-64 ELF64 executable. The file
+must define a parameterless pure funcra main() -> integer. Bounded integer
+control flow and nonrecursive direct calls share one native work allowance.
+Results 0 through 125 become process exit statuses, other results yield 126
+and checked runtime failures yield 128 plus their native status.
+";
+
+pub(super) fn run_executable(
+    args: &[OsString],
+    output: &mut impl Write,
+    errors: &mut impl Write,
+) -> u8 {
+    if matches!(args, [flag] if flag == "--help" || flag == "-h") {
+        return write_output(output.write_all(EXECUTABLE_HELP.as_bytes()), errors);
+    }
+    let [target, work, stack, source, flag, destination] = args else {
+        let _ = write!(errors, "{EXECUTABLE_HELP}");
+        return 2;
+    };
+    if target != "linux-x86_64" || flag != "-o" {
+        let _ = write!(errors, "{EXECUTABLE_HELP}");
+        return 2;
+    }
+    let Some(work) = parse_budget(work, "max-work", errors) else {
+        return 2;
+    };
+    let Some(stack) = parse_budget(stack, "max-stack-bytes", errors) else {
+        return 2;
+    };
+    let source = Path::new(source);
+    let text = match read_frontend_source(source) {
+        Ok(text) => text,
+        Err(error) => {
+            let _ = writeln!(
+                errors,
+                "error: could not read {}: {error}",
+                source.display()
+            );
+            return 1;
+        }
+    };
+    let executable = match emit_elf64_linux_executable(&text, work, stack) {
+        Ok(executable) => executable,
+        Err(error) => return report_diagnostic(&error, source, &text, errors, false),
+    };
+    let destination = Path::new(destination);
+    match write_elf64_linux_executable_new(destination, &executable.image) {
+        Ok(()) => 0,
+        Err(error) => {
+            let _ = writeln!(
+                errors,
+                "error: could not write {}: {error}",
+                destination.display()
+            );
+            1
+        }
+    }
+}
 
 enum Request<'a> {
     Single(FreestandingFunctionMode),

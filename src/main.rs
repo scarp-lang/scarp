@@ -38,6 +38,7 @@ Commands:
   run [directory|file.srp]          Run a project or legacy source file
   test [--json|--json=v2] [--list] [--require-tests] [--filter SUBSTRING] [directory]  Project tests
   bigint add|sub|mul|div|div-wide [options] <left> <right> <new-output>  Calculate with decimal files
+  native-exe linux-x86_64 ... -o <file>  Emit a bounded standalone Linux executable
   native-object [--json] <target> <mode> ... -o <file>  Emit an experimental relocatable object
   inspect ast <file.srp>           Show the parsed syntax tree (development)
   inspect modules [--json] <file.srp|directory>  Inspect statically checked modules
@@ -72,7 +73,7 @@ Examples:
 
 The original run, check, tokens and modules commands remain available during
 migration. The old check command evaluates selected paths; it is not static-only
-verification. Native executable generation and package management are not supported yet.
+verification. Experimental native-exe targets Linux x86-64. Package management is unavailable.
 ";
 
 const VERIFY_HELP: &str =
@@ -261,7 +262,7 @@ fn diagnose(output: &mut impl Write, errors: &mut impl Write, json: bool) -> u8 
         write_output(
             writeln!(
                 output,
-                r#"{{"schema_version":1,"version":"{}","host_os":"{}","host_arch":"{}","execution":"interpreter","static_verify":true,"module_inspection":true,"project_workflow":true,"native_executable":false,"package_manager":false}}"#,
+                r#"{{"schema_version":1,"version":"{}","host_os":"{}","host_arch":"{}","execution":"interpreter","static_verify":true,"module_inspection":true,"project_workflow":true,"native_executable":true,"package_manager":false}}"#,
                 version, os, arch
             ),
             errors,
@@ -270,7 +271,7 @@ fn diagnose(output: &mut impl Write, errors: &mut impl Write, json: bool) -> u8 
         write_output(
             writeln!(
                 output,
-                "Scarp compiler: {version}\nHost: {os}/{arch}\nExecution: interpreter\nStatic verification: available\nModule inspection: available\nProject create/launch: available\nNative executable emission: unavailable\nPackage management: unavailable"
+                "Scarp compiler: {version}\nHost: {os}/{arch}\nExecution: interpreter\nStatic verification: available\nModule inspection: available\nProject create/launch: available\nNative executable emission: experimental (Linux x86-64)\nPackage management: unavailable"
             ),
             errors,
         )
@@ -411,6 +412,9 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
     if args.is_empty() {
         return write_output(output.write_all(HELP.as_bytes()), errors);
     }
+    if args[0] == "native-exe" {
+        return object_cli::run_executable(&args[1..], output, errors);
+    }
     if args[0] == "native-object" {
         return object_cli::run(&args[1..], output, errors);
     }
@@ -450,6 +454,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
             let page = match target.to_str() {
                 Some("exec") => Some(EXEC_HELP),
                 Some("bigint") => Some(bigint_cli::HELP),
+                Some("native-exe") => Some(object_cli::EXECUTABLE_HELP),
                 Some("native-object") => Some(object_cli::HELP),
                 Some("inspect") => Some(INSPECT_HELP),
                 Some("verify") => Some(VERIFY_HELP),

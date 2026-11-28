@@ -30,6 +30,32 @@ pub fn write_elf64_object_new(destination: impl AsRef<Path>, object: &[u8]) -> i
     publish_object(destination.as_ref(), |file| file.write_all(object))
 }
 
+/// Publish a Linux executable image at a new path. On Unix the staged file
+/// receives execute permission before it becomes visible at the destination.
+pub fn write_elf64_linux_executable_new(
+    destination: impl AsRef<Path>,
+    image: &[u8],
+) -> io::Result<()> {
+    if image.len() < 64
+        || !image.starts_with(b"\x7fELF\x02\x01\x01")
+        || image[16..20] != [2, 0, 62, 0]
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "expected a Linux x86-64 ELF64 executable",
+        ));
+    }
+    publish_object(destination.as_ref(), |file| {
+        file.write_all(image)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            file.set_permissions(std::fs::Permissions::from_mode(0o755))?;
+        }
+        Ok(())
+    })
+}
+
 fn publish_object(
     destination: &Path,
     write_object: impl FnOnce(&mut File) -> io::Result<()>,

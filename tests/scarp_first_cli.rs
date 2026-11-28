@@ -239,7 +239,7 @@ fn diagnose_reports_real_compiler_host_and_capabilities_without_mutation() {
     assert!(report.contains(env!("CARGO_PKG_VERSION")), "{report}");
     assert!(report.contains(std::env::consts::OS), "{report}");
     assert!(report.contains(std::env::consts::ARCH), "{report}");
-    assert!(report.contains("Native executable emission: unavailable"));
+    assert!(report.contains("Native executable emission: experimental (Linux x86-64)"));
 
     let json = scarp(&["diagnose", "--json"]);
     assert!(json.status.success(), "{json:?}");
@@ -249,7 +249,7 @@ fn diagnose_reports_real_compiler_host_and_capabilities_without_mutation() {
     assert!(report.contains(&format!("\"version\":\"{}\"", env!("CARGO_PKG_VERSION"))));
     assert!(report.contains(&format!("\"host_os\":\"{}\"", std::env::consts::OS)));
     assert!(report.contains(&format!("\"host_arch\":\"{}\"", std::env::consts::ARCH)));
-    assert!(report.contains("\"native_executable\":false"));
+    assert!(report.contains("\"native_executable\":true"));
     assert!(report.contains("\"package_manager\":false"));
 
     for args in [
