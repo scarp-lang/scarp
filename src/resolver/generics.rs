@@ -91,11 +91,18 @@ pub(super) fn substitute(
     registry: &mut TypeRegistryBuilder,
     span: Span,
 ) -> Result<SourceType, Diagnostic> {
+    substitute_from(kind, |index| bindings.get(index).cloned(), registry, span)
+}
+
+fn substitute_from(
+    kind: &SourceType,
+    mut binding: impl FnMut(usize) -> Option<SourceType>,
+    registry: &mut TypeRegistryBuilder,
+    span: Span,
+) -> Result<SourceType, Diagnostic> {
     kind.map_parameters(
         &mut |p| {
-            bindings
-                .get(p.index)
-                .cloned()
+            binding(p.index)
                 .ok_or_else(|| definition(span, format!("unknown type parameter {:?}", p.name)))
         },
         &mut |family, first, second| resolve_builtin_variant(family, first, second, registry, span),
@@ -280,14 +287,42 @@ impl<'a> Inference<'a> {
         Ok(())
     }
 
+    fn apply_context(
+        &mut self,
+        expected: Option<&SourceType>,
+        span: Span,
+    ) -> Result<(), Diagnostic> {
+        if let Some(expected) = expected.filter(|_| !self.explicit) {
+            self.unify(&self.function.result, expected, span, true)?;
+        }
+        Ok(())
+    }
+
+    /// Keep each supported contextual binding independently. A missing
+    /// argument type prevents substitution only where that type appears.
+    fn contextual_bindings(
+        mut self,
+        expected: Option<&SourceType>,
+        span: Span,
+    ) -> Result<Vec<Option<SourceType>>, Diagnostic> {
+        self.apply_context(expected, span)?;
+        Ok(self
+            .function
+            .type_parameters
+            .iter()
+            .zip(self.inferred)
+            .map(|(parameter, binding)| {
+                binding.and_then(|(kind, span)| checked_binding(parameter, kind, span).ok())
+            })
+            .collect())
+    }
+
     pub(super) fn finish(
         mut self,
         expected: Option<&SourceType>,
         span: Span,
     ) -> Result<Vec<SourceType>, Diagnostic> {
-        if let Some(expected) = expected.filter(|_| !self.explicit) {
-            self.unify(&self.function.result, expected, span, true)?;
-        }
+        self.apply_context(expected, span)?;
         self.function
             .type_parameters
             .iter()
@@ -300,29 +335,37 @@ impl<'a> Inference<'a> {
                     )
                     .with_related(parameter.span, "the type parameter is declared here")
                 })?;
-                let allowed = match parameter.constraint {
-                    Some(TypeConstraint::Numeric) => kind.is_numeric(),
-                    Some(TypeConstraint::Comparable) => kind.is_ordered(),
-                    None => kind != ValueType::Unit,
-                };
-                if !allowed {
-                    let requirement = parameter.constraint.map_or_else(
-                        || "a non-unit value type".into(),
-                        |constraint| constraint.to_string(),
-                    );
-                    return Err(arguments(
-                        argument_span,
-                        format!(
-                            "type argument {} requires {requirement}, found {kind}",
-                            parameter.name
-                        ),
-                    )
-                    .with_related(parameter.span, "the type parameter is declared here"));
-                }
-                Ok(kind)
+                checked_binding(parameter, kind, argument_span)
             })
             .collect()
     }
+}
+
+fn checked_binding(
+    parameter: &GenericParameter,
+    kind: SourceType,
+    span: Span,
+) -> Result<SourceType, Diagnostic> {
+    let allowed = match parameter.constraint {
+        Some(TypeConstraint::Numeric) => kind.is_numeric(),
+        Some(TypeConstraint::Comparable) => kind.is_ordered(),
+        None => kind != ValueType::Unit,
+    };
+    if allowed {
+        return Ok(kind);
+    }
+    let requirement = parameter.constraint.map_or_else(
+        || "a non-unit value type".into(),
+        |constraint| constraint.to_string(),
+    );
+    Err(arguments(
+        span,
+        format!(
+            "type argument {} requires {requirement}, found {kind}",
+            parameter.name
+        ),
+    )
+    .with_related(parameter.span, "the type parameter is declared here"))
 }
 
 pub(super) struct Instance {
@@ -441,7 +484,7 @@ pub(super) fn abstract_call_signature(
     registry: &mut TypeRegistryBuilder,
     span: Span,
 ) -> Result<TypeId, Diagnostic> {
-    use crate::types::{FunctionEffect, TypeKind};
+    use crate::types::FunctionEffect;
 
     let parameters = function
         .parameters
@@ -597,9 +640,9 @@ pub(super) fn call_expectations(
     Ok(calls)
 }
 
-// Use explicit type arguments or a fully determined contextual result to
-// guide nested calls. The ordinary call pass still diagnoses and checks
-// every argument, including disagreements with context.
+// Use explicit type arguments or contextual result bindings to guide
+// nested calls. The ordinary call pass still checks all argument types
+// and constraints, including disagreements with context.
 fn parameter_expectations(
     syntax: &Expression,
     index: usize,
@@ -637,7 +680,7 @@ fn parameter_expectations(
             },
             *function_span,
         )
-        .and_then(|inference| inference.finish(expected, *function_span))
+        .and_then(|inference| inference.contextual_bindings(expected, *function_span))
         .ok()
     } else {
         None
@@ -653,9 +696,10 @@ fn parameter_expectations(
             let kind = if !parameter.kind.has_parameter() {
                 parameter.kind.clone()
             } else {
-                substitute(
+                let bindings = bindings.as_deref()?;
+                substitute_from(
                     &parameter.kind,
-                    bindings.as_deref()?,
+                    |index| bindings.get(index).cloned().flatten(),
                     resolver.registry,
                     parameter.span,
                 )

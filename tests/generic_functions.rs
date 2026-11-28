@@ -440,3 +440,47 @@ fn nested_calls_use_explicit_and_result_inferred_parameter_types() {
     scarp::run(source, &mut output).unwrap();
     assert!(output.is_empty());
 }
+
+#[test]
+fn partial_result_context_guides_nested_calls_across_modules() {
+    let entry = r#"import "lib.srp" as lib;
+        bind ids: list<integer> = lib.keep(tag: "ids", items: lib.blank());
+        bind flags: list<boolean> = lib.keep(items: (lib.blank()), tag: 7);
+        bind more: list<integer> = lib.keep(lib.blank(), "more");
+        print(ids, flags, more);"#;
+    let mut loader = MemorySourceLoader::new();
+    loader.insert("main.srp", entry).unwrap();
+    loader
+        .insert(
+            "lib.srp",
+            "pub pure funcra blank<T>() -> list<T> { return [list: <T>]; }
+             pub pure funcra keep<T, U>(items: list<T>, tag: U) -> list<T> { return items; }",
+        )
+        .unwrap();
+    let linked =
+        modules::compile_with_loader("main.srp", &loader, ModuleLimits::default()).unwrap();
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    linked
+        .execute(&mut out, &mut err, ExecutionOptions::default())
+        .unwrap();
+    assert_eq!(
+        out,
+        b"[list: <integer>] [list: <boolean>] [list: <integer>]\n"
+    );
+    assert!(err.is_empty());
+}
+
+#[test]
+fn partial_context_preserves_constraints_and_does_not_guess_missing_types() {
+    let declarations = "pure funcra blank<T>() -> list<T> { return [list: <T>]; }
+        pure funcra keep<T, U: Numeric>(items: list<T>, tag: U) -> list<T> { return items; }";
+    let check = |script| scarp::compile(&format!("{declarations}\n{script}")).unwrap_err();
+    let missing = check("bind items = keep(blank(), 2);");
+    assert_eq!(missing.kind, Kind::GenericArguments);
+    assert!(missing.message.contains("cannot infer type parameter T"));
+    let constraint = check("bind items: list<integer> = keep(blank(), true);");
+    assert_eq!(constraint.kind, Kind::GenericArguments);
+    assert!(constraint.message.contains("U requires Numeric"));
+    let mismatch = check("bind items: list<integer> = keep(blank::<boolean>(), 2);");
+    assert_eq!(mismatch.kind, Kind::TypeMismatch);
+}

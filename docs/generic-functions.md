@@ -61,8 +61,8 @@ bind initial = new Names { values: empty() };
 Use an explicit type argument for a call such as `print(empty());`, where
 neither a value argument nor an expected result determines `T`. Supply either
 all type arguments or none. Scarp resolves input expressions from the inside
-out. For a generic outer call whose parameter type still depends on its own
-type arguments, use `outer(empty::<integer>())` to resolve the inner call.
+out. If the outer call cannot supply the required type for an inner call,
+use an explicit argument such as `outer(empty::<integer>())`.
 
 ## Constraints
 
@@ -81,9 +81,9 @@ argument order, defaults, contracts and lexical scopes follow ordinary
 
 Explicit type arguments on an outer call can also determine the types
 of its arguments. For example, `size::<integer>(empty())` can infer the
-element type of `empty()` when `size` takes a `list<T>`. A concrete
-expected result can guide nested calls when it determines all the outer
-call's type arguments.
+element type of `empty()` when `size` takes a `list<T>`. The expected
+result can guide any parameter type it fully determines. Other type arguments
+can still be inferred from supplied values.
 
 ## Option and Result payloads
 
