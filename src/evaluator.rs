@@ -369,7 +369,12 @@ impl Workspace {
                             operand,
                             operator_span,
                         } => {
-                            tasks.push(Task::Negate(*operator_span));
+                            tasks.push(match expression.calls[index] {
+                                Some(ResolvedCall::Tensor(operation)) => {
+                                    Task::TensorCall(operation, 1, *operator_span)
+                                }
+                                _ => Task::Negate(*operator_span),
+                            });
                             tasks.push(Task::Visit(*operand));
                         }
                         ExpressionKind::Not {
@@ -1310,6 +1315,11 @@ pub(crate) fn apply_binary_with_budget(
             budget,
             span,
         );
+    }
+    if left.as_tensor().is_some() && right.as_tensor().is_some() {
+        if let Some(operation) = TensorCall::operator(operator) {
+            return operation.evaluate(&[left.clone(), right.clone()], budget, span);
+        }
     }
     if let Some(left) = left.as_fixed_integer() {
         return left.binary(operator, right, span);

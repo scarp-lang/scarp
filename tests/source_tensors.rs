@@ -310,3 +310,26 @@ fn graph_adjoint_of_a_broadcast_reduces_to_the_original_shape() {
         "(132.0, tensor<float, 2, 1> [3.0, 3.0])\n(0.0, tensor<float, 2, 0> [])\n",
     );
 }
+
+#[test]
+fn tensor_compound_assignment_checks_the_result_shape_and_preserves_aliases() {
+    let source = "
+        var w: tensor<float, 2> = [1.0, 2.0];
+        bind initial = w;
+        w += [tensor: <float> 2.0];
+        print(initial[0], w[0], tensor_sum(-w));
+        print(tensor_value_grad(w, tensor_sum(-w))[1]);
+    ";
+    assert_eq!(
+        output(source),
+        "1.0 3.0 -7.0\ntensor<float, 2> [-1.0, -1.0]\n"
+    );
+    let changed_shape = "
+        var w: tensor<float, 1> = [1.0];
+        w += [tensor: <float, 2> [2.0, 3.0]];
+    ";
+    assert_eq!(
+        scarp::compile(changed_shape).unwrap_err().kind,
+        Kind::TypeMismatch
+    );
+}

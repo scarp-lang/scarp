@@ -142,6 +142,9 @@ impl TensorGraph {
                     Operation::Input(slots[index].expect("resolved tensor binding"))
                 }
                 ExpressionKind::Group { expression } => Operation::Alias(*expression),
+                ExpressionKind::Negate { operand, .. } => {
+                    Operation::Unary(TensorUnary::Negate, *operand)
+                }
                 ExpressionKind::Binary { left, right, .. } => {
                     let Some(ResolvedCall::Tensor(TensorCall::Binary(operation))) = calls[index]
                     else {

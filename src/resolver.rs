@@ -1182,6 +1182,23 @@ impl<'a> Resolver<'a> {
                     AssignmentOperator::Compound(_) if fixed_shift => {
                         require_type(&value.kind, ValueType::Integer, operator_span)?;
                     }
+                    AssignmentOperator::Compound(op) if expected_type.as_tensor().is_some() => {
+                        use crate::numeric::source_tensor::{tensor_shape, TensorCall};
+                        let operation = TensorCall::operator(op).ok_or_else(|| {
+                            Diagnostic::new(
+                                DiagnosticKind::TypeMismatch,
+                                operator_span,
+                                "unsupported tensor compound operator",
+                            )
+                        })?;
+                        let left = tensor_shape(&expected_type, operator_span)?;
+                        let right = tensor_shape(
+                            &value.kind,
+                            value.syntax.nodes()[value.syntax.root()].span,
+                        )?;
+                        let result = operation.infer_binary(left, right, operator_span)?;
+                        require_type(&result, &expected_type, operator_span)?;
+                    }
                     AssignmentOperator::Compound(operator)
                         if expected_type == ValueType::String
                             && matches!(
@@ -2523,21 +2540,30 @@ fn resolve_expression(
                 operand,
                 operator_span,
             } => {
-                if !types[*operand].is_numeric() {
-                    if let SourceType::Parameter(parameter) = &types[*operand] {
-                        return Err(generics::operation(
-                            parameter,
-                            crate::types::TypeConstraint::Numeric,
+                if types[*operand].as_tensor().is_some() {
+                    call = Some(ResolvedCall::Tensor(
+                        crate::numeric::source_tensor::TensorCall::Unary(
+                            crate::numeric::tensor::TensorUnary::Negate,
+                        ),
+                    ));
+                    (types[*operand].clone(), None)
+                } else {
+                    if !types[*operand].is_numeric() {
+                        if let SourceType::Parameter(parameter) = &types[*operand] {
+                            return Err(generics::operation(
+                                parameter,
+                                crate::types::TypeConstraint::Numeric,
+                                *operator_span,
+                            ));
+                        }
+                        return Err(type_mismatch(
                             *operator_span,
+                            ValueType::Integer,
+                            &types[*operand],
                         ));
                     }
-                    return Err(type_mismatch(
-                        *operator_span,
-                        ValueType::Integer,
-                        &types[*operand],
-                    ));
+                    (types[*operand].clone(), None)
                 }
-                (types[*operand].clone(), None)
             }
             ExpressionKind::Not {
                 operand,
