@@ -42,17 +42,13 @@ pub fn evaluate_value(expression: &Expression) -> Result<Value, Diagnostic> {
 pub(crate) struct Workspace {
     values: Vec<Value>,
     tasks: Vec<Task>,
-    tensor_tape: numeric::tensor_graph::TapeWorkspace,
+    tensor_tape: Option<Box<numeric::tensor_graph::TapeWorkspace>>,
 }
 
 enum Task {
     BitNot(Span),
     Vector(usize, bool, Span),
-    Tensor(usize, Span),
-    TensorCall(TensorCall, usize, Span),
-    TensorOptimizer(numeric::source_optimizer::TensorOptimizer, usize, Span),
-    ScalarUnary(numeric::autodiff::Unary, Span),
-    FixedCast(ValueType, Span),
+    Numeric(NumericTask, Span),
     Tuple(usize, Span),
     Array(usize, Span),
     List(usize, Span),
@@ -92,11 +88,23 @@ pub(crate) enum Evaluation {
     },
 }
 
+// Keep numerical materialization and VJP temporaries out of the general
+// evaluator frame, including in Windows debug builds with a small host stack.
+enum NumericTask {
+    Construct(usize),
+    Tensor(TensorCall, usize),
+    Optimizer(numeric::source_optimizer::TensorOptimizer, usize),
+    ScalarUnary(numeric::autodiff::Unary),
+    FixedCast(ValueType),
+}
+
 impl Workspace {
     pub(crate) fn clear(&mut self) {
         self.values.clear();
         self.tasks.clear();
-        self.tensor_tape.clear();
+        if let Some(tape) = &mut self.tensor_tape {
+            tape.clear();
+        }
     }
 
     pub(crate) fn retire_for_reuse(&mut self, max_items: usize) {
@@ -107,7 +115,9 @@ impl Workspace {
         if self.tasks.capacity() > max_items {
             self.tasks = Vec::new();
         }
-        self.tensor_tape.retire_for_reuse(max_items);
+        if let Some(tape) = &mut self.tensor_tape {
+            tape.retire_for_reuse(max_items);
+        }
     }
 
     pub(crate) fn evaluate(
@@ -179,11 +189,7 @@ impl Workspace {
                 Task::Visit(index) => expression.syntax.nodes()[*index].span,
                 Task::UserCall(_, _, span)
                 | Task::Tuple(_, span)
-                | Task::Tensor(_, span)
-                | Task::TensorCall(_, _, span)
-                | Task::TensorOptimizer(_, _, span)
-                | Task::ScalarUnary(_, span)
-                | Task::FixedCast(_, span)
+                | Task::Numeric(_, span)
                 | Task::Array(_, span)
                 | Task::List(_, span)
                 | Task::Map(_, span)
@@ -223,7 +229,7 @@ impl Workspace {
                                     environment,
                                     budget,
                                     node.span,
-                                    tensor_tape,
+                                    tensor_tape.get_or_insert_with(Box::default),
                                 )?);
                                 continue;
                             }
@@ -242,17 +248,19 @@ impl Workspace {
                                     Task::ListIntrinsic(*op, index, node.span)
                                 }
                                 Some(ResolvedCall::FixedCast(kind)) => {
-                                    Task::FixedCast(*kind, node.span)
+                                    Task::Numeric(NumericTask::FixedCast(*kind), node.span)
                                 }
                                 Some(ResolvedCall::ScalarUnary(op)) => {
-                                    Task::ScalarUnary(*op, node.span)
+                                    Task::Numeric(NumericTask::ScalarUnary(*op), node.span)
                                 }
-                                Some(ResolvedCall::TensorOptimizer(op)) => {
-                                    Task::TensorOptimizer(*op, arguments.len(), node.span)
-                                }
-                                Some(ResolvedCall::Tensor(op)) => {
-                                    Task::TensorCall(*op, arguments.len(), node.span)
-                                }
+                                Some(ResolvedCall::TensorOptimizer(op)) => Task::Numeric(
+                                    NumericTask::Optimizer(*op, arguments.len()),
+                                    node.span,
+                                ),
+                                Some(ResolvedCall::Tensor(op)) => Task::Numeric(
+                                    NumericTask::Tensor(*op, arguments.len()),
+                                    node.span,
+                                ),
                                 Some(ResolvedCall::Map(op)) => {
                                     Task::MapIntrinsic(*op, index, node.span)
                                 }
@@ -289,7 +297,7 @@ impl Workspace {
                             }
                         }
                         ExpressionKind::Tensor { elements, .. } => {
-                            tasks.push(Task::Tensor(index, node.span));
+                            tasks.push(Task::Numeric(NumericTask::Construct(index), node.span));
                             for &element in elements.iter().rev() {
                                 tasks.push(Task::Visit(element));
                             }
@@ -371,7 +379,7 @@ impl Workspace {
                         } => {
                             tasks.push(match expression.calls[index] {
                                 Some(ResolvedCall::Tensor(operation)) => {
-                                    Task::TensorCall(operation, 1, *operator_span)
+                                    Task::Numeric(NumericTask::Tensor(operation, 1), *operator_span)
                                 }
                                 _ => Task::Negate(*operator_span),
                             });
@@ -392,7 +400,7 @@ impl Workspace {
                         } => {
                             tasks.push(match expression.calls[index] {
                                 Some(ResolvedCall::Tensor(operation)) => {
-                                    Task::TensorCall(operation, 2, *operator_span)
+                                    Task::Numeric(NumericTask::Tensor(operation, 2), *operator_span)
                                 }
                                 _ => Task::Binary(*operator, *operator_span),
                             });
@@ -473,51 +481,8 @@ impl Workspace {
                     values.push(value.fields()[offset].clone());
                 }
                 Task::Tuple(count, span) => finish_tuple(values, count, budget, span)?,
-                Task::Tensor(node, span) => {
-                    let ExpressionKind::Tensor { kind, elements } =
-                        &expression.syntax.nodes()[node].kind
-                    else {
-                        unreachable!("resolved tensor literal");
-                    };
-                    let shape = kind.as_tensor().expect("resolved tensor type").dimensions();
-                    let count = elements.len();
-                    budget.charge(count as u64, span)?;
-                    let mut cells = numeric::buffer(count, budget, span)?;
-                    for value in values.drain(values.len() - count..) {
-                        let Value::Float(cell) = value else {
-                            unreachable!("typed tensor cell")
-                        };
-                        cells.push(cell);
-                    }
-                    let vector = crate::value::NumericVector::from_finite(cells)
-                        .expect("bounded tensor buffer");
-                    let tensor = crate::value::NumericTensor::from_vector(vector, shape)
-                        .expect("typed tensor literal shape");
-                    values.push(source_tensor::wrap(tensor));
-                }
-                Task::FixedCast(kind, span) => {
-                    let input = values.pop().expect("fixed integer conversion input");
-                    values.push(crate::value::fixed_integer::cast(
-                        kind, &input, budget, span,
-                    )?);
-                }
-                Task::ScalarUnary(operation, span) => {
-                    let input = values.pop().expect("scalar activation input");
-                    values.push(numeric::source_autodiff::unary(
-                        operation, &input, budget, span,
-                    )?);
-                }
-                Task::TensorOptimizer(operation, count, span) => {
-                    let start = values.len() - count;
-                    let value = operation.evaluate(&values[start..], budget, span)?;
-                    values.truncate(start);
-                    values.push(value);
-                }
-                Task::TensorCall(operation, count, span) => {
-                    let start = values.len() - count;
-                    let value = operation.evaluate(&values[start..], budget, span)?;
-                    values.truncate(start);
-                    values.push(value);
+                Task::Numeric(operation, span) => {
+                    finish_numeric(operation, expression, values, budget, span)?;
                 }
                 Task::Array(node, span) => {
                     let ExpressionKind::Array {
@@ -679,28 +644,8 @@ impl Workspace {
                     let index = values.pop().unwrap().require_integer(span)?;
                     let value = values.pop().unwrap();
                     if let Some(tensor) = value.as_tensor() {
-                        let length = tensor.shape()[0];
                         let index_span = expression.syntax.nodes()[index_node].span;
-                        let index = usize::try_from(index)
-                            .ok()
-                            .filter(|&i| i < length)
-                            .ok_or_else(|| {
-                                Diagnostic::new(
-                                    DiagnosticKind::TensorIndex,
-                                    index_span,
-                                    format!("index {index} is outside tensor axis length {length}"),
-                                )
-                            })?;
-                        let selected = if tensor.rank() == 1 {
-                            Value::Float(tensor.cells()[index])
-                        } else {
-                            source_tensor::wrap(
-                                tensor
-                                    .slice_first(index)
-                                    .expect("tensor slice shape checked during resolution"),
-                            )
-                        };
-                        values.push(selected);
+                        values.push(select_tensor(tensor, index, index_span)?);
                         continue;
                     }
                     if let Some(tuple) = value.as_tuple() {
@@ -1289,6 +1234,86 @@ impl Workspace {
                 .expect("a resolved expression produces one value"),
         ))
     }
+}
+
+#[inline(never)]
+fn finish_numeric(
+    operation: NumericTask,
+    expression: &ResolvedExpression,
+    values: &mut Vec<Value>,
+    budget: &mut Budget,
+    span: Span,
+) -> Result<(), Diagnostic> {
+    let count = match operation {
+        NumericTask::Construct(node) => {
+            let ExpressionKind::Tensor { kind, elements } = &expression.syntax.nodes()[node].kind
+            else {
+                unreachable!("resolved tensor literal");
+            };
+            let shape = kind.as_tensor().expect("resolved tensor type").dimensions();
+            let count = elements.len();
+            budget.charge(count as u64, span)?;
+            let mut cells = numeric::buffer(count, budget, span)?;
+            for value in values.drain(values.len() - count..) {
+                let Value::Float(cell) = value else {
+                    unreachable!("typed tensor cell");
+                };
+                cells.push(cell);
+            }
+            let vector =
+                crate::value::NumericVector::from_finite(cells).expect("bounded tensor buffer");
+            let tensor = crate::value::NumericTensor::from_vector(vector, shape)
+                .expect("typed tensor literal shape");
+            values.push(source_tensor::wrap(tensor));
+            return Ok(());
+        }
+        NumericTask::ScalarUnary(_) | NumericTask::FixedCast(_) => 1,
+        NumericTask::Tensor(_, count) | NumericTask::Optimizer(_, count) => count,
+    };
+    let start = values.len() - count;
+    let args = &values[start..];
+    let value = match operation {
+        NumericTask::Tensor(operation, _) => operation.evaluate(args, budget, span)?,
+        NumericTask::Optimizer(operation, _) => operation.evaluate(args, budget, span)?,
+        NumericTask::FixedCast(kind) => {
+            crate::value::fixed_integer::cast(kind, &args[0], budget, span)?
+        }
+        NumericTask::ScalarUnary(operation) => {
+            numeric::source_autodiff::unary(operation, &args[0], budget, span)?
+        }
+        NumericTask::Construct(_) => unreachable!("handled tensor construction"),
+    };
+    values.truncate(start);
+    values.push(value);
+    Ok(())
+}
+
+#[inline(never)]
+fn select_tensor(
+    tensor: &crate::value::NumericTensor,
+    index: i64,
+    span: Span,
+) -> Result<Value, Diagnostic> {
+    let length = tensor.shape()[0];
+    let index = usize::try_from(index)
+        .ok()
+        .filter(|&i| i < length)
+        .ok_or_else(|| {
+            Diagnostic::new(
+                DiagnosticKind::TensorIndex,
+                span,
+                format!("index {index} is outside tensor axis length {length}"),
+            )
+        })?;
+    Ok(if tensor.rank() == 1 {
+        Value::Float(tensor.cells()[index])
+    } else {
+        source_tensor::wrap(
+            tensor
+                .slice_first(index)
+                .expect("tensor slice shape checked during resolution"),
+        )
+    })
 }
 
 pub(crate) fn apply_binary_with_budget(
