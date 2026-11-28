@@ -45,7 +45,10 @@ fn empty_and_incompatible_broadcasts() {
         max_steps: 0,
         max_vector_bytes: 0,
     };
-    assert_eq!(binary(TensorBinary::Add, &empty, &row, zero).unwrap(), empty);
+    assert_eq!(
+        binary(TensorBinary::Add, &empty, &row, zero).unwrap(),
+        empty
+    );
     let wrong = t(&[1.0, 2.0], &[2, 1]);
     assert_eq!(
         binary(TensorBinary::Add, &empty, &wrong, LIMITS)
@@ -93,7 +96,7 @@ fn binary_work_and_allocation_fail_before_output() {
         )
         .unwrap_err()
         .kind,
-        Kind::VectorAllocation
+        Kind::VectorBudget
     );
     assert!(binary(TensorBinary::Divide, &a, &t(&[-0.0], &[]), LIMITS).is_err());
     assert!(binary(
@@ -174,7 +177,7 @@ fn matmul_preserves_compensated_accumulation_and_budget() {
         )
         .unwrap_err()
         .kind,
-        Kind::VectorAllocation
+        Kind::VectorBudget
     );
 }
 

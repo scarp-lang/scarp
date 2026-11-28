@@ -48,19 +48,11 @@ fn count(shape: &[usize]) -> Result<usize, Diagnostic> {
 
 /// Right-aligned broadcasting: equal axes or a singleton can combine.
 /// In particular, zero and one combine to zero, not one.
-fn broadcast(
-    left: &[usize],
-    right: &[usize],
-    output: &mut [usize],
-) -> Result<(), Diagnostic> {
+fn broadcast(left: &[usize], right: &[usize], output: &mut [usize]) -> Result<(), Diagnostic> {
     let rank = output.len();
     for (axis, extent) in output.iter_mut().enumerate() {
-        let l = axis
-            .checked_sub(rank - left.len())
-            .map_or(1, |i| left[i]);
-        let r = axis
-            .checked_sub(rank - right.len())
-            .map_or(1, |i| right[i]);
+        let l = axis.checked_sub(rank - left.len()).map_or(1, |i| left[i]);
+        let r = axis.checked_sub(rank - right.len()).map_or(1, |i| right[i]);
         *extent = match (l, r) {
             (a, b) if a == b => a,
             (1, b) => b,
@@ -95,17 +87,11 @@ fn finish(
         .ok_or_else(|| length_error(Span::default()))
 }
 
-fn charge(
-    budget: &mut Budget,
-    output_count: usize,
-    per_cell: u64,
-) -> Result<(), Diagnostic> {
+fn charge(budget: &mut Budget, output_count: usize, per_cell: u64) -> Result<(), Diagnostic> {
     let span = Span::default();
-    let work = (output_count as u64)
-        .checked_mul(per_cell)
-        .ok_or_else(|| {
-            Diagnostic::new(DiagnosticKind::ExecutionLimit, span, "tensor work overflow")
-        })?;
+    let work = (output_count as u64).checked_mul(per_cell).ok_or_else(|| {
+        Diagnostic::new(DiagnosticKind::ExecutionLimit, span, "tensor work overflow")
+    })?;
     budget.charge(work, span)
 }
 
@@ -124,7 +110,11 @@ pub fn binary(
     let count = count(shape)?;
     let span = Span::default();
     let mut budget = limits.budget();
-    charge(&mut budget, count, (1 + rank + left.rank() + right.rank()) as u64)?;
+    charge(
+        &mut budget,
+        count,
+        (1 + rank + left.rank() + right.rank()) as u64,
+    )?;
     let mut output = buffer(count, &mut budget, span)?;
     let mut coordinates = [0; MAX_TENSOR_RANK];
     let coordinates = &mut coordinates[..rank];
@@ -171,11 +161,7 @@ pub fn matmul(
     }
     let columns = rshape[rrank + 1];
     let mut shape = [0; MAX_TENSOR_RANK];
-    broadcast(
-        &lshape[..lrank],
-        &rshape[..rrank],
-        &mut shape[..batch_rank],
-    )?;
+    broadcast(&lshape[..lrank], &rshape[..rrank], &mut shape[..batch_rank])?;
     shape[batch_rank] = rows;
     shape[batch_rank + 1] = columns;
     let shape = &shape[..batch_rank + 2];
