@@ -1,9 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.0.7-alpha.4 — prerelease candidate
 
 - Add opt-in native self and mutual recursion for ELF64 integer entries,
   with checked stack, frame-depth, and shared work limits.
+- Lower nested fixed arrays, tuples, and records as verified private stack lanes.
+- Infer nested generic calls from partial result context across modules.
+- Add bounded file-backed exact integer arithmetic and checked output staging.
+- Add exact BigInt utilities, sequences, wide exponents, and chunked formatting.
 
 ## 0.0.7-alpha.3 — published GitHub prerelease, 2026-11-27
 
