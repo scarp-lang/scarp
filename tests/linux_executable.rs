@@ -1,5 +1,5 @@
 use scarp::diagnostics::DiagnosticKind;
-use scarp::native_object::{emit_elf64_linux_executable, write_elf64_linux_executable_new};
+use scarp::native_object::emit_elf64_linux_executable;
 
 const SOURCE: &str = "
     pure funcra compute(x: integer) -> integer {
@@ -52,6 +52,7 @@ fn executable_rejects_unsupported_programs_before_writing() {
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[test]
 fn linux_process_results_match_interpreter_and_checked_failures() {
+    use scarp::native_object::write_elf64_linux_executable_new;
     use std::{fs, process::Command};
     let directory = std::env::temp_dir().join(format!("scarp-linux-exe-{}", std::process::id()));
     fs::create_dir(&directory).unwrap();
