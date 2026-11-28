@@ -84,8 +84,7 @@ fn empty_broadcast_reduces_to_explicit_zeros() {
         assert_eq!(db, t(&[0.0; 3], &[3]));
     }
     let scalar_zero = t(&[0.0], &[]);
-    let (da, db) =
-        binary_backward(TensorBinary::Divide, &a, &scalar_zero, &g, LIMITS).unwrap();
+    let (da, db) = binary_backward(TensorBinary::Divide, &a, &scalar_zero, &g, LIMITS).unwrap();
     assert_eq!(da, a);
     assert_eq!(db, scalar_zero);
 }
