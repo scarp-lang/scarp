@@ -83,9 +83,16 @@ impl TypedExpression<'_> {
                     }
                     Some(ResolvedCall::Io(input)) => self.types.input.get(&input).copied(),
                     Some(ResolvedCall::BigIntDivMod) => self.types.divmod,
-                    Some(ResolvedCall::Array(_) | ResolvedCall::List(_) | ResolvedCall::Map(_)) => {
-                        None
-                    }
+                    Some(
+                        ResolvedCall::Array(_)
+                        | ResolvedCall::List(_)
+                        | ResolvedCall::Map(_)
+                        | ResolvedCall::Tensor(_)
+                        | ResolvedCall::FixedCast(_)
+                        | ResolvedCall::ScalarUnary(_)
+                        | ResolvedCall::ScalarGraph(_)
+                        | ResolvedCall::TensorGraph(_),
+                    ) => None,
                     None => None,
                 };
                 TypedNode {

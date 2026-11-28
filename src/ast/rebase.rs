@@ -71,6 +71,9 @@ pub(crate) fn relocate(program: &mut Program, base: usize, to_local: bool) -> us
                         }
                     }
                 }
+                ExpressionKind::Tensor { kind, .. } => {
+                    *nodes = nodes.saturating_add(kind.node_count());
+                }
                 ExpressionKind::Conditional { .. }
                 | ExpressionKind::Tuple { .. }
                 | ExpressionKind::Array { .. }

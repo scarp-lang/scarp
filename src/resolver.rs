@@ -328,17 +328,28 @@ pub(crate) enum ResolvedCall {
     BigIntDivMod,
     Array(ArrayIntrinsic),
     List(ListIntrinsic),
+    Tensor(crate::numeric::source_tensor::TensorCall),
+    ScalarUnary(crate::numeric::autodiff::Unary),
+    FixedCast(ValueType),
+    ScalarGraph(std::sync::Arc<crate::numeric::source_autodiff::ScalarGraph>),
+    TensorGraph(std::sync::Arc<crate::numeric::tensor_graph::TensorGraph>),
     Map(MapIntrinsic),
     Io(crate::input::IoBuiltin),
 }
 
 pub(crate) fn is_builtin_name(name: &str) -> bool {
+    use crate::numeric::source_autodiff;
     name == "bigint_divmod"
+        || crate::value::fixed_integer::named_cast(name).is_some()
+        || name == source_autodiff::VALUE_GRAD
+        || name == crate::numeric::tensor_graph::VALUE_GRAD
+        || source_autodiff::named_unary(name).is_some()
         || ArrayIntrinsic::from_name(name).is_some()
         || ListIntrinsic::from_name(name).is_some()
         || MapIntrinsic::from_name(name).is_some()
         || crate::input::IoBuiltin::from_name(name).is_some()
         || Builtin::from_name(name).is_some()
+        || crate::numeric::source_tensor::TensorCall::named(name).is_some()
 }
 
 /// Static function signature and call-graph information. Spans are source bytes.
@@ -1157,8 +1168,18 @@ impl<'a> Resolver<'a> {
                     );
                     return Ok(());
                 }
-                let value = self.expression_with_expected(value, Some(&expected_type))?;
+                let fixed_shift = matches!(operator, AssignmentOperator::Compound(op)
+                    if fixed_type(&expected_type) && crate::value::fixed_integer::is_shift(op));
+                let rhs = if fixed_shift {
+                    ValueType::Integer.into()
+                } else {
+                    expected_type.clone()
+                };
+                let value = self.expression_with_expected(value, Some(&rhs))?;
                 match operator {
+                    AssignmentOperator::Compound(_) if fixed_shift => {
+                        require_type(&value.kind, ValueType::Integer, operator_span)?;
+                    }
                     AssignmentOperator::Compound(operator)
                         if expected_type == ValueType::String
                             && matches!(
@@ -1179,7 +1200,8 @@ impl<'a> Resolver<'a> {
                         if operator.is_integer_only()
                             && !(operator == BinaryOperator::Remainder
                                 && expected_type == ValueType::BigInt)
-                            && expected_type != ValueType::Integer =>
+                            && expected_type != ValueType::Integer
+                            && !fixed_type(&expected_type) =>
                     {
                         return Err(type_mismatch(
                             operator_span,
@@ -1717,6 +1739,23 @@ fn resolve_expression(
                 }
                 (SourceType::from(ValueType::Integers), None)
             }
+            ExpressionKind::Tensor { kind, elements } => {
+                if kind.as_tensor().map(|t| t.cell_count()) != Some(elements.len()) {
+                    return Err(Diagnostic::new(
+                        DiagnosticKind::TensorShape,
+                        node.span,
+                        "tensor literal payload does not match its shape",
+                    ));
+                }
+                for &element in elements {
+                    require_type(
+                        &types[element],
+                        ValueType::Float,
+                        syntax.nodes()[element].span,
+                    )?;
+                }
+                (kind.clone(), None)
+            }
             ExpressionKind::Vector { elements } => {
                 for &element in elements {
                     require_type(
@@ -1733,6 +1772,29 @@ fn resolve_expression(
                 operator_span,
                 source_literal,
             } => {
+                if let Some(tensor) = types[*vector].as_tensor() {
+                    require_type(
+                        &types[*index],
+                        ValueType::Integer,
+                        syntax.nodes()[*index].span,
+                    )?;
+                    let (_, inner) = tensor.dimensions().split_first().ok_or_else(|| {
+                        Diagnostic::new(
+                            DiagnosticKind::TensorIndex,
+                            *operator_span,
+                            "cannot index rank-zero tensor; use tensor_item",
+                        )
+                    })?;
+                    let kind = if inner.is_empty() {
+                        ValueType::Float.into()
+                    } else {
+                        crate::numeric::source_tensor::source_shape(inner, *operator_span)?
+                    };
+                    slots.push(None);
+                    calls.push(None);
+                    types.push(kind);
+                    continue;
+                }
                 if let Some(array) = types[*vector].as_array() {
                     require_type(
                         &types[*index],
@@ -2097,6 +2159,109 @@ fn resolve_expression(
                     types.push(result);
                     continue;
                 }
+                if !names.contains_key(name) {
+                    use crate::numeric::source_autodiff::{self, ScalarGraph};
+                    use crate::value::fixed_integer;
+                    let target = fixed_integer::named_cast(name).or_else(|| {
+                        (name == "to_integer"
+                            && arguments
+                                .first()
+                                .is_some_and(|arg| fixed_type(&types[arg.expression])))
+                        .then_some(ValueType::Integer)
+                    });
+                    if let Some(target) = target {
+                        if arguments.len() != 1 || arguments[0].label.is_some() {
+                            return Err(Diagnostic::new(
+                                DiagnosticKind::CallArguments,
+                                *function_span,
+                                "integer conversion requires one positional argument",
+                            ));
+                        }
+                        let input = arguments[0].expression;
+                        if !fixed_integer::can_cast(target, &types[input]) {
+                            return Err(Diagnostic::new(DiagnosticKind::TypeMismatch, syntax.nodes()[input].span,
+                                format!("cannot convert {} to {target}; supply an integer, fixed-width value or bigint", types[input])));
+                        }
+                        slots.push(None);
+                        calls.push(Some(ResolvedCall::FixedCast(target)));
+                        types.push(target.into());
+                        continue;
+                    }
+                    let scalar = ValueType::Float;
+                    if name == crate::numeric::tensor_graph::VALUE_GRAD {
+                        let (graph, kind) = crate::numeric::tensor_graph::TensorGraph::compile(
+                            &syntax,
+                            arguments,
+                            &types,
+                            &slots,
+                            &calls,
+                            *function_span,
+                        )?;
+                        slots.push(None);
+                        calls.push(Some(ResolvedCall::TensorGraph(std::sync::Arc::new(graph))));
+                        types.push(kind);
+                        continue;
+                    }
+                    if name == source_autodiff::VALUE_GRAD {
+                        let graph = ScalarGraph::compile(
+                            &syntax,
+                            arguments,
+                            &types,
+                            &slots,
+                            &calls,
+                            *function_span,
+                        )?;
+                        let pair = SourceType::tuple(vec![scalar.into(), scalar.into()])
+                            .expect("float pair type");
+                        slots.push(None);
+                        calls.push(Some(ResolvedCall::ScalarGraph(std::sync::Arc::new(graph))));
+                        types.push(pair);
+                        continue;
+                    }
+                    if let Some(operation) = source_autodiff::named_unary(name) {
+                        let [argument] = arguments.as_slice() else {
+                            return Err(Diagnostic::new(
+                                DiagnosticKind::CallArguments,
+                                *function_span,
+                                "scalar activation requires one positional float argument",
+                            ));
+                        };
+                        if argument.label.is_some() {
+                            return Err(Diagnostic::new(
+                                DiagnosticKind::CallArguments,
+                                *function_span,
+                                "scalar activation requires one positional float argument",
+                            ));
+                        }
+                        require_type(
+                            &types[argument.expression],
+                            scalar,
+                            syntax.nodes()[argument.expression].span,
+                        )?;
+                        slots.push(None);
+                        calls.push(Some(ResolvedCall::ScalarUnary(operation)));
+                        types.push(scalar.into());
+                        continue;
+                    }
+                    use crate::numeric::source_tensor::TensorCall;
+                    let operation = TensorCall::named(name).or_else(|| {
+                        let uses_tensor = arguments
+                            .iter()
+                            .any(|arg| types[arg.expression].as_tensor().is_some());
+                        if uses_tensor {
+                            Builtin::from_name(name).and_then(TensorCall::overloaded)
+                        } else {
+                            None
+                        }
+                    });
+                    if let Some(operation) = operation {
+                        let kind = operation.infer(&syntax, arguments, &types, *function_span)?;
+                        slots.push(None);
+                        calls.push(Some(ResolvedCall::Tensor(operation)));
+                        types.push(kind);
+                        continue;
+                    }
+                }
                 if let Some(builtin) =
                     Builtin::from_name(name).filter(|_| !names.contains_key(name))
                 {
@@ -2337,8 +2502,11 @@ fn resolve_expression(
                 operand,
                 operator_span,
             } => {
-                require_type(&types[*operand], ValueType::Integer, *operator_span)?;
-                (SourceType::from(ValueType::Integer), None)
+                let kind = &types[*operand];
+                if !fixed_type(kind) {
+                    require_type(kind, ValueType::Integer, *operator_span)?;
+                }
+                (kind.clone(), None)
             }
             ExpressionKind::Negate {
                 operand,
@@ -2383,6 +2551,17 @@ fn resolve_expression(
                 operator,
                 operator_span,
             } => {
+                use crate::numeric::source_tensor::{tensor_shape, TensorCall};
+                if let Some(operation) = TensorCall::operator(*operator).filter(|_| {
+                    types[*left].as_tensor().is_some() || types[*right].as_tensor().is_some()
+                }) {
+                    let left = tensor_shape(&types[*left], syntax.nodes()[*left].span)?;
+                    let right = tensor_shape(&types[*right], syntax.nodes()[*right].span)?;
+                    types.push(operation.infer_binary(left, right, *operator_span)?);
+                    slots.push(None);
+                    calls.push(Some(ResolvedCall::Tensor(operation)));
+                    continue;
+                }
                 match operator {
                     BinaryOperator::Add | BinaryOperator::Multiply
                         if types[*left] == ValueType::String => {}
@@ -2407,6 +2586,7 @@ fn resolve_expression(
                         }
                     }
                     operator if operator.is_comparison() && types[*left].is_ordered() => {}
+                    operator if operator.is_integer_only() && fixed_type(&types[*left]) => {}
                     operator
                         if operator.is_integer_only()
                             && !(*operator == BinaryOperator::Remainder
@@ -2436,12 +2616,15 @@ fn resolve_expression(
                         }
                     }
                 }
-                let right_type =
-                    if *operator == BinaryOperator::Multiply && types[*left] == ValueType::String {
-                        SourceType::from(ValueType::Integer)
-                    } else {
-                        types[*left].clone()
-                    };
+                let right_type = if (*operator == BinaryOperator::Multiply
+                    && types[*left] == ValueType::String)
+                    || (fixed_type(&types[*left])
+                        && crate::value::fixed_integer::is_shift(*operator))
+                {
+                    SourceType::from(ValueType::Integer)
+                } else {
+                    types[*left].clone()
+                };
                 require_type(&types[*right], &right_type, *operator_span).map_err(|error| {
                     error
                         .with_related(
@@ -2517,6 +2700,12 @@ fn check_argument(
             format!("parameter {:?} is declared here", parameter.name),
         )
     })
+}
+
+fn fixed_type(kind: &SourceType) -> bool {
+    kind.as_primitive()
+        .and_then(ValueType::fixed_integer_width)
+        .is_some()
 }
 
 pub(crate) fn require_type(

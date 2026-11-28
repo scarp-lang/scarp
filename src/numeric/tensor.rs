@@ -1,6 +1,6 @@
 //! Explicitly budgeted host tensor arithmetic.
 //!
-//! Source syntax and interpreter dispatch are intentionally not exposed.
+//! Host calls and source evaluation share the same budgeted kernels.
 
 use super::{buffer, compensated, domain, length_error};
 use crate::{
@@ -63,6 +63,16 @@ fn broadcast(left: &[usize], right: &[usize], output: &mut [usize]) -> Result<()
     Ok(())
 }
 
+pub(crate) fn broadcast_shape(
+    left: &[usize],
+    right: &[usize],
+    output: &mut [usize; MAX_TENSOR_RANK],
+) -> Result<usize, Diagnostic> {
+    let rank = left.len().max(right.len());
+    broadcast(left, right, &mut output[..rank])?;
+    Ok(rank)
+}
+
 fn decode(mut flat: usize, shape: &[usize], coordinates: &mut [usize]) {
     for (axis, &extent) in shape.iter().enumerate().rev() {
         coordinates[axis] = flat % extent;
@@ -78,7 +88,7 @@ fn projected_offset(shape: &[usize], coordinates: &[usize]) -> usize {
     })
 }
 
-fn finish(
+pub(crate) fn finish(
     values: Vec<crate::value::FiniteFloat>,
     shape: &[usize],
 ) -> Result<NumericTensor, Diagnostic> {
@@ -103,19 +113,26 @@ pub fn binary(
     right: &NumericTensor,
     limits: TensorLimits,
 ) -> Result<NumericTensor, Diagnostic> {
-    let rank = left.rank().max(right.rank());
+    binary_with_budget(operation, left, right, &mut limits.budget())
+}
+
+pub(crate) fn binary_with_budget(
+    operation: TensorBinary,
+    left: &NumericTensor,
+    right: &NumericTensor,
+    budget: &mut Budget,
+) -> Result<NumericTensor, Diagnostic> {
     let mut shape = [0; MAX_TENSOR_RANK];
-    let shape = &mut shape[..rank];
-    broadcast(left.shape(), right.shape(), shape)?;
+    let rank = broadcast_shape(left.shape(), right.shape(), &mut shape)?;
+    let shape = &shape[..rank];
     let count = count(shape)?;
     let span = Span::default();
-    let mut budget = limits.budget();
     charge(
-        &mut budget,
+        budget,
         count,
         (1 + rank + left.rank() + right.rank()) as u64,
     )?;
-    let mut output = buffer(count, &mut budget, span)?;
+    let mut output = buffer(count, budget, span)?;
     let mut coordinates = [0; MAX_TENSOR_RANK];
     let coordinates = &mut coordinates[..rank];
     for flat in 0..count {
@@ -138,25 +155,23 @@ pub fn binary(
     finish(output, shape)
 }
 
-fn matmul_shape(
-    left: &NumericTensor,
-    right: &NumericTensor,
+pub(crate) fn matmul_shape(
+    left: &[usize],
+    right: &[usize],
     shape: &mut [usize; MAX_TENSOR_RANK],
 ) -> Result<usize, Diagnostic> {
-    if left.rank() < 2 || right.rank() < 2 {
+    if left.len() < 2 || right.len() < 2 {
         return Err(shape_error("tensor matmul requires rank at least two"));
     }
-    let lrank = left.rank() - 2;
-    let rrank = right.rank() - 2;
+    let lrank = left.len() - 2;
+    let rrank = right.len() - 2;
     let batch_rank = lrank.max(rrank);
-    let lshape = left.shape();
-    let rshape = right.shape();
-    if lshape[lrank + 1] != rshape[rrank] {
+    if left[lrank + 1] != right[rrank] {
         return Err(shape_error("tensor matmul inner dimensions must match"));
     }
-    broadcast(&lshape[..lrank], &rshape[..rrank], &mut shape[..batch_rank])?;
-    shape[batch_rank] = lshape[lrank];
-    shape[batch_rank + 1] = rshape[rrank + 1];
+    broadcast(&left[..lrank], &right[..rrank], &mut shape[..batch_rank])?;
+    shape[batch_rank] = left[lrank];
+    shape[batch_rank + 1] = right[rrank + 1];
     Ok(batch_rank + 2)
 }
 
@@ -168,8 +183,16 @@ pub fn matmul(
     right: &NumericTensor,
     limits: TensorLimits,
 ) -> Result<NumericTensor, Diagnostic> {
+    matmul_with_budget(left, right, &mut limits.budget())
+}
+
+pub(crate) fn matmul_with_budget(
+    left: &NumericTensor,
+    right: &NumericTensor,
+    budget: &mut Budget,
+) -> Result<NumericTensor, Diagnostic> {
     let mut shape = [0; MAX_TENSOR_RANK];
-    let rank = matmul_shape(left, right, &mut shape)?;
+    let rank = matmul_shape(left.shape(), right.shape(), &mut shape)?;
     let shape = &shape[..rank];
     let lrank = left.rank() - 2;
     let rrank = right.rank() - 2;
@@ -181,10 +204,9 @@ pub fn matmul(
     let columns = shape[batch_rank + 1];
     let count = count(shape)?;
     let span = Span::default();
-    let mut budget = limits.budget();
     let per_cell = (1 + batch_rank + lrank + rrank) as u64 + 2 * inner as u64;
-    charge(&mut budget, count, per_cell)?;
-    let mut output = buffer(count, &mut budget, span)?;
+    charge(budget, count, per_cell)?;
+    let mut output = buffer(count, budget, span)?;
     if count == 0 {
         return finish(output, shape);
     }
@@ -212,6 +234,29 @@ pub fn matmul(
     finish(output, shape)
 }
 
+/// Exchange the final two axes using the checked tensor storage permutation.
+pub(crate) fn transpose_with_budget(
+    input: &NumericTensor,
+    budget: &mut Budget,
+    span: Span,
+) -> Result<NumericTensor, Diagnostic> {
+    let rank = input.rank();
+    if rank < 2 {
+        return Err(shape_error("tensor transpose requires at least two axes"));
+    }
+    let mut axes: [usize; MAX_TENSOR_RANK] = std::array::from_fn(|i| i);
+    axes.swap(rank - 2, rank - 1);
+    budget.charge(input.len() as u64 * (1 + 2 * rank as u64), span)?;
+    budget.charge_vector_allocation(input.len() * std::mem::size_of::<f64>(), span)?;
+    input.permute(&axes[..rank]).ok_or_else(|| {
+        Diagnostic::new(
+            DiagnosticKind::VectorAllocation,
+            span,
+            "cannot reserve tensor transpose",
+        )
+    })
+}
+
 /// Sum broadcasted axes back to a compatible, right-aligned target shape.
 ///
 /// This is the reverse of broadcasting a target-shaped value to the input
@@ -222,6 +267,14 @@ pub fn sum_to_shape(
     input: &NumericTensor,
     target: &[usize],
     limits: TensorLimits,
+) -> Result<NumericTensor, Diagnostic> {
+    sum_to_shape_with_budget(input, target, &mut limits.budget())
+}
+
+pub(crate) fn sum_to_shape_with_budget(
+    input: &NumericTensor,
+    target: &[usize],
+    budget: &mut Budget,
 ) -> Result<NumericTensor, Diagnostic> {
     let rank = input.rank();
     if target.len() > rank || target.iter().any(|&n| n > MAX_VECTOR_LENGTH) {
@@ -249,14 +302,13 @@ pub fn sum_to_shape(
     }
     let output_count = count(target)?;
     let span = Span::default();
-    let mut budget = limits.budget();
     // Charge even explicit zeros and coordinate decoding. Input and output
     // counts are independently bounded; all work is prepaid before allocation.
     let per_output = (1 + rank + target.len()) as u64;
     let per_term = (1 + rank + reduced_rank) as u64;
-    charge(&mut budget, output_count, per_output)?;
-    charge(&mut budget, input.len(), per_term)?;
-    let mut output = buffer(output_count, &mut budget, span)?;
+    charge(budget, output_count, per_output)?;
+    charge(budget, input.len(), per_term)?;
+    let mut output = buffer(output_count, budget, span)?;
     if output_count == 0 {
         return finish(output, target);
     }
@@ -299,6 +351,15 @@ pub fn sum_axis(
     keep_dims: bool,
     limits: TensorLimits,
 ) -> Result<NumericTensor, Diagnostic> {
+    sum_axis_with_budget(input, axis, keep_dims, &mut limits.budget())
+}
+
+pub(crate) fn sum_axis_with_budget(
+    input: &NumericTensor,
+    axis: usize,
+    keep_dims: bool,
+    budget: &mut Budget,
+) -> Result<NumericTensor, Diagnostic> {
     if axis >= input.rank() {
         return Err(shape_error(
             "tensor reduction axis is outside the input rank",
@@ -308,7 +369,7 @@ pub fn sum_axis(
     let rank = input.rank();
     shape[..rank].copy_from_slice(input.shape());
     shape[axis] = 1;
-    let result = sum_to_shape(input, &shape[..rank], limits)?;
+    let result = sum_to_shape_with_budget(input, &shape[..rank], budget)?;
     if keep_dims {
         return Ok(result);
     }
@@ -471,8 +532,17 @@ pub fn matmul_backward(
     upstream: &NumericTensor,
     limits: TensorLimits,
 ) -> Result<(NumericTensor, NumericTensor), Diagnostic> {
+    matmul_backward_with_budget(left, right, upstream, &mut limits.budget())
+}
+
+pub(crate) fn matmul_backward_with_budget(
+    left: &NumericTensor,
+    right: &NumericTensor,
+    upstream: &NumericTensor,
+    budget: &mut Budget,
+) -> Result<(NumericTensor, NumericTensor), Diagnostic> {
     let mut shape = [0; MAX_TENSOR_RANK];
-    let rank = matmul_shape(left, right, &mut shape)?;
+    let rank = matmul_shape(left.shape(), right.shape(), &mut shape)?;
     let shape = &shape[..rank];
     let forward_count = count(shape)?;
     if upstream.shape() != shape {
@@ -483,13 +553,12 @@ pub fn matmul_backward(
     let batch_rank = rank - 2;
     let inner = left.shape()[left.rank() - 1];
     let span = Span::default();
-    let mut budget = limits.budget();
-    charge(&mut budget, left.len(), (1 + left.rank()) as u64)?;
-    charge(&mut budget, right.len(), (1 + right.rank()) as u64)?;
+    charge(budget, left.len(), (1 + left.rank()) as u64)?;
+    charge(budget, right.len(), (1 + right.rank()) as u64)?;
     let terms = forward_count as u64 * inner as u64;
     budget.charge(2 * terms * (4 + 4 * batch_rank as u64), span)?;
-    let mut left_output = buffer(left.len(), &mut budget, span)?;
-    let mut right_output = buffer(right.len(), &mut budget, span)?;
+    let mut left_output = buffer(left.len(), budget, span)?;
+    let mut right_output = buffer(right.len(), budget, span)?;
     let gradient = MatmulGradient {
         left,
         right,
@@ -587,10 +656,19 @@ pub fn binary_backward(
     upstream: &NumericTensor,
     limits: TensorLimits,
 ) -> Result<(NumericTensor, NumericTensor), Diagnostic> {
-    let rank = left.rank().max(right.rank());
+    binary_backward_with_budget(operation, left, right, upstream, &mut limits.budget())
+}
+
+pub(crate) fn binary_backward_with_budget(
+    operation: TensorBinary,
+    left: &NumericTensor,
+    right: &NumericTensor,
+    upstream: &NumericTensor,
+    budget: &mut Budget,
+) -> Result<(NumericTensor, NumericTensor), Diagnostic> {
     let mut shape = [0; MAX_TENSOR_RANK];
-    let shape = &mut shape[..rank];
-    broadcast(left.shape(), right.shape(), shape)?;
+    let rank = broadcast_shape(left.shape(), right.shape(), &mut shape)?;
+    let shape = &shape[..rank];
     let output_count = count(shape)?;
     if upstream.shape() != shape {
         return Err(shape_error(
@@ -598,12 +676,11 @@ pub fn binary_backward(
         ));
     }
     let span = Span::default();
-    let mut budget = limits.budget();
-    charge(&mut budget, left.len(), (1 + left.rank()) as u64)?;
-    charge(&mut budget, right.len(), (1 + right.rank()) as u64)?;
-    charge(&mut budget, output_count, 2 * (6 + 4 * rank as u64))?;
-    let mut left_output = buffer(left.len(), &mut budget, span)?;
-    let mut right_output = buffer(right.len(), &mut budget, span)?;
+    charge(budget, left.len(), (1 + left.rank()) as u64)?;
+    charge(budget, right.len(), (1 + right.rank()) as u64)?;
+    charge(budget, output_count, 2 * (6 + 4 * rank as u64))?;
+    let mut left_output = buffer(left.len(), budget, span)?;
+    let mut right_output = buffer(right.len(), budget, span)?;
     let gradient = BinaryGradient {
         operation,
         left,
@@ -669,10 +746,17 @@ pub fn unary(
     input: &NumericTensor,
     limits: TensorLimits,
 ) -> Result<NumericTensor, Diagnostic> {
+    unary_with_budget(operation, input, &mut limits.budget())
+}
+
+pub(crate) fn unary_with_budget(
+    operation: TensorUnary,
+    input: &NumericTensor,
+    budget: &mut Budget,
+) -> Result<NumericTensor, Diagnostic> {
     let span = Span::default();
-    let mut budget = limits.budget();
-    charge(&mut budget, input.len(), 8)?;
-    let mut result = buffer(input.len(), &mut budget, span)?;
+    charge(budget, input.len(), 8)?;
+    let mut result = buffer(input.len(), budget, span)?;
     for x in input.cells() {
         result.push(unary_cell(operation, x.get(), span)?);
     }
@@ -687,13 +771,21 @@ pub fn unary_backward(
     upstream: &NumericTensor,
     limits: TensorLimits,
 ) -> Result<NumericTensor, Diagnostic> {
+    unary_backward_with_budget(operation, input, upstream, &mut limits.budget())
+}
+
+pub(crate) fn unary_backward_with_budget(
+    operation: TensorUnary,
+    input: &NumericTensor,
+    upstream: &NumericTensor,
+    budget: &mut Budget,
+) -> Result<NumericTensor, Diagnostic> {
     if input.shape() != upstream.shape() {
         return Err(shape_error("tensor unary backward requires equal shapes"));
     }
     let span = Span::default();
-    let mut budget = limits.budget();
-    charge(&mut budget, input.len(), 16)?;
-    let mut result = buffer(input.len(), &mut budget, span)?;
+    charge(budget, input.len(), 16)?;
+    let mut result = buffer(input.len(), budget, span)?;
     for (x, g) in input.cells().iter().zip(upstream.cells()) {
         let x = x.get();
         let g = g.get();
@@ -745,6 +837,14 @@ pub fn broadcast_to(
     target: &[usize],
     limits: TensorLimits,
 ) -> Result<NumericTensor, Diagnostic> {
+    broadcast_to_with_budget(input, target, &mut limits.budget())
+}
+
+pub(crate) fn broadcast_to_with_budget(
+    input: &NumericTensor,
+    target: &[usize],
+    budget: &mut Budget,
+) -> Result<NumericTensor, Diagnostic> {
     let output_count = checked_shape(target)?;
     let rank = target.len();
     if input.rank() > rank {
@@ -758,9 +858,8 @@ pub fn broadcast_to(
         ));
     }
     let span = Span::default();
-    let mut budget = limits.budget();
-    charge(&mut budget, output_count, (1 + rank + input.rank()) as u64)?;
-    let mut output = buffer(output_count, &mut budget, span)?;
+    charge(budget, output_count, (1 + rank + input.rank()) as u64)?;
+    let mut output = buffer(output_count, budget, span)?;
     let mut coordinates = [0; MAX_TENSOR_RANK];
     let coordinates = &mut coordinates[..rank];
     for flat in 0..output_count {
@@ -778,6 +877,22 @@ pub fn sum_axis_backward(
     keep_dims: bool,
     upstream: &NumericTensor,
     limits: TensorLimits,
+) -> Result<NumericTensor, Diagnostic> {
+    sum_axis_backward_with_budget(
+        original_shape,
+        axis,
+        keep_dims,
+        upstream,
+        &mut limits.budget(),
+    )
+}
+
+pub(crate) fn sum_axis_backward_with_budget(
+    original_shape: &[usize],
+    axis: usize,
+    keep_dims: bool,
+    upstream: &NumericTensor,
+    budget: &mut Budget,
 ) -> Result<NumericTensor, Diagnostic> {
     checked_shape(original_shape)?;
     if axis >= original_shape.len() {
@@ -806,5 +921,5 @@ pub fn sum_axis_backward(
             .reshape(retained)
             .ok_or_else(|| length_error(Span::default()))?
     };
-    broadcast_to(&expanded, original_shape, limits)
+    broadcast_to_with_budget(&expanded, original_shape, budget)
 }

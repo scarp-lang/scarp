@@ -1,6 +1,6 @@
 //! Experimental bounded scalar reverse-mode automatic differentiation.
 //! Graph construction is append-only; each evaluation is an isolated tape.
-//! This API is for Rust hosts, not yet source-language automatic differentiation.
+//! The source compiler builds immutable graphs over the same engine.
 
 use super::{buffer, domain};
 use crate::{
@@ -105,7 +105,7 @@ fn sigmoid(x: f64) -> f64 {
     }
 }
 
-fn unary_value(op: Unary, x: f64) -> Result<FiniteFloat, Diagnostic> {
+pub(crate) fn unary_value(op: Unary, x: f64) -> Result<FiniteFloat, Diagnostic> {
     let y = match op {
         Unary::Negate => -x,
         Unary::Square => x * x,
@@ -288,6 +288,17 @@ impl Graph {
         seed: f64,
         limits: GraphLimits,
     ) -> Result<Evaluation, Diagnostic> {
+        let mut budget = Budget::new(limits.max_steps).with_vector_bytes(limits.max_vector_bytes);
+        self.evaluate_with_budget(output, inputs, seed, &mut budget)
+    }
+
+    pub(crate) fn evaluate_with_budget(
+        &self,
+        output: &NodeId,
+        inputs: &[f64],
+        seed: f64,
+        budget: &mut Budget,
+    ) -> Result<Evaluation, Diagnostic> {
         let output = self.index(output)?;
         if inputs.len() != self.inputs {
             return Err(Diagnostic::new(
@@ -298,15 +309,14 @@ impl Graph {
         }
         let seed = checked(seed)?;
         let n = self.nodes.len();
-        let mut budget = Budget::new(limits.max_steps).with_vector_bytes(limits.max_vector_bytes);
         budget.charge(16 * n as u64 + inputs.len() as u64, span())?;
         for &input in inputs {
             checked(input)?;
         }
         let zero = checked(0.0)?;
-        let mut reachable = buffer(n, &mut budget, span())?;
-        let mut values = buffer(n, &mut budget, span())?;
-        let mut gradients = buffer(n, &mut budget, span())?;
+        let mut reachable = buffer(n, budget, span())?;
+        let mut values = buffer(n, budget, span())?;
+        let mut gradients = buffer(n, budget, span())?;
         reachable.resize(n, false);
         values.resize(n, zero);
         gradients.resize(n, zero);

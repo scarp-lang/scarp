@@ -1142,6 +1142,7 @@ fn charge_capture(
         PrintValue::Value(Value::String(text)) => text.len(),
         PrintValue::Value(Value::Vector(vector)) => vector.len().saturating_mul(8),
         PrintValue::Value(Value::Integers(vector)) => vector.len().saturating_mul(8),
+        PrintValue::Value(Value::Tensor(tensor)) => tensor.capture_bytes(),
         PrintValue::Value(Value::Tile(tile)) => tile.len().saturating_mul(8).saturating_add(16),
         _ => 8,
     };

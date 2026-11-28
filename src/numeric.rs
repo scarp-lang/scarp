@@ -20,9 +20,12 @@ mod parse_format;
 mod samples;
 mod scalar_text;
 mod similarity;
+pub(crate) mod source_autodiff;
+pub(crate) mod source_tensor;
 mod temperature;
 /// Experimental, explicitly budgeted Rust-host tensor kernels.
 pub mod tensor;
+pub(crate) mod tensor_graph;
 mod text;
 mod tiles;
 mod topk;

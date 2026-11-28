@@ -1,7 +1,6 @@
 //! Bounded, immutable row-major tensor storage for Rust hosts.
 //!
-//! This is a storage foundation, not a source-language tensor type. All
-//! numerical cells reuse the finite vector representation.
+//! Numerical cells reuse the finite vector representation.
 
 use super::{FiniteFloat, NumericTile, NumericVector, MAX_VECTOR_LENGTH};
 
@@ -20,7 +19,7 @@ pub struct NumericTensor {
 }
 
 /// Validate every axis, even for empty tensors, before computing the count.
-fn element_count(shape: &[usize]) -> Option<usize> {
+pub(crate) fn element_count(shape: &[usize]) -> Option<usize> {
     if shape.len() > MAX_TENSOR_RANK || shape.iter().any(|&n| n > MAX_VECTOR_LENGTH) {
         return None;
     }
@@ -167,5 +166,65 @@ impl NumericTensor {
             cells.push(self.get(&coordinates[..self.rank])?);
         }
         Self::from_vector(NumericVector::from_finite(cells)?, shape)
+    }
+}
+
+/// A source tensor snapshot. Cloning a value shares its shape and payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TensorValue(std::sync::Arc<SourceTensor>);
+
+#[derive(Debug, PartialEq, Eq)]
+struct SourceTensor {
+    tensor: NumericTensor,
+    kind: super::SourceType,
+}
+
+impl TensorValue {
+    pub fn new(tensor: NumericTensor) -> Self {
+        let kind = super::SourceType::tensor(tensor.shape()).expect("checked tensor shape");
+        Self(std::sync::Arc::new(SourceTensor { tensor, kind }))
+    }
+
+    pub fn tensor(&self) -> &NumericTensor {
+        &self.0.tensor
+    }
+
+    pub fn kind(&self) -> &super::SourceType {
+        &self.0.kind
+    }
+
+    pub(crate) fn work(&self) -> u64 {
+        16 + 8 * self.tensor().rank() as u64 + 32 * self.tensor().len() as u64
+    }
+
+    pub(crate) fn capture_bytes(&self) -> usize {
+        16 + 8 * self.tensor().rank() + 8 * self.tensor().len()
+    }
+}
+
+impl std::fmt::Display for TensorValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} ", self.kind())?;
+        std::fmt::Display::fmt(self.tensor().as_vector(), f)
+    }
+}
+
+#[cfg(test)]
+mod source_tests {
+    use super::*;
+
+    #[test]
+    fn retire_source_tensor_while_only_its_visible_slice_survives() {
+        let tensor = NumericTensor::new(&[1.0, 2.0, 3.0, 4.0], &[2, 2]).unwrap();
+        let value = TensorValue::new(tensor);
+        let outer = std::sync::Arc::downgrade(&value.0);
+        let original = std::sync::Arc::downgrade(&value.tensor().as_vector().storage);
+        let row = TensorValue::new(value.tensor().slice_first(1).unwrap());
+        drop(value);
+        assert!(outer.upgrade().is_none());
+        assert!(original.upgrade().is_some());
+        assert_eq!(row.tensor().as_vector().to_string(), "[3.0, 4.0]");
+        drop(row);
+        assert!(original.upgrade().is_none());
     }
 }

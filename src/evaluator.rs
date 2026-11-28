@@ -5,7 +5,11 @@ use crate::{
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     input::IoBuiltin,
     limits::Budget,
-    numeric::{self, Builtin},
+    numeric::{
+        self,
+        source_tensor::{self, TensorCall},
+        Builtin,
+    },
     resolver::{
         self, ArrayIntrinsic, ListIntrinsic, MapIntrinsic, ResolvedCall, ResolvedExpression,
     },
@@ -43,6 +47,10 @@ pub(crate) struct Workspace {
 enum Task {
     BitNot(Span),
     Vector(usize, bool, Span),
+    Tensor(usize, Span),
+    TensorCall(TensorCall, usize, Span),
+    ScalarUnary(numeric::autodiff::Unary, Span),
+    FixedCast(ValueType, Span),
     Tuple(usize, Span),
     Array(usize, Span),
     List(usize, Span),
@@ -163,6 +171,10 @@ impl Workspace {
                 Task::Visit(index) => expression.syntax.nodes()[*index].span,
                 Task::UserCall(_, _, span)
                 | Task::Tuple(_, span)
+                | Task::Tensor(_, span)
+                | Task::TensorCall(_, _, span)
+                | Task::ScalarUnary(_, span)
+                | Task::FixedCast(_, span)
                 | Task::Array(_, span)
                 | Task::List(_, span)
                 | Task::Map(_, span)
@@ -191,6 +203,16 @@ impl Workspace {
                     let node = &expression.syntax.nodes()[index];
                     match &node.kind {
                         ExpressionKind::UserCall { arguments, .. } => {
+                            if let Some(ResolvedCall::ScalarGraph(graph)) = &expression.calls[index]
+                            {
+                                values.push(graph.evaluate(environment, budget, node.span)?);
+                                continue;
+                            }
+                            if let Some(ResolvedCall::TensorGraph(graph)) = &expression.calls[index]
+                            {
+                                values.push(graph.evaluate(environment, budget, node.span)?);
+                                continue;
+                            }
                             tasks.push(match &expression.calls[index] {
                                 Some(ResolvedCall::Io(input)) => Task::Io(*input, node.span),
                                 Some(ResolvedCall::Builtin(builtin)) => {
@@ -204,6 +226,15 @@ impl Workspace {
                                 }
                                 Some(ResolvedCall::List(op)) => {
                                     Task::ListIntrinsic(*op, index, node.span)
+                                }
+                                Some(ResolvedCall::FixedCast(kind)) => {
+                                    Task::FixedCast(*kind, node.span)
+                                }
+                                Some(ResolvedCall::ScalarUnary(op)) => {
+                                    Task::ScalarUnary(*op, node.span)
+                                }
+                                Some(ResolvedCall::Tensor(op)) => {
+                                    Task::TensorCall(*op, arguments.len(), node.span)
                                 }
                                 Some(ResolvedCall::Map(op)) => {
                                     Task::MapIntrinsic(*op, index, node.span)
@@ -236,6 +267,12 @@ impl Workspace {
                         }
                         ExpressionKind::Tuple { elements } => {
                             tasks.push(Task::Tuple(elements.len(), node.span));
+                            for &element in elements.iter().rev() {
+                                tasks.push(Task::Visit(element));
+                            }
+                        }
+                        ExpressionKind::Tensor { elements, .. } => {
+                            tasks.push(Task::Tensor(index, node.span));
                             for &element in elements.iter().rev() {
                                 tasks.push(Task::Visit(element));
                             }
@@ -331,7 +368,12 @@ impl Workspace {
                             right,
                             operator_span,
                         } => {
-                            tasks.push(Task::Binary(*operator, *operator_span));
+                            tasks.push(match expression.calls[index] {
+                                Some(ResolvedCall::Tensor(operation)) => {
+                                    Task::TensorCall(operation, 2, *operator_span)
+                                }
+                                _ => Task::Binary(*operator, *operator_span),
+                            });
                             tasks.push(Task::Visit(*right));
                             tasks.push(Task::Visit(*left));
                         }
@@ -409,6 +451,46 @@ impl Workspace {
                     values.push(value.fields()[offset].clone());
                 }
                 Task::Tuple(count, span) => finish_tuple(values, count, budget, span)?,
+                Task::Tensor(node, span) => {
+                    let ExpressionKind::Tensor { kind, elements } =
+                        &expression.syntax.nodes()[node].kind
+                    else {
+                        unreachable!("resolved tensor literal");
+                    };
+                    let shape = kind.as_tensor().expect("resolved tensor type").dimensions();
+                    let count = elements.len();
+                    budget.charge(count as u64, span)?;
+                    let mut cells = numeric::buffer(count, budget, span)?;
+                    for value in values.drain(values.len() - count..) {
+                        let Value::Float(cell) = value else {
+                            unreachable!("typed tensor cell")
+                        };
+                        cells.push(cell);
+                    }
+                    let vector = crate::value::NumericVector::from_finite(cells)
+                        .expect("bounded tensor buffer");
+                    let tensor = crate::value::NumericTensor::from_vector(vector, shape)
+                        .expect("typed tensor literal shape");
+                    values.push(source_tensor::wrap(tensor));
+                }
+                Task::FixedCast(kind, span) => {
+                    let input = values.pop().expect("fixed integer conversion input");
+                    values.push(crate::value::fixed_integer::cast(
+                        kind, &input, budget, span,
+                    )?);
+                }
+                Task::ScalarUnary(operation, span) => {
+                    let input = values.pop().expect("scalar activation input");
+                    values.push(numeric::source_autodiff::unary(
+                        operation, &input, budget, span,
+                    )?);
+                }
+                Task::TensorCall(operation, count, span) => {
+                    let start = values.len() - count;
+                    let value = operation.evaluate(&values[start..], budget, span)?;
+                    values.truncate(start);
+                    values.push(value);
+                }
                 Task::Array(node, span) => {
                     let ExpressionKind::Array {
                         elements,
@@ -568,6 +650,31 @@ impl Workspace {
                 Task::Index(index_node, span) => {
                     let index = values.pop().unwrap().require_integer(span)?;
                     let value = values.pop().unwrap();
+                    if let Some(tensor) = value.as_tensor() {
+                        let length = tensor.shape()[0];
+                        let index_span = expression.syntax.nodes()[index_node].span;
+                        let index = usize::try_from(index)
+                            .ok()
+                            .filter(|&i| i < length)
+                            .ok_or_else(|| {
+                                Diagnostic::new(
+                                    DiagnosticKind::TensorIndex,
+                                    index_span,
+                                    format!("index {index} is outside tensor axis length {length}"),
+                                )
+                            })?;
+                        let selected = if tensor.rank() == 1 {
+                            Value::Float(tensor.cells()[index])
+                        } else {
+                            source_tensor::wrap(
+                                tensor
+                                    .slice_first(index)
+                                    .expect("tensor slice shape checked during resolution"),
+                            )
+                        };
+                        values.push(selected);
+                        continue;
+                    }
                     if let Some(tuple) = value.as_tuple() {
                         let element = usize::try_from(index)
                             .ok()
@@ -1066,14 +1173,18 @@ impl Workspace {
                     });
                 }
                 Task::BitNot(span) => {
-                    let value = values.pop().unwrap().require_integer(span)?;
-                    values.push(Value::Integer(!value));
+                    let value = values.pop().unwrap();
+                    values.push(match value.as_fixed_integer() {
+                        Some(value) => value.invert(),
+                        None => Value::Integer(!value.require_integer(span)?),
+                    });
                 }
                 Task::Negate(span) => {
                     let value = values.pop().unwrap();
                     values.push(match value {
                         Value::Float(value) => finite(-value.get(), span)?,
                         Value::BigInt(value) => Value::BigInt(value.negated()),
+                        Value::FixedInteger(value) => value.negate(span)?,
                         Value::Decimal(value) => Value::Decimal(
                             crate::decimal::Decimal::new(-value.coefficient(), value.scale())
                                 .expect("bounded canonical decimal negation"),
@@ -1176,6 +1287,9 @@ pub(crate) fn apply_binary_with_budget(
             budget,
             span,
         );
+    }
+    if let Some(left) = left.as_fixed_integer() {
+        return left.binary(operator, right, span);
     }
     if let (Some(left), Some(right)) = (left.as_bigint(), right.as_bigint()) {
         return crate::bigint::binary(operator, left, right, budget, span);
@@ -1362,9 +1476,30 @@ fn finish_tuple(
     budget: &mut Budget,
     span: Span,
 ) -> Result<(), Diagnostic> {
-    budget.charge(count as u64, span)?;
     let start = values.len() - count;
-    let bytes = TupleValue::allocation_bytes(&values[start..]).ok_or_else(|| {
+    let mut elements = reserve_tuple(&values[start..], budget, span)?;
+    elements.extend(values.drain(start..));
+    values.push(checked_tuple(elements, span)?);
+    Ok(())
+}
+
+pub(crate) fn make_tuple<const N: usize>(
+    values: [Value; N],
+    budget: &mut Budget,
+    span: Span,
+) -> Result<Value, Diagnostic> {
+    let mut elements = reserve_tuple(&values, budget, span)?;
+    elements.extend(values);
+    checked_tuple(elements, span)
+}
+
+fn reserve_tuple(
+    values: &[Value],
+    budget: &mut Budget,
+    span: Span,
+) -> Result<Vec<Value>, Diagnostic> {
+    budget.charge(values.len() as u64, span)?;
+    let bytes = TupleValue::allocation_bytes(values).ok_or_else(|| {
         Diagnostic::new(
             DiagnosticKind::TupleAllocation,
             span,
@@ -1373,18 +1508,20 @@ fn finish_tuple(
     })?;
     budget.charge_tuple_allocation(bytes, span)?;
     let mut elements = Vec::new();
-    elements.try_reserve_exact(count).map_err(|_| {
+    elements.try_reserve_exact(values.len()).map_err(|_| {
         Diagnostic::new(
             DiagnosticKind::TupleAllocation,
             span,
             "could not reserve tuple storage",
         )
     })?;
-    elements.extend(values.drain(start..));
-    let tuple = TupleValue::new(elements)
-        .ok_or_else(|| Diagnostic::new(DiagnosticKind::TupleLimit, span, "invalid tuple shape"))?;
-    values.push(Value::Tuple(tuple));
-    Ok(())
+    Ok(elements)
+}
+
+fn checked_tuple(elements: Vec<Value>, span: Span) -> Result<Value, Diagnostic> {
+    TupleValue::new(elements)
+        .map(Value::Tuple)
+        .ok_or_else(|| Diagnostic::new(DiagnosticKind::TupleLimit, span, "invalid tuple shape"))
 }
 
 fn overflow(span: Span) -> Diagnostic {
@@ -1408,6 +1545,7 @@ fn numeric_tuple_cmp(left: &TupleValue, right: &TupleValue) -> Option<std::cmp::
     for (a, b) in left.elements().iter().zip(right.elements()) {
         let order = match (a, b) {
             (Value::Integer(a), Value::Integer(b)) => a.cmp(b),
+            (Value::FixedInteger(a), Value::FixedInteger(b)) => a.value().cmp(&b.value()),
             (Value::Float(a), Value::Float(b)) => a.get().partial_cmp(&b.get())?,
             (Value::BigInt(a), Value::BigInt(b)) => a.cmp(b),
             (Value::Decimal(a), Value::Decimal(b)) => a.cmp(b),

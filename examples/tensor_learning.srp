@@ -1,0 +1,19 @@
+pure funcra identity<T>(value: T) -> T {
+    return value;
+}
+
+bind features: tensor<float, 2, 2> = [[1.0, 2.0], [3.0, 4.0]];
+bind weights: tensor<float, 2, 1> = [[0.5], [1.0]];
+bind scores = identity(matmul(features, weights));
+bind loss = tensor_sum(tensor_square(scores));
+bind seed = [tensor: <float, 2, 1> [[1.0], [1.0]]];
+bind dz = tensor_square_backward(scores, seed);
+bind gradients = tensor_matmul_backward(features, weights, dz);
+bind rate = [tensor: <float> 0.01];
+bind next_weights = weights - rate * gradients[1];
+print(scores, loss);
+print(gradients[1], next_weights);
+
+bind x = 3.0;
+bind offset = 2.0;
+print(value_grad(x, scalar_square(x) + x * offset));

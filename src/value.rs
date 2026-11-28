@@ -10,6 +10,8 @@ use crate::diagnostics::{Diagnostic, DiagnosticKind, Span};
 pub use crate::types::PrimitiveType as ValueType;
 use crate::types::SourceType;
 mod array;
+pub(crate) mod fixed_integer;
+pub use fixed_integer::FixedInteger;
 mod list;
 mod map;
 mod record;
@@ -21,7 +23,8 @@ pub use list::ListValue;
 pub use map::MapValue;
 pub(crate) use map::{key_compare, key_work};
 pub use record::RecordValue;
-pub use tensor::{NumericTensor, MAX_TENSOR_RANK};
+pub(crate) use tensor::element_count as tensor_element_count;
+pub use tensor::{NumericTensor, TensorValue, MAX_TENSOR_RANK};
 pub use tuple::TupleValue;
 pub use variant::VariantValue;
 
@@ -356,10 +359,12 @@ pub enum Value {
     /// Internal marker; rejected in ordinary value contexts.
     Unit,
     Integer(i64),
+    FixedInteger(FixedInteger),
     Float(FiniteFloat),
     Vector(NumericVector),
     Integers(IntegerVector),
     Tile(NumericTile),
+    Tensor(TensorValue),
     Boolean(bool),
     String(Arc<str>),
     Tuple(TupleValue),
@@ -408,10 +413,12 @@ impl Value {
             Self::Variant(value) => value.kind().clone(),
             Self::Unit => ValueType::Unit.into(),
             Self::Integer(_) => ValueType::Integer.into(),
+            Self::FixedInteger(value) => value.kind().into(),
             Self::Float(_) => ValueType::Float.into(),
             Self::Vector(_) => ValueType::Vector.into(),
             Self::Integers(_) => ValueType::Integers.into(),
             Self::Tile(_) => ValueType::Tile.into(),
+            Self::Tensor(value) => value.kind().clone(),
             Self::Boolean(_) => ValueType::Boolean.into(),
             Self::String(_) => ValueType::String.into(),
         }
@@ -449,11 +456,19 @@ impl Value {
     pub(crate) fn composite_work(&self) -> Option<u64> {
         match self {
             Self::Tuple(value) => Some(value.work()),
+            Self::Tensor(value) => Some(value.work()),
             Self::Array(value) => Some(value.work()),
             Self::List(value) => Some(value.work()),
             Self::Map(value) => Some(value.work()),
             Self::Record(value) => Some(value.work()),
             Self::Variant(value) => Some(value.work()),
+            _ => None,
+        }
+    }
+
+    pub fn as_fixed_integer(&self) -> Option<FixedInteger> {
+        match self {
+            Self::FixedInteger(value) => Some(*value),
             _ => None,
         }
     }
@@ -489,6 +504,13 @@ impl Value {
     pub fn as_vector(&self) -> Option<&NumericVector> {
         match self {
             Self::Vector(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn as_tensor(&self) -> Option<&NumericTensor> {
+        match self {
+            Self::Tensor(value) => Some(value.tensor()),
             _ => None,
         }
     }
@@ -575,10 +597,12 @@ impl fmt::Display for Value {
             Self::Variant(value) => value.fmt(f),
             Self::Unit => f.write_str("unit"),
             Self::Integer(value) => value.fmt(f),
+            Self::FixedInteger(value) => value.fmt(f),
             Self::Float(value) => value.fmt(f),
             Self::Vector(value) => value.fmt(f),
             Self::Integers(value) => value.fmt(f),
             Self::Tile(value) => value.fmt(f),
+            Self::Tensor(value) => value.fmt(f),
             Self::Boolean(value) => value.fmt(f),
             Self::String(value) => f.write_str(value),
         }
