@@ -1,0 +1,26 @@
+// A frame snapshot contains records, tuples and fixed-size arrays.
+record Lane {
+    enabled: boolean,
+    payload: tuple<integer, array<integer, 2>>,
+}
+
+record Window {
+    lanes: array<record Lane, 2>,
+    offset: integer,
+}
+
+pure funcra entry(index: integer, input: integer) -> integer {
+    bind first = new Lane { payload: (input, [array: input + 1, input + 2]), enabled: true };
+    bind second = new Lane { enabled: false, payload: (0, [array: 1, 2]) };
+    var state = new Window { offset: 2, lanes: [array: first, second] };
+    bind snapshot = state;
+    if input < 0 {
+        state = new Window { lanes: [array: second, first], offset: 10 };
+    }
+    bind selected = state->lanes[index];
+    bind payload = if selected->enabled { selected->payload } else { snapshot->lanes[0]->payload };
+    return payload[1][index] + state->offset;
+}
+
+print(entry(0, 7));
+print(entry(1, -7));

@@ -480,8 +480,8 @@ The development CLI can save these relocatable objects through the explicit
 
 ## Bounded aggregate locals
 
-Bounded integer functions and entries can use fixed arrays, tuples, and
-records with one to 32 integer or Boolean components. Supported operations
+Bounded integer functions and entries can use nested fixed arrays, tuples,
+and records with one to 32 integer or Boolean leaves per value. Supported operations
 include construction, copying to a binding, replacing a mutable binding,
 literal tuple subscripts, record field access, and integer array subscripts.
 Conditional expressions can select aggregate values of the same type.
@@ -489,7 +489,10 @@ Record initializer expressions run in written order. The compiler places
 the results in declaration order after all initializers succeed.
 
 The compiler checks each shape against the canonical x86-64 layout planner.
-Private frame storage uses one eight-byte lane per component. The existing
+Private frame storage uses one eight-byte lane per leaf. Each aggregate
+component occupies a contiguous group of lanes. Tuple and record projections
+select the whole group. Fixed-array indexing evaluates the index once and
+selects every lane from the same element. The existing
 IR verifier checks initialized lanes at joins and retires every lane when the
 source binding goes out of scope. Aggregate lanes and temporaries count
 toward the normal frame and entry stack limits. Aggregates have no external
@@ -499,7 +502,12 @@ the checked SysV AMD64 ABI.
 A negative array index or one at or above the array length returns status
 `CHECKED_KERNEL_ARRAY_INDEX` (6), with the subscript's source byte span.
 Aggregate construction preserves interpreter work charges. Native values use
-the stack and do not consume interpreter heap-allocation allowances. Empty,
-nested, or heap-backed aggregate shapes and tuple component assignment are
+the stack and do not consume interpreter heap-allocation allowances. Empty
+or heap-backed aggregate shapes and tuple component assignment are
 outside this slice. Scarp emits relocatable ELF64 objects for an external
 linker.
+
+The [nested aggregate example](../examples/native_nested_aggregate_locals.srp)
+demonstrates projection, snapshot copies, and reassignment. The native
+differential test emits its function declarations and compares each checked
+result, work-limit boundary, and failing index with the interpreter.
