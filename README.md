@@ -19,8 +19,13 @@ See the [compiler documentation index](docs/README.md) for those records.
 ## Compiler releases
 
 The latest published prerelease is
-[0.0.7-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.3).
-It adds generic functions, bounded string operators, and checked native
+[0.0.7-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.4).
+It adds bounded native recursion, nested native aggregate locals, improved
+generic inference, and scalable and file-backed BigInt arithmetic.
+[Release notes](docs/releases/v0.0.7-alpha.4-publication.md) ·
+[Publication verification](docs/releases/v0.0.7-alpha.4-validation.md)
+
+**0.0.7-alpha.3** adds generic functions, bounded string operators, and checked native
 array, tuple, and record locals. [Release notes](docs/releases/v0.0.7-alpha.3-publication.md) ·
 [Publication verification](docs/releases/v0.0.7-alpha.3-validation.md)
 

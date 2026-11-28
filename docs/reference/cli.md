@@ -134,7 +134,7 @@ Published v0.0.6-alpha.1 adds static `inspect symbols` and `inspect references`
 commands, which are absent from older alpha.5 packages.
 
 The latest published prerelease is
-[v0.0.7-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.3).
+[v0.0.7-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.4).
 `scarp exec` enables bounded input calls automatically, including
 `input_integer(prompt)` and `input_boolean(prompt)`; the latter accepts
 lowercase `true` and `false`. Legacy `run` keeps its explicit

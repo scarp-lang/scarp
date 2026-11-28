@@ -6,6 +6,11 @@ Start with the [release-aware learning path](https://scarp-lang.github.io/scarp-
 The links below index compiler-specific references, implementation history and
 release evidence in this checkout.
 
+**0.0.7-alpha.4 prerelease** adds bounded ELF64 recursion, nested native
+aggregate locals, improved generic inference, and file-backed BigInt arithmetic.
+[Release notes](releases/v0.0.7-alpha.4-publication.md) ·
+[Publication verification](releases/v0.0.7-alpha.4-validation.md)
+
 **0.0.7-alpha.3 prerelease** adds generic functions, bounded string operators,
 and native stack locals for flat arrays, tuples, and records.
 [Release notes](releases/v0.0.7-alpha.3-publication.md) ·
@@ -153,7 +158,7 @@ updated for the **0.0.6-alpha.6 published prerelease**, retaining
 [source modules](modules.md), numerical vectors/tiles, typed functions,
 contracts, loops and the Scarp-first CLI.
 The latest published prerelease is
-[0.0.7-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.3),
+[0.0.7-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.4),
 with native archives and checksums for Windows x64, Linux x64 and macOS Apple
 Silicon. [Alpha.1 preparation notes](releases/v0.0.5-alpha.1.md) preserve that
 earlier candidate contract. [Repository migration](migrations/scarp-lang-Scarp.md)

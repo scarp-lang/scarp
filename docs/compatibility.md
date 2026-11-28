@@ -5,6 +5,11 @@ accepts up to sixteen integer arguments and bounded scalar loops.
 [Public notes](releases/v0.0.7-alpha.1-publication.md) ·
 [Publication verification](releases/v0.0.7-alpha.1-validation.md)
 
+`0.0.7-alpha.4` is **a published GitHub prerelease**. Its Rust object API supports
+bounded recursion and nested aggregate locals on x86-64 ELF64. The public
+entry ABI still uses integer parameters and a checked integer result.
+[Publication verification](releases/v0.0.7-alpha.4-validation.md)
+
 `0.0.7-alpha.3` is **a published GitHub prerelease**. It adds generic
 functions and bounded native aggregate locals. Native output is experimental
 x86-64 ELF64 relocatable object code.
@@ -171,7 +176,7 @@ The opt-in C11 scalar source emitter does not add a native executable CLI;
 its supported integer/Boolean subset is documented in
 [Proposal 0035](proposals/0035-native-scalar-c11.md).
 The latest published prerelease is
-[0.0.7-alpha.3](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.3).
+[0.0.7-alpha.4](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.4).
 
 Published alpha.4 implements `scarp create DIRECTORY`,
 `scarp launch DIRECTORY` and static `scarp verify DIRECTORY` using a
