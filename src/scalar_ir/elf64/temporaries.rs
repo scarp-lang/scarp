@@ -283,6 +283,7 @@ impl TemporaryLayout {
                 | Operation::Boolean { .. }
                 | Operation::Load { .. }
                 | Operation::Move { .. }
+                | Operation::FixedCast { .. }
                 | Operation::Unary { .. }
                 | Operation::Binary { .. }
                 | Operation::Index { .. }

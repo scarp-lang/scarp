@@ -30,6 +30,17 @@ pub fn write_elf64_object_new(destination: impl AsRef<Path>, object: &[u8]) -> i
     publish_object(destination.as_ref(), |file| file.write_all(object))
 }
 
+/// Atomically publish raw native code at a new path.
+pub fn write_flat_entry_new(destination: impl AsRef<Path>, bytes: &[u8]) -> io::Result<()> {
+    if bytes.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "flat code is empty",
+        ));
+    }
+    publish_object(destination.as_ref(), |file| file.write_all(bytes))
+}
+
 /// Publish a Linux executable image at a new path. On Unix the staged file
 /// receives execute permission before it becomes visible at the destination.
 pub fn write_elf64_linux_executable_new(

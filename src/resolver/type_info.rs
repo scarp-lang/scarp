@@ -90,6 +90,7 @@ impl TypedExpression<'_> {
                         | ResolvedCall::Tensor(_)
                         | ResolvedCall::TensorOptimizer(_)
                         | ResolvedCall::FixedCast(_)
+                        | ResolvedCall::FixedIntrinsic(_)
                         | ResolvedCall::ScalarUnary(_)
                         | ResolvedCall::ScalarGraph(_)
                         | ResolvedCall::TensorGraph(_)

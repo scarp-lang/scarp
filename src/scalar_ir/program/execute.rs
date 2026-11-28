@@ -101,7 +101,9 @@ impl ScalarExpressionIr {
                     }
                 }
                 super::super::Operation::Jump { target } => pc = *target,
-                super::super::Operation::Call { .. } | super::super::Operation::Native { .. } => {
+                super::super::Operation::Call { .. }
+                | super::super::Operation::Native { .. }
+                | super::super::Operation::FixedCast { .. } => {
                     return Err(invalid(span));
                 }
             }

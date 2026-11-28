@@ -333,6 +333,7 @@ pub(crate) enum ResolvedCall {
     TensorOptimizer(crate::numeric::source_optimizer::TensorOptimizer),
     ScalarUnary(crate::numeric::autodiff::Unary),
     FixedCast(ValueType),
+    FixedIntrinsic(crate::value::fixed_integer::intrinsics::Intrinsic),
     ScalarGraph(std::sync::Arc<crate::numeric::source_autodiff::ScalarGraph>),
     TensorGraph(std::sync::Arc<crate::numeric::tensor_graph::TensorGraph>),
     Map(MapIntrinsic),
@@ -344,6 +345,7 @@ pub(crate) fn is_builtin_name(name: &str) -> bool {
     use crate::numeric::source_autodiff;
     name == "bigint_divmod"
         || crate::value::fixed_integer::named_cast(name).is_some()
+        || crate::value::fixed_integer::intrinsics::Intrinsic::named(name).is_some()
         || name == source_autodiff::VALUE_GRAD
         || name == crate::numeric::tensor_graph::VALUE_GRAD
         || crate::numeric::source_optimizer::TensorOptimizer::named(name).is_some()
@@ -1603,6 +1605,52 @@ fn resolve_numeric_call(
             ));
         }
         return Ok(Some((target.into(), ResolvedCall::FixedCast(target))));
+    }
+    if let Some(operation) = fixed_integer::intrinsics::Intrinsic::named(name).filter(|op| {
+        !op.is_bit_operation()
+            || arguments
+                .first()
+                .is_some_and(|argument| fixed_type(&types[argument.expression]))
+    }) {
+        if arguments.len() != operation.arity() || arguments.iter().any(|arg| arg.label.is_some()) {
+            return Err(Diagnostic::new(
+                DiagnosticKind::CallArguments,
+                span,
+                format!("{name} requires {} positional arguments", operation.arity()),
+            ));
+        }
+        let first = arguments[0].expression;
+        let kind = types[first]
+            .as_primitive()
+            .filter(|kind| kind.fixed_integer_width().is_some())
+            .ok_or_else(|| {
+                Diagnostic::new(
+                    DiagnosticKind::TypeMismatch,
+                    syntax.nodes()[first].span,
+                    format!("{name} requires an explicitly sized integer operand"),
+                )
+            })?;
+        if let Some(argument) = arguments.get(1) {
+            let expected = if operation.takes_count() {
+                ValueType::Integer
+            } else {
+                kind
+            };
+            require_type(
+                &types[argument.expression],
+                expected,
+                syntax.nodes()[argument.expression].span,
+            )?;
+        }
+        let result = if operation.reports_overflow() {
+            SourceType::tuple(vec![kind.into(), ValueType::Boolean.into()])
+                .expect("overflow tuple type")
+        } else if operation.returns_count() {
+            ValueType::Integer.into()
+        } else {
+            kind.into()
+        };
+        return Ok(Some((result, ResolvedCall::FixedIntrinsic(operation))));
     }
     if name == tensor_graph::VALUE_GRAD {
         let (graph, kind) = TensorGraph::compile(syntax, arguments, types, slots, calls, span)?;

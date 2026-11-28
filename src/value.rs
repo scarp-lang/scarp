@@ -11,7 +11,7 @@ pub use crate::types::PrimitiveType as ValueType;
 use crate::types::SourceType;
 mod array;
 pub(crate) mod fixed_integer;
-pub use fixed_integer::FixedInteger;
+pub use fixed_integer::{FixedInteger, WideFixedInteger};
 mod list;
 mod map;
 mod record;
@@ -360,6 +360,7 @@ pub enum Value {
     Unit,
     Integer(i64),
     FixedInteger(FixedInteger),
+    WideFixedInteger(WideFixedInteger),
     Float(FiniteFloat),
     Vector(NumericVector),
     Integers(IntegerVector),
@@ -414,6 +415,7 @@ impl Value {
             Self::Unit => ValueType::Unit.into(),
             Self::Integer(_) => ValueType::Integer.into(),
             Self::FixedInteger(value) => value.kind().into(),
+            Self::WideFixedInteger(value) => value.kind().into(),
             Self::Float(_) => ValueType::Float.into(),
             Self::Vector(_) => ValueType::Vector.into(),
             Self::Integers(_) => ValueType::Integers.into(),
@@ -469,6 +471,13 @@ impl Value {
     pub fn as_fixed_integer(&self) -> Option<FixedInteger> {
         match self {
             Self::FixedInteger(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    pub fn as_wide_fixed_integer(&self) -> Option<WideFixedInteger> {
+        match self {
+            Self::WideFixedInteger(value) => Some(*value),
             _ => None,
         }
     }
@@ -598,6 +607,7 @@ impl fmt::Display for Value {
             Self::Unit => f.write_str("unit"),
             Self::Integer(value) => value.fmt(f),
             Self::FixedInteger(value) => value.fmt(f),
+            Self::WideFixedInteger(value) => value.fmt(f),
             Self::Float(value) => value.fmt(f),
             Self::Vector(value) => value.fmt(f),
             Self::Integers(value) => value.fmt(f),

@@ -1,12 +1,12 @@
 //! Explicit file-to-native-artifact frontend.
 use super::{read_frontend_source, report_diagnostic, write_output};
-use scarp::diagnostics::Diagnostic;
+use scarp::diagnostics::{Diagnostic, Span};
 use scarp::native_object::{
     emit_elf64_bounded_integer_entry_with_layout, emit_elf64_linux_executable,
     emit_freestanding_function, emit_pe32plus_uefi_application, emit_pe32plus_uefi_kernel,
-    write_elf64_linux_executable_new, write_elf64_object_new, write_pe32plus_uefi_application_new,
-    CheckedElf64Kernel, FreestandingCallLayout, FreestandingFunctionMode, FreestandingTarget,
-    UefiKernelError,
+    emit_x86_64_flat_entry, write_elf64_linux_executable_new, write_elf64_object_new,
+    write_flat_entry_new, write_pe32plus_uefi_application_new, FreestandingCallLayout,
+    FreestandingFunctionMode, FreestandingTarget, UefiKernelError,
 };
 use std::{
     ffi::{OsStr, OsString},
@@ -18,11 +18,14 @@ pub(super) const HELP: &str = "Usage:
   scarp native-object [--json] x86_64-none checked <source.srp> -o <new-object>
   scarp native-object [--json] x86_64-none bounded <max-work> <source.srp> -o <new-object>
   scarp native-object [--json] x86_64-none bounded-entry <function> <max-work> <max-stack-bytes> <source.srp> -o <new-object>
+  scarp native-object [--json] x86_64-none flat-entry <function> <max-work> <max-stack-bytes> <source.srp> -o <new-flat-binary>
 
 Compile pure integer functions to a relocatable x86-64 ELF64 object.
 Checked mode accepts forward scalar control flow. Bounded modes also accept
 while and counted repeat loops. Choose bounded-entry for nonrecursive direct
 calls within a source file that contains only function declarations.
+Flat-entry emits the same position-independent native code starting at byte
+zero, without an ELF envelope. The caller supplies the stack and loading.
 Budgets are decimal unsigned 32-bit integers. The stack budget is measured
 below the aligned caller stack pointer immediately before CALL.
 The -o destination must be new and its parent directory must exist.
@@ -192,14 +195,16 @@ enum Request<'a> {
         name: &'a str,
         max_work: u32,
         max_stack_bytes: u32,
+        flat: bool,
     },
 }
 
 struct ObjectOutput {
-    kernel: CheckedElf64Kernel,
+    bytes: Vec<u8>,
+    failure_spans: Vec<Span>,
     layout: FreestandingCallLayout,
     mode: &'static str,
-    symbol: &'static str,
+    symbol: Option<&'static str>,
     max_work: Option<u32>,
     entry_stack: Option<EntryStack>,
 }
@@ -237,7 +242,7 @@ pub(super) fn run(args: &[OsString], output: &mut impl Write, errors: &mut impl 
             )
         }
         [target, mode, entry, work, stack, source, flag, destination]
-            if mode == "bounded-entry" && flag == "-o" =>
+            if (mode == "bounded-entry" || mode == "flat-entry") && flag == "-o" =>
         {
             let Some(name) = entry.to_str().filter(|name| !name.is_empty()) else {
                 let _ = writeln!(errors, "error: entry function name must be nonempty UTF-8");
@@ -255,6 +260,7 @@ pub(super) fn run(args: &[OsString], output: &mut impl Write, errors: &mut impl 
                     name,
                     max_work,
                     max_stack_bytes,
+                    flat: mode == "flat-entry",
                 },
                 source,
                 destination,
@@ -288,7 +294,12 @@ pub(super) fn run(args: &[OsString], output: &mut impl Write, errors: &mut impl 
         Err(error) => return report_diagnostic(&error, input, &text, errors, false),
     };
     let path = Path::new(destination);
-    match write_elf64_object_new(path, &artifact.kernel.object) {
+    let written = if artifact.symbol.is_some() {
+        write_elf64_object_new(path, &artifact.bytes)
+    } else {
+        write_flat_entry_new(path, &artifact.bytes)
+    };
+    match written {
         Ok(()) if json => write_output(write_metadata(target, &artifact, output), errors),
         Ok(()) => 0,
         Err(error) => {
@@ -325,10 +336,11 @@ fn compile_object(
                 FreestandingFunctionMode::Bounded { max_work } => ("bounded", Some(max_work)),
             };
             Ok(ObjectOutput {
-                kernel: artifact.kernel,
+                bytes: artifact.kernel.object,
+                failure_spans: artifact.kernel.failure_spans,
                 layout: artifact.layout,
                 mode: mode_name,
-                symbol: mode.symbol(),
+                symbol: Some(mode.symbol()),
                 max_work,
                 entry_stack: None,
             })
@@ -337,8 +349,25 @@ fn compile_object(
             name,
             max_work,
             max_stack_bytes,
+            flat,
         } => match target {
             FreestandingTarget::X86_64None => {
+                if flat {
+                    let artifact = emit_x86_64_flat_entry(source, name, max_work, max_stack_bytes)?;
+                    return Ok(ObjectOutput {
+                        bytes: artifact.bytes,
+                        failure_spans: artifact.failure_spans,
+                        layout: artifact.entry_layout,
+                        mode: "flat-entry",
+                        symbol: None,
+                        max_work: Some(max_work),
+                        entry_stack: Some(EntryStack {
+                            max_stack_bytes,
+                            peak_stack_bytes: artifact.peak_stack_bytes,
+                            max_active_frames: artifact.max_active_frames,
+                        }),
+                    });
+                }
                 let artifact = emit_elf64_bounded_integer_entry_with_layout(
                     source,
                     name,
@@ -346,10 +375,11 @@ fn compile_object(
                     max_stack_bytes,
                 )?;
                 Ok(ObjectOutput {
-                    kernel: artifact.kernel,
+                    bytes: artifact.kernel.object,
+                    failure_spans: artifact.kernel.failure_spans,
                     layout: artifact.entry_layout,
                     mode: "bounded-entry",
-                    symbol: "scarp_bounded_integer_entry",
+                    symbol: Some("scarp_bounded_integer_entry"),
                     max_work: Some(max_work),
                     entry_stack: Some(EntryStack {
                         max_stack_bytes,
@@ -372,11 +402,15 @@ fn write_metadata(
     // emitter. The report contains no caller-controlled path or source text.
     write!(
         out,
-        "{{\"schema_version\":1,\"target\":\"{}\",\"mode\":\"{}\",\"symbol\":\"{}\",\"max_work\":",
+        "{{\"schema_version\":1,\"target\":\"{}\",\"mode\":\"{}\",\"symbol\":",
         target.name(),
         artifact.mode,
-        artifact.symbol,
     )?;
+    match artifact.symbol {
+        Some(symbol) => write!(out, "\"{symbol}\"")?,
+        None => out.write_all(b"null")?,
+    }
+    out.write_all(b",\"max_work\":")?;
     match artifact.max_work {
         None => out.write_all(b"null")?,
         Some(max_work) => write!(out, "{max_work}")?,
@@ -401,7 +435,7 @@ fn write_metadata(
         )?;
     }
     out.write_all(b"\"span_encoding\":\"utf-8-bytes\",\"failure_spans\":[")?;
-    for (index, span) in artifact.kernel.failure_spans.iter().enumerate() {
+    for (index, span) in artifact.failure_spans.iter().enumerate() {
         if index != 0 {
             out.write_all(b",")?;
         }

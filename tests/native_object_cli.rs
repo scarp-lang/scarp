@@ -1,6 +1,6 @@
 use scarp::native_object::{
     emit_elf64_bounded_integer_entry_with_layout, emit_freestanding_function,
-    FreestandingFunctionMode, FreestandingTarget,
+    emit_x86_64_flat_entry, FreestandingFunctionMode, FreestandingTarget,
 };
 use std::{
     fs,
@@ -32,6 +32,45 @@ impl Drop for Directory {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);
     }
+}
+
+#[test]
+fn flat_entry_emits_the_elf_text_and_reports_a_callable_offset_zero() {
+    let family = Directory::new("flat");
+    let source = "pure funcra helper(x: integer) -> integer { return x + 2; }
+        pure funcra entry(x: integer) -> integer { return helper(x) * 2; }";
+    fs::write(family.path("test.srp"), source).unwrap();
+    let flat = emit_x86_64_flat_entry(source, "entry", 1000, 1024).unwrap();
+    let elf = emit_elf64_bounded_integer_entry_with_layout(source, "entry", 1000, 1024).unwrap();
+    assert_eq!(flat.entry_layout, elf.entry_layout);
+    assert_eq!(flat.failure_spans, elf.kernel.failure_spans);
+    assert_eq!(flat.peak_stack_bytes, elf.peak_stack_bytes);
+
+    let image = &elf.kernel.object;
+    let field = |at| u64::from_le_bytes(image[at..at + 8].try_into().unwrap()) as usize;
+    let text = field(40) + 64;
+    let offset = field(text + 24);
+    let length = field(text + 32);
+    assert_eq!(flat.bytes, image[offset..offset + length]);
+
+    let args = [
+        "--json",
+        "x86_64-none",
+        "flat-entry",
+        "entry",
+        "1000",
+        "1024",
+        "test.srp",
+        "-o",
+        "entry.bin",
+    ];
+    let run = family.run(&args);
+    assert!(run.status.success(), "{:?}", run.stderr);
+    let metadata = String::from_utf8(run.stdout).unwrap();
+    assert!(metadata.contains("\"mode\":\"flat-entry\"") && metadata.contains("\"symbol\":null"));
+    assert_eq!(fs::read(family.path("entry.bin")).unwrap(), flat.bytes);
+    assert!(!family.run(&args).status.success());
+    assert_eq!(fs::read(family.path("entry.bin")).unwrap(), flat.bytes);
 }
 
 #[test]
