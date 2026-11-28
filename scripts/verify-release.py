@@ -491,7 +491,7 @@ def verify(directory, version, commit, source_directory=None):
             "docs/releases/v0.0.7-alpha.5-publication.md",
             "docs/source-tensors.md", "docs/fixed-width-integers.md", "docs/native-linux-executable.md",
             "examples/tensor_learning.srp", "examples/tensor_learning.stdout",
-            "examples/native_linux_exit.srp",
+            "examples/native_linux_exit.srp", "examples/native_linux_exit.stdout",
         ) if version == "0.0.7-alpha.5" else ()
         release_files = (METADATA_MEMBER,) if version in EXTERNAL_DOCS_VERSIONS else (f"docs/releases/v{version}.md",)
         for member in (
