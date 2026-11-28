@@ -330,7 +330,7 @@ fn kernel_layout_has_its_own_uninitialized_nonexecutable_storage() {
     let build = |stack| emit_pe32plus_uefi_kernel(LOADER, "boot", KERNEL, "kernel", 10000, stack);
     let kernel = build(1024).unwrap();
     let exact = kernel.loader_stack_bytes.max(kernel.kernel_stack_bytes);
-    assert!(exact >= 112 && exact < 1024);
+    assert!((112..1024).contains(&exact));
     assert_eq!(kernel, build(exact).unwrap());
     assert!(build(exact - 1).is_err());
     assert!(kernel
