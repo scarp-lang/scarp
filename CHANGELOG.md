@@ -1,6 +1,9 @@
 # Changelog
 
-## 0.0.7-alpha.4 — prerelease candidate
+## 0.0.7-alpha.4 — published GitHub prerelease, 2026-11-28
+
+Published from [`e620bdcb`](https://github.com/scarp-lang/scarp/commit/e620bdcb512fbe909b08f1b4cc625865e4cdf339).
+[Release and downloads](https://github.com/scarp-lang/scarp/releases/tag/v0.0.7-alpha.4)
 
 - Add opt-in native self and mutual recursion for ELF64 integer entries,
   with checked stack, frame-depth, and shared work limits.
