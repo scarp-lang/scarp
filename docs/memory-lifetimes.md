@@ -96,6 +96,23 @@ larger source allocation live after the original binding is retired. Window
 offset and length validation is unchanged. Empty constructors also reuse
 their type-specific empty allocation.
 
+Tensor source values share their finite vector backing across reshapes and
+slices. A tensor graph releases each primal and adjoint handle after its
+last reverse use and clears both tapes on return or failure. Frames reuse
+empty tape buffers across selected calls. The spare-frame pool caps retained
+tape capacity at 128 entries per buffer. Every selected graph charges the
+same logical tape sizes, including when the host can reuse an allocation.
+
+For native heap-backed values, a future escape analysis should begin with
+resolved value origins and trace them through local assignments, projections,
+returns, outputs and call arguments. A return, output, unresolved effect or
+call without a proven borrowing contract marks the corresponding origin
+as escaping. At joins, union the possible origins. Begin with frame-owned
+storage for proven local origins and keep shared immutable backing for
+the escaping class. Emit checked ownership and retirement events in the
+verified IR before introducing native heap allocation. The current native
+backend uses inline aggregate lanes and supplies a scalar process boundary.
+
 There is no guarantee that the host allocator immediately returns released
 physical pages to the operating system. String formatting, output capture,
 expression stacks, compilation data, and native host allocations can retain

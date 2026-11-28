@@ -389,6 +389,10 @@ pub enum ExpressionKind {
         entries: Vec<(usize, usize)>,
         empty_types: Option<(SourceType, SourceType)>,
     },
+    Tensor {
+        kind: SourceType,
+        elements: Vec<usize>,
+    },
     Integers {
         elements: Vec<usize>,
     },

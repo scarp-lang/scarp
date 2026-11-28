@@ -18,7 +18,7 @@ use crate::{
     },
     diagnostics::{Diagnostic, DiagnosticKind, Span},
     lexer::{Token, TokenKind},
-    value::{FiniteFloat, ValueType, MAX_VECTOR_LENGTH},
+    value::{FiniteFloat, ValueType, MAX_TENSOR_RANK, MAX_VECTOR_LENGTH},
 };
 
 /// Maximum expression nesting, excluding the output call itself.
@@ -916,7 +916,8 @@ impl Parser<'_> {
         self.punctuation(TokenKind::Equal, "'='").map_err(|error|
             error.with_help("declarations require an initializer: bind name = expression; or var name = expression;"))?;
         let mut nodes = Vec::new();
-        let root = self.logical_or(&mut nodes, 0).map_err(|error| {
+        let initializer = self.binding_initializer(&mut nodes, annotation.as_ref());
+        let root = initializer.map_err(|error: ParseError| {
             if error.0.kind == DiagnosticKind::UnexpectedToken {
                 error.with_help(format!(
                     "provide an initializer after '=': {keyword} name = expression;"
@@ -952,6 +953,40 @@ impl Parser<'_> {
             propagate,
             span: Span::new(start, end),
         })
+    }
+
+    #[inline(never)]
+    fn binding_initializer(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        annotation: Option<&crate::ast::TypeAnnotation>,
+    ) -> Result<usize, ParseError> {
+        let bare_tensor = annotation.filter(|type_| {
+            type_
+                .kind
+                .as_tensor()
+                .is_some_and(|tensor| !tensor.dimensions().is_empty())
+                && self.at(&TokenKind::LeftBracket)
+                && !self
+                    .tokens
+                    .get(self.cursor + 2)
+                    .is_some_and(|t| t.kind == TokenKind::Colon)
+        });
+        if let Some(type_) = bare_tensor {
+            let opening = self.current().expect("opening tensor bracket").span;
+            let elements = self.tensor_payload(nodes, 0, &type_.kind)?;
+            let end = self.tokens[self.cursor - 1].span.end;
+            Ok(push(
+                nodes,
+                ExpressionKind::Tensor {
+                    kind: type_.kind.clone(),
+                    elements,
+                },
+                Span::new(opening.start, end),
+            ))
+        } else {
+            self.logical_or(nodes, 0)
+        }
     }
 
     fn assignment(&mut self) -> Result<Statement, ParseError> {
@@ -1076,7 +1111,7 @@ impl Parser<'_> {
         *remaining = remaining
             .checked_sub(1)
             .ok_or_else(|| ParseError::new(limit, span, "type exceeds 4096 structural nodes"))?;
-        if matches!(name.as_str(), "tuple" | "array" | "list" | "map")
+        if matches!(name.as_str(), "tuple" | "array" | "list" | "map" | "tensor")
             && depth >= MAX_COMPOSITE_DEPTH
         {
             return Err(ParseError::new(
@@ -1084,6 +1119,12 @@ impl Parser<'_> {
                 span,
                 "composite type nesting exceeds 32 levels",
             ));
+        }
+        if name == "tensor" {
+            *remaining = remaining.checked_sub(1).ok_or_else(|| {
+                ParseError::new(limit, span, "type exceeds 4096 structural nodes")
+            })?;
+            return self.tensor_type(span, remaining);
         }
         if name == "map" {
             self.punctuation(TokenKind::Less, "'<' after map")?;
@@ -1353,6 +1394,67 @@ impl Parser<'_> {
             .ok_or_else(|| self.array_length_error(Some(span)))
     }
 
+    fn tensor_type(
+        &mut self,
+        opening: Span,
+        remaining: &mut usize,
+    ) -> Result<SourceType, ParseError> {
+        self.punctuation(TokenKind::Less, "'<' before tensor type")?;
+        let (element, span) = self.identifier()?;
+        if element != "float" {
+            return Err(ParseError::new(
+                DiagnosticKind::TensorShape,
+                span,
+                "tensor elements must have type float",
+            ));
+        }
+        let mut shape = [0; MAX_TENSOR_RANK];
+        let mut rank = 0;
+        while self.at(&TokenKind::Comma) {
+            self.advance();
+            let span = self.current().map_or(opening, |token| token.span);
+            if rank == MAX_TENSOR_RANK {
+                return Err(ParseError::new(
+                    DiagnosticKind::TensorShape,
+                    span,
+                    "tensor rank exceeds eight axes",
+                ));
+            }
+            let axis = match self.current().map(|token| &token.kind) {
+                Some(TokenKind::Integer(text)) if text.bytes().all(|b| b.is_ascii_digit()) => {
+                    text.parse::<usize>().ok()
+                }
+                _ => None,
+            }
+            .filter(|&n| n <= MAX_VECTOR_LENGTH)
+            .ok_or_else(|| {
+                ParseError::new(
+                    DiagnosticKind::TensorShape,
+                    span,
+                    "tensor axes require decimal literals from 0 through 65536",
+                )
+            })?;
+            *remaining = remaining.checked_sub(1).ok_or_else(|| {
+                ParseError::new(
+                    DiagnosticKind::TensorShape,
+                    span,
+                    "type exceeds 4096 structural nodes",
+                )
+            })?;
+            shape[rank] = axis;
+            rank += 1;
+            self.advance();
+        }
+        let end = self.type_close()?.end;
+        SourceType::tensor(&shape[..rank]).ok_or_else(|| {
+            ParseError::new(
+                DiagnosticKind::TensorShape,
+                Span::new(opening.start, end),
+                "tensor shape exceeds 65536 cells",
+            )
+        })
+    }
+
     fn array_length_error(&self, span: Option<Span>) -> ParseError {
         let mut span = span.unwrap_or_else(|| {
             let end = self.tokens.last().map_or(0, |token| token.span.end);
@@ -1407,6 +1509,7 @@ impl Parser<'_> {
                     name.as_str(),
                     "tuple"
                         | "array"
+                        | "tensor"
                         | "list"
                         | "map"
                         | "option"
@@ -1996,6 +2099,13 @@ impl Parser<'_> {
             .get(self.cursor + 1)
             .is_some_and(|token| token.kind == TokenKind::Colon)
             && !self.explicit_type_arguments_at(self.cursor + 1);
+        if tagged && self.keyword("tensor") {
+            self.advance();
+            self.advance();
+            let mut remaining = MAX_SOURCE_TYPE_NODES;
+            let kind = self.tensor_type(opening, &mut remaining)?;
+            return self.tensor_literal(nodes, depth, opening, kind);
+        }
         if tagged && self.keyword("array") {
             self.advance();
             self.advance();
@@ -2042,6 +2152,84 @@ impl Parser<'_> {
             },
             Span::new(opening.start, end),
         ))
+    }
+
+    #[inline(never)]
+    fn tensor_literal(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+        opening: Span,
+        kind: SourceType,
+    ) -> Result<usize, ParseError> {
+        let elements = self.tensor_payload(nodes, depth + 1, &kind)?;
+        let end = self
+            .punctuation(TokenKind::RightBracket, "']' after tensor literal")?
+            .end;
+        Ok(push(
+            nodes,
+            ExpressionKind::Tensor { kind, elements },
+            Span::new(opening.start, end),
+        ))
+    }
+
+    fn tensor_payload(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+        kind: &SourceType,
+    ) -> Result<Vec<usize>, ParseError> {
+        let tensor = kind.as_tensor().expect("validated tensor type");
+        let mut elements = Vec::new();
+        if tensor.cell_count() == 0 {
+            self.punctuation(TokenKind::LeftBracket, "'[' for empty tensor payload")?;
+            self.punctuation(TokenKind::RightBracket, "']' for empty tensor payload")?;
+        } else {
+            self.tensor_cells(nodes, depth, tensor.dimensions(), &mut elements)?;
+        }
+        Ok(elements)
+    }
+
+    #[inline(never)]
+    fn tensor_cells(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+        shape: &[usize],
+        elements: &mut Vec<usize>,
+    ) -> Result<(), ParseError> {
+        let Some((&extent, inner)) = shape.split_first() else {
+            elements.push(self.logical_or(nodes, depth)?);
+            return Ok(());
+        };
+        let opening = self.punctuation(TokenKind::LeftBracket, "'[' opening a tensor axis")?;
+        self.expression_depth(depth, opening)?;
+        for i in 0..extent {
+            if i != 0 && !self.at(&TokenKind::RightBracket) {
+                self.punctuation(TokenKind::Comma, "',' between tensor cells or rows")?;
+            }
+            if self.at(&TokenKind::RightBracket) {
+                return Err(ParseError::new(
+                    DiagnosticKind::TensorShape,
+                    opening,
+                    format!("tensor axis requires {extent} entries, found {i}"),
+                ));
+            }
+            self.tensor_cells(nodes, depth + 1, inner, elements)?;
+        }
+        if self.at(&TokenKind::Comma) {
+            self.advance();
+        }
+        if !self.at(&TokenKind::RightBracket) {
+            let span = self.current().map_or(opening, |token| token.span);
+            return Err(ParseError::new(
+                DiagnosticKind::TensorShape,
+                span,
+                format!("tensor axis requires exactly {extent} entries"),
+            ));
+        }
+        self.advance();
+        Ok(())
     }
 
     fn array_literal(

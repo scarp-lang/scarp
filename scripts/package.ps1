@@ -49,7 +49,7 @@ try {
         throw 'Expected a three-part package version'
     }
     # Current packages retain the extracted-package checks introduced in alpha.14.
-    $contractVersion = if ($version -in @('0.0.6-alpha.15', '0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1', '0.0.7-alpha.2', '0.0.7-alpha.3', '0.0.7-alpha.4')) { '0.0.6-alpha.14' } else { $version }
+    $contractVersion = if ($version -in @('0.0.6-alpha.15', '0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1', '0.0.7-alpha.2', '0.0.7-alpha.3', '0.0.7-alpha.4', '0.0.7-alpha.5')) { '0.0.6-alpha.14' } else { $version }
     $compiler = & rustc --version
     if ($LASTEXITCODE -ne 0) { throw 'Could not read compiler version' }
     $compilerDetails = & rustc --version --verbose
@@ -140,14 +140,14 @@ try {
         'x86_64-unknown-linux-gnu' = @('linux', 'x86_64')
         'aarch64-apple-darwin' = @('macos', 'aarch64')
     }[$Target]
-    if ($diagnoseResult.ExitCode -ne 0 -or $diagnoseResult.Stderr.Length -ne 0 -or $hostReport.schema_version -ne 1 -or $hostReport.version -cne $version -or $hostReport.host_os -cne $expectedHost[0] -or $hostReport.host_arch -cne $expectedHost[1] -or $hostReport.execution -cne 'interpreter' -or $hostReport.native_executable -ne $false -or $hostReport.package_manager -ne $false -or $hostReport.static_verify -ne $true -or $hostReport.module_inspection -ne $true) { throw 'Packaged diagnose differs from native host capabilities' }
+    if ($diagnoseResult.ExitCode -ne 0 -or $diagnoseResult.Stderr.Length -ne 0 -or $hostReport.schema_version -ne 1 -or $hostReport.version -cne $version -or $hostReport.host_os -cne $expectedHost[0] -or $hostReport.host_arch -cne $expectedHost[1] -or $hostReport.execution -cne 'interpreter' -or $hostReport.native_executable -ne $true -or $hostReport.package_manager -ne $false -or $hostReport.static_verify -ne $true -or $hostReport.module_inspection -ne $true) { throw 'Packaged diagnose differs from native host capabilities' }
     $canonicalRun = Invoke-ScarpProcess -Executable $executable -Arguments @('exec', (Join-Path $extractedPackage 'examples/hello.srp'))
     $legacyRun = Invoke-ScarpProcess -Executable $executable -Arguments @('run', (Join-Path $extractedPackage 'examples/hello.srp'))
     if ($canonicalRun.ExitCode -ne 0 -or $canonicalRun.Stderr.Length -ne 0 -or [System.Convert]::ToBase64String($canonicalRun.Stdout) -cne [System.Convert]::ToBase64String($legacyRun.Stdout)) { throw 'Packaged exec differs from run' }
     # Alpha.18 and later: test the actual extracted compiler, not only the development
     # binary. Manifest precedence, conventional entrypoints, and typed prompts
     # must work with zero-argument exec on every supported package target.
-    if ($version -in @('0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1', '0.0.7-alpha.2', '0.0.7-alpha.3', '0.0.7-alpha.4')) {
+    if ($version -in @('0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1', '0.0.7-alpha.2', '0.0.7-alpha.3', '0.0.7-alpha.4', '0.0.7-alpha.5')) {
         $workspace = Join-Path $stagingRoot 'unified-exec-smoke'
         $srcDir = Join-Path $workspace 'src'
         New-Item -ItemType Directory -Path $srcDir -Force | Out-Null
@@ -204,7 +204,7 @@ try {
     [System.IO.File]::WriteAllText($staticSource, 'print(1/0);')
     $staticCheck = Invoke-ScarpProcess -Executable $executable -Arguments @('verify', '--diagnostic-format=json', $staticSource)
     if ($staticCheck.ExitCode -ne 0 -or $staticCheck.Stdout.Length -ne 0 -or $staticCheck.Stderr.Length -ne 0) { throw 'Packaged verify must remain static and silent' }
-    if ($version -in @('0.0.6-alpha.15', '0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1', '0.0.7-alpha.2', '0.0.7-alpha.3', '0.0.7-alpha.4')) {
+    if ($version -in @('0.0.6-alpha.15', '0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1', '0.0.7-alpha.2', '0.0.7-alpha.3', '0.0.7-alpha.4', '0.0.7-alpha.5')) {
         $oversized = Join-Path $stagingRoot 'oversized-frontend.srp'
         [IO.File]::WriteAllText($oversized, (' ' * (1MB + 1)))
         foreach ($mode in @('tokens', 'ast')) {
@@ -235,7 +235,7 @@ try {
             throw 'Packaged text comparison output differs at the exact budget'
         }
     }
-    if ($version -in @('0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1', '0.0.7-alpha.2', '0.0.7-alpha.3', '0.0.7-alpha.4')) {
+    if ($version -in @('0.0.6-alpha.16', '0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1', '0.0.7-alpha.2', '0.0.7-alpha.3', '0.0.7-alpha.4', '0.0.7-alpha.5')) {
         foreach ($example in @('order_statistics', 'core_collections')) {
             $source = Join-Path $extractedPackage "examples/$example.srp"
             $expectedOutput = [IO.File]::ReadAllBytes((Join-Path $extractedPackage "examples/$example.stdout"))
@@ -246,7 +246,32 @@ try {
             }
         }
     }
-    if ($version -in @('0.0.7-alpha.2', '0.0.7-alpha.3', '0.0.7-alpha.4')) {
+    $tensorSource = Join-Path $extractedPackage 'examples/tensor_learning.srp'
+    $tensorOutput = [IO.File]::ReadAllBytes((Join-Path $extractedPackage 'examples/tensor_learning.stdout'))
+    $tensor = Invoke-ScarpProcess -Executable $executable -Arguments @('exec', $tensorSource)
+    if ($tensor.ExitCode -ne 0 -or $tensor.Stderr.Length -ne 0 -or
+        [Convert]::ToBase64String($tensor.Stdout) -cne [Convert]::ToBase64String($tensorOutput)) {
+        throw 'Packaged tensor training output differs'
+    }
+    $linuxSource = Join-Path $extractedPackage 'examples/native_linux_exit.srp'
+    $linuxExecutable = Join-Path $stagingRoot 'scarp-linux-exit'
+    $linuxBuild = Invoke-ScarpProcess -Executable $executable -Arguments @(
+        'native-exe', 'linux-x86_64', '1000', '4096', $linuxSource, '-o', $linuxExecutable
+    )
+    if ($linuxBuild.ExitCode -ne 0 -or $linuxBuild.Stdout.Length -ne 0 -or $linuxBuild.Stderr.Length -ne 0) {
+        throw 'Packaged standalone executable emission failed'
+    }
+    $linuxBytes = [IO.File]::ReadAllBytes($linuxExecutable)
+    if ($linuxBytes.Length -lt 176 -or [BitConverter]::ToString($linuxBytes, 16, 4) -cne '02-00-3E-00') {
+        throw 'Packaged standalone executable has an incorrect ELF64 target or envelope'
+    }
+    if ($IsLinux -and $Target -eq 'x86_64-unknown-linux-gnu') {
+        $linuxRun = Invoke-ScarpProcess -Executable $linuxExecutable -Arguments @()
+        if ($linuxRun.ExitCode -ne 45 -or $linuxRun.Stdout.Length -ne 0 -or $linuxRun.Stderr.Length -ne 0) {
+            throw 'Packaged standalone executable returned an unexpected result'
+        }
+    }
+    if ($version -in @('0.0.7-alpha.2', '0.0.7-alpha.3', '0.0.7-alpha.4', '0.0.7-alpha.5')) {
         $source = Join-Path $extractedPackage 'examples/native_bounded_entry.srp'
         $nativeObject = Join-Path $stagingRoot 'entry.o'
         $entry = Invoke-ScarpProcess -Executable $executable -Arguments @(
@@ -261,7 +286,7 @@ try {
             throw 'Packaged native object ABI or ELF64 header differs'
         }
     }
-    if ($version -in @('0.0.7-alpha.3', '0.0.7-alpha.4')) {
+    if ($version -in @('0.0.7-alpha.3', '0.0.7-alpha.4', '0.0.7-alpha.5')) {
         $source = Join-Path $extractedPackage 'examples/native_aggregate_locals.srp'
         $nativeObject = Join-Path $stagingRoot 'aggregate.o'
         $entry = Invoke-ScarpProcess -Executable $executable -Arguments @(
@@ -280,7 +305,7 @@ try {
             throw 'Packaged string operators differ from expected output'
         }
     }
-    if ($version -ceq '0.0.7-alpha.4') {
+    if ($version -in @('0.0.7-alpha.4', '0.0.7-alpha.5')) {
         $left = Join-Path $stagingRoot 'bigint-left.txt'
         $right = Join-Path $stagingRoot 'bigint-right.txt'
         $quotient = Join-Path $stagingRoot 'bigint-quotient.txt'
@@ -455,7 +480,7 @@ try {
         $expectedSchema = if ($example -in @('variant_validation', 'ui_event_patterns', 'typed_submission', 'typed_propagation', 'task_panel_state', 'structured_pattern_coverage')) { 5 }
         elseif ($example -in @('app_state', 'typed_dynamic_lists', 'persistent_list_updates', 'native_aggregate_locals', 'native_nested_aggregate_locals')) { 4 }
         elseif ($example -in @('fixed_arrays', 'array_updates', 'array_concat', 'array_reordering', 'list_reordering', 'typed_maps', 'persistent_maps', 'map_projections', 'core_collections')) { 3 }
-        elseif ($example -in @('tuples', 'core_input_tuple', 'data_destructure')) { 2 }
+        elseif ($example -in @('tuples', 'core_input_tuple', 'data_destructure', 'tensor_learning')) { 2 }
         else { 1 }
         if ($metadata.schema_version -ne $expectedSchema -or $metadata.entry -ne 0 -or $metadata.modules.Count -lt 1) {
             throw "Packaged $example JSON schema failed: expected schema $expectedSchema, entry 0 and at least one module; got schema $($metadata.schema_version), entry $($metadata.entry) and $($metadata.modules.Count) modules"
@@ -463,7 +488,7 @@ try {
     }
     $interactiveExamples = @('typed_calculator', 'exact_integer')
     if ($contractVersion -in @('0.0.6-alpha.11', '0.0.6-alpha.12', '0.0.6-alpha.13', '0.0.6-alpha.14')) { $interactiveExamples += 'exact_decimal' }
-    if ($version -in @('0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1', '0.0.7-alpha.2', '0.0.7-alpha.3', '0.0.7-alpha.4')) { $interactiveExamples += 'boolean_prompt' }
+    if ($version -in @('0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1', '0.0.7-alpha.2', '0.0.7-alpha.3', '0.0.7-alpha.4', '0.0.7-alpha.5')) { $interactiveExamples += 'boolean_prompt' }
     foreach ($example in $interactiveExamples) {
         $source = Join-Path $extractedPackage "examples/interactive/$example.srp"
         $inputPath = Join-Path $extractedPackage "examples/interactive/$example.stdin"
@@ -473,7 +498,7 @@ try {
             throw "Packaged interactive $example output differs"
         }
     }
-    if ($version -in @('0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1', '0.0.7-alpha.2', '0.0.7-alpha.3', '0.0.7-alpha.4')) {
+    if ($version -in @('0.0.6-alpha.17', '0.0.6-alpha.18', '0.0.6-alpha.19', '0.0.6-alpha.20', '0.0.7-alpha.1', '0.0.7-alpha.2', '0.0.7-alpha.3', '0.0.7-alpha.4', '0.0.7-alpha.5')) {
         $source = Join-Path $extractedPackage 'examples/interactive/boolean_prompt.srp'
         $invalidInput = [Text.Encoding]::UTF8.GetBytes("invalid`n")
         $invalidBoolean = Invoke-ScarpProcess -Executable $executable -Arguments @(

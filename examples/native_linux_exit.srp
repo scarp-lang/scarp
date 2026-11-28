@@ -1,0 +1,11 @@
+pure funcra sum_to(count: integer) -> integer {
+    var total = 0;
+    repeat count as index {
+        total += index;
+    }
+    return total;
+}
+
+pure funcra main() -> integer {
+    return sum_to(10);
+}

@@ -17,6 +17,7 @@ enum Native {
     SampleArea(usize),
     SampleSlopes(usize),
     SampleCumulativeArea(usize),
+    TensorGradient(usize),
 }
 
 fn call(kernel: Builtin, args: &[Value]) -> Value {
@@ -31,6 +32,30 @@ fn fill(value: f64, count: usize) -> Value {
 
 fn native(workload: Native) -> Value {
     match workload {
+        Native::TensorGradient(size) => {
+            use scarp::{
+                numeric::tensor::{self, TensorLimits, TensorUnary},
+                value::NumericTensor,
+            };
+            let items = size * size;
+            let shape = [size, size];
+            let limits = TensorLimits {
+                max_steps: 10_000_000,
+                max_vector_bytes: 8 * 1024 * 1024,
+            };
+            let one = NumericTensor::new(&[1.0], &[]).unwrap();
+            let two = NumericTensor::new(&[2.0], &[]).unwrap();
+            let w = tensor::broadcast_to(&one, &shape, limits).unwrap();
+            let a = tensor::broadcast_to(&two, &shape, limits).unwrap();
+            let product = tensor::matmul(&a, &w, limits).unwrap();
+            let loss = tensor::unary(TensorUnary::Square, &product, limits).unwrap();
+            black_box(tensor::sum_to_shape(&loss, &[], limits).unwrap());
+            let seed = NumericTensor::new(&vec![1.0; items], &shape).unwrap();
+            let adjoint =
+                tensor::unary_backward(TensorUnary::Square, &product, &seed, limits).unwrap();
+            let (_, gradient) = tensor::matmul_backward(&a, &w, &adjoint, limits).unwrap();
+            Value::Float(gradient.cells()[0])
+        }
         Native::Rms(count) => call(Builtin::Rms, &[fill(3.0, count)]),
         Native::SampleArea(count) => {
             let x: Vec<f64> = (0..count).map(|i| i as f64).collect();
@@ -225,6 +250,24 @@ fn main() {
         Native::Allocation,
         1024,
     ));
+    for size in [16, 64] {
+        cases.push((
+            format!("tensor_matmul_gradient_{size}"),
+            format!(
+                "
+                bind one = [tensor: <float> 1.0];
+                bind two = [tensor: <float> 2.0];
+                bind w = tensor_broadcast(one, {size}, {size});
+                bind a = tensor_broadcast(two, {size}, {size});
+                bind result = tensor_value_grad(w, tensor_sum(tensor_square(matmul(a, w))));
+                print(result[1][0][0]);
+            "
+            ),
+            (8 * size * size) as f64,
+            Native::TensorGradient(size),
+            size,
+        ));
+    }
     for (name, source, expected, workload, size) in cases {
         let program = scarp::compile(&source).unwrap();
         let mut output = Vec::new();

@@ -255,6 +255,7 @@ fn expression_nodes_preserve_spans_and_postorder_invariants() {
             | ExpressionKind::Array { elements, .. }
             | ExpressionKind::List { elements, .. }
             | ExpressionKind::Vector { elements }
+            | ExpressionKind::Tensor { elements, .. }
             | ExpressionKind::Integers { elements } => {
                 assert!(elements.iter().all(|element| *element < id))
             }

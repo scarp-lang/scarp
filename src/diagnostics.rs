@@ -189,6 +189,10 @@ diagnostic_catalogue! {
     GenericDefinition => ("E0085", "Invalid generic declaration or parameter. Declare distinct type parameters after the function name and use a supported constraint."),
     GenericArguments => ("E0086", "Type arguments could not be inferred or checked. Supply explicit arguments with name::<type>(...) or pass values of a consistent type that satisfies the declared constraints."),
     GenericLimit => ("E0087", "Generic specialization exceeded a compiler budget or produced an oversized type. Reduce the number and size of distinct instantiations, or keep recursive type arguments unchanged."),
+    TensorShape => ("E0088", "Tensor shape is invalid or incompatible with the operation. Use float cells, at most eight axes and at most 65536 cells."),
+    TensorIndex => ("E0089", "Tensor index is out of bounds for the selected axis, or a scalar tensor was indexed. Use a nonnegative index smaller than the axis length."),
+    AutoDiffExpression => ("E0090", "Unsupported source differentiation expression or graph shape. Use a named float or tensor parameter and a bounded expression of supported operations."),
+    FixedIntegerOverflow => ("E0091", "Fixed-width integer arithmetic overflow. Use a wider destination or reduce the operands."),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -47,6 +47,8 @@ integer. Each returned vector owns a new buffer; inputs are borrowed unchanged.
 | `dot(a, b)` | float | Equal lengths; empty returns +0.0 |
 | `mse(a, b)` | float | Equal nonzero lengths; scaled mean squared difference |
 | `add(a, b)` | vector | Equal lengths; element addition |
+| `vector_sub(a, b)` | vector | Development: equal lengths; element subtraction |
+| `hadamard(a, b)` | vector | Development: equal lengths; element multiplication |
 | `scale(v, factor)` | vector | Float multiplication |
 | `clamp(v, low, high)` | vector | Float low <= high, also for empty input |
 | `fill(value, count)` | vector | Float value then integer count in 0..65536 |
@@ -346,3 +348,53 @@ bound and unchanged diagnostic codes. Empty/zero vectors cannot be normalized;
 `norm([])` returns 0.0. A nonrepresentable final scalar norm still fails.
 See [proposal 0018](proposals/0018-scaled-l2-norms.md) for precise semantics,
 tests and release criteria. See [alpha.3 release notes](releases/v0.0.4-alpha.3.md).
+
+## Development: explicit elementwise arithmetic
+
+`vector_sub(a, b)` and `hadamard(a, b)` return new immutable vectors. Both
+require equal visible lengths (including two empty vectors), charge one work
+unit and eight cumulative payload bytes per output element, and reject any
+nonfinite result. No broadcasting or implicit integer conversion is added.
+`hadamard` differs from `dot`: it returns individual products rather than a
+compensated scalar reduction. For ordinary-sized values the products can be
+summed; prefer `dot` when only a scalar is needed to avoid an extra allocation.
+
+The [vector learning example](../examples/vector_learning.srp) compares a
+manual dot product with the built-in and performs one explicit gradient step
+for half squared error, then demonstrates matrix multiplication. It does not
+implement automatic differentiation. Build the development branch to use these
+new kernels; no previously published binary is claimed to include them.
+
+## Development: explicit activation backpropagation and SGD
+
+The following pure functions return a fresh vector and accept equal-length
+finite input vectors. The first argument is the original preactivation or
+logit vector, not the activated output. The second is the upstream gradient.
+
+| Call | Meaning |
+| --- | --- |
+| `relu_backward(x, g)` | `g * (x > 0)`, zero subgradient at zero |
+| `sigmoid_backward(x, g)` | Stable sigmoid derivative times g |
+| `tanh_backward(x, g)` | Stable hyperbolic tangent derivative times g |
+| `softplus_backward(x, g)` | Sigmoid of x times g |
+| `softmax_backward(x, g)` | Jacobian-vector product, `p_i * (g_i - dot(p,g))` |
+| `sgd_step(w, g, rate)` | `w - rate*g`, with nonnegative finite rate |
+
+Smooth derivatives are computed from the input rather than subtracting a
+rounded saturated activation from one; tails remain visible when representable.
+Derivatives are rounded to binary64 before multiplication by the upstream
+value. Softmax uses maximum-shifted exponentials, compensated weighted sums,
+a scaled fallback for overflowing sums, and a weighted-difference fallback
+when the unweighted difference overflows. Constant upstream gradients produce
+exact positive zeros. Softmax rejects empty input; other functions accept two
+empty vectors. SGD rejects a nonfinite intermediate product or final result.
+
+Prepaid native work: `max(1,n)` for ReLU, `max(1,2*n)` for SGD,
+`max(1,6*n)` for smooth elementwise backward calls, and `12*n` for softmax
+backward. Every call materializes exactly 8*n logical numerical payload bytes;
+no temporary vector or Jacobian is allocated. Inputs remain immutable.
+
+[Two-layer training](../examples/two_layer_training.srp) combines these calls
+with matrix training primitives. It computes all gradients from the original
+weights before applying updates. This is explicit backpropagation, not an
+automatic differentiation engine or optimizer state manager.

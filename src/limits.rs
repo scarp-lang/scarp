@@ -35,8 +35,8 @@ pub struct ExecutionOptions {
     pub max_live_slots: usize,
     /// Conservative cumulative storage of output snapshots, including overhead.
     pub max_capture_bytes: usize,
-    /// Cumulative newly reserved vector/tile element payload, in bytes.
-    /// Sharing an existing immutable vector or tile does not charge again.
+    /// Cumulative newly reserved vector, tile and tensor payload, in bytes.
+    /// Sharing immutable numerical storage does not charge it again.
     pub max_vector_bytes: usize,
     /// Cumulative newly materialized UTF-8 string payload; sharing does not recharge.
     pub max_text_bytes: usize,

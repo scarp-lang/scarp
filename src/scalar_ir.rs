@@ -862,6 +862,17 @@ pub(crate) fn emit_bounded_integer_entry(
     elf64::emit_bounded_entry(&ir, max_work, max_stack_bytes)
 }
 
+pub(crate) fn emit_linux_executable(
+    source: &str,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<crate::native_object::LinuxExecutable, Diagnostic> {
+    let resolved = crate::compile(source)?;
+    let ir =
+        program::ScalarCallGraph::lower(&resolved, "main", elf64::MAX_INTEGER_ARGUMENTS, None)?;
+    elf64::emit_linux_executable(&ir, max_work, max_stack_bytes)
+}
+
 fn lower_integer_kernel(source: &str) -> Result<program::ScalarProgramIr, Diagnostic> {
     let syntax = crate::parse(source)?;
     // The resolved plan uses the same Store for declarations and plain

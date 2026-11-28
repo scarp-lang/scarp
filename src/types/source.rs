@@ -24,6 +24,7 @@ pub enum SourceType {
     Parameter(Arc<TypeParameter>),
     Tuple(Arc<TupleType>),
     Array(Arc<ArrayType>),
+    Tensor(Arc<TensorType>),
     List(Arc<ListType>),
     Map(Arc<MapType>),
     /// A record name in parsed syntax, resolved before semantic interning.
@@ -175,6 +176,23 @@ impl ArrayType {
 
     pub fn is_empty(&self) -> bool {
         self.length == 0
+    }
+}
+
+/// A validated shape for an immutable finite float tensor.
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct TensorType {
+    dimensions: Box<[usize]>,
+    cells: usize,
+}
+
+impl TensorType {
+    pub fn dimensions(&self) -> &[usize] {
+        &self.dimensions
+    }
+
+    pub fn cell_count(&self) -> usize {
+        self.cells
     }
 }
 
@@ -679,6 +697,21 @@ impl SourceType {
             _ => None,
         }
     }
+    pub fn tensor(dimensions: &[usize]) -> Option<Self> {
+        let cells = crate::value::tensor_element_count(dimensions)?;
+        Some(Self::Tensor(Arc::new(TensorType {
+            dimensions: dimensions.into(),
+            cells,
+        })))
+    }
+
+    pub fn as_tensor(&self) -> Option<&TensorType> {
+        match self {
+            Self::Tensor(tensor) => Some(tensor),
+            _ => None,
+        }
+    }
+
     pub fn as_array(&self) -> Option<&ArrayType> {
         match self {
             Self::Array(array) => Some(array),
@@ -722,6 +755,15 @@ impl SourceType {
         match self {
             Self::Tuple(t) => t.shape,
             Self::Array(a) => a.shape,
+            Self::Tensor(t) => Shape {
+                depth: 1,
+                nodes: 2 + t.dimensions.len(),
+                expanded: 1,
+                display_bytes: "tensor<float>".len() + 7 * t.dimensions.len(),
+                contains_array: false,
+                has_nominal_ref: false,
+                has_parameter: false,
+            },
             Self::List(l) => l.shape,
             Self::Map(m) => m.shape,
             Self::Record(r) => r.shape,
@@ -805,6 +847,10 @@ impl SourceType {
                     .collect::<Result<Vec<_>, _>>()?;
                 registry.intern(TypeKind::Tuple(elements.into()))
             }
+            Self::Tensor(t) => registry.intern(TypeKind::Tensor {
+                element: PrimitiveType::Float.id(),
+                dimensions: t.dimensions.iter().map(|&n| Some(n as u64)).collect(),
+            }),
             Self::Array(a) => {
                 let element = a.element.intern(registry)?;
                 registry.intern(TypeKind::Sequence {
@@ -868,6 +914,13 @@ impl fmt::Display for SourceType {
                 f.write_str(">")
             }
             Self::Array(a) => write!(f, "array<{}, {}>", a.element, a.length),
+            Self::Tensor(t) => {
+                f.write_str("tensor<float")?;
+                for axis in t.dimensions.iter() {
+                    write!(f, ", {axis}")?;
+                }
+                f.write_str(">")
+            }
             Self::List(l) => write!(f, "list<{}>", l.element),
             Self::Map(map) => write!(f, "map<{}, {}>", map.key, map.value),
         }

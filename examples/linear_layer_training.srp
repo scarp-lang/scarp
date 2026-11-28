@@ -1,0 +1,25 @@
+// A two-output linear layer with explicit gradients, no autodiff.
+bind weights = tile([1.0, 2.0, 3.0, 4.0], 2, 2);
+bind features = [1.0, 2.0];
+bind bias = [0.0, 0.0];
+bind target = [4.0, 10.0];
+bind prediction = add(matvec(weights, features), bias);
+bind error = vector_sub(prediction, target);
+bind weight_gradient = outer(error, features);
+bind input_gradient = matvec_transpose(weights, error);
+bind rate = 0.125;
+bind updated_weights = tile_sub(weights, tilescale(weight_gradient, rate));
+bind updated_bias = vector_sub(bias, scale(error, rate));
+bind next_prediction = add(matvec(updated_weights, features), updated_bias);
+bind next_error = vector_sub(next_prediction, target);
+print(prediction);
+print(weight_gradient);
+print(input_gradient);
+print(updated_weights);
+print(updated_bias);
+print(next_prediction);
+print(dot(error, error), dot(next_error, next_error));
+bind batch = tile([1.0, 2.0, 3.0, 4.0], 2, 2);
+print(tile_bias(batch, [10.0, 20.0]));
+print(row_sums(batch), column_sums(batch));
+print(tile_hadamard(batch, batch));

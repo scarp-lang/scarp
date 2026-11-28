@@ -56,10 +56,7 @@ impl BigInt {
     }
     /// Exact conversion. Out-of-range values never saturate or round.
     pub fn to_integer(&self) -> Option<i64> {
-        let mut magnitude = 0_u64;
-        for &limb in self.limbs.iter().rev() {
-            magnitude = magnitude.checked_mul(BASE)?.checked_add(u64::from(limb))?;
-        }
+        let magnitude = self.magnitude_u64()?;
         if self.negative {
             if magnitude == 1_u64 << 63 {
                 Some(i64::MIN)
@@ -69,6 +66,11 @@ impl BigInt {
         } else {
             i64::try_from(magnitude).ok()
         }
+    }
+    pub(crate) fn magnitude_u64(&self) -> Option<u64> {
+        self.limbs.iter().rev().try_fold(0_u64, |magnitude, &limb| {
+            magnitude.checked_mul(BASE)?.checked_add(u64::from(limb))
+        })
     }
     pub(crate) fn negated(&self) -> Self {
         Self {

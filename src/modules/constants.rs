@@ -156,6 +156,7 @@ impl Work {
                     | ExpressionKind::List { .. }
                     | ExpressionKind::Map { .. }
                     | ExpressionKind::Vector { .. }
+                    | ExpressionKind::Tensor { .. }
                     | ExpressionKind::Integers { .. }
                     | ExpressionKind::Index { .. } => return Err(Diagnostic::new(
                         Kind::ModuleSyntax,

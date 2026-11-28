@@ -102,6 +102,7 @@ pub(super) fn value_work(value: &Value) -> u64 {
         Value::String(s) => (s.len() as u64).saturating_mul(6).saturating_add(2),
         Value::Vector(v) => (v.len() as u64).saturating_mul(32).saturating_add(2),
         Value::Integers(v) => (v.len() as u64).saturating_mul(24).saturating_add(12),
+        Value::Tensor(t) => t.work(),
         Value::Tile(t) => (t.len() as u64)
             .saturating_mul(32)
             .saturating_add(t.height() as u64)
@@ -124,6 +125,7 @@ pub(super) fn value_capture(value: &Value) -> usize {
         Value::Vector(v) => v.len().saturating_mul(8),
         Value::Integers(v) => v.len().saturating_mul(8),
         Value::Tile(t) => t.len().saturating_mul(8).saturating_add(16),
+        Value::Tensor(t) => t.capture_bytes(),
         Value::BigInt(n) => n.payload_bytes().max(
             n.decimal_digits()
                 .saturating_add(usize::from(n.is_negative())),

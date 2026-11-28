@@ -179,6 +179,14 @@ impl Planner<'_> {
                 size: 8,
                 alignment: 8,
             },
+            TypeKind::Primitive(primitive) if primitive.fixed_integer_width().is_some() => {
+                let (bits, _) = primitive.fixed_integer_width().expect("fixed integer");
+                let bytes = u64::from(bits / 8);
+                Extent {
+                    size: bytes,
+                    alignment: bytes,
+                }
+            }
             TypeKind::Primitive(PrimitiveType::Boolean) => Extent {
                 size: 1,
                 alignment: 1,

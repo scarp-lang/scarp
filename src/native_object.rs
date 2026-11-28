@@ -10,7 +10,27 @@ use crate::diagnostics::{Diagnostic, Span};
 
 mod artifact;
 
-pub use artifact::write_elf64_object_new;
+pub use artifact::{write_elf64_linux_executable_new, write_elf64_object_new};
+
+/// Experimental compiler-owned standalone Linux x86-64 image.
+#[derive(Debug, PartialEq, Eq)]
+pub struct LinuxExecutable {
+    pub image: Vec<u8>,
+    pub max_active_frames: usize,
+    pub peak_stack_bytes: u32,
+}
+
+/// Compile a file of supported pure integer functions with a zero-argument
+/// `main` entry to an ET_EXEC image without a linker or libc. A successful
+/// result in 0..=125 becomes the exit status. Other values yield 126. A
+/// checked runtime failure yields 128 plus the nonzero native error status.
+pub fn emit_elf64_linux_executable(
+    source: &str,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<LinuxExecutable, Diagnostic> {
+    crate::scalar_ir::emit_linux_executable(source, max_work, max_stack_bytes)
+}
 
 /// Emit a deterministic ELF64 relocatable object from integer bindings.
 ///

@@ -1,8 +1,8 @@
 //! Semantic type identities. Source-language legality is checked separately.
 mod source;
 pub use source::{
-    ArrayType, ListType, MapType, RecordType, SourceType, TupleType, TypeParameter, VariantType,
-    MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_EXPANDED_VALUE_NODES, MAX_LIST_LENGTH,
+    ArrayType, ListType, MapType, RecordType, SourceType, TensorType, TupleType, TypeParameter,
+    VariantType, MAX_ARRAY_LENGTH, MAX_COMPOSITE_DEPTH, MAX_EXPANDED_VALUE_NODES, MAX_LIST_LENGTH,
     MAX_MAP_ENTRIES, MAX_RECORD_FIELDS, MAX_SOURCE_TYPE_NODES, MAX_TUPLE_ARITY, MAX_TUPLE_DEPTH,
     MAX_VARIANT_CASES,
 };
@@ -47,6 +47,14 @@ pub enum PrimitiveType {
     String,
     BigInt,
     Decimal,
+    I8,
+    U8,
+    I16,
+    U16,
+    I32,
+    U32,
+    I64,
+    U64,
 }
 
 impl PrimitiveType {
@@ -61,6 +69,14 @@ impl PrimitiveType {
         Self::String,
         Self::BigInt,
         Self::Decimal,
+        Self::I8,
+        Self::U8,
+        Self::I16,
+        Self::U16,
+        Self::I32,
+        Self::U32,
+        Self::I64,
+        Self::U64,
     ];
     pub const fn id(self) -> TypeId {
         TypeId(self as u64)
@@ -77,6 +93,14 @@ impl PrimitiveType {
             "string" => Self::String,
             "bigint" => Self::BigInt,
             "decimal" => Self::Decimal,
+            "i8" => Self::I8,
+            "u8" => Self::U8,
+            "i16" => Self::I16,
+            "u16" => Self::U16,
+            "i32" => Self::I32,
+            "u32" => Self::U32,
+            "i64" => Self::I64,
+            "u64" => Self::U64,
             _ => return None,
         })
     }
@@ -84,8 +108,23 @@ impl PrimitiveType {
         matches!(
             self,
             Self::Integer | Self::Float | Self::BigInt | Self::Decimal
-        )
+        ) || self.fixed_integer_width().is_some()
     }
+    /// Fixed-width integer layout in bits, with its signedness.
+    pub const fn fixed_integer_width(self) -> Option<(u32, bool)> {
+        Some(match self {
+            Self::I8 => (8, true),
+            Self::U8 => (8, false),
+            Self::I16 => (16, true),
+            Self::U16 => (16, false),
+            Self::I32 => (32, true),
+            Self::U32 => (32, false),
+            Self::I64 => (64, true),
+            Self::U64 => (64, false),
+            _ => return None,
+        })
+    }
+
     pub(crate) const fn name(self) -> &'static str {
         match self {
             Self::Unit => "unit",
@@ -98,6 +137,14 @@ impl PrimitiveType {
             Self::String => "string",
             Self::BigInt => "bigint",
             Self::Decimal => "decimal",
+            Self::I8 => "i8",
+            Self::U8 => "u8",
+            Self::I16 => "i16",
+            Self::U16 => "u16",
+            Self::I32 => "i32",
+            Self::U32 => "u32",
+            Self::I64 => "i64",
+            Self::U64 => "u64",
         }
     }
 }
@@ -283,7 +330,7 @@ impl TypeKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TypeLimits {
-    /// Unique types, including the ten universal primitives.
+    /// Unique types, including the eighteen universal primitives.
     pub max_types: usize,
     /// Retained child references and tensor axis descriptors, not process bytes.
     pub max_components: usize,
@@ -341,7 +388,7 @@ impl fmt::Display for TypeRegistryError {
 }
 impl std::error::Error for TypeRegistryError {}
 
-static PRIMITIVES: [TypeKind; 10] = [
+static PRIMITIVES: [TypeKind; PrimitiveType::ALL.len()] = [
     TypeKind::Primitive(PrimitiveType::Unit),
     TypeKind::Primitive(PrimitiveType::Integer),
     TypeKind::Primitive(PrimitiveType::Float),
@@ -352,6 +399,14 @@ static PRIMITIVES: [TypeKind; 10] = [
     TypeKind::Primitive(PrimitiveType::String),
     TypeKind::Primitive(PrimitiveType::BigInt),
     TypeKind::Primitive(PrimitiveType::Decimal),
+    TypeKind::Primitive(PrimitiveType::I8),
+    TypeKind::Primitive(PrimitiveType::U8),
+    TypeKind::Primitive(PrimitiveType::I16),
+    TypeKind::Primitive(PrimitiveType::U16),
+    TypeKind::Primitive(PrimitiveType::I32),
+    TypeKind::Primitive(PrimitiveType::U32),
+    TypeKind::Primitive(PrimitiveType::I64),
+    TypeKind::Primitive(PrimitiveType::U64),
 ];
 static NEXT_ARENA: AtomicU32 = AtomicU32::new(1);
 

@@ -25,6 +25,9 @@ generic inference, and scalable and file-backed BigInt arithmetic.
 [Release notes](docs/releases/v0.0.7-alpha.4-publication.md) ·
 [Publication verification](docs/releases/v0.0.7-alpha.4-validation.md)
 
+The development branch targets **0.0.7-alpha.5** with source tensors,
+differentiation and optimizers, fixed-width integers, and Linux ELF64 executables.
+
 **0.0.7-alpha.3** adds generic functions, bounded string operators, and checked native
 array, tuple, and record locals. [Release notes](docs/releases/v0.0.7-alpha.3-publication.md) ·
 [Publication verification](docs/releases/v0.0.7-alpha.3-validation.md)
@@ -401,6 +404,9 @@ the CLI does not reject other filename extensions.
 ## What works now
 
 - `print("text");` statements, executed in source order.
+- [Source tensors, reverse-mode differentiation, and optimizers](docs/source-tensors.md).
+- [Fixed-width signed and unsigned integers](docs/fixed-width-integers.md).
+- [Bounded standalone Linux x86-64 executables](docs/native-linux-executable.md).
 - Multiple statements, empty strings, and empty or comment-only files.
 - Signed 64-bit integers with `+`, `-`, `*`, `/`, unary minus, and parentheses.
 - Operator precedence, left-associative binary operators, and checked arithmetic.
