@@ -753,7 +753,9 @@ pub fn broadcast_to(
     let mut shape = [0; MAX_TENSOR_RANK];
     broadcast(input.shape(), target, &mut shape[..rank])?;
     if &shape[..rank] != target {
-        return Err(shape_error("tensor cannot broadcast to the requested shape"));
+        return Err(shape_error(
+            "tensor cannot broadcast to the requested shape",
+        ));
     }
     let span = Span::default();
     let mut budget = limits.budget();
@@ -779,7 +781,9 @@ pub fn sum_axis_backward(
 ) -> Result<NumericTensor, Diagnostic> {
     checked_shape(original_shape)?;
     if axis >= original_shape.len() {
-        return Err(shape_error("tensor reduction axis is outside the input rank"));
+        return Err(shape_error(
+            "tensor reduction axis is outside the input rank",
+        ));
     }
     let rank = original_shape.len();
     let mut retained = [0; MAX_TENSOR_RANK];
