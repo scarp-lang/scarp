@@ -73,10 +73,7 @@ fn softmax_backward(
         .map(|v| v.get())
         .fold(f64::NEG_INFINITY, f64::max);
     let weight = |value: f64| (value - maximum).exp();
-    let total = compensated(
-        logits.as_slice().iter().map(|v| Ok(weight(v.get()))),
-        span,
-    )?;
+    let total = compensated(logits.as_slice().iter().map(|v| Ok(weight(v.get()))), span)?;
     let probability = |value: f64| weight(value) / total;
     let pairs = || logits.as_slice().iter().zip(gradient.as_slice());
     let center = match compensated(
@@ -132,7 +129,10 @@ pub(super) fn evaluate(
     let rate = if function == Builtin::SgdStep {
         let rate = args[2].require_float(at(2))?;
         if rate < 0.0 {
-            return Err(domain(at(2), "sgd_step requires a nonnegative learning rate"));
+            return Err(domain(
+                at(2),
+                "sgd_step requires a nonnegative learning rate",
+            ));
         }
         rate
     } else {

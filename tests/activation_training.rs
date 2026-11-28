@@ -154,10 +154,7 @@ fn sgd_step_matches_composed_kernels_and_preserves_inputs() {
         &[weights.clone(), gradients.clone(), rate.clone()],
     );
     let delta = call(Builtin::Scale, &[gradients.clone(), rate]);
-    assert_eq!(
-        result,
-        call(Builtin::VectorSub, &[weights.clone(), delta])
-    );
+    assert_eq!(result, call(Builtin::VectorSub, &[weights.clone(), delta]));
     assert_eq!(result, v(&[1.875, -3.75]));
     assert_eq!(weights, before);
     assert_eq!(
