@@ -1,0 +1,35 @@
+// Two-layer network, with explicit reverse-mode derivatives and SGD.
+bind features = [1.0, -1.0];
+bind first_weights = tile([1.0, 0.0, 0.0, 1.0], 2, 2);
+bind output_weights = [1.0, 1.0];
+bind target = 2.0;
+bind rate = 0.125;
+
+bind preactivation = matvec(first_weights, features);
+bind hidden = relu(preactivation);
+bind prediction = dot(output_weights, hidden);
+bind error = prediction - target;
+
+// Derivative of half squared error with respect to the prediction is error.
+bind output_gradient = scale(hidden, error);
+bind hidden_gradient = relu_backward(
+    preactivation, scale(output_weights, error)
+);
+bind first_gradient = outer(hidden_gradient, features);
+
+// Update both layers only after calculating gradients at the old weights.
+bind next_output = sgd_step(output_weights, output_gradient, rate);
+bind next_first = tile_sub(first_weights, tilescale(first_gradient, rate));
+bind next_hidden = relu(matvec(next_first, features));
+bind next_prediction = dot(next_output, next_hidden);
+print(prediction, next_prediction);
+print(hidden_gradient);
+print(next_output);
+print(next_first);
+print((next_prediction - target) * (next_prediction - target) < error * error);
+
+// Small exact or tolerance-based checks for remaining reverse primitives.
+print(sigmoid_backward([0.0], [4.0]));
+print(tanh_backward([0.0], [1.0])[0] > 0.999999);
+print(softplus_backward([0.0], [2.0]));
+print(softmax_backward([0.0, 0.0], [1.0, -1.0]));
