@@ -199,6 +199,7 @@ impl ScalarProgramIr {
             }
         }
         let registry = program.type_registry();
+        let mut layouts = aggregates::AggregateLayouts::new(registry);
         let mut slots = Vec::new();
         let mut ranges = Vec::new();
         for &kind in &function.slot_types {
@@ -206,7 +207,7 @@ impl ScalarProgramIr {
             if let Some(kind) = aggregates::scalar(kind) {
                 slots.push(kind);
             } else if bounded {
-                slots.extend(aggregates::lanes(Some(registry), kind, signature.span)?);
+                slots.extend_from_slice(layouts.lanes(kind, signature.span)?);
             } else {
                 return Err(unsupported(signature.span));
             }

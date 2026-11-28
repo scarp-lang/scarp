@@ -264,6 +264,7 @@ impl ScalarExpressionIr {
             return Err(invalid(Span::default()));
         }
         let registry = frame.map(|(_, registry)| registry);
+        let mut layouts = registry.map(aggregates::AggregateLayouts::new);
         let mut registers = vec![ValueType::Integer; nodes.len()];
         let mut ranges = Vec::with_capacity(nodes.len());
         for (index, node) in nodes.iter().enumerate() {
@@ -272,12 +273,15 @@ impl ScalarExpressionIr {
                 registers[index] = scalar;
                 ranges.push(index..index + 1);
             } else {
-                let lanes = aggregates::lanes(registry, kind, node.span)?;
+                let lanes = layouts
+                    .as_mut()
+                    .ok_or_else(|| invalid(node.span))?
+                    .lanes(kind, node.span)?;
                 let start = registers.len();
                 if start + lanes.len() > MAX_IR_REGISTERS {
                     return Err(invalid(node.span));
                 }
-                registers.extend(lanes);
+                registers.extend_from_slice(lanes);
                 ranges.push(start..registers.len());
             }
         }
@@ -516,7 +520,7 @@ impl ScalarExpressionIr {
                             expression,
                             &ranges,
                             index,
-                            registry.ok_or_else(|| invalid(node.span))?,
+                            layouts.as_ref().ok_or_else(|| invalid(node.span))?,
                         )?,
                     }
                 }
