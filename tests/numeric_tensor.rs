@@ -15,11 +15,7 @@ fn scalar_vector_and_three_axis_coordinates() {
     assert_eq!(scalar.get(&[]).unwrap().get(), 3.0);
     assert!(scalar.get(&[0]).is_none());
     assert!(scalar.slice_first(0).is_none());
-    let tensor = NumericTensor::new(
-        &[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0],
-        &[2, 2, 2],
-    )
-    .unwrap();
+    let tensor = NumericTensor::new(&[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0], &[2, 2, 2]).unwrap();
     assert_eq!(tensor.shape(), &[2, 2, 2]);
     assert_eq!(tensor.offset(&[1, 0, 1]), Some(5));
     assert_eq!(tensor.get(&[1, 1, 0]).unwrap().get(), 6.0);
@@ -52,8 +48,14 @@ fn empty_axes_keep_shape_and_do_not_require_large_products() {
     assert!(tensor.is_empty());
     assert_eq!(tensor.shape(), &shape);
     assert!(tensor.get(&[0, 0, 0]).is_none());
-    assert_eq!(tensor.slice_first(0).unwrap().shape(), &[MAX_VECTOR_LENGTH, 0]);
-    assert_eq!(tensor.permute(&[2, 0, 1]).unwrap().shape(), &[0, MAX_VECTOR_LENGTH, MAX_VECTOR_LENGTH]);
+    assert_eq!(
+        tensor.slice_first(0).unwrap().shape(),
+        &[MAX_VECTOR_LENGTH, 0]
+    );
+    assert_eq!(
+        tensor.permute(&[2, 0, 1]).unwrap().shape(),
+        &[0, MAX_VECTOR_LENGTH, MAX_VECTOR_LENGTH]
+    );
     assert_ne!(tensor, tensor.reshape(&[0]).unwrap());
     assert!(tensor.reshape(&[]).is_none());
 }
@@ -65,7 +67,10 @@ fn reshape_and_slices_share_existing_immutable_storage() {
     let tensor = NumericTensor::from_vector(window.clone(), &[2, 2]).unwrap();
     let flattened = tensor.reshape(&[4]).unwrap();
     assert_eq!(values(&flattened), vec![0.0, 1.0, 2.0, 3.0]);
-    assert!(std::ptr::eq(flattened.cells().as_ptr(), window.as_slice().as_ptr()));
+    assert!(std::ptr::eq(
+        flattened.cells().as_ptr(),
+        window.as_slice().as_ptr()
+    ));
     assert!(tensor.reshape(&[3, 2]).is_none());
     let slice = tensor.slice_first(1).unwrap();
     assert_eq!(slice.shape(), &[2]);
@@ -75,7 +80,10 @@ fn reshape_and_slices_share_existing_immutable_storage() {
     let scalar = slice.slice_first(1).unwrap();
     assert_eq!(scalar.shape(), &[]);
     assert_eq!(values(&scalar), vec![3.0]);
-    assert!(std::ptr::eq(tensor.permute(&[0, 1]).unwrap().cells().as_ptr(), tensor.cells().as_ptr()));
+    assert!(std::ptr::eq(
+        tensor.permute(&[0, 1]).unwrap().cells().as_ptr(),
+        tensor.cells().as_ptr()
+    ));
 }
 
 #[test]
@@ -84,13 +92,19 @@ fn permutation_reorders_cells_and_validates_bijection() {
     let tensor = NumericTensor::new(&input, &[2, 2, 3]).unwrap();
     let result = tensor.permute(&[2, 0, 1]).unwrap();
     assert_eq!(result.shape(), &[3, 2, 2]);
-    assert_eq!(values(&result), vec![0.0, 3.0, 6.0, 9.0, 1.0, 4.0, 7.0, 10.0, 2.0, 5.0, 8.0, 11.0]);
+    assert_eq!(
+        values(&result),
+        vec![0.0, 3.0, 6.0, 9.0, 1.0, 4.0, 7.0, 10.0, 2.0, 5.0, 8.0, 11.0]
+    );
     assert_eq!(result.permute(&[1, 2, 0]).unwrap(), tensor);
     for invalid in [&[0, 0, 1][..], &[0, 1, 3], &[0, 1], &[0, 1, 2, 3]] {
         assert!(tensor.permute(invalid).is_none());
     }
     let scalar = NumericTensor::new(&[-0.0], &[]).unwrap();
-    assert_eq!(scalar.permute(&[]).unwrap().cells()[0].get().to_bits(), (-0.0f64).to_bits());
+    assert_eq!(
+        scalar.permute(&[]).unwrap().cells()[0].get().to_bits(),
+        (-0.0f64).to_bits()
+    );
 }
 
 #[test]
@@ -116,7 +130,14 @@ fn rank_two_bridge_reuses_the_existing_checked_matmul() {
 
 #[test]
 fn all_small_three_axis_permutations_match_coordinate_reference() {
-    let permutations = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+    let permutations = [
+        [0, 1, 2],
+        [0, 2, 1],
+        [1, 0, 2],
+        [1, 2, 0],
+        [2, 0, 1],
+        [2, 1, 0],
+    ];
     for x in 0..4 {
         for y in 0..4 {
             for z in 0..4 {
