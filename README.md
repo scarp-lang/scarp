@@ -25,6 +25,9 @@ generic inference, and scalable and file-backed BigInt arithmetic.
 [Release notes](docs/releases/v0.0.7-alpha.4-publication.md) ·
 [Publication verification](docs/releases/v0.0.7-alpha.4-validation.md)
 
+The development branch targets **0.0.7-alpha.5** with source tensors,
+differentiation and optimizers, fixed-width integers, and Linux ELF64 executables.
+
 **0.0.7-alpha.3** adds generic functions, bounded string operators, and checked native
 array, tuple, and record locals. [Release notes](docs/releases/v0.0.7-alpha.3-publication.md) ·
 [Publication verification](docs/releases/v0.0.7-alpha.3-validation.md)

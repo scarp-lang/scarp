@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.0.7-alpha.5 — development
+
+- Add typed source tensors, broadcasting, batched matmul and checked gradients.
+- Train with scalar and tensor reverse-mode differentiation, SGD, Adam and AdamW.
+- Add explicit fixed-width integer types and a standalone Linux x86-64 backend.
+- Reuse tensor differentiation workspace while retiring immutable snapshots.
+
 ## 0.0.7-alpha.4 — published GitHub prerelease, 2026-11-28
 
 Published from [`e620bdcb`](https://github.com/scarp-lang/scarp/commit/e620bdcb512fbe909b08f1b4cc625865e4cdf339).
