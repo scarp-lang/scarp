@@ -239,8 +239,7 @@ fn generated_reductions_match_independent_index_reference() {
     for x in 0..5 {
         for y in 0..5 {
             for z in 0..5 {
-                let cells: Vec<f64> =
-                    (0..x * y * z).map(|i| (i % 17) as f64 - 8.0).collect();
+                let cells: Vec<f64> = (0..x * y * z).map(|i| (i % 17) as f64 - 8.0).collect();
                 let input = tensor(&cells, &[x, y, z]);
                 let mut middle = vec![0.0; y];
                 let mut last = vec![0.0; z];

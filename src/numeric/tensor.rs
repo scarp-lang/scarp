@@ -198,7 +198,6 @@ pub fn matmul(
     finish(output, shape)
 }
 
-
 /// Sum broadcasted axes back to a compatible, right-aligned target shape.
 ///
 /// This is the reverse of broadcasting a target-shaped value to the input
