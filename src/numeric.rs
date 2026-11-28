@@ -20,6 +20,8 @@ mod samples;
 mod scalar_text;
 mod similarity;
 mod temperature;
+/// Experimental, explicitly budgeted Rust-host tensor kernels.
+pub mod tensor;
 mod text;
 mod tiles;
 mod topk;
