@@ -91,3 +91,23 @@ rank R, work is `A*(1+rA) + B*(1+rB) + 2*C*(6+4*R)`. Both gradients share
 one payload budget, requiring `8*(A+B)` logical bytes. Shape and size
 validation precede work and allocation; no partial gradient is returned.
 This is a host API, not a Scarp-language feature yet.
+
+## Development: unary tensor kernels and reduction adjoints
+
+`unary` and `unary_backward` implement shape-preserving negate, square,
+exp, log, ReLU, sigmoid, tanh and softplus operations. Every backward cell
+validates its forward value, including zero upstream gradients. The reverse
+pass recomputes scalar forward values without a temporary tensor. ReLU uses
+a zero subgradient at zero, sigmoid and tanh use stable saturation-tail
+formulas, and logarithm requires positive input. Work is 8*n forward and
+16*n backward; both allocate 8*n logical output bytes. Empty shapes are valid.
+
+`broadcast_to(input, target, limits)` materializes an exact right-aligned
+broadcast shape, checking all dimensions and the output length. It is the
+adjoint of `sum_to_shape`. `sum_axis_backward(original_shape, axis, keep_dims,
+upstream, limits)` restores a dropped axis using a shared singleton view,
+then broadcasts directly to the original input shape. Both require the
+correct forward shape contract even for empty tensors. Broadcast work is
+n*(1+output_rank+input_rank) and its output consumes 8*n bytes. For a dropped
+axis the input rank in that formula is the restored rank. Neither operation
+allocates an expanded intermediate buffer. These remain experimental host APIs.

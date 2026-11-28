@@ -617,3 +617,194 @@ pub fn binary_backward(
         finish(right_output, right.shape())?,
     ))
 }
+
+/// Elementwise finite tensor operations. Shape is preserved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TensorUnary {
+    Negate,
+    Square,
+    Exp,
+    Log,
+    Relu,
+    Sigmoid,
+    Tanh,
+    Softplus,
+}
+
+fn tensor_sigmoid(x: f64) -> f64 {
+    if x >= 0.0 {
+        1.0 / (1.0 + (-x).exp())
+    } else {
+        let e = x.exp();
+        e / (1.0 + e)
+    }
+}
+
+fn unary_cell(
+    operation: TensorUnary,
+    x: f64,
+    span: Span,
+) -> Result<crate::value::FiniteFloat, Diagnostic> {
+    let result = match operation {
+        TensorUnary::Negate => -x,
+        TensorUnary::Square => x * x,
+        TensorUnary::Exp => x.exp(),
+        TensorUnary::Log => {
+            if x <= 0.0 {
+                return Err(domain(span, "tensor log requires positive input"));
+            }
+            x.ln()
+        }
+        TensorUnary::Relu => x.max(0.0),
+        TensorUnary::Sigmoid => tensor_sigmoid(x),
+        TensorUnary::Tanh => x.tanh(),
+        TensorUnary::Softplus => x.max(0.0) + (-x.abs()).exp().ln_1p(),
+    };
+    finite_number(result, span)
+}
+
+/// Shape-preserving unary forward evaluation, with finite output checks.
+pub fn unary(
+    operation: TensorUnary,
+    input: &NumericTensor,
+    limits: TensorLimits,
+) -> Result<NumericTensor, Diagnostic> {
+    let span = Span::default();
+    let mut budget = limits.budget();
+    charge(&mut budget, input.len(), 8)?;
+    let mut result = buffer(input.len(), &mut budget, span)?;
+    for x in input.cells() {
+        result.push(unary_cell(operation, x.get(), span)?);
+    }
+    finish(result, input.shape())
+}
+
+/// Shape-preserving unary VJP. Validates the original forward cell even
+/// for a zero cotangent; no separate forward buffer is materialized.
+pub fn unary_backward(
+    operation: TensorUnary,
+    input: &NumericTensor,
+    upstream: &NumericTensor,
+    limits: TensorLimits,
+) -> Result<NumericTensor, Diagnostic> {
+    if input.shape() != upstream.shape() {
+        return Err(shape_error("tensor unary backward requires equal shapes"));
+    }
+    let span = Span::default();
+    let mut budget = limits.budget();
+    charge(&mut budget, input.len(), 16)?;
+    let mut result = buffer(input.len(), &mut budget, span)?;
+    for (x, g) in input.cells().iter().zip(upstream.cells()) {
+        let x = x.get();
+        let g = g.get();
+        let forward = unary_cell(operation, x, span)?.get();
+        let value = if g == 0.0 {
+            0.0
+        } else {
+            match operation {
+                TensorUnary::Negate => -g,
+                TensorUnary::Square => finite_number(g * x, span)?.get() * 2.0,
+                TensorUnary::Exp => g * forward,
+                TensorUnary::Log => g / x,
+                TensorUnary::Relu => {
+                    if x > 0.0 {
+                        g
+                    } else {
+                        0.0
+                    }
+                }
+                TensorUnary::Sigmoid => {
+                    let e = (-x.abs()).exp();
+                    let denom = 1.0 + e;
+                    g * (e / (denom * denom))
+                }
+                TensorUnary::Tanh => {
+                    let exponent = -2.0 * x.abs();
+                    let denom = 1.0 + exponent.exp();
+                    g * ((exponent + 2.0 * std::f64::consts::LN_2).exp() / (denom * denom))
+                }
+                TensorUnary::Softplus => g * tensor_sigmoid(x),
+            }
+        };
+        result.push(finite_number(value, span)?);
+    }
+    finish(result, input.shape())
+}
+
+fn checked_shape(shape: &[usize]) -> Result<usize, Diagnostic> {
+    if shape.len() > MAX_TENSOR_RANK || shape.iter().any(|&n| n > MAX_VECTOR_LENGTH) {
+        return Err(shape_error("tensor target rank or axis exceeds its bound"));
+    }
+    count(shape)
+}
+
+/// Explicitly broadcast an input to a requested shape, allocating only the
+/// final cells. This is also the reverse of a matching sum_to_shape call.
+pub fn broadcast_to(
+    input: &NumericTensor,
+    target: &[usize],
+    limits: TensorLimits,
+) -> Result<NumericTensor, Diagnostic> {
+    let output_count = checked_shape(target)?;
+    let rank = target.len();
+    if input.rank() > rank {
+        return Err(shape_error("tensor broadcast cannot remove leading axes"));
+    }
+    let mut shape = [0; MAX_TENSOR_RANK];
+    broadcast(input.shape(), target, &mut shape[..rank])?;
+    if &shape[..rank] != target {
+        return Err(shape_error(
+            "tensor cannot broadcast to the requested shape",
+        ));
+    }
+    let span = Span::default();
+    let mut budget = limits.budget();
+    charge(&mut budget, output_count, (1 + rank + input.rank()) as u64)?;
+    let mut output = buffer(output_count, &mut budget, span)?;
+    let mut coordinates = [0; MAX_TENSOR_RANK];
+    let coordinates = &mut coordinates[..rank];
+    for flat in 0..output_count {
+        decode(flat, target, coordinates);
+        output.push(input.cells()[projected_offset(input.shape(), coordinates)]);
+    }
+    finish(output, target)
+}
+
+/// Reverse one sum_axis operation. The upstream shape must exactly match
+/// the forward reduction. Dropped axes are restored as singleton views.
+pub fn sum_axis_backward(
+    original_shape: &[usize],
+    axis: usize,
+    keep_dims: bool,
+    upstream: &NumericTensor,
+    limits: TensorLimits,
+) -> Result<NumericTensor, Diagnostic> {
+    checked_shape(original_shape)?;
+    if axis >= original_shape.len() {
+        return Err(shape_error(
+            "tensor reduction axis is outside the input rank",
+        ));
+    }
+    let rank = original_shape.len();
+    let mut retained = [0; MAX_TENSOR_RANK];
+    retained[..rank].copy_from_slice(original_shape);
+    retained[axis] = 1;
+    let retained = &retained[..rank];
+    let expanded = if keep_dims {
+        if upstream.shape() != retained {
+            return Err(shape_error("tensor retained-axis gradient shape mismatch"));
+        }
+        upstream.clone()
+    } else {
+        let mut removed = [0; MAX_TENSOR_RANK];
+        removed[..axis].copy_from_slice(&original_shape[..axis]);
+        removed[axis..rank - 1].copy_from_slice(&original_shape[axis + 1..]);
+        if upstream.shape() != &removed[..rank - 1] {
+            return Err(shape_error("tensor dropped-axis gradient shape mismatch"));
+        }
+        upstream
+            .reshape(retained)
+            .ok_or_else(|| length_error(Span::default()))?
+    };
+    broadcast_to(&expanded, original_shape, limits)
+}
