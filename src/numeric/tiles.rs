@@ -224,11 +224,7 @@ pub(super) fn evaluate(
             let mut values = buffer(count, budget, span)?;
             for i in 0..count {
                 let terms = (0..inner).map(|k| {
-                    let index = if rows {
-                        i * width + k
-                    } else {
-                        k * width + i
-                    };
+                    let index = if rows { i * width + k } else { k * width + i };
                     Ok(left.cells()[index].get())
                 });
                 values.push(finite_number(compensated(terms, span)?, span)?);

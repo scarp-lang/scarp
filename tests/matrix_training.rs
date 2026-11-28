@@ -38,21 +38,16 @@ fn rectangular_outer_product_has_correct_orientation() {
 
 #[test]
 fn maximum_outer_shape_and_over_limit_shapes() {
-    let a = vec_value(&vec![2.0; 256]);
-    let b = vec_value(&vec![3.0; 256]);
+    let a = vec_value(&[2.0; 256]);
+    let b = vec_value(&[3.0; 256]);
     assert_eq!(
         call(Builtin::Outer, &[a.clone(), b]),
         tile_value(&vec![6.0; MAX_VECTOR_LENGTH], 256, 256)
     );
     assert_eq!(
-        numeric::evaluate_with_vector_limit(
-            Builtin::Outer,
-            &[a, vec_value(&vec![1.0; 257])],
-            0,
-            0
-        )
-        .unwrap_err()
-        .kind,
+        numeric::evaluate_with_vector_limit(Builtin::Outer, &[a, vec_value(&[1.0; 257])], 0, 0)
+            .unwrap_err()
+            .kind,
         Kind::VectorLength
     );
 }
@@ -98,7 +93,10 @@ fn bias_and_tile_arithmetic_preserve_rectangular_shape() {
     let a = tile_value(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
     let b = tile_value(&[6.0, 5.0, 4.0, 3.0, 2.0, 1.0], 2, 3);
     assert_eq!(
-        call(Builtin::TileBias, &[a.clone(), vec_value(&[10.0, 20.0, 30.0])]),
+        call(
+            Builtin::TileBias,
+            &[a.clone(), vec_value(&[10.0, 20.0, 30.0])]
+        ),
         tile_value(&[11.0, 22.0, 33.0, 14.0, 25.0, 36.0], 2, 3)
     );
     assert_eq!(
@@ -201,10 +199,20 @@ fn equal_cell_counts_do_not_imply_equal_shapes() {
 fn all_materializations_obey_exact_work_and_payload_limits() {
     let a = tile_value(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
     let cases = [
-        (Builtin::Outer, vec![vec_value(&[1.0; 2]), vec_value(&[1.0; 3])], 6, 48),
+        (
+            Builtin::Outer,
+            vec![vec_value(&[1.0; 2]), vec_value(&[1.0; 3])],
+            6,
+            48,
+        ),
         (Builtin::TileSub, vec![a.clone(), a.clone()], 6, 48),
         (Builtin::TileHadamard, vec![a.clone(), a.clone()], 6, 48),
-        (Builtin::TileBias, vec![a.clone(), vec_value(&[1.0; 3])], 6, 48),
+        (
+            Builtin::TileBias,
+            vec![a.clone(), vec_value(&[1.0; 3])],
+            6,
+            48,
+        ),
         (Builtin::RowSums, vec![a.clone()], 8, 16),
         (Builtin::ColumnSums, vec![a], 9, 24),
     ];
