@@ -3,7 +3,7 @@
 use super::{ScalarProgramIr, Span};
 use crate::{
     diagnostics::{Diagnostic, DiagnosticKind},
-    native_object::BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES,
+    native_object::{BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES, RECURSIVE_INTEGER_ENTRY_MAX_FRAMES},
     resolver::ResolvedProgram,
     scalar_ir::{CallTargets, Operation},
 };
@@ -16,10 +16,20 @@ const RETURN_ADDRESS_BYTES: u32 = 8;
 pub(in crate::scalar_ir) struct ScalarCallGraph {
     bodies: Vec<ScalarProgramIr>,
     entry: usize,
-    entry_depth: usize,
     edges: Vec<Vec<(usize, Span)>>,
-    postorder: Vec<usize>,
+    mode: GraphMode,
     spans: Vec<Span>,
+}
+
+enum GraphMode {
+    Acyclic { postorder: Vec<usize>, depth: usize },
+    Recursive { max_frames: usize },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::scalar_ir) struct StackBound {
+    pub bytes: u32,
+    pub frames: usize,
 }
 
 fn unsupported(span: Span, message: &str) -> Diagnostic {
@@ -31,6 +41,7 @@ impl ScalarCallGraph {
         resolved: &ResolvedProgram,
         entry: &str,
         max_parameters: usize,
+        recursion_frames: Option<usize>,
     ) -> Result<Self, Diagnostic> {
         let signatures = resolved.functions();
         if let Some(step) = resolved.statements.first() {
@@ -54,6 +65,14 @@ impl ScalarCallGraph {
                     "the selected native entry function was not declared",
                 )
             })?;
+        if let Some(frames) = recursion_frames {
+            if !(1..=RECURSIVE_INTEGER_ENTRY_MAX_FRAMES).contains(&frames) {
+                return Err(unsupported(
+                    signatures[entry].span,
+                    "native recursion requires a frame allowance in 1 through 64",
+                ));
+            }
+        }
         if !signatures[entry].type_parameters.is_empty() {
             return Err(unsupported(
                 signatures[entry].span,
@@ -132,29 +151,15 @@ impl ScalarCallGraph {
             bodies.push(body);
             edges.push(calls);
         }
-        let mut postorder = Vec::with_capacity(bodies.len());
-        let mut state = vec![Visit::New; bodies.len()];
-        for id in 0..bodies.len() {
-            postorder_visit(id, &edges, &mut state, &mut postorder)?;
-        }
-
-        let mut depth = vec![0usize; bodies.len()];
-        for &id in &postorder {
-            let deepest_callee = edges[id].iter().map(|&(callee, _)| depth[callee]).max();
-            depth[id] = 1 + deepest_callee.unwrap_or(0);
-            if depth[id] > MAX_CALL_DEPTH {
-                return Err(unsupported(
-                    spans[id],
-                    "native call chain exceeds the 16-frame limit",
-                ));
-            }
-        }
+        let mode = match recursion_frames {
+            Some(max_frames) => GraphMode::Recursive { max_frames },
+            None => acyclic_order(entry, &edges, &spans)?,
+        };
         Ok(Self {
             bodies,
             entry,
-            entry_depth: depth[entry],
             edges,
-            postorder,
+            mode,
             spans,
         })
     }
@@ -163,23 +168,28 @@ impl ScalarCallGraph {
         self.entry
     }
 
-    pub(in crate::scalar_ir) fn entry_depth(&self) -> usize {
-        self.entry_depth
+    pub(in crate::scalar_ir) fn recursion_frames(&self) -> Option<usize> {
+        match self.mode {
+            GraphMode::Acyclic { .. } => None,
+            GraphMode::Recursive { max_frames } => Some(max_frames),
+        }
     }
 
     pub(in crate::scalar_ir) fn bodies(&self) -> &[ScalarProgramIr] {
         &self.bodies
     }
 
-    /// Every caller precedes its callees in reverse postorder. Propagate
-    /// reachability once, then retain source order for deterministic output.
+    /// Visit each reachable body once, including back edges, then retain
+    /// source order for deterministic output.
     pub(in crate::scalar_ir) fn emission_order(&self) -> Vec<usize> {
         let mut reachable = vec![false; self.bodies.len()];
         reachable[self.entry] = true;
-        for &id in self.postorder.iter().rev() {
-            if reachable[id] {
-                for &(callee, _) in &self.edges[id] {
+        let mut pending = vec![self.entry];
+        while let Some(id) = pending.pop() {
+            for &(callee, _) in &self.edges[id] {
+                if !reachable[callee] {
                     reachable[callee] = true;
+                    pending.push(callee);
                 }
             }
         }
@@ -194,35 +204,116 @@ impl ScalarCallGraph {
         &self,
         frames: &[u32],
         max_stack_bytes: u32,
-    ) -> Result<u32, Diagnostic> {
+    ) -> Result<StackBound, Diagnostic> {
         if frames.len() != self.bodies.len() {
             return Err(super::invalid(Span::default()));
         }
-        let mut peak = vec![0; frames.len()];
-        for &id in &self.postorder {
-            let child = self.edges[id].iter().map(|&(callee, _)| peak[callee]).max();
-            peak[id] = frames[id]
-                .checked_add(RETURN_ADDRESS_BYTES)
-                .and_then(|frame| frame.checked_add(child.unwrap_or(0)))
-                .filter(|&bytes| bytes <= BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES)
-                .ok_or_else(|| {
-                    unsupported(
-                        self.spans[id],
-                        "native call chain exceeds the 64 KiB stack limit",
-                    )
-                })?;
-        }
-        let bytes = peak[self.entry];
-        if bytes > max_stack_bytes {
+        let check_hard_limit = |bytes, id| {
+            if bytes > BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES {
+                return Err(unsupported(
+                    self.spans[id],
+                    "native call chain exceeds the 64 KiB stack limit",
+                ));
+            }
+            Ok(())
+        };
+        let bound = match &self.mode {
+            GraphMode::Acyclic { postorder, depth } => {
+                let mut peak = vec![0; frames.len()];
+                for &id in postorder {
+                    let child = self.edges[id].iter().map(|&(callee, _)| peak[callee]).max();
+                    let bytes = extend_stack(frames[id], child.unwrap_or(0))?;
+                    check_hard_limit(bytes, id)?;
+                    peak[id] = bytes;
+                }
+                StackBound {
+                    bytes: peak[self.entry],
+                    frames: *depth,
+                }
+            }
+            GraphMode::Recursive { max_frames } => {
+                let bound = self.recursive_stack_bound(frames, *max_frames)?;
+                check_hard_limit(bound.bytes, self.entry)?;
+                bound
+            }
+        };
+        if bound.bytes > max_stack_bytes {
             return Err(unsupported(
                 self.spans[self.entry],
                 &format!(
-                    "native entry requires {bytes} stack bytes, exceeding the caller budget of {max_stack_bytes}"
+                    "native entry requires {} stack bytes, exceeding the caller budget of {max_stack_bytes}",
+                    bound.bytes
                 ),
             ));
         }
-        Ok(bytes)
+        Ok(bound)
     }
+
+    /// Each iteration permits one additional active frame. Read only the
+    /// previous layer so a cycle cannot add frames in the same iteration.
+    fn recursive_stack_bound(
+        &self,
+        frames: &[u32],
+        max_frames: usize,
+    ) -> Result<StackBound, Diagnostic> {
+        let empty = StackBound {
+            bytes: 0,
+            frames: 0,
+        };
+        let mut previous = vec![empty; frames.len()];
+        let mut current = previous.clone();
+        for remaining in 1..=max_frames {
+            for (id, &frame) in frames.iter().enumerate() {
+                let mut child = empty;
+                if remaining > 1 {
+                    for &(callee, _) in &self.edges[id] {
+                        child.bytes = child.bytes.max(previous[callee].bytes);
+                        child.frames = child.frames.max(previous[callee].frames);
+                    }
+                }
+                current[id] = StackBound {
+                    bytes: extend_stack(frame, child.bytes)?,
+                    frames: 1 + child.frames,
+                };
+            }
+            std::mem::swap(&mut previous, &mut current);
+        }
+        Ok(previous[self.entry])
+    }
+}
+
+fn extend_stack(frame: u32, child: u32) -> Result<u32, Diagnostic> {
+    frame
+        .checked_add(RETURN_ADDRESS_BYTES)
+        .and_then(|bytes| bytes.checked_add(child))
+        .ok_or_else(|| super::invalid(Span::default()))
+}
+
+fn acyclic_order(
+    entry: usize,
+    edges: &[Vec<(usize, Span)>],
+    spans: &[Span],
+) -> Result<GraphMode, Diagnostic> {
+    let mut postorder = Vec::with_capacity(edges.len());
+    let mut state = vec![Visit::New; edges.len()];
+    for id in 0..edges.len() {
+        postorder_visit(id, edges, &mut state, &mut postorder)?;
+    }
+    let mut depth = vec![0usize; edges.len()];
+    for &id in &postorder {
+        let deepest_callee = edges[id].iter().map(|&(callee, _)| depth[callee]).max();
+        depth[id] = 1 + deepest_callee.unwrap_or(0);
+        if depth[id] > MAX_CALL_DEPTH {
+            return Err(unsupported(
+                spans[id],
+                "native call chain exceeds the 16-frame limit",
+            ));
+        }
+    }
+    Ok(GraphMode::Acyclic {
+        postorder,
+        depth: depth[entry],
+    })
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -268,18 +359,54 @@ mod tests {
     #[test]
     fn stack_limit_includes_every_active_return_address() {
         let resolved = crate::compile(CHAIN).unwrap();
-        let graph = ScalarCallGraph::lower(&resolved, "top", 6).unwrap();
-        assert_eq!(graph.postorder, [1, 0]);
+        let graph = ScalarCallGraph::lower(&resolved, "top", 6, None).unwrap();
         let limit = BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES;
-        assert_eq!(graph.verify_stack(&[32_760, 32_760], limit).unwrap(), limit);
+        assert_eq!(
+            graph.verify_stack(&[32_760, 32_760], limit).unwrap(),
+            StackBound {
+                bytes: limit,
+                frames: 2
+            },
+        );
         assert!(graph.verify_stack(&[32_776, 32_760], u32::MAX).is_err());
         assert!(graph.verify_stack(&[32_760], limit).is_err());
     }
 
     #[test]
+    fn recursive_stack_bound_accounts_for_different_frames_and_exits() {
+        let resolved = crate::compile(
+            "pure funcra top(n: integer) -> integer { return looped(n); }
+             pure funcra looped(n: integer) -> integer {
+                 return if n > 0 { top(n - 1) } else { leaf(n) };
+             }
+             pure funcra leaf(n: integer) -> integer { return n; }",
+        )
+        .unwrap();
+        let widths = [24, 40, 200];
+        let limit = BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES;
+        for (cap, bytes) in [(1, 32), (2, 80), (3, 288), (4, 288), (5, 368)] {
+            let graph = ScalarCallGraph::lower(&resolved, "top", 6, Some(cap)).unwrap();
+            assert_eq!(graph.emission_order(), [0, 1, 2]);
+            assert_eq!(
+                graph.verify_stack(&widths, limit).unwrap(),
+                StackBound { bytes, frames: cap },
+            );
+            assert!(graph.verify_stack(&widths, bytes - 1).is_err());
+        }
+        let graph = ScalarCallGraph::lower(&resolved, "top", 6, Some(5)).unwrap();
+        assert_eq!(
+            graph
+                .verify_stack(&[16_376, 16_376, 0], limit)
+                .unwrap_err()
+                .kind,
+            DiagnosticKind::NativeUnsupported
+        );
+    }
+
+    #[test]
     fn verifier_rejects_forged_callee_and_missing_argument() {
         let resolved = crate::compile(CHAIN).unwrap();
-        let graph = ScalarCallGraph::lower(&resolved, "top", 6).unwrap();
+        let graph = ScalarCallGraph::lower(&resolved, "top", 6, None).unwrap();
         for missing_argument in [false, true] {
             let mut body = graph.bodies[0].clone();
             let call = body

@@ -1,5 +1,8 @@
 # Feature completeness and development roadmap
 
+Development adds an opt-in Rust API for
+[bounded recursive ELF64 entries](../native-elf64.md#bounded-recursion-in-elf64-entry-objects).
+
 Published `0.0.7-alpha.3` adds generic functions, generic Option and Result,
 bounded string operations, and verified native aggregate locals.
 [Publication verification](../releases/v0.0.7-alpha.3-validation.md)

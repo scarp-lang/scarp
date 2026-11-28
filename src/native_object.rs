@@ -86,8 +86,14 @@ pub const CHECKED_KERNEL_REPEAT_COUNT: u32 = 5;
 /// A bounded native fixed-array index was negative or reached the length.
 pub const CHECKED_KERNEL_ARRAY_INDEX: u32 = 6;
 
+/// A native call would exceed the selected number of active frames.
+pub const CHECKED_KERNEL_CALL_DEPTH: u32 = 7;
+
 /// Hard limit for an emitted direct-call chain, including return addresses.
 pub const BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES: u32 = 64 * 1024;
+
+/// Largest call-depth allowance accepted by the recursive entry API.
+pub const RECURSIVE_INTEGER_ENTRY_MAX_FRAMES: usize = 64;
 
 /// Emit one pure integer function with a fixed native work allowance per call.
 ///
@@ -152,7 +158,38 @@ pub fn emit_elf64_bounded_integer_entry_with_layout(
     max_work: u32,
     max_stack_bytes: u32,
 ) -> Result<FreestandingEntry, Diagnostic> {
-    crate::scalar_ir::emit_bounded_integer_entry(source, entry, max_work, max_stack_bytes)
+    crate::scalar_ir::emit_bounded_integer_entry(source, entry, max_work, max_stack_bytes, None)
+}
+
+/// Emit an ELF64 integer entry with bounded direct self or mutual recursion.
+///
+/// Uses the same experimental symbol and checked result ABI as
+/// [`emit_elf64_bounded_integer_entry_with_layout`]. The frame allowance
+/// includes the external entry and must be in
+/// `1..=RECURSIVE_INTEGER_ENTRY_MAX_FRAMES`. Every call uses the shared
+/// work meter. After evaluating its arguments, a call that would exceed
+/// the frame allowance returns [`CHECKED_KERNEL_CALL_DEPTH`] and the
+/// source span of that call. A failed call does not allocate its frame.
+///
+/// The stack bound includes return addresses and all generated frames on
+/// the most expensive permitted call path, even if source branches would
+/// prevent that path from occurring. The caller must supply that stack
+/// space and its own argument area. The backend does not apply the
+/// interpreter's terminal self-call optimization.
+pub fn emit_elf64_recursive_integer_entry(
+    source: &str,
+    entry: &str,
+    max_work: u32,
+    max_active_frames: usize,
+    max_stack_bytes: u32,
+) -> Result<FreestandingEntry, Diagnostic> {
+    crate::scalar_ir::emit_bounded_integer_entry(
+        source,
+        entry,
+        max_work,
+        max_stack_bytes,
+        Some(max_active_frames),
+    )
 }
 
 /// Maximum callee frame size enforced by the experimental x86-64 encoder.

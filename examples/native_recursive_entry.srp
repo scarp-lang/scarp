@@ -1,0 +1,13 @@
+// Alternate frames while reducing the Euclidean remainder.
+pure funcra gcd(left: integer, right: integer) -> integer {
+    if right == 0 {
+        return left;
+    }
+    return reduce(left, right);
+}
+
+pure funcra reduce(left: integer, right: integer) -> integer {
+    return gcd(right, left % right);
+}
+
+print(gcd(1071, 462));

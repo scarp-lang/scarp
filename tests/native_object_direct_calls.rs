@@ -2,11 +2,17 @@ use scarp::{
     diagnostics::DiagnosticKind,
     native_object::{
         emit_elf64_bounded_integer_entry, emit_elf64_bounded_integer_entry_with_layout,
-        emit_elf64_bounded_integer_function, BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES,
+        emit_elf64_bounded_integer_function, emit_elf64_recursive_integer_entry,
+        BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES, RECURSIVE_INTEGER_ENTRY_MAX_FRAMES,
     },
 };
 
 const EXAMPLE: &str = include_str!("../examples/native_direct_calls.srp");
+const RECURSIVE: &str = include_str!("../examples/native_recursive_entry.srp");
+
+fn recursive_definitions() -> &'static str {
+    RECURSIVE.split_once("\nprint(").unwrap().0
+}
 
 fn definitions() -> &'static str {
     EXAMPLE.split_once("\nprint(").unwrap().0
@@ -317,6 +323,37 @@ fn direct_objects_validate_generic_instantiations_and_reuse_concrete_bodies() {
     assert!(error.message.contains("32 concrete bodies"));
 }
 
+#[test]
+fn recursive_entries_require_explicit_limits_and_produce_deterministic_objects() {
+    let source = recursive_definitions();
+    let compile =
+        |frames, bytes| emit_elf64_recursive_integer_entry(source, "gcd", 250, frames, bytes);
+    let limit = BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES;
+    let artifact = compile(9, limit).unwrap();
+    assert_eq!(artifact.max_active_frames, 9);
+    assert_eq!(artifact, compile(9, artifact.peak_stack_bytes).unwrap());
+    let error = compile(9, artifact.peak_stack_bytes - 1).unwrap_err();
+    assert_eq!(error.kind, DiagnosticKind::NativeUnsupported);
+    assert!(error.message.contains("exceeding the caller budget"));
+    for frames in [0, RECURSIVE_INTEGER_ENTRY_MAX_FRAMES + 1, usize::MAX] {
+        let error = compile(frames, limit).unwrap_err();
+        assert_eq!(error.kind, DiagnosticKind::NativeUnsupported);
+        assert!(error.message.contains("frame allowance"));
+    }
+    let error = emit_elf64_bounded_integer_entry(source, "gcd", 250).unwrap_err();
+    assert!(error.message.contains("nonrecursive"));
+
+    let leaf = emit_elf64_recursive_integer_entry(
+        "pure funcra f() -> integer { return 2; }",
+        "f",
+        10,
+        RECURSIVE_INTEGER_ENTRY_MAX_FRAMES,
+        limit,
+    )
+    .unwrap();
+    assert_eq!((leaf.max_active_frames, leaf.peak_stack_bytes), (1, 16));
+}
+
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[test]
 fn native_direct_calls_share_meter_and_propagate_the_first_failure() {
@@ -591,4 +628,97 @@ int main(int argc, char **argv) {{
         assert_eq!(format!("{}\n", row.0).as_bytes(), expected);
         assert_eq!((row.1, row.2), (0, 0));
     }
+
+    check_recursive_execution(invoke);
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn check_recursive_execution(
+    invoke: impl Fn(&scarp::native_object::CheckedElf64Kernel, usize, &[i64]) -> Vec<(i64, u32, usize)>,
+) {
+    use scarp::native_object::{
+        CHECKED_KERNEL_CALL_DEPTH, CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_WORK_LIMIT,
+    };
+    let limit = BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES;
+    let source = recursive_definitions();
+    let compile = |work, depth| {
+        emit_elf64_recursive_integer_entry(source, "gcd", work, depth, limit)
+            .unwrap()
+            .kernel
+    };
+    let cases = [[1071, 462], [10, 0], [48, 18], [0, 9], [1071, 462]];
+    let artifact = compile(500, 7);
+    let arguments: Vec<_> = cases.into_iter().flatten().collect();
+    for ([left, right], row) in cases.into_iter().zip(invoke(&artifact, 2, &arguments)) {
+        let mut expected = Vec::new();
+        scarp::run(
+            &format!("{source}\nprint(gcd({left}, {right}));"),
+            &mut expected,
+        )
+        .unwrap();
+        assert_eq!(format!("{}\n", row.0).as_bytes(), expected);
+        assert_eq!((row.1, row.2), (0, 0));
+    }
+    let depth = compile(500, 2);
+    let rows = invoke(&depth, 2, &[1071, 462, 10, 0, 1071, 462]);
+    assert_eq!(rows[0], rows[2]);
+    assert_eq!(rows[1], (10, 0, 0));
+    assert_eq!((rows[0].0, rows[0].1), (0, CHECKED_KERNEL_CALL_DEPTH));
+    let span = depth.failure_spans[rows[0].2];
+    assert_eq!(&source[span.start..span.end], "gcd(right, left % right)");
+    let work = compile(30, 64);
+    let rows = invoke(&work, 2, &[1071, 462, 1071, 462]);
+    assert_eq!(rows[0], rows[1]);
+    assert_eq!((rows[0].0, rows[0].1), (0, CHECKED_KERNEL_WORK_LIMIT));
+
+    // Argument errors win over an unavailable callee frame.
+    let precedence = "// गणना\npure funcra f(n: integer) -> integer { return f(9 / n); }";
+    let artifact = emit_elf64_recursive_integer_entry(precedence, "f", 100, 1, limit)
+        .unwrap()
+        .kernel;
+    let rows = invoke(&artifact, 1, &[0, 3]);
+    assert_eq!(rows[0].1, CHECKED_KERNEL_DIVISION_BY_ZERO);
+    assert_eq!(rows[1].1, CHECKED_KERNEL_CALL_DEPTH);
+    let span = artifact.failure_spans[rows[0].2];
+    assert_eq!(&precedence[span.start..span.end], "/");
+
+    // Sibling recursive calls each receive the same remaining depth.
+    // The concrete generic instance shares the same call machinery.
+    let branching = r#"
+        pure funcra fib<T: Numeric>(n: T, one: T, zero: T) -> T {
+            if n == zero { return zero; }
+            if n == one { return one; }
+            return fib(n - one, one, zero) + fib(n - (one + one), one, zero);
+        }
+        pure funcra entry(n: integer) -> integer { return fib::<integer>(n, 1, 0); }
+    "#;
+    let artifact = emit_elf64_recursive_integer_entry(branching, "entry", 3000, 7, limit)
+        .unwrap()
+        .kernel;
+    assert_eq!(
+        invoke(&artifact, 1, &[6, 5, 6, 3]),
+        [(8, 0, 0), (5, 0, 0), (8, 0, 0), (2, 0, 0)]
+    );
+
+    // Use all ABI argument registers and ten caller-owned argument slots.
+    let params = (1..=16)
+        .map(|i| format!("a{i}: integer"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let rest = (2..=16)
+        .map(|i| format!("a{i}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let wide = format!(
+        "pure funcra wide({params}) -> integer {{
+        if a1 == 0 {{ return a2 + a3 + a7 + a16; }}
+        return wide(a1 - 1, {rest}) + a3;
+    }}"
+    );
+    let artifact = emit_elf64_recursive_integer_entry(&wide, "wide", 500, 4, limit)
+        .unwrap()
+        .kernel;
+    let mut arguments = vec![3];
+    arguments.extend(2..=16);
+    assert_eq!(invoke(&artifact, 16, &arguments), [(37, 0, 0)]);
 }
