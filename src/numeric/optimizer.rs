@@ -271,7 +271,10 @@ pub fn clip_norm(
     maximum: f64,
     limits: OptimizerLimits,
 ) -> Result<NumericVector, Diagnostic> {
-    nonnegative(maximum, "gradient norm bound must be finite and nonnegative")?;
+    nonnegative(
+        maximum,
+        "gradient norm bound must be finite and nonnegative",
+    )?;
     let span = Span::default();
     let mut budget = limits.budget();
     let n = gradient.len();
