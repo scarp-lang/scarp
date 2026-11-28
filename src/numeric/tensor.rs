@@ -197,3 +197,110 @@ pub fn matmul(
     }
     finish(output, shape)
 }
+
+
+/// Sum broadcasted axes back to a compatible, right-aligned target shape.
+///
+/// This is the reverse of broadcasting a target-shaped value to the input
+/// shape. Missing leading axes and singleton target axes are summed, including
+/// an empty reduced axis (whose sum is zero). It is useful for accumulating
+/// gradients for shared bias and other broadcast parameters.
+pub fn sum_to_shape(
+    input: &NumericTensor,
+    target: &[usize],
+    limits: TensorLimits,
+) -> Result<NumericTensor, Diagnostic> {
+    let rank = input.rank();
+    if target.len() > rank || target.iter().any(|&n| n > MAX_VECTOR_LENGTH) {
+        return Err(shape_error(
+            "tensor reduction target rank or axis exceeds its bound",
+        ));
+    }
+    let source = input.shape();
+    let leading = rank - target.len();
+    let mut reduced_axes = [0; MAX_TENSOR_RANK];
+    let mut reduced_shape = [0; MAX_TENSOR_RANK];
+    let mut reduced_rank = 0;
+    for (axis, &extent) in source.iter().enumerate() {
+        let dest = axis.checked_sub(leading).map_or(1, |i| target[i]);
+        if dest != extent && dest != 1 {
+            return Err(shape_error(
+                "tensor reduction target cannot broadcast to input",
+            ));
+        }
+        if axis < leading || dest != extent {
+            reduced_axes[reduced_rank] = axis;
+            reduced_shape[reduced_rank] = extent;
+            reduced_rank += 1;
+        }
+    }
+    let output_count = count(target)?;
+    let span = Span::default();
+    let mut budget = limits.budget();
+    // Charge even explicit zeros and coordinate decoding. Input and output
+    // counts are independently bounded; all work is prepaid before allocation.
+    let per_output = (1 + rank + target.len()) as u64;
+    let per_term = (1 + rank + reduced_rank) as u64;
+    charge(&mut budget, output_count, per_output)?;
+    charge(&mut budget, input.len(), per_term)?;
+    let mut output = buffer(output_count, &mut budget, span)?;
+    if output_count == 0 {
+        return finish(output, target);
+    }
+    if input.is_empty() {
+        output.resize(output_count, finite_number(0.0, span)?);
+        return finish(output, target);
+    }
+
+    // Both counts are nonzero and the target is broadcast-compatible, so
+    // every output receives exactly this many input terms.
+    let terms_per_output = input.len() / output_count;
+    let mut source_coordinates = [0; MAX_TENSOR_RANK];
+    let mut reduced_coordinates = [0; MAX_TENSOR_RANK];
+    let reduced_shape = &reduced_shape[..reduced_rank];
+    let reduced_coordinates = &mut reduced_coordinates[..reduced_rank];
+    for flat in 0..output_count {
+        source_coordinates.fill(0);
+        decode(flat, target, &mut source_coordinates[leading..rank]);
+        let terms = (0..terms_per_output).map(|term| {
+            decode(term, reduced_shape, reduced_coordinates);
+            for (i, &axis) in reduced_axes[..reduced_rank].iter().enumerate() {
+                source_coordinates[axis] = reduced_coordinates[i];
+            }
+            // Every coordinate is checked by shape validation and decoding.
+            let offset = source
+                .iter()
+                .zip(&source_coordinates)
+                .fold(0usize, |offset, (&extent, &index)| offset * extent + index);
+            Ok(input.cells()[offset].get())
+        });
+        output.push(finite_number(compensated(terms, span)?, span)?);
+    }
+    finish(output, target)
+}
+
+/// Sum one zero-based axis. Preserve it as a singleton when keep_dims is true.
+pub fn sum_axis(
+    input: &NumericTensor,
+    axis: usize,
+    keep_dims: bool,
+    limits: TensorLimits,
+) -> Result<NumericTensor, Diagnostic> {
+    if axis >= input.rank() {
+        return Err(shape_error(
+            "tensor reduction axis is outside the input rank",
+        ));
+    }
+    let mut shape = [0; MAX_TENSOR_RANK];
+    let rank = input.rank();
+    shape[..rank].copy_from_slice(input.shape());
+    shape[axis] = 1;
+    let result = sum_to_shape(input, &shape[..rank], limits)?;
+    if keep_dims {
+        return Ok(result);
+    }
+    shape.copy_within(axis + 1..rank, axis);
+    result
+        .reshape(&shape[..rank - 1])
+        .ok_or_else(|| length_error(Span::default()))
+}

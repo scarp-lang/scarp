@@ -22,3 +22,32 @@ storage foundation's limits. Input storage remains immutable.
 The next separate integration layer must add parser/type support, runtime
 value representation, shared interpreter quotas and source conformance.
 No release publication or version change is part of this patch.
+
+## Axis sums and broadcast-gradient reduction
+
+`sum_axis(input, axis, keep_dims, limits)` reduces one zero-based axis using
+the same finite compensated summation contract as matrix products. Rank-zero
+inputs have no axis. The reduced dimension becomes one when retained; otherwise
+the output is reshaped without a second cell allocation.
+
+`sum_to_shape(input, target, limits)` sums the axes that would have been
+broadcast from the target to the input. The target rank cannot exceed the
+input rank; every right-aligned target dimension must equal the corresponding
+input dimension or be one. Missing leading target axes are reduced. The
+target can be rank zero, in which case all input cells are summed. This is
+the adjoint of broadcasting and can be used for explicit bias gradients.
+
+For example, an input shaped [2, 3] with cells [1, 2, 3, 4, 5, 6] reduces to
+[5, 7, 9] for target shape [3], or [6, 15] for shape [2, 1]. A reduced zero
+axis yields explicit positive zeros, including a scalar zero when all axes
+are reduced. Output shape validation precedes allocation; eliminating a zero
+axis can produce an oversized output, which is rejected before work.
+
+Let r be input rank, t target rank, k reduced-axis count, N input cell count
+and M output cell count. Work is prepaid as M*(1+r+t) + N*(1+r+k); payload
+is 8*M cumulative logical bytes within this host call. Axis sums use the
+same retained-axis shape internally and dropping the axis shares storage.
+The operation scans each input cell once in deterministic row-major order
+within its output group and never allocates an intermediate index array
+proportional to the number of cells. These remain host-only experimental APIs,
+not source-language tensor syntax or automatic differentiation.

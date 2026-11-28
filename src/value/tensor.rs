@@ -130,7 +130,7 @@ impl NumericTensor {
         NumericTile::from_vector(self.cells.clone(), self.dimensions[0], self.dimensions[1])
     }
 
-    /// Rearrange axes; output axis i corresponds to input axis axes[i].
+    /// Rearrange axes; output axis `i` corresponds to input axis `axes[i]`.
     ///
     /// The work is bounded by rank * element count. Identity and empty
     /// permutations share existing storage; other permutations allocate at
