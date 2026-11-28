@@ -1,0 +1,27 @@
+funcra kernel() -> integer {
+    bind count = kernel_map_count();
+    var pages = 0;
+    repeat count as index {
+        pages += kernel_map_pages(index);
+    }
+    if count == 0 or pages <= 0 { return 1; }
+    if x86_cpuid(0, 0, 0) == 0 or (x86_read_cr3() & -4096) == 0 { return 4; }
+    bind begin = x86_read_tsc();
+
+    bind original = kernel_exchange64(0, 41);
+    bind wrong = kernel_compare_exchange64(0, 40, 0);
+    bind observed = kernel_compare_exchange64(0, 41, 42);
+    bind boundary = kernel_exchange64(4088, pages);
+    kernel_fence();
+    x86_pause();
+    if original != 0 or wrong != 41 or observed != 41 or boundary != 0 {
+        return 2;
+    }
+    if kernel_load64(0) != 42 or kernel_load64(4088) != pages { return 3; }
+    if x86_read_tsc() < begin { return 5; }
+
+    // SCARP KERNEL PASS followed by LF on the QEMU debug console.
+    bind message = [array: 83, 67, 65, 82, 80, 32, 75, 69, 82, 78, 69, 76, 32, 80, 65, 83, 83, 10];
+    repeat 18 as index { qemu_debug_byte(message[index]); }
+    return 0;
+}

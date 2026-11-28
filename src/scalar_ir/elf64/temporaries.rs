@@ -285,7 +285,8 @@ impl TemporaryLayout {
                 | Operation::Move { .. }
                 | Operation::Unary { .. }
                 | Operation::Binary { .. }
-                | Operation::Index { .. } => true,
+                | Operation::Index { .. }
+                | Operation::Native { .. } => true,
             });
     }
 

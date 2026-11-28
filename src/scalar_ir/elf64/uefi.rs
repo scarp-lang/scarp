@@ -20,7 +20,7 @@ pub(super) const ENTRY_FRAME_BYTES: u32 = 3 * 8;
 const CONSOLE_FRAME_BYTES: u8 = 48;
 pub(super) const CONSOLE_CALL_BYTES: u32 = CONSOLE_FRAME_BYTES as u32 + 8;
 const CONSOLE_FAILURE: u32 = 8;
-const EFI_ABORTED: u64 = (1 << 63) | 21;
+pub(super) const EFI_ABORTED: u64 = (1 << 63) | 21;
 
 #[derive(Default)]
 pub(super) struct ConsoleLiterals {
@@ -158,8 +158,17 @@ pub(super) fn image(mut code: Code) -> Result<Vec<u8>, Diagnostic> {
         .try_reserve_exact(code.data.len())
         .map_err(|_| failure())?;
     machine.extend_from_slice(&code.data);
+    write_image(machine, console, bridge_size, 0, &[])
+}
 
-    let section_count = if console.bytes.is_empty() { 2 } else { 3 };
+pub(super) fn write_image(
+    mut machine: Vec<u8>,
+    console: ConsoleLiterals,
+    console_base: usize,
+    bss_size: usize,
+    bss_fixups: &[(usize, usize)],
+) -> Result<Vec<u8>, Diagnostic> {
+    let section_count = 2 + usize::from(!console.bytes.is_empty()) + usize::from(bss_size != 0);
     let headers = align_up(
         SECTION_TABLE + section_count * SECTION_HEADER_BYTES,
         FILE_ALIGNMENT,
@@ -173,12 +182,21 @@ pub(super) fn image(mut code: Code) -> Result<Vec<u8>, Diagnostic> {
         0x4000_0040,
     )?;
     for (displacement, offset) in console.fixups {
-        let displacement = bridge_size + displacement;
-        // Both the use and the literal move with the firmware's image base.
-        let rip = text.rva + displacement + 4;
-        let relative =
-            i32::try_from((data.rva + offset) as i64 - rip as i64).map_err(|_| failure())?;
-        put(&mut machine, displacement, &relative.to_le_bytes())?;
+        patch_rip(&mut machine, console_base + displacement, data.rva + offset)?;
+    }
+    let bss = Section {
+        name: b".bss",
+        rva: data.next_rva()?,
+        offset: 0,
+        size: bss_size,
+        raw_size: 0,
+        flags: 0xc000_0080, // initialized by firmware, read/write, no executable bit
+    };
+    for &(displacement, offset) in bss_fixups {
+        if offset >= bss_size {
+            return Err(failure());
+        }
+        patch_rip(&mut machine, displacement, bss.rva + offset)?;
     }
 
     // All generated text is position-independent. A base-relocation block
@@ -188,7 +206,7 @@ pub(super) fn image(mut code: Code) -> Result<Vec<u8>, Diagnostic> {
     u32at(&mut reloc, 4, 12)?;
     let relocation = Section::new(
         b".reloc",
-        data.next_rva()?,
+        bss.next_rva()?,
         data.offset + data.raw_size,
         reloc.len(),
         0x4200_0040,
@@ -210,6 +228,7 @@ pub(super) fn image(mut code: Code) -> Result<Vec<u8>, Diagnostic> {
     u16at(optional, 0, 0x20b)?; // PE32+
     u32at(optional, 4, text.raw_size as u32)?;
     u32at(optional, 8, (data.raw_size + relocation.raw_size) as u32)?;
+    u32at(optional, 12, bss.size as u32)?;
     u32at(optional, 16, text.rva as u32)?; // AddressOfEntryPoint
     u32at(optional, 20, text.rva as u32)?; // BaseOfCode
     u64at(optional, 24, IMAGE_BASE)?;
@@ -227,6 +246,16 @@ pub(super) fn image(mut code: Code) -> Result<Vec<u8>, Diagnostic> {
     if !console.bytes.is_empty() {
         data.write(&mut result, 1, &console.bytes)?;
     }
+    if bss_size != 0 {
+        bss.write(&mut result, section_count - 2, &[])?;
+    }
     relocation.write(&mut result, section_count - 1, &reloc)?;
     Ok(result)
+}
+
+fn patch_rip(machine: &mut [u8], displacement: usize, target_rva: usize) -> Result<(), Diagnostic> {
+    // The instruction and its target move with the firmware's image base.
+    let next = TEXT_RVA + displacement + 4;
+    let relative = i32::try_from(target_rva as i64 - next as i64).map_err(|_| failure())?;
+    put(machine, displacement, &relative.to_le_bytes())
 }

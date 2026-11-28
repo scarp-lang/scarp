@@ -62,6 +62,60 @@ pub fn emit_pe32plus_uefi_application(
     crate::scalar_ir::emit_uefi_application(source, entry, max_work, max_stack_bytes)
 }
 
+/// Experimental PE32+ loader and post-boot-services Scarp kernel.
+#[derive(Debug, PartialEq, Eq)]
+pub struct UefiKernel {
+    pub image: Vec<u8>,
+    /// Generated usage below the firmware's incoming RSP.
+    pub loader_stack_bytes: u32,
+    /// Generated usage below the top of the dedicated kernel stack.
+    pub kernel_stack_bytes: u32,
+    /// The high half of RDX indexes this table after a checked kernel failure.
+    /// The terminal CPU trap status has no Scarp source span.
+    pub kernel_failure_spans: Vec<Span>,
+}
+
+/// Source or image phase associated with a failed kernel build.
+#[derive(Debug, PartialEq, Eq)]
+pub enum UefiKernelError {
+    Loader(Diagnostic),
+    Kernel(Diagnostic),
+    Image(Diagnostic),
+}
+
+/// Compile two separately resolved, named zero-argument integer entries.
+/// A successful zero loader result transfers control through ExitBootServices
+/// to the kernel. Each stage receives a fresh work allowance. The generated
+/// kernel owns a 64 KiB stack and has no firmware console capability.
+pub fn emit_pe32plus_uefi_kernel(
+    loader: &str,
+    loader_entry: &str,
+    kernel: &str,
+    kernel_entry: &str,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<UefiKernel, UefiKernelError> {
+    crate::scalar_ir::emit_uefi_kernel(
+        loader,
+        loader_entry,
+        kernel,
+        kernel_entry,
+        max_work,
+        max_stack_bytes,
+    )
+}
+
+/// A kernel atomic operation used a nonaligned or out-of-range region offset.
+pub const CHECKED_KERNEL_REGION_OFFSET: u32 = 9;
+/// A kernel memory map query used an index outside the retained map.
+pub const CHECKED_KERNEL_MEMORY_MAP_INDEX: u32 = 10;
+/// A debug-port write requested a value outside an unsigned byte.
+pub const CHECKED_KERNEL_DEBUG_BYTE: u32 = 11;
+/// The processor entered the default kernel exception handler.
+pub const CHECKED_KERNEL_UNHANDLED_TRAP: u32 = 12;
+/// A CPU query used an invalid operand or an unavailable feature.
+pub const CHECKED_KERNEL_CPU_QUERY: u32 = 13;
+
 /// Emit a deterministic ELF64 relocatable object from integer bindings.
 ///
 /// Every source operation must be a scalar integer binding initialized by

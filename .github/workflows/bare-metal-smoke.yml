@@ -49,6 +49,6 @@ jobs:
           sudo apt-get install -y --no-install-recommends grub-pc-bin grub-common xorriso mtools qemu-system-x86 ovmf
       - name: Boot Scarp-generated machine code
         run: bash experiments/bare-metal/smoke.sh
-      - name: Boot Scarp-only x86-64 UEFI applications
+      - name: Boot Scarp-only x86-64 UEFI applications and kernel
         run: python3 experiments/bare-metal/uefi-smoke.py
 
