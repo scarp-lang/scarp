@@ -169,18 +169,23 @@ impl Budget {
         if digits > self.bigint_digits {
             return Err(Diagnostic::new(DiagnosticKind::BigIntLimit, span,
                 format!("bigint decimal digit limit of {} exceeded", self.bigint_digits))
-                .with_help("reduce input/result digits or raise --max-bigint-digits / ExecutionOptions.max_bigint_digits up to 1000000"));
+                .with_help("reduce input/result digits or raise --max-bigint-digits / ExecutionOptions.max_bigint_digits up to the platform ceiling (1000000000 on 64-bit, 10000000 otherwise)"));
         }
         Ok(())
     }
 
     pub fn charge_bigint_allocation(&mut self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
+        self.check_bigint_allocation(bytes, span)?;
+        self.bigint_remaining -= bytes;
+        Ok(())
+    }
+
+    pub fn check_bigint_allocation(&self, bytes: usize, span: Span) -> Result<(), Diagnostic> {
         if bytes > self.bigint_remaining {
             return Err(Diagnostic::new(DiagnosticKind::BigIntLimit, span,
                 format!("cumulative bigint allocation limit of {} bytes exceeded", self.bigint_limit))
                 .with_help("reduce bigint materialization or raise --max-bigint-bytes / ExecutionOptions.max_bigint_bytes; scratch buffers also count"));
         }
-        self.bigint_remaining -= bytes;
         Ok(())
     }
 

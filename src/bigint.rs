@@ -19,10 +19,16 @@ pub mod file;
 mod modular;
 mod number_theory;
 mod radix;
+mod sequences;
+mod utilities;
 
 const BASE: u64 = 1_000_000_000;
-/// Initial implementation ceiling; hosts may select a smaller per-value limit.
-pub const MAX_BIGINT_DIGITS: usize = 1_000_000;
+/// Opt-in implementation ceiling; hosts may select a smaller per-value limit.
+/// Keep smaller address-space targets (including wasm32) at ten million.
+#[cfg(target_pointer_width = "64")]
+pub const MAX_BIGINT_DIGITS: usize = 1_000_000_000;
+#[cfg(not(target_pointer_width = "64"))]
+pub const MAX_BIGINT_DIGITS: usize = 10_000_000;
 pub const DEFAULT_BIGINT_DIGITS: usize = 10_000;
 pub const DEFAULT_BIGINT_BYTES: usize = 8 * 1024 * 1024;
 
@@ -161,8 +167,31 @@ impl fmt::Display for BigInt {
         }
         let mut limbs = self.limbs.iter().rev();
         write!(f, "{}", limbs.next().expect("nonzero magnitude"))?;
-        for limb in limbs {
-            write!(f, "{limb:09}")?;
+        // Batch both dense and sparse decimal limbs into bounded chunks.
+        // Do not allocate an intermediate decimal string or make one writer
+        // call per limb. Every non-leading limb has exactly nine ASCII digits.
+        const CHUNK_BYTES: usize = 9 * 1024;
+        let mut chunk = [b'0'; CHUNK_BYTES];
+        let mut used = 0;
+        for &limb in limbs {
+            let slot = &mut chunk[used..used + 9];
+            if limb == 0 {
+                slot.fill(b'0');
+            } else {
+                let mut value = limb;
+                for digit in slot.iter_mut().rev() {
+                    *digit = b'0' + (value % 10) as u8;
+                    value /= 10;
+                }
+            }
+            used += 9;
+            if used == CHUNK_BYTES {
+                f.write_str(std::str::from_utf8(&chunk).map_err(|_| fmt::Error)?)?;
+                used = 0;
+            }
+        }
+        if used != 0 {
+            f.write_str(std::str::from_utf8(&chunk[..used]).map_err(|_| fmt::Error)?)?;
         }
         Ok(())
     }
@@ -275,8 +304,80 @@ fn multiply(
     budget: &mut Budget,
     span: Span,
 ) -> Result<BigInt, Diagnostic> {
-    let (n, m) = (left.limbs.len(), right.limbs.len());
+    if !left.is_zero() && !right.is_zero() {
+        // The exact result has either this many digits or one more.
+        budget.check_bigint_digits(left.decimal_digits() + right.decimal_digits() - 1, span)?;
+    }
+    let result = multiply_limbs(&left.limbs, &right.limbs, budget, span)?;
+    finish(result, left.negative != right.negative, budget, span)
+}
+
+// Balanced large products use Karatsuba (three half-size products instead of
+// four). Small or very unbalanced products retain the schoolbook kernel.
+const KARATSUBA_THRESHOLD: usize = 64;
+
+fn multiply_limbs(
+    left: &[u32],
+    right: &[u32],
+    budget: &mut Budget,
+    span: Span,
+) -> Result<Vec<u32>, Diagnostic> {
+    let (n, m) = (left.len(), right.len());
     let capacity = n.checked_add(m).ok_or_else(|| allocation(span))?;
+    if n == 0 || m == 0 {
+        budget.charge(capacity as u64 + 1, span)?;
+        return Ok(Vec::new());
+    }
+
+    if n.max(m) >= KARATSUBA_THRESHOLD {
+        // Charge before scanning, even when no zero limbs are found. Factoring
+        // whole base-10^9 limbs makes decimal powers and shifted values cheap.
+        budget.charge(capacity as u64, span)?;
+        let lz = left.iter().take_while(|&&x| x == 0).count();
+        let rz = right.iter().take_while(|&&x| x == 0).count();
+        if lz + rz != 0 {
+            let mut core = multiply_limbs(&left[lz..], &right[rz..], budget, span)?;
+            if core.is_empty() {
+                return Ok(core);
+            }
+            let shift = lz + rz;
+            let length = shift
+                .checked_add(core.len())
+                .ok_or_else(|| allocation(span))?;
+            budget.charge(length as u64, span)?;
+            let mut result = buffer(length, budget, span)?;
+            result.resize(shift, 0);
+            result.append(&mut core);
+            return Ok(result);
+        }
+    }
+
+    if n.min(m) >= KARATSUBA_THRESHOLD && n.max(m) <= n.min(m) * 2 {
+        // Prepay linear splitting, sums, differences, and recombination.
+        // Each recursive kernel additionally prepays its own work and buffers.
+        budget.charge((capacity as u64).saturating_mul(16), span)?;
+        let split = n.max(m) / 2;
+        let (a0, a1) = left.split_at(split);
+        let (b0, b1) = right.split_at(split);
+        let a0 = trimmed(a0);
+        let b0 = trimmed(b0);
+        let z0 = multiply_limbs(a0, b0, budget, span)?;
+        let z2 = multiply_limbs(a1, b1, budget, span)?;
+        let a_sum = sum_limbs(a0, a1, budget, span)?;
+        let b_sum = sum_limbs(b0, b1, budget, span)?;
+        let mut middle = multiply_limbs(&a_sum, &b_sum, budget, span)?;
+        // (a0+a1)(b0+b1) - a0*b0 - a1*b1 is nonnegative.
+        subtract_magnitude(&mut middle, &z0);
+        subtract_magnitude(&mut middle, &z2);
+        let mut result = buffer(capacity, budget, span)?;
+        result.resize(capacity, 0);
+        add_shifted(&mut result, &z0, 0);
+        add_shifted(&mut result, &middle, split);
+        add_shifted(&mut result, &z2, split * 2);
+        normalize(&mut result);
+        return Ok(result);
+    }
+
     budget.charge(
         (n as u64)
             .saturating_mul(m as u64)
@@ -284,16 +385,11 @@ fn multiply(
             .saturating_add(1),
         span,
     )?;
-    if n == 0 || m == 0 {
-        return finish(Vec::new(), false, budget, span);
-    }
-    // A nonzero product has at least d(left) + d(right) - 1 digits.
-    budget.check_bigint_digits(left.decimal_digits() + right.decimal_digits() - 1, span)?;
     let mut result = buffer(capacity, budget, span)?;
     result.resize(capacity, 0);
-    for (i, &a) in left.limbs.iter().enumerate() {
+    for (i, &a) in left.iter().enumerate() {
         let mut carry = 0_u64;
-        for (j, &b) in right.limbs.iter().enumerate() {
+        for (j, &b) in right.iter().enumerate() {
             // (BASE-1)^2 + 2*(BASE-1) == BASE^2-1 fits u64.
             let product = u64::from(a) * u64::from(b) + u64::from(result[i + j]) + carry;
             result[i + j] = (product % BASE) as u32;
@@ -301,7 +397,55 @@ fn multiply(
         }
         result[i + m] = carry as u32;
     }
-    finish(result, left.negative != right.negative, budget, span)
+    normalize(&mut result);
+    Ok(result)
+}
+
+fn trimmed(limbs: &[u32]) -> &[u32] {
+    let length = limbs.iter().rposition(|&x| x != 0).map_or(0, |i| i + 1);
+    &limbs[..length]
+}
+
+fn sum_limbs(
+    left: &[u32],
+    right: &[u32],
+    budget: &mut Budget,
+    span: Span,
+) -> Result<Vec<u32>, Diagnostic> {
+    let length = left.len().max(right.len());
+    let mut result = buffer(
+        length.checked_add(1).ok_or_else(|| allocation(span))?,
+        budget,
+        span,
+    )?;
+    let mut carry = 0_u64;
+    for i in 0..length {
+        let value =
+            u64::from(*left.get(i).unwrap_or(&0)) + u64::from(*right.get(i).unwrap_or(&0)) + carry;
+        result.push((value % BASE) as u32);
+        carry = value / BASE;
+    }
+    if carry != 0 {
+        result.push(carry as u32);
+    }
+    Ok(result)
+}
+
+fn add_shifted(result: &mut [u32], value: &[u32], shift: usize) {
+    let mut carry = 0_u64;
+    for (i, &limb) in value.iter().enumerate() {
+        let slot = &mut result[shift + i];
+        let sum = u64::from(*slot) + u64::from(limb) + carry;
+        *slot = (sum % BASE) as u32;
+        carry = sum / BASE;
+    }
+    let mut i = shift + value.len();
+    while carry != 0 {
+        let sum = u64::from(result[i]) + carry;
+        result[i] = (sum % BASE) as u32;
+        carry = sum / BASE;
+        i += 1;
+    }
 }
 
 enum DivisionOutputs {

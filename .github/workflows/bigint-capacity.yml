@@ -1,0 +1,32 @@
+name: BigInt capacity validation
+
+on:
+  pull_request:
+    paths:
+      - 'src/bigint.rs'
+      - 'src/bigint/**'
+      - 'src/numeric.rs'
+      - 'src/numeric/bigints.rs'
+      - 'tests/bigint_scalable.rs'
+      - '.github/workflows/bigint-capacity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bigint-capacity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-sparse-capacity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CARGO_NET_OFFLINE: 'true'
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Verify exact million-, ten-million- and billion-digit sparse outputs
+        run: cargo test --release --locked --offline --test bigint_scalable -- --ignored --test-threads=1
