@@ -31,6 +31,27 @@ Existing `run`, `launch`, explicit interactive flags, and file-backed input
 remain available for compatibility. This development change is not yet part of
 a published prerelease.
 
+## Experimental file-backed BigInt
+
+`scarp bigint add LEFT RIGHT OUTPUT`, `scarp bigint sub LEFT RIGHT OUTPUT`,
+`scarp bigint mul LEFT RIGHT OUTPUT`, and `scarp bigint div LEFT RIGHT OUTPUT`
+calculate with one signed decimal integer per regular file. Multiplication
+requires either operand's magnitude to be at most `999999999`. Division
+requires a nonzero right operand whose magnitude is at most `999999999`. It
+stores the quotient truncated toward zero and prints the signed remainder on
+stdout. Use `scarp bigint div-wide LEFT RIGHT OUTPUT` with a larger divisor.
+The divisor must fit the `--max-buffer-bytes` workspace. Use
+`--max-limb-steps` to set the wide division work budget. With `--stats`, the
+remainder is part of the JSON record and wide division encodes it as a
+decimal string.
+
+Each input allows an optional sign and leading zeros. Use ASCII digits
+without whitespace or a trailing newline. The result file is canonical
+decimal and the destination must be a new filename on a filesystem that
+supports hard links.
+
+Use `scarp guide bigint` for byte budgets and `--stats`. See the
+[file-backed BigInt design and examples](../development/bigint-file-arithmetic.md).
 
 ## Project commands in v0.0.6-alpha.8
 

@@ -30,6 +30,7 @@ pub mod modules;
 pub mod native_object;
 mod native_preflight;
 pub mod numeric;
+mod output_stage;
 pub mod parser;
 pub mod resolver;
 mod scalar_ir;

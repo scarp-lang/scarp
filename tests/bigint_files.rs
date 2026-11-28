@@ -1,0 +1,1075 @@
+use scarp::bigint::file::{
+    calculate, calculate_with_progress, divide, divide_wide, divide_wide_with_progress,
+    divide_with_progress, FileError, FileLimits, FileOperation, FilePhase, FileResource,
+    WideDivisionLimits,
+};
+use std::{
+    fs::{self, OpenOptions},
+    io::{self, Seek, SeekFrom, Write},
+    ops::ControlFlow,
+    path::PathBuf,
+    process::{Command, Output},
+    sync::Barrier,
+};
+use FileOperation::{Add, Multiply, Subtract};
+
+struct Directory(PathBuf);
+
+impl Directory {
+    fn new(name: &str) -> Self {
+        let path =
+            std::env::temp_dir().join(format!("scarp-bigint-file-{name}-{}", std::process::id()));
+        fs::create_dir(&path).unwrap();
+        Self(path)
+    }
+
+    fn operands(&self, left: impl AsRef<[u8]>, right: impl AsRef<[u8]>) -> [PathBuf; 3] {
+        let paths = ["left", "right", "out"].map(|name| self.0.join(name));
+        fs::write(&paths[0], left).unwrap();
+        fs::write(&paths[1], right).unwrap();
+        paths
+    }
+
+    fn assert_staging_clean(&self) {
+        assert!(fs::read_dir(&self.0).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".scarp-bigint-")
+        }));
+    }
+
+    fn cli(&self, args: &[&str]) -> Output {
+        Command::new(env!("CARGO_BIN_EXE_scarp"))
+            .current_dir(&self.0)
+            .args(args)
+            .output()
+            .unwrap()
+    }
+}
+
+impl Drop for Directory {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+#[test]
+fn signed_values_match_the_interpreter_across_chunk_boundaries() {
+    let dir = Directory::new("boundaries");
+    let nines = "9".repeat(250);
+    let power = format!("1{}", "0".repeat(250));
+    let zeros = format!("-{}", "0".repeat(38));
+    let equal = format!("-000{nines}");
+    let negative = format!("-{nines}");
+    let uneven = format!("+00090{}700000000001", "0".repeat(41));
+    for (left, right) in [
+        (nines.as_str(), "1"),
+        (power.as_str(), "1"),
+        ("1", power.as_str()),
+        (negative.as_str(), "-1"),
+        (equal.as_str(), negative.as_str()),
+        (nines.as_str(), equal.as_str()),
+        (zeros.as_str(), "0"),
+        (zeros.as_str(), negative.as_str()),
+        (uneven.as_str(), "-41000000001"),
+        ("123456789000000000001", "123456789000000000002"),
+    ] {
+        let [left_path, right_path, output] = dir.operands(left, right);
+        for (operation, operator) in [(Add, '+'), (Subtract, '-')] {
+            let source = format!("print(bigint(\"{left}\") {operator} bigint(\"{right}\"));");
+            let mut expected = Vec::new();
+            scarp::run(&source, &mut expected).unwrap();
+            assert_eq!(expected.pop(), Some(b'\n'));
+            for max_buffer_bytes in [30, 52, 118, 256 * 1024] {
+                let usage = calculate(
+                    operation,
+                    &left_path,
+                    &right_path,
+                    &output,
+                    FileLimits {
+                        max_buffer_bytes,
+                        ..FileLimits::default()
+                    },
+                )
+                .unwrap();
+                assert_eq!(fs::read(&output).unwrap(), expected);
+                assert_eq!(usage.output_bytes, expected.len() as u64);
+                assert_eq!(
+                    usage.result_digits,
+                    usage.output_bytes - u64::from(expected[0] == b'-')
+                );
+                assert_eq!(
+                    usage.peak_temp_bytes,
+                    usage.scratch_bytes + usage.output_bytes
+                );
+                assert!(usage.buffer_bytes <= max_buffer_bytes);
+                fs::remove_file(&output).unwrap();
+            }
+        }
+    }
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn seeded_signed_arithmetic_matches_i128() {
+    let dir = Directory::new("oracle");
+    let mut seed = 0x3411_234b_a185_70d0_u64;
+    let mut sample = || {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+        i128::from(seed as i64) * 1_000_000_001
+    };
+    for case in 0..80 {
+        let left = sample() / (case % 7 + 1);
+        let right = sample() / (case % 11 + 1);
+        let [left_path, right_path, output] = dir.operands(left.to_string(), right.to_string());
+        for (operation, expected) in [(Add, left + right), (Subtract, left - right)] {
+            calculate(
+                operation,
+                &left_path,
+                &right_path,
+                &output,
+                FileLimits {
+                    max_buffer_bytes: 30 + 22 * (case as usize % 3),
+                    ..FileLimits::default()
+                },
+            )
+            .unwrap();
+            assert_eq!(fs::read_to_string(&output).unwrap(), expected.to_string());
+            fs::remove_file(&output).unwrap();
+        }
+    }
+}
+
+#[test]
+fn signed_products_match_the_interpreter_in_both_operand_orders() {
+    let dir = Directory::new("products");
+    let nines = "9".repeat(273);
+    let signed = format!("-000{nines}");
+    for (left, right) in [
+        (nines.as_str(), "-000999999999"),
+        (signed.as_str(), "-1"),
+        (signed.as_str(), "-0000000000000000000"),
+        ("+0001", "-000999999999"),
+        ("999999999", "999999999"),
+    ] {
+        let source = format!("print(bigint(\"{left}\") * bigint(\"{right}\"));");
+        let mut expected = Vec::new();
+        scarp::run(&source, &mut expected).unwrap();
+        assert_eq!(expected.pop(), Some(b'\n'));
+        for (a, b) in [(left, right), (right, left)] {
+            let [a, b, output] = dir.operands(a, b);
+            for max_buffer_bytes in [30, 52, 118, 256 * 1024] {
+                let usage = calculate(
+                    Multiply,
+                    &a,
+                    &b,
+                    &output,
+                    FileLimits {
+                        max_buffer_bytes,
+                        ..FileLimits::default()
+                    },
+                )
+                .unwrap();
+                assert_eq!(fs::read(&output).unwrap(), expected);
+                assert!(usage.buffer_bytes <= max_buffer_bytes);
+                assert_eq!(usage.output_bytes, expected.len() as u64);
+                if expected == b"0" {
+                    assert_eq!(usage.scratch_bytes, 0);
+                }
+                fs::remove_file(&output).unwrap();
+            }
+        }
+    }
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn seeded_single_limb_products_match_i128() {
+    let dir = Directory::new("product-oracle");
+    let mut seed = 0xa7aa_e921_76be_a645_u64;
+    let mut sample = || {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+        seed as i64
+    };
+    for case in 0..80 {
+        let integer = i128::from(sample()) * 1_000_000_001;
+        let factor = i128::from(sample() % 1_000_000_000);
+        let [left, right, output] = dir.operands(integer.to_string(), factor.to_string());
+        let limits = FileLimits {
+            max_buffer_bytes: 30 + 22 * (case % 3),
+            ..FileLimits::default()
+        };
+        calculate(Multiply, left, right, &output, limits).unwrap();
+        assert_eq!(
+            fs::read_to_string(&output).unwrap(),
+            (integer * factor).to_string()
+        );
+        fs::remove_file(output).unwrap();
+    }
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn multiplication_checks_factor_width_and_result_limits() {
+    let dir = Directory::new("product-limits");
+    let [left, right, output] = dir.operands("1000000000", "-1000000000");
+    assert!(matches!(
+        calculate(Multiply, &left, &right, &output, FileLimits::default()),
+        Err(FileError::FactorTooLarge)
+    ));
+    assert!(!output.exists());
+    dir.assert_staging_clean();
+
+    let [left, right, output] = dir.operands("999999999", "9");
+    let usage = calculate(Multiply, &left, &right, &output, FileLimits::default()).unwrap();
+    assert_eq!(fs::read_to_string(&output).unwrap(), "8999999991");
+    fs::remove_file(&output).unwrap();
+    let exact = FileLimits {
+        max_input_bytes: usage.input_bytes,
+        max_output_bytes: usage.output_bytes,
+        max_temp_bytes: usage.peak_temp_bytes,
+        max_buffer_bytes: usage.buffer_bytes,
+    };
+    for (limits, kind) in [
+        (
+            FileLimits {
+                max_output_bytes: 8,
+                ..exact
+            },
+            FileResource::OutputBytes,
+        ),
+        (
+            FileLimits {
+                max_output_bytes: 9,
+                ..exact
+            },
+            FileResource::OutputBytes,
+        ),
+        (
+            FileLimits {
+                max_temp_bytes: exact.max_temp_bytes - 1,
+                ..exact
+            },
+            FileResource::TemporaryBytes,
+        ),
+    ] {
+        assert!(matches!(
+            calculate(Multiply, &left, &right, &output, limits),
+            Err(FileError::Limit { resource, .. }) if resource == kind
+        ));
+        assert!(!output.exists());
+        dir.assert_staging_clean();
+    }
+    calculate(Multiply, &left, &right, &output, exact).unwrap();
+}
+
+#[test]
+fn multiplication_cancelled_mid_carry_chain_cleans_staging() {
+    let dir = Directory::new("product-cancel");
+    let [left, right, output] = dir.operands("9".repeat(90), "999999999");
+    let limits = FileLimits {
+        max_buffer_bytes: 30,
+        ..FileLimits::default()
+    };
+    let result = calculate_with_progress(Multiply, left, right, &output, limits, |progress| {
+        if progress.phase == FilePhase::Arithmetic && progress.completed == 3 {
+            assert!(progress.completed < progress.total);
+            ControlFlow::Break(())
+        } else {
+            ControlFlow::Continue(())
+        }
+    });
+    assert!(matches!(result, Err(FileError::Cancelled)));
+    assert!(!output.exists());
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn multiplication_cli_uses_the_shared_output_and_error_contract() {
+    let dir = Directory::new("product-cli");
+    let [left, _, output] = dir.operands("-999999999", "+0001000000000");
+    let run = || dir.cli(&["bigint", "mul", "--stats", "left", "right", "out"]);
+    let result = run();
+    assert!(result.status.success(), "{:?}", result.stderr);
+    assert_eq!(fs::read_to_string(&output).unwrap(), "-999999999000000000");
+    assert!(String::from_utf8(result.stdout)
+        .unwrap()
+        .contains("\"result_digits\":18"));
+    assert_eq!(run().status.code(), Some(1));
+    fs::remove_file(&output).unwrap();
+    fs::write(left, "1000000000").unwrap();
+    let error = run();
+    assert_eq!(error.status.code(), Some(1));
+    assert!(String::from_utf8(error.stderr)
+        .unwrap()
+        .contains("999999999"));
+    assert!(!output.exists());
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn signed_division_matches_interpreter_across_decimal_block_boundaries() {
+    let dir = Directory::new("division");
+    let large = format!("-0001{}876543210", "0246813579".repeat(27));
+    for (left, right) in [
+        (large.as_str(), "-000999999999"),
+        (large.as_str(), "+000987654321"),
+        (large.as_str(), "1"),
+        ("9999999981234567890", "999999999"),
+        ("9999999991234567890", "999999999"),
+        ("-999999998", "999999999"),
+        ("-000", "-1"),
+        ("+000999999999", "-999999999"),
+    ] {
+        let [a, b, output] = dir.operands(left, right);
+        let source = format!(
+            "bind a = bigint(\"{left}\"); bind b = bigint(\"{right}\"); print(a / b); print(a % b);"
+        );
+        let mut expected = Vec::new();
+        scarp::run(&source, &mut expected).unwrap();
+        for max_buffer_bytes in [9, 17, 18, 27, 81, 256 * 1024] {
+            let limits = FileLimits {
+                max_buffer_bytes,
+                ..FileLimits::default()
+            };
+            let result = divide(&a, &b, &output, limits).unwrap();
+            let quotient = fs::read_to_string(&output).unwrap();
+            assert_eq!(
+                format!("{quotient}\n{}\n", result.remainder).as_bytes(),
+                expected
+            );
+            assert_eq!(result.quotient.scratch_bytes, 0);
+            assert_eq!(result.quotient.peak_temp_bytes, quotient.len() as u64);
+            assert_eq!(result.quotient.output_bytes, quotient.len() as u64);
+            assert_eq!(
+                result.quotient.result_digits,
+                quotient.trim_start_matches('-').len() as u64
+            );
+            assert!(result.quotient.buffer_bytes <= max_buffer_bytes);
+            fs::remove_file(&output).unwrap();
+        }
+    }
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn seeded_file_division_matches_i128() {
+    let dir = Directory::new("division-oracle");
+    let mut seed = 0x5307_b12e_929e_a170_u64;
+    let mut sample = || {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+        i128::from(seed as i64)
+    };
+    for case in 0..96 {
+        let dividend = sample() * 1_000_000_001 / (case % 11 + 1) + 3;
+        let divisor = sample() % 999_999_999;
+        let divisor = if divisor == 0 { 1 } else { divisor };
+        let [a, b, output] = dir.operands(dividend.to_string(), divisor.to_string());
+        let result = divide(&a, &b, &output, FileLimits::default()).unwrap();
+        assert_eq!(
+            fs::read_to_string(&output).unwrap(),
+            (dividend / divisor).to_string()
+        );
+        assert_eq!(i128::from(result.remainder), dividend % divisor);
+        fs::remove_file(output).unwrap();
+    }
+}
+
+#[test]
+fn division_preflights_exact_output_and_temporary_sizes() {
+    let dir = Directory::new("division-quota");
+    let [left, right, output] = dir.operands("-0001234567890123", "000999999999");
+    let exact = FileLimits {
+        max_input_bytes: 29,
+        max_output_bytes: 5,
+        max_temp_bytes: 5,
+        max_buffer_bytes: 9,
+    };
+    for (limits, kind) in [
+        (
+            FileLimits {
+                max_input_bytes: 28,
+                ..exact
+            },
+            FileResource::InputBytes,
+        ),
+        (
+            FileLimits {
+                max_output_bytes: 4,
+                ..exact
+            },
+            FileResource::OutputBytes,
+        ),
+        (
+            FileLimits {
+                max_temp_bytes: 4,
+                ..exact
+            },
+            FileResource::TemporaryBytes,
+        ),
+        (
+            FileLimits {
+                max_buffer_bytes: 8,
+                ..exact
+            },
+            FileResource::BufferBytes,
+        ),
+    ] {
+        let error = divide_with_progress(&left, &right, &output, limits, |progress| {
+            assert_eq!(progress.phase, FilePhase::ReadInputs);
+            ControlFlow::Continue(())
+        })
+        .unwrap_err();
+        assert!(
+            matches!(
+                error,
+                FileError::Limit { resource, required, limit } if resource == kind && required == limit + 1
+            ),
+            "{error}"
+        );
+        assert!(!output.exists());
+        dir.assert_staging_clean();
+    }
+    let usage = divide(left, right, &output, exact).unwrap();
+    assert_eq!(fs::read_to_string(output).unwrap(), "-1234");
+    assert_eq!(usage.quotient.peak_temp_bytes, 5);
+    assert_eq!(usage.remainder, -567891357);
+}
+
+#[test]
+fn invalid_division_operands_leave_no_result() {
+    let dir = Directory::new("division-invalid");
+    let [left, right, output] = dir.operands("1", "-0000000");
+    let run = || divide(&left, &right, &output, FileLimits::default());
+    assert!(matches!(run(), Err(FileError::DivisionByZero)));
+    fs::write(&right, "0001000000000").unwrap();
+    assert!(matches!(run(), Err(FileError::DivisorTooLarge)));
+    fs::write(&right, "00010\n").unwrap();
+    assert!(matches!(
+        run(),
+        Err(FileError::InvalidDecimal {
+            operand: "right operand",
+            offset: 5
+        })
+    ));
+    fs::write(&left, "0q").unwrap();
+    fs::write(&right, "0").unwrap();
+    assert!(matches!(
+        run(),
+        Err(FileError::InvalidDecimal {
+            operand: "left operand",
+            offset: 1
+        })
+    ));
+    assert!(!output.exists());
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn cancelled_or_conflicting_division_cleans_up_staged_quotient() {
+    let dir = Directory::new("division-cancel");
+    let [left, right, output] = dir.operands("123456789".repeat(9), "23");
+    let limits = FileLimits {
+        max_buffer_bytes: 9,
+        ..FileLimits::default()
+    };
+    for phase in [
+        FilePhase::ReadInputs,
+        FilePhase::WriteDecimal,
+        FilePhase::Publish,
+    ] {
+        let result = divide_with_progress(&left, &right, &output, limits, |progress| {
+            assert!(!output.exists());
+            assert!(progress.completed <= progress.total);
+            if progress.phase == phase && (progress.completed == 9 || phase == FilePhase::Publish) {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        });
+        assert!(matches!(result, Err(FileError::Cancelled)));
+        assert!(!output.exists());
+        dir.assert_staging_clean();
+    }
+    let result = divide_with_progress(&left, &right, &output, limits, |progress| {
+        if progress.phase == FilePhase::Publish {
+            OpenOptions::new()
+                .append(true)
+                .open(&right)
+                .unwrap()
+                .write_all(b"0")
+                .unwrap();
+        }
+        ControlFlow::Continue(())
+    });
+    assert!(matches!(
+        result,
+        Err(FileError::InputChanged {
+            operand: "right operand"
+        })
+    ));
+    assert!(!output.exists());
+    dir.assert_staging_clean();
+    let result = divide_with_progress(left, right, &output, limits, |progress| {
+        if progress.phase == FilePhase::Publish {
+            fs::write(&output, "other writer").unwrap();
+        }
+        ControlFlow::Continue(())
+    });
+    assert!(
+        matches!(result, Err(FileError::Io { source, .. }) if source.kind() == io::ErrorKind::AlreadyExists)
+    );
+    assert_eq!(fs::read_to_string(output).unwrap(), "other writer");
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn division_cli_publishes_quotient_and_prints_signed_remainder() {
+    let dir = Directory::new("division-cli");
+    let [_, right, output] = dir.operands("-0010000", "+00033");
+    let result = dir.cli(&["bigint", "div", "left", "right", "out"]);
+    assert!(result.status.success(), "{:?}", result.stderr);
+    assert_eq!(result.stdout, b"-1\n");
+    assert_eq!(fs::read_to_string(&output).unwrap(), "-303");
+    fs::remove_file(&output).unwrap();
+    let args = [
+        "bigint",
+        "div",
+        "--stats",
+        "--max-buffer-bytes",
+        "9",
+        "left",
+        "right",
+        "out",
+    ];
+    let result = dir.cli(&args);
+    assert!(result.status.success(), "{:?}", result.stderr);
+    let stats = String::from_utf8(result.stdout).unwrap();
+    assert!(stats.ends_with(",\"remainder\":-1}\n"));
+    assert!(stats.contains("\"scratch_bytes\":0") && stats.contains("\"buffer_bytes\":9"));
+    let conflict = dir.cli(&args);
+    assert_eq!(conflict.status.code(), Some(1));
+    assert!(conflict.stdout.is_empty());
+    fs::remove_file(&output).unwrap();
+    fs::write(right, "0").unwrap();
+    let error = dir.cli(&args);
+    assert_eq!(error.status.code(), Some(1));
+    assert!(String::from_utf8(error.stderr)
+        .unwrap()
+        .contains("division by zero"));
+    assert!(error.stdout.is_empty() && !output.exists());
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn wide_division_matches_signed_interpreter_results() {
+    let dir = Directory::new("wide-division");
+    let dense = "12345678908765432109".repeat(16);
+    let negative = format!("-000{dense}");
+    let divisor = format!("-003{}", "8919283740".repeat(10));
+    for (left, right) in [
+        (negative.as_str(), divisor.as_str()),
+        (dense.as_str(), "-9999999999999999999"),
+        (dense.as_str(), "1000000000000000001"),
+        (dense.as_str(), "1"),
+        ("-999999999999999999", "1000000000000000000"),
+        ("-1000000000000000000", "-1000000000000000000"),
+        ("-0000", divisor.as_str()),
+    ] {
+        let [a, b, output] = dir.operands(left, right);
+        let source = format!(
+            "bind a = bigint(\"{left}\"); bind b = bigint(\"{right}\"); print(a / b); print(a % b);"
+        );
+        let mut expected = Vec::new();
+        scarp::run(&source, &mut expected).unwrap();
+        for max_buffer_bytes in [110, 118, 256 * 1024] {
+            let limits = WideDivisionLimits {
+                file: FileLimits {
+                    max_buffer_bytes,
+                    ..FileLimits::default()
+                },
+                ..WideDivisionLimits::default()
+            };
+            let usage = divide_wide(&a, &b, &output, limits).unwrap();
+            let quotient = fs::read_to_string(&output).unwrap();
+            assert_eq!(
+                format!("{quotient}\n{}\n", usage.remainder).as_bytes(),
+                expected
+            );
+            assert_eq!(usage.quotient.scratch_bytes, 0);
+            assert_eq!(usage.quotient.peak_temp_bytes, quotient.len() as u64);
+            assert!(usage.quotient.buffer_bytes <= max_buffer_bytes);
+            fs::remove_file(&output).unwrap();
+        }
+    }
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn seeded_wide_division_matches_i128() {
+    let dir = Directory::new("wide-division-oracle");
+    let mut seed = 0xac0e_e321_7a98_65db_u64;
+    let mut sample = || {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+        i128::from(seed as i64)
+    };
+    for index in 0..128 {
+        let left = sample() * 1_000_000_000_000_000_000 + sample();
+        let right = sample() / (index % 7 + 1);
+        let right = if right == 0 { 1 } else { right };
+        let [a, b, output] = dir.operands(left.to_string(), right.to_string());
+        let usage = divide_wide(&a, &b, &output, WideDivisionLimits::default()).unwrap();
+        assert_eq!(usage.remainder.to_string(), (left % right).to_string());
+        assert_eq!(
+            fs::read_to_string(&output).unwrap(),
+            (left / right).to_string()
+        );
+        fs::remove_file(output).unwrap();
+    }
+}
+
+#[test]
+fn wide_division_checks_workspace_work_and_output_before_staging() {
+    let dir = Directory::new("wide-division-limits");
+    let [a, b, output] = dir.operands("-123456789123456789123456789", "1000000001");
+    let file = FileLimits {
+        max_input_bytes: 38,
+        max_output_bytes: 19,
+        max_temp_bytes: 19,
+        max_buffer_bytes: 29,
+    };
+    let try_limits = |file, max_limb_steps| {
+        divide_wide_with_progress(
+            &a,
+            &b,
+            &output,
+            WideDivisionLimits {
+                file,
+                max_limb_steps,
+            },
+            |p| {
+                assert!(matches!(
+                    p.phase,
+                    FilePhase::ReadInputs | FilePhase::CompareMagnitudes
+                ));
+                dir.assert_staging_clean();
+                ControlFlow::Continue(())
+            },
+        )
+    };
+    assert!(matches!(
+        try_limits(file, 41),
+        Err(FileError::LimbWorkLimit {
+            required: 42,
+            limit: 41
+        })
+    ));
+    assert!(matches!(
+        try_limits(file, 21),
+        Err(FileError::LimbWorkLimit {
+            required: 22,
+            limit: 21
+        })
+    ));
+    for (limits, kind) in [
+        (
+            FileLimits {
+                max_input_bytes: 37,
+                ..file
+            },
+            FileResource::InputBytes,
+        ),
+        (
+            FileLimits {
+                max_buffer_bytes: 28,
+                ..file
+            },
+            FileResource::BufferBytes,
+        ),
+        (
+            FileLimits {
+                max_output_bytes: 18,
+                ..file
+            },
+            FileResource::OutputBytes,
+        ),
+        (
+            FileLimits {
+                max_temp_bytes: 18,
+                ..file
+            },
+            FileResource::TemporaryBytes,
+        ),
+    ] {
+        assert!(matches!(
+            try_limits(limits, 42),
+            Err(FileError::Limit { resource, required, limit }) if resource == kind && required == limit + 1
+        ));
+        assert!(!output.exists());
+    }
+    let result = divide_wide(
+        &a,
+        &b,
+        &output,
+        WideDivisionLimits {
+            file,
+            max_limb_steps: 42,
+        },
+    )
+    .unwrap();
+    assert_eq!(result.limb_steps, 42);
+    assert_eq!(result.quotient.buffer_bytes, 29);
+    assert_eq!(result.remainder.to_string(), "-123456789");
+    assert_eq!(fs::read_to_string(output).unwrap(), "-123456789000000000");
+}
+
+#[test]
+fn wide_division_supports_cancellation_during_loading_and_output() {
+    let dir = Directory::new("wide-division-cancel");
+    let [a, b, output] = dir.operands("8922743609".repeat(19), "1300000000000000000007");
+    let limits = WideDivisionLimits {
+        file: FileLimits {
+            max_buffer_bytes: 37,
+            ..FileLimits::default()
+        },
+        ..WideDivisionLimits::default()
+    };
+    for cancel in [
+        FilePhase::CompareMagnitudes,
+        FilePhase::WriteDecimal,
+        FilePhase::Publish,
+    ] {
+        let result = divide_wide_with_progress(&a, &b, &output, limits, |p| {
+            assert!(!output.exists());
+            assert!(p.completed <= p.total);
+            if p.phase == cancel && (p.completed > 0 || cancel == FilePhase::Publish) {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        });
+        assert!(matches!(result, Err(FileError::Cancelled)));
+        assert!(!output.exists());
+        dir.assert_staging_clean();
+    }
+    assert!(matches!(
+        divide_wide_with_progress(&a, &b, &output, limits, |p| {
+            if p.phase == FilePhase::Publish { fs::write(&output, "already here").unwrap(); }
+            ControlFlow::Continue(())
+        }),
+        Err(FileError::Io { source, .. }) if source.kind() == io::ErrorKind::AlreadyExists
+    ));
+    assert_eq!(fs::read_to_string(output).unwrap(), "already here");
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn wide_division_cli_prints_remainders_without_narrowing() {
+    let dir = Directory::new("wide-division-cli");
+    let [_, right, output] = dir.operands("-123456789012345678901234", "123456789012345678901235");
+    let result = dir.cli(&["bigint", "div-wide", "--stats", "left", "right", "out"]);
+    assert!(result.status.success(), "{:?}", result.stderr);
+    assert_eq!(fs::read_to_string(&output).unwrap(), "0");
+    let stats = String::from_utf8(result.stdout).unwrap();
+    assert!(stats.contains("\"remainder\":\"-123456789012345678901234\""));
+    assert!(stats.contains("\"limb_steps\":31"));
+    fs::remove_file(&output).unwrap();
+    let result = dir.cli(&["bigint", "div-wide", "left", "right", "out"]);
+    assert!(result.status.success());
+    assert_eq!(result.stdout, b"-123456789012345678901234\n");
+    fs::remove_file(&output).unwrap();
+    let limited = dir.cli(&[
+        "bigint",
+        "div-wide",
+        "--max-limb-steps",
+        "30",
+        "left",
+        "right",
+        "out",
+    ]);
+    assert_eq!(limited.status.code(), Some(1));
+    assert!(String::from_utf8(limited.stderr)
+        .unwrap()
+        .contains("31 limb steps"));
+    fs::write(right, "0").unwrap();
+    let zero = dir.cli(&["bigint", "div-wide", "left", "right", "out"]);
+    assert_eq!(zero.status.code(), Some(1));
+    assert!(String::from_utf8(zero.stderr)
+        .unwrap()
+        .contains("division by zero"));
+    assert!(!output.exists());
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn resource_limits_accept_equality_and_reject_before_publication() {
+    let dir = Directory::new("limits");
+    let [left, right, output] = dir.operands("9999999999", "1");
+    let mut limits = FileLimits {
+        max_buffer_bytes: 30,
+        ..FileLimits::default()
+    };
+    let usage = calculate(Add, &left, &right, &output, limits).unwrap();
+    assert_eq!(usage.result_digits, 11);
+    fs::remove_file(&output).unwrap();
+    limits.max_input_bytes = usage.input_bytes;
+    limits.max_temp_bytes = usage.peak_temp_bytes;
+    limits.max_output_bytes = usage.output_bytes;
+    for (changed, kind) in [
+        (
+            FileLimits {
+                max_input_bytes: limits.max_input_bytes - 1,
+                ..limits
+            },
+            FileResource::InputBytes,
+        ),
+        (
+            FileLimits {
+                max_output_bytes: limits.max_output_bytes - 1,
+                ..limits
+            },
+            FileResource::OutputBytes,
+        ),
+        (
+            FileLimits {
+                max_temp_bytes: limits.max_temp_bytes - 1,
+                ..limits
+            },
+            FileResource::TemporaryBytes,
+        ),
+        (
+            FileLimits {
+                max_buffer_bytes: limits.max_buffer_bytes - 1,
+                ..limits
+            },
+            FileResource::BufferBytes,
+        ),
+    ] {
+        let error = calculate(Add, &left, &right, &output, changed).unwrap_err();
+        assert!(
+            matches!(error, FileError::Limit { resource, required, limit } if resource == kind && required == limit + 1),
+            "{error}"
+        );
+        assert!(!output.exists());
+        dir.assert_staging_clean();
+    }
+    assert_eq!(
+        calculate(Add, &left, &right, &output, limits)
+            .unwrap()
+            .peak_temp_bytes,
+        usage.peak_temp_bytes
+    );
+    assert_eq!(fs::read_to_string(&output).unwrap(), "10000000000");
+}
+
+#[test]
+fn malformed_input_reports_the_byte_and_produces_no_output() {
+    let dir = Directory::new("malformed");
+    for (text, offset) in [
+        ("", 0),
+        ("-", 1),
+        ("+", 1),
+        ("1\r\n", 1),
+        ("1_2", 1),
+        ("12é", 2),
+        ("012345678901+4", 12),
+    ] {
+        let [left, right, output] = dir.operands("0010", text);
+        let limits = FileLimits {
+            max_buffer_bytes: 30,
+            ..FileLimits::default()
+        };
+        assert!(matches!(
+            calculate(Add, &left, &right, &output, limits),
+            Err(FileError::InvalidDecimal { operand: "right operand", offset: actual }) if actual == offset
+        ));
+        assert!(!output.exists());
+        dir.assert_staging_clean();
+    }
+    let [left, _, output] = dir.operands("1", "1");
+    assert!(matches!(
+        calculate(Add, left, &dir.0, output, FileLimits::default()),
+        Err(FileError::NotRegularFile { .. })
+    ));
+}
+
+#[test]
+fn cancellation_at_every_phase_leaves_inputs_and_destination_intact() {
+    let dir = Directory::new("cancel");
+    let [left, right, output] = dir.operands("80000000000000000001", "79999999999999999999");
+    for phase in [
+        FilePhase::ReadInputs,
+        FilePhase::CompareMagnitudes,
+        FilePhase::Arithmetic,
+        FilePhase::WriteDecimal,
+        FilePhase::Publish,
+    ] {
+        assert!(matches!(
+            calculate_with_progress(
+                Subtract,
+                &left,
+                &right,
+                &output,
+                FileLimits::default(),
+                |progress| {
+                    assert!(progress.completed <= progress.total);
+                    assert!(!output.exists());
+                    if progress.phase == phase
+                        && (phase == FilePhase::Publish || progress.completed != 0)
+                    {
+                        ControlFlow::Break(())
+                    } else {
+                        ControlFlow::Continue(())
+                    }
+                }
+            ),
+            Err(FileError::Cancelled)
+        ));
+        assert!(!output.exists());
+        dir.assert_staging_clean();
+    }
+    assert_eq!(fs::read_to_string(&left).unwrap(), "80000000000000000001");
+    assert_eq!(fs::read_to_string(&right).unwrap(), "79999999999999999999");
+}
+
+#[test]
+fn corruption_and_changed_inputs_are_detected_before_commit() {
+    let dir = Directory::new("integrity");
+    let [left, right, output] = dir.operands("1234567890123", "456789123456");
+    for (offset, message) in [(0, "header"), (24, "limb")] {
+        assert!(
+            matches!(
+                calculate_with_progress(
+                    Add,
+                    &left,
+                    &right,
+                    &output,
+                    FileLimits::default(),
+                    |progress| {
+                        if progress.phase == FilePhase::WriteDecimal && progress.completed == 0 {
+                            let scratch = fs::read_dir(&dir.0)
+                                .unwrap()
+                                .map(|entry| entry.unwrap().path().join("scratch"))
+                                .find(|path| path.is_file())
+                                .unwrap();
+                            let mut file = OpenOptions::new().write(true).open(scratch).unwrap();
+                            file.seek(SeekFrom::Start(offset)).unwrap();
+                            file.write_all(&[0xff]).unwrap();
+                        }
+                        ControlFlow::Continue(())
+                    }
+                ),
+                Err(FileError::ScratchIntegrity)
+            ),
+            "modified {message}"
+        );
+        assert!(!output.exists());
+        dir.assert_staging_clean();
+    }
+    assert!(matches!(
+        calculate_with_progress(
+            Add,
+            &left,
+            &right,
+            &output,
+            FileLimits::default(),
+            |progress| {
+                if progress.phase == FilePhase::Publish {
+                    OpenOptions::new()
+                        .append(true)
+                        .open(&left)
+                        .unwrap()
+                        .write_all(b"1")
+                        .unwrap();
+                }
+                ControlFlow::Continue(())
+            }
+        ),
+        Err(FileError::InputChanged {
+            operand: "left operand"
+        })
+    ));
+    assert!(!output.exists());
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn concurrent_publication_commits_exactly_one_complete_result() {
+    let dir = Directory::new("race");
+    let [left, right, output] = dir.operands("3", "1");
+    let barrier = Barrier::new(2);
+    let [sum, difference] = std::thread::scope(|scope| {
+        let run = |operation| {
+            calculate_with_progress(
+                operation,
+                &left,
+                &right,
+                &output,
+                FileLimits::default(),
+                |progress| {
+                    if progress.phase == FilePhase::Publish {
+                        barrier.wait();
+                    }
+                    ControlFlow::Continue(())
+                },
+            )
+        };
+        let add = scope.spawn(move || run(Add));
+        let sub = scope.spawn(move || run(Subtract));
+        [add.join().unwrap(), sub.join().unwrap()]
+    });
+    assert_ne!(sum.is_ok(), difference.is_ok());
+    let expected = if sum.is_ok() { "4" } else { "2" };
+    let error = sum.err().or_else(|| difference.err()).unwrap();
+    assert!(
+        matches!(error, FileError::Io { source, .. } if source.kind() == io::ErrorKind::AlreadyExists)
+    );
+    assert_eq!(fs::read_to_string(output).unwrap(), expected);
+    dir.assert_staging_clean();
+}
+
+#[test]
+fn command_accepts_non_ascii_paths_and_keeps_existing_files() {
+    let dir = Directory::new("cli");
+    fs::write(dir.0.join("-é.txt"), "999999999999999999").unwrap();
+    fs::write(dir.0.join("right file.txt"), "1").unwrap();
+    let args = [
+        "bigint",
+        "add",
+        "--stats",
+        "--max-buffer-bytes",
+        "30",
+        "--",
+        "-é.txt",
+        "right file.txt",
+        "out",
+    ];
+    let output = dir.cli(&args);
+    assert!(output.status.success(), "{:?}", output.stderr);
+    let stats = String::from_utf8(output.stdout).unwrap();
+    assert!(stats.contains("\"result_digits\":19") && stats.contains("\"buffer_bytes\":30"));
+    assert_eq!(
+        fs::read_to_string(dir.0.join("out")).unwrap(),
+        "1000000000000000000"
+    );
+    let conflict = dir.cli(&args);
+    assert_eq!(conflict.status.code(), Some(1));
+    assert!(conflict.stdout.is_empty());
+    assert_eq!(
+        fs::read_to_string(dir.0.join("out")).unwrap(),
+        "1000000000000000000"
+    );
+    assert_eq!(
+        dir.cli(&["bigint", "sub", "--max-temp-bytes", "-1", "a", "b", "out"])
+            .status
+            .code(),
+        Some(2)
+    );
+    assert_eq!(
+        dir.cli(&["guide", "bigint"]).stdout,
+        dir.cli(&["bigint", "--help"]).stdout
+    );
+    dir.assert_staging_clean();
+}
