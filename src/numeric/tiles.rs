@@ -93,6 +93,30 @@ pub(super) fn evaluate(
             .map(Value::Tile)
             .ok_or_else(|| length_error(span));
     }
+    if function == Builtin::Outer {
+        let left = args[0].require_vector(argument_span(0))?;
+        let right = args[1].require_vector(argument_span(1))?;
+        let (height, width) = (left.len(), right.len());
+        let count = height
+            .checked_mul(width)
+            .filter(|&n| n <= MAX_VECTOR_LENGTH)
+            .ok_or_else(|| {
+                shape_error(
+                    span,
+                    format!("outer result shape {height}x{width} exceeds 65536 cells"),
+                )
+            })?;
+        budget.charge(count as u64, span)?;
+        let mut values = buffer(count, budget, span)?;
+        if count != 0 {
+            for a in left.as_slice() {
+                for b in right.as_slice() {
+                    values.push(finite_number(a.get() * b.get(), span)?);
+                }
+            }
+        }
+        return tile(values, height, width, span);
+    }
     let left = args[0].require_tile(argument_span(0))?;
     let (height, width) = (left.height(), left.width());
     match function {
@@ -130,14 +154,14 @@ pub(super) fn evaluate(
             }
             tile(values, width, height, span)
         }
-        Builtin::TileAdd | Builtin::TileScale => {
-            let right = if function == Builtin::TileAdd {
+        Builtin::TileAdd | Builtin::TileSub | Builtin::TileHadamard | Builtin::TileScale => {
+            let right = if function != Builtin::TileScale {
                 let right = args[1].require_tile(argument_span(1))?;
                 if (height, width) != (right.height(), right.width()) {
                     return Err(shape_error(
                         span,
                         format!(
-                            "tileadd requires equal shapes, found {height}x{width} and {}x{}",
+                            "tile elementwise operation requires equal shapes, found {height}x{width} and {}x{}",
                             right.height(),
                             right.width()
                         ),
@@ -155,13 +179,84 @@ pub(super) fn evaluate(
             budget.charge(left.len() as u64, span)?;
             let mut values = buffer(left.len(), budget, span)?;
             for (i, value) in left.cells().iter().enumerate() {
-                let result = match right {
-                    Some(right) => value.get() + right.cells()[i].get(),
-                    None => value.get() * factor,
+                let result = match function {
+                    Builtin::TileAdd => value.get() + right.unwrap().cells()[i].get(),
+                    Builtin::TileSub => value.get() - right.unwrap().cells()[i].get(),
+                    Builtin::TileHadamard => value.get() * right.unwrap().cells()[i].get(),
+                    _ => value.get() * factor,
                 };
                 values.push(finite_number(result, span)?);
             }
             tile(values, height, width, span)
+        }
+        Builtin::TileBias => {
+            let bias = args[1].require_vector(argument_span(1))?;
+            if bias.len() != width {
+                return Err(shape_error(
+                    span,
+                    format!(
+                        "tile_bias requires bias length {width}, found {}",
+                        bias.len()
+                    ),
+                ));
+            }
+            budget.charge(left.len() as u64, span)?;
+            let mut values = buffer(left.len(), budget, span)?;
+            // A nonempty tile necessarily has nonzero width.
+            for (i, value) in left.cells().iter().enumerate() {
+                values.push(finite_number(
+                    value.get() + bias.as_slice()[i % width].get(),
+                    span,
+                )?);
+            }
+            tile(values, height, width, span)
+        }
+        Builtin::RowSums | Builtin::ColumnSums => {
+            let rows = function == Builtin::RowSums;
+            let (count, inner) = if rows {
+                (height, width)
+            } else {
+                (width, height)
+            };
+            // Charge each visited cell and each explicit output, including
+            // reductions across an empty axis.
+            budget.charge(left.len() as u64 + count as u64, span)?;
+            let mut values = buffer(count, budget, span)?;
+            for i in 0..count {
+                let terms = (0..inner).map(|k| {
+                    let index = if rows {
+                        i * width + k
+                    } else {
+                        k * width + i
+                    };
+                    Ok(left.cells()[index].get())
+                });
+                values.push(finite_number(compensated(terms, span)?, span)?);
+            }
+            vector(values, span)
+        }
+        Builtin::MatVecTranspose => {
+            let right = args[1].require_vector(argument_span(1))?;
+            if right.len() != height {
+                return Err(shape_error(
+                    span,
+                    format!(
+                        "matvec_transpose requires vector length {height}, found {}",
+                        right.len()
+                    ),
+                ));
+            }
+            budget.charge(product_work(width, height, span)?, span)?;
+            let mut values = buffer(width, budget, span)?;
+            // Read columns directly without allocating a transposed tile.
+            for column in 0..width {
+                let products = right.as_slice().iter().enumerate().map(|(row, b)| {
+                    finite_number(left.cells()[row * width + column].get() * b.get(), span)
+                        .map(FiniteFloat::get)
+                });
+                values.push(finite_number(compensated(products, span)?, span)?);
+            }
+            vector(values, span)
         }
         Builtin::MatVec => {
             let right = args[1].require_vector(argument_span(1))?;
