@@ -6,6 +6,7 @@ use crate::{
     value::{finite_number, FiniteFloat, NumericVector, Value, ValueType, MAX_VECTOR_LENGTH},
 };
 
+pub mod autodiff;
 mod bigints;
 mod bits;
 mod correlation;
