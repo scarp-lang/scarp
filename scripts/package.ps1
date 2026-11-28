@@ -246,6 +246,31 @@ try {
             }
         }
     }
+    $tensorSource = Join-Path $extractedPackage 'examples/tensor_learning.srp'
+    $tensorOutput = [IO.File]::ReadAllBytes((Join-Path $extractedPackage 'examples/tensor_learning.stdout'))
+    $tensor = Invoke-ScarpProcess -Executable $executable -Arguments @('exec', $tensorSource)
+    if ($tensor.ExitCode -ne 0 -or $tensor.Stderr.Length -ne 0 -or
+        [Convert]::ToBase64String($tensor.Stdout) -cne [Convert]::ToBase64String($tensorOutput)) {
+        throw 'Packaged tensor training output differs'
+    }
+    $linuxSource = Join-Path $extractedPackage 'examples/native_linux_exit.srp'
+    $linuxExecutable = Join-Path $stagingRoot 'scarp-linux-exit'
+    $linuxBuild = Invoke-ScarpProcess -Executable $executable -Arguments @(
+        'native-exe', 'linux-x86_64', '1000', '4096', $linuxSource, '-o', $linuxExecutable
+    )
+    if ($linuxBuild.ExitCode -ne 0 -or $linuxBuild.Stdout.Length -ne 0 -or $linuxBuild.Stderr.Length -ne 0) {
+        throw 'Packaged standalone executable emission failed'
+    }
+    $linuxBytes = [IO.File]::ReadAllBytes($linuxExecutable)
+    if ($linuxBytes.Length -lt 176 -or [BitConverter]::ToString($linuxBytes, 16, 4) -cne '02-00-3E-00') {
+        throw 'Packaged standalone executable has an incorrect ELF64 target or envelope'
+    }
+    if ($IsLinux -and $Target -eq 'x86_64-unknown-linux-gnu') {
+        $linuxRun = Invoke-ScarpProcess -Executable $linuxExecutable -Arguments @()
+        if ($linuxRun.ExitCode -ne 45 -or $linuxRun.Stdout.Length -ne 0 -or $linuxRun.Stderr.Length -ne 0) {
+            throw 'Packaged standalone executable returned an unexpected result'
+        }
+    }
     if ($version -in @('0.0.7-alpha.2', '0.0.7-alpha.3', '0.0.7-alpha.4')) {
         $source = Join-Path $extractedPackage 'examples/native_bounded_entry.srp'
         $nativeObject = Join-Path $stagingRoot 'entry.o'

@@ -88,6 +88,7 @@ impl TypedExpression<'_> {
                         | ResolvedCall::List(_)
                         | ResolvedCall::Map(_)
                         | ResolvedCall::Tensor(_)
+                        | ResolvedCall::TensorOptimizer(_)
                         | ResolvedCall::FixedCast(_)
                         | ResolvedCall::ScalarUnary(_)
                         | ResolvedCall::ScalarGraph(_)

@@ -126,37 +126,57 @@ pub(super) fn evaluate(
     if function == Builtin::SoftmaxBackward {
         return softmax_backward(values, gradient, budget, span);
     }
-    let rate = if function == Builtin::SgdStep {
-        let rate = args[2].require_float(at(2))?;
-        if rate < 0.0 {
-            return Err(domain(
-                at(2),
-                "sgd_step requires a nonnegative learning rate",
-            ));
-        }
-        rate
+    if function == Builtin::SgdStep {
+        return sgd_with_budget(
+            values,
+            gradient,
+            args[2].require_float(at(2))?,
+            budget,
+            span,
+            at(2),
+        )
+        .map(Value::Vector);
+    }
+    let work = if function == Builtin::ReluBackward {
+        1
     } else {
-        0.0
-    };
-    let work = match function {
-        Builtin::ReluBackward => 1,
-        Builtin::SgdStep => 2,
-        _ => 6,
+        6
     };
     budget.charge((work * values.len() as u64).max(1), span)?;
     let mut output = buffer(values.len(), budget, span)?;
     for (x, g) in values.as_slice().iter().zip(gradient.as_slice()) {
-        let x = x.get();
-        let g = g.get();
-        let value = if function == Builtin::SgdStep {
-            // Match separate scale/subtract semantics: the intermediate
-            // product and final subtraction must each be finite.
-            let delta = finite_number(rate * g, span)?.get();
-            x - delta
-        } else {
-            g * derivative(function, x)
-        };
-        output.push(finite_number(value, span)?);
+        output.push(finite_number(
+            g.get() * derivative(function, x.get()),
+            span,
+        )?);
     }
     vector(output, span)
+}
+
+pub(super) fn sgd_with_budget(
+    values: &NumericVector,
+    gradient: &NumericVector,
+    rate: f64,
+    budget: &mut Budget,
+    span: Span,
+    rate_span: Span,
+) -> Result<NumericVector, Diagnostic> {
+    if values.len() != gradient.len() {
+        return Err(length_error(span));
+    }
+    if rate < 0.0 {
+        return Err(domain(
+            rate_span,
+            "sgd_step requires a nonnegative learning rate",
+        ));
+    }
+    budget.charge((2 * values.len() as u64).max(1), span)?;
+    let mut output = buffer(values.len(), budget, span)?;
+    for (x, g) in values.as_slice().iter().zip(gradient.as_slice()) {
+        // Match separate scale/subtract semantics, including the finite
+        // intermediate product and the final finite subtraction.
+        let delta = finite_number(rate * g.get(), span)?.get();
+        output.push(finite_number(x.get() - delta, span)?);
+    }
+    NumericVector::from_finite(output).ok_or_else(|| length_error(span))
 }

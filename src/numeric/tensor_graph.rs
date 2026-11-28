@@ -18,6 +18,27 @@ use crate::{
 pub(crate) const VALUE_GRAD: &str = "tensor_value_grad";
 const MAX_GRAPH_NODES: usize = 1024;
 
+#[derive(Default)]
+pub(crate) struct TapeWorkspace {
+    values: Vec<Option<NumericTensor>>,
+    gradients: Vec<Option<NumericTensor>>,
+}
+
+impl TapeWorkspace {
+    pub(crate) fn clear(&mut self) {
+        self.values.clear();
+        self.gradients.clear();
+    }
+
+    pub(crate) fn retire_for_reuse(&mut self, slots: usize) {
+        self.clear();
+        let limit = slots.min(128);
+        if self.values.capacity().max(self.gradients.capacity()) > limit {
+            *self = Self::default();
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct TensorGraph {
     nodes: Box<[Node]>,
@@ -211,11 +232,25 @@ impl TensorGraph {
         environment: &[Value],
         budget: &mut Budget,
         span: Span,
+        workspace: &mut TapeWorkspace,
+    ) -> Result<Value, Diagnostic> {
+        let result = self.evaluate_tape(environment, budget, span, workspace);
+        workspace.clear();
+        result
+    }
+
+    fn evaluate_tape(
+        &self,
+        environment: &[Value],
+        budget: &mut Budget,
+        span: Span,
+        workspace: &mut TapeWorkspace,
     ) -> Result<Value, Diagnostic> {
         let count = self.nodes.len();
         budget.charge(4 * count as u64, span)?;
-        let mut values: Vec<Option<NumericTensor>> = super::buffer(count, budget, span)?;
-        let mut gradients: Vec<Option<NumericTensor>> = super::buffer(count, budget, span)?;
+        let TapeWorkspace { values, gradients } = workspace;
+        super::reserve_empty_buffer(values, count, budget, span)?;
+        super::reserve_empty_buffer(gradients, count, budget, span)?;
         gradients.resize_with(count, || None);
         for node in self.nodes.iter() {
             let input = |id: usize| values[id].as_ref().expect("earlier graph node");
@@ -260,7 +295,7 @@ impl TensorGraph {
                 continue;
             }
             if let Some(upstream) = gradients[id].take() {
-                self.backward(node, &upstream, &values, &mut gradients, budget)
+                self.backward(node, &upstream, values, gradients, budget)
                     .map_err(|err| at(err, node.span))?;
             }
             // All consumers are later in the topological order and have run.

@@ -1,4 +1,4 @@
-//! Experimental immutable, budgeted optimizer state for Rust hosts.
+//! Experimental immutable, budgeted optimizers for hosts and source calls.
 //! Optimizer updates never change their input weights or moment buffers.
 
 use super::{buffer, compensated, domain, length_error};
@@ -107,13 +107,20 @@ impl AdamState {
         config: AdamConfig,
         limits: OptimizerLimits,
     ) -> Result<Self, Diagnostic> {
+        Self::new_with_budget(length, config, &mut limits.budget())
+    }
+
+    pub(crate) fn new_with_budget(
+        length: usize,
+        config: AdamConfig,
+        budget: &mut Budget,
+    ) -> Result<Self, Diagnostic> {
         config.validate()?;
         if length > crate::value::MAX_VECTOR_LENGTH {
             return Err(length_error(Span::default()));
         }
-        let mut budget = limits.budget();
         budget.charge((length as u64).max(1), Span::default())?;
-        let mut zeros = buffer(length, &mut budget, Span::default())?;
+        let mut zeros = buffer(length, budget, Span::default())?;
         zeros.resize(length, checked(0.0)?);
         let zeros = finish(zeros)?;
         Ok(Self {
@@ -150,11 +157,20 @@ impl AdamState {
         second: NumericVector,
         limits: OptimizerLimits,
     ) -> Result<Self, Diagnostic> {
+        Self::restore_with_budget(config, step, first, second, &mut limits.budget())
+    }
+
+    pub(crate) fn restore_with_budget(
+        config: AdamConfig,
+        step: u64,
+        first: NumericVector,
+        second: NumericVector,
+        budget: &mut Budget,
+    ) -> Result<Self, Diagnostic> {
         config.validate()?;
         if first.len() != second.len() {
             return Err(length_error(Span::default()));
         }
-        let mut budget = limits.budget();
         budget.charge((first.len() as u64).max(1), Span::default())?;
         for (m, v) in first.as_slice().iter().zip(second.as_slice()) {
             if v.get() < 0.0 || (step == 0 && (m.get() != 0.0 || v.get() != 0.0)) {
@@ -191,6 +207,17 @@ impl AdamState {
         decay: f64,
         limits: OptimizerLimits,
     ) -> Result<AdamUpdate, Diagnostic> {
+        self.adamw_with_budget(weights, gradient, rate, decay, &mut limits.budget())
+    }
+
+    pub(crate) fn adamw_with_budget(
+        &self,
+        weights: &NumericVector,
+        gradient: &NumericVector,
+        rate: f64,
+        decay: f64,
+        budget: &mut Budget,
+    ) -> Result<AdamUpdate, Diagnostic> {
         let n = weights.len();
         if n != gradient.len() || n != self.first.len() {
             return Err(length_error(Span::default()));
@@ -205,11 +232,10 @@ impl AdamState {
             )
         })?;
         let span = Span::default();
-        let mut budget = limits.budget();
         budget.charge(24 * n as u64 + 8, span)?;
-        let mut next_weights = buffer(n, &mut budget, span)?;
-        let mut next_first = buffer(n, &mut budget, span)?;
-        let mut next_second = buffer(n, &mut budget, span)?;
+        let mut next_weights = buffer(n, budget, span)?;
+        let mut next_first = buffer(n, budget, span)?;
+        let mut next_second = buffer(n, budget, span)?;
         let AdamConfig {
             beta1,
             beta2,

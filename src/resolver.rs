@@ -329,6 +329,7 @@ pub(crate) enum ResolvedCall {
     Array(ArrayIntrinsic),
     List(ListIntrinsic),
     Tensor(crate::numeric::source_tensor::TensorCall),
+    TensorOptimizer(crate::numeric::source_optimizer::TensorOptimizer),
     ScalarUnary(crate::numeric::autodiff::Unary),
     FixedCast(ValueType),
     ScalarGraph(std::sync::Arc<crate::numeric::source_autodiff::ScalarGraph>),
@@ -343,6 +344,7 @@ pub(crate) fn is_builtin_name(name: &str) -> bool {
         || crate::value::fixed_integer::named_cast(name).is_some()
         || name == source_autodiff::VALUE_GRAD
         || name == crate::numeric::tensor_graph::VALUE_GRAD
+        || crate::numeric::source_optimizer::TensorOptimizer::named(name).is_some()
         || source_autodiff::named_unary(name).is_some()
         || ArrayIntrinsic::from_name(name).is_some()
         || ListIntrinsic::from_name(name).is_some()
@@ -2241,6 +2243,15 @@ fn resolve_expression(
                         slots.push(None);
                         calls.push(Some(ResolvedCall::ScalarUnary(operation)));
                         types.push(scalar.into());
+                        continue;
+                    }
+                    if let Some(optimizer) =
+                        crate::numeric::source_optimizer::TensorOptimizer::named(name)
+                    {
+                        let kind = optimizer.infer(&syntax, arguments, &types, *function_span)?;
+                        slots.push(None);
+                        calls.push(Some(ResolvedCall::TensorOptimizer(optimizer)));
+                        types.push(kind);
                         continue;
                     }
                     use crate::numeric::source_tensor::TensorCall;

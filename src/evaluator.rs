@@ -42,6 +42,7 @@ pub fn evaluate_value(expression: &Expression) -> Result<Value, Diagnostic> {
 pub(crate) struct Workspace {
     values: Vec<Value>,
     tasks: Vec<Task>,
+    tensor_tape: numeric::tensor_graph::TapeWorkspace,
 }
 
 enum Task {
@@ -49,6 +50,7 @@ enum Task {
     Vector(usize, bool, Span),
     Tensor(usize, Span),
     TensorCall(TensorCall, usize, Span),
+    TensorOptimizer(numeric::source_optimizer::TensorOptimizer, usize, Span),
     ScalarUnary(numeric::autodiff::Unary, Span),
     FixedCast(ValueType, Span),
     Tuple(usize, Span),
@@ -94,6 +96,7 @@ impl Workspace {
     pub(crate) fn clear(&mut self) {
         self.values.clear();
         self.tasks.clear();
+        self.tensor_tape.clear();
     }
 
     pub(crate) fn retire_for_reuse(&mut self, max_items: usize) {
@@ -104,6 +107,7 @@ impl Workspace {
         if self.tasks.capacity() > max_items {
             self.tasks = Vec::new();
         }
+        self.tensor_tape.retire_for_reuse(max_items);
     }
 
     pub(crate) fn evaluate(
@@ -165,7 +169,11 @@ impl Workspace {
         environment: &[Value],
         budget: &mut Budget,
     ) -> Result<Evaluation, Diagnostic> {
-        let Self { values, tasks } = self;
+        let Self {
+            values,
+            tasks,
+            tensor_tape,
+        } = self;
         while let Some(task) = tasks.pop() {
             let span = match &task {
                 Task::Visit(index) => expression.syntax.nodes()[*index].span,
@@ -173,6 +181,7 @@ impl Workspace {
                 | Task::Tuple(_, span)
                 | Task::Tensor(_, span)
                 | Task::TensorCall(_, _, span)
+                | Task::TensorOptimizer(_, _, span)
                 | Task::ScalarUnary(_, span)
                 | Task::FixedCast(_, span)
                 | Task::Array(_, span)
@@ -210,7 +219,12 @@ impl Workspace {
                             }
                             if let Some(ResolvedCall::TensorGraph(graph)) = &expression.calls[index]
                             {
-                                values.push(graph.evaluate(environment, budget, node.span)?);
+                                values.push(graph.evaluate(
+                                    environment,
+                                    budget,
+                                    node.span,
+                                    tensor_tape,
+                                )?);
                                 continue;
                             }
                             tasks.push(match &expression.calls[index] {
@@ -232,6 +246,9 @@ impl Workspace {
                                 }
                                 Some(ResolvedCall::ScalarUnary(op)) => {
                                     Task::ScalarUnary(*op, node.span)
+                                }
+                                Some(ResolvedCall::TensorOptimizer(op)) => {
+                                    Task::TensorOptimizer(*op, arguments.len(), node.span)
                                 }
                                 Some(ResolvedCall::Tensor(op)) => {
                                     Task::TensorCall(*op, arguments.len(), node.span)
@@ -484,6 +501,12 @@ impl Workspace {
                     values.push(numeric::source_autodiff::unary(
                         operation, &input, budget, span,
                     )?);
+                }
+                Task::TensorOptimizer(operation, count, span) => {
+                    let start = values.len() - count;
+                    let value = operation.evaluate(&values[start..], budget, span)?;
+                    values.truncate(start);
+                    values.push(value);
                 }
                 Task::TensorCall(operation, count, span) => {
                     let start = values.len() - count;

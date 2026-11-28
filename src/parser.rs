@@ -929,14 +929,7 @@ impl Parser<'_> {
         });
         let initializer = if let Some(type_) = bare_tensor {
             let opening = self.current().expect("opening tensor bracket").span;
-            let tensor = type_.kind.as_tensor().expect("checked tensor annotation");
-            let mut elements = Vec::new();
-            if tensor.cell_count() == 0 {
-                self.punctuation(TokenKind::LeftBracket, "'[' for empty tensor payload")?;
-                self.punctuation(TokenKind::RightBracket, "']' for empty tensor payload")?;
-            } else {
-                self.tensor_cells(&mut nodes, 0, tensor.dimensions(), &mut elements)?;
-            }
+            let elements = self.tensor_payload(&mut nodes, 0, &type_.kind)?;
             let end = self.tokens[self.cursor - 1].span.end;
             Ok(push(
                 &mut nodes,
@@ -2160,14 +2153,7 @@ impl Parser<'_> {
         opening: Span,
         kind: SourceType,
     ) -> Result<usize, ParseError> {
-        let tensor = kind.as_tensor().expect("validated tensor type");
-        let mut elements = Vec::new();
-        if tensor.cell_count() == 0 {
-            self.punctuation(TokenKind::LeftBracket, "'[' for empty tensor payload")?;
-            self.punctuation(TokenKind::RightBracket, "']' for empty tensor payload")?;
-        } else {
-            self.tensor_cells(nodes, depth + 1, tensor.dimensions(), &mut elements)?;
-        }
+        let elements = self.tensor_payload(nodes, depth + 1, &kind)?;
         let end = self
             .punctuation(TokenKind::RightBracket, "']' after tensor literal")?
             .end;
@@ -2176,6 +2162,23 @@ impl Parser<'_> {
             ExpressionKind::Tensor { kind, elements },
             Span::new(opening.start, end),
         ))
+    }
+
+    fn tensor_payload(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        depth: usize,
+        kind: &SourceType,
+    ) -> Result<Vec<usize>, ParseError> {
+        let tensor = kind.as_tensor().expect("validated tensor type");
+        let mut elements = Vec::new();
+        if tensor.cell_count() == 0 {
+            self.punctuation(TokenKind::LeftBracket, "'[' for empty tensor payload")?;
+            self.punctuation(TokenKind::RightBracket, "']' for empty tensor payload")?;
+        } else {
+            self.tensor_cells(nodes, depth, tensor.dimensions(), &mut elements)?;
+        }
+        Ok(elements)
     }
 
     #[inline(never)]

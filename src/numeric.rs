@@ -22,6 +22,7 @@ mod samples;
 mod scalar_text;
 mod similarity;
 pub(crate) mod source_autodiff;
+pub(crate) mod source_optimizer;
 pub(crate) mod source_tensor;
 mod temperature;
 /// Experimental, explicitly budgeted Rust-host tensor kernels.
@@ -890,6 +891,19 @@ pub(crate) fn buffer<T>(
     budget: &mut Budget,
     span: Span,
 ) -> Result<Vec<T>, Diagnostic> {
+    let mut values = Vec::new();
+    reserve_empty_buffer(&mut values, count, budget, span)?;
+    Ok(values)
+}
+
+/// Charge the same logical request even when a retired buffer can be reused.
+pub(crate) fn reserve_empty_buffer<T>(
+    values: &mut Vec<T>,
+    count: usize,
+    budget: &mut Budget,
+    span: Span,
+) -> Result<(), Diagnostic> {
+    debug_assert!(values.is_empty());
     if count > MAX_VECTOR_LENGTH {
         return Err(length_error(span));
     }
@@ -904,7 +918,6 @@ pub(crate) fn buffer<T>(
         )
     })?;
     budget.charge_vector_allocation(bytes, span)?;
-    let mut values = Vec::new();
     values.try_reserve_exact(count).map_err(|_| {
         Diagnostic::new(
             DiagnosticKind::VectorAllocation,
@@ -912,7 +925,7 @@ pub(crate) fn buffer<T>(
             "cannot reserve the bounded vector buffer",
         )
     })?;
-    Ok(values)
+    Ok(())
 }
 
 pub(crate) fn vector(values: Vec<FiniteFloat>, span: Span) -> Result<Value, Diagnostic> {
