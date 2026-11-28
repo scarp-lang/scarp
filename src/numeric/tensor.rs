@@ -506,3 +506,114 @@ pub fn matmul_backward(
         finish(right_output, right.shape())?,
     ))
 }
+
+/// A broadcast elementwise operation's reverse pass. Each operand gradient
+/// is accumulated directly in its original shape.
+struct BinaryGradient<'a> {
+    operation: TensorBinary,
+    left: &'a NumericTensor,
+    right: &'a NumericTensor,
+    upstream: &'a NumericTensor,
+}
+
+impl BinaryGradient<'_> {
+    fn accumulate(
+        &self,
+        for_left: bool,
+        output: &mut Vec<crate::value::FiniteFloat>,
+    ) -> Result<(), Diagnostic> {
+        let span = Span::default();
+        let own = if for_left { self.left } else { self.right };
+        if own.is_empty() {
+            return Ok(());
+        }
+        if self.upstream.is_empty() {
+            output.resize(own.len(), finite_number(0.0, span)?);
+            return Ok(());
+        }
+
+        let shape = self.upstream.shape();
+        let plan = BatchGradientPlan::new(shape, own.shape());
+        let mut coordinates = [0; MAX_TENSOR_RANK];
+        let coordinates = &mut coordinates[..shape.len()];
+        for index in 0..own.len() {
+            plan.fixed_coordinates(index, coordinates);
+            let terms = (0..plan.repeats).map(|term| {
+                let flat = plan.select_batch(term, coordinates);
+                let g = self.upstream.cells()[flat].get();
+                let a = self.left.cells()[projected_offset(self.left.shape(), coordinates)].get();
+                let b = self.right.cells()[projected_offset(self.right.shape(), coordinates)].get();
+                let value = match self.operation {
+                    TensorBinary::Add => g,
+                    TensorBinary::Subtract if for_left => g,
+                    TensorBinary::Subtract => -g,
+                    TensorBinary::Multiply if for_left => g * b,
+                    TensorBinary::Multiply => g * a,
+                    TensorBinary::Divide => {
+                        if b == 0.0 {
+                            return Err(domain(span, "tensor division backward by zero"));
+                        }
+                        let left = finite_number(g / b, span)?.get();
+                        if for_left {
+                            left
+                        } else {
+                            let quotient = finite_number(a / b, span)?.get();
+                            -left * quotient
+                        }
+                    }
+                };
+                finite_number(value, span).map(crate::value::FiniteFloat::get)
+            });
+            output.push(finite_number(compensated(terms, span)?, span)?);
+        }
+        Ok(())
+    }
+}
+
+/// Reverse-mode gradients of a broadcast binary operation.
+///
+/// Upstream must have exactly the broadcast result shape. The returned
+/// gradients retain the original input shapes; no expanded operand or
+/// expanded gradient is allocated. Contributions use compensated summation
+/// in deterministic row-major order.
+///
+/// Work is A*(1+rA) + B*(1+rB) + 2*C*(6+4*R), with A/B the input
+/// lengths, rA/rB the input ranks, C the broadcast output length and R
+/// the broadcast output rank. Both output buffers use one shared budget.
+pub fn binary_backward(
+    operation: TensorBinary,
+    left: &NumericTensor,
+    right: &NumericTensor,
+    upstream: &NumericTensor,
+    limits: TensorLimits,
+) -> Result<(NumericTensor, NumericTensor), Diagnostic> {
+    let rank = left.rank().max(right.rank());
+    let mut shape = [0; MAX_TENSOR_RANK];
+    let shape = &mut shape[..rank];
+    broadcast(left.shape(), right.shape(), shape)?;
+    let output_count = count(shape)?;
+    if upstream.shape() != shape {
+        return Err(shape_error(
+            "tensor binary backward requires the exact broadcast output shape",
+        ));
+    }
+    let span = Span::default();
+    let mut budget = limits.budget();
+    charge(&mut budget, left.len(), (1 + left.rank()) as u64)?;
+    charge(&mut budget, right.len(), (1 + right.rank()) as u64)?;
+    charge(&mut budget, output_count, 2 * (6 + 4 * rank as u64))?;
+    let mut left_output = buffer(left.len(), &mut budget, span)?;
+    let mut right_output = buffer(right.len(), &mut budget, span)?;
+    let gradient = BinaryGradient {
+        operation,
+        left,
+        right,
+        upstream,
+    };
+    gradient.accumulate(true, &mut left_output)?;
+    gradient.accumulate(false, &mut right_output)?;
+    Ok((
+        finish(left_output, left.shape())?,
+        finish(right_output, right.shape())?,
+    ))
+}

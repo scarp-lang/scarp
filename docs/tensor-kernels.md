@@ -70,3 +70,24 @@ Payload is `8*(A+B)` logical bytes. The forward output cell limit still
 applies even though no forward result is materialized. Both buffers are
 reserved before numerical loops; no partial result escapes on failure.
 This is a host-only VJP primitive, not an automatic differentiation engine.
+
+## Development: broadcast elementwise gradients
+
+`binary_backward(operation, left, right, upstream, limits)` computes
+both original-shaped operand gradients for addition, subtraction,
+multiplication and division. The upstream tensor must match the exact
+broadcast result shape. Missing and singleton axes are reduced directly;
+no intermediate broadcast-sized gradients are stored. Each input cell's
+contributions are accumulated in row-major order with compensated sums.
+
+Division rejects signed-zero denominators for visited cells and checks the
+intermediate quotient and gradient contributions for finiteness. The
+backward call does not materialize or validate the complete forward result;
+a caller must have separately qualified its forward evaluation. Empty
+broadcast outputs produce positive zeros in any nonempty operand gradient.
+
+For input lengths A and B, ranks rA and rB, broadcast output length C and
+rank R, work is `A*(1+rA) + B*(1+rB) + 2*C*(6+4*R)`. Both gradients share
+one payload budget, requiring `8*(A+B)` logical bytes. Shape and size
+validation precede work and allocation; no partial gradient is returned.
+This is a host API, not a Scarp-language feature yet.
