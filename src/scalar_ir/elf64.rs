@@ -19,8 +19,9 @@ use crate::{
     diagnostics::{Diagnostic, Span},
     native_object::{
         CheckedElf64Kernel, FreestandingCallLayout, FreestandingEntry, CHECKED_KERNEL_ARRAY_INDEX,
-        CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_INTEGER_OVERFLOW,
-        CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_REPEAT_COUNT, CHECKED_KERNEL_WORK_LIMIT,
+        CHECKED_KERNEL_CALL_DEPTH, CHECKED_KERNEL_DIVISION_BY_ZERO,
+        CHECKED_KERNEL_INTEGER_OVERFLOW, CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_REPEAT_COUNT,
+        CHECKED_KERNEL_WORK_LIMIT,
     },
 };
 use std::borrow::Cow;
@@ -243,6 +244,21 @@ impl Code {
         Ok(())
     }
 
+    /// R11 carries the allowance into a callee. A caller saves its own
+    /// allowance in its frame because R11 is also a volatile temporary.
+    fn start_call_depth(&mut self, frames: usize) -> Result<(), Diagnostic> {
+        let frames = u32::try_from(frames).map_err(|_| failure())?;
+        self.push(&[0x41, 0xbb])?; // mov r11d, imm32
+        self.push(&frames.to_le_bytes())
+    }
+
+    fn prepare_call_depth(&mut self, slot: usize, span: Span) -> Result<(), Diagnostic> {
+        self.stack_operand(0x8b, TEMPORARY_REGISTER, slot_offset(slot)?)?;
+        self.push(&[0x41, 0x83, 0xeb, 0x01])?; // sub r11d, 1
+        let span_id = self.record_failure_span(span)?;
+        self.branch_to_failure(Condition::Equal, CHECKED_KERNEL_CALL_DEPTH, span_id)
+    }
+
     fn charge_work(&mut self, span: Span) -> Result<(), Diagnostic> {
         if !self.metered {
             return Ok(());
@@ -426,6 +442,7 @@ struct StackSlots {
     /// Slots below the locals are reserved for arguments passed to callees.
     local_base: usize,
     temporary_base: usize,
+    call_depth: Option<usize>,
 }
 
 impl StackSlots {
@@ -463,6 +480,7 @@ fn text(program: &ScalarProgramIr, checked_arithmetic: bool) -> Result<Code, Dia
     let slots = StackSlots {
         local_base: 0,
         temporary_base: slot_count,
+        call_depth: None,
     };
     for (slot, expr) in program.integer_stores() {
         expression(&mut code, expr, slots, checked_arithmetic, None, None)?;
@@ -594,6 +612,11 @@ fn expression(
                 if arguments.len() > MAX_INTEGER_ARGUMENTS || outgoing > slots.local_base {
                     return Err(invalid(step.span));
                 }
+                // Argument evaluation already finished. Check the depth before
+                // pushing a return address and before loading the ABI registers.
+                if let Some(depth) = slots.call_depth {
+                    code.prepare_call_depth(depth, step.span)?;
+                }
                 // RSP is already aligned and points at argument seven's slot
                 // at the call site. Copy from the disjoint temporary region.
                 for (stack_index, &argument) in
@@ -652,12 +675,14 @@ struct FunctionLayout<'a> {
 fn plan_function<'a>(
     program: &'a ScalarProgramIr,
     call_arities: Option<&[usize]>,
+    recursive: bool,
 ) -> Result<FunctionLayout<'a>, Diagnostic> {
     if !program.is_function() || program.parameters() > MAX_INTEGER_ARGUMENTS {
         return Err(failure());
     }
     let mut max_registers = 0;
     let mut outgoing = 0;
+    let mut calls = false;
     let mut estimated_steps = program.operations().len();
     let mut expressions = Vec::with_capacity(program.operations().len());
     for step in program.operations() {
@@ -673,6 +698,7 @@ fn plan_function<'a>(
         max_registers = max_registers.max(layout.count());
         for instruction in &value.steps {
             if let Operation::Call { arguments, .. } = &instruction.kind {
+                calls = true;
                 outgoing = outgoing.max(arguments.len().saturating_sub(REGISTER_ARGUMENTS));
             }
         }
@@ -681,11 +707,17 @@ fn plan_function<'a>(
             .ok_or_else(failure)?;
         expressions.push(Some((value, layout)));
     }
+    let local_end = outgoing
+        .checked_add(program.integer_slot_count())
+        .ok_or_else(failure)?;
+    let call_depth = (recursive && calls).then_some(local_end);
+    let temporary_base = local_end
+        .checked_add(usize::from(call_depth.is_some()))
+        .ok_or_else(failure)?;
     let slots = StackSlots {
         local_base: outgoing,
-        temporary_base: outgoing
-            .checked_add(program.integer_slot_count())
-            .ok_or_else(failure)?,
+        temporary_base,
+        call_depth,
     };
     Ok(FunctionLayout {
         expressions,
@@ -710,6 +742,9 @@ fn append_function(
     let stack_size = layout.frame_bytes;
     let slots = layout.slots;
     code.allocate_stack(stack_size)?;
+    if let Some(depth) = slots.call_depth {
+        code.store_argument(depth, TEMPORARY_REGISTER)?;
+    }
     for (slot, register) in registers.iter().copied().enumerate() {
         code.store_argument(slots.local(slot)?, register)?;
     }
@@ -822,7 +857,7 @@ fn function_text(
     budget: Option<u32>,
 ) -> Result<(Code, FreestandingCallLayout), Diagnostic> {
     program.verify()?;
-    let layout = plan_function(program, None)?;
+    let layout = plan_function(program, None, false)?;
     let mut code = Code::new(layout.estimated_steps, true)?;
     code.metered = budget.is_some();
     append_function(&mut code, program, &layout, budget)?;
@@ -933,16 +968,17 @@ pub(super) fn emit_bounded_entry(
 ) -> Result<FreestandingEntry, Diagnostic> {
     let bodies = graph.bodies();
     let entry = graph.entry();
+    let recursion_frames = graph.recursion_frames();
     let arities: Vec<_> = bodies.iter().map(ScalarProgramIr::parameters).collect();
     let layouts = bodies
         .iter()
-        .map(|body| plan_function(body, Some(&arities)))
+        .map(|body| plan_function(body, Some(&arities), recursion_frames.is_some()))
         .collect::<Result<Vec<_>, _>>()?;
     let frame_sizes = layouts
         .iter()
         .map(|layout| layout.frame_bytes)
         .collect::<Vec<_>>();
-    let peak_stack_bytes = graph.verify_stack(&frame_sizes, max_stack_bytes)?;
+    let stack = graph.verify_stack(&frame_sizes, max_stack_bytes)?;
     let entry_layout = FreestandingCallLayout {
         frame_bytes: frame_sizes[entry],
         integer_arguments: bodies[entry].parameters(),
@@ -959,10 +995,13 @@ pub(super) fn emit_bounded_entry(
     for id in order {
         let is_entry = id == entry;
         // Calls to the named entry from another source function must not reset
-        // the shared meter. Its internal target starts after the external meter
-        // setup, at the body's own prologue.
+        // the work or depth allowance. Its internal target starts at the
+        // body's prologue, after the one-time external initialization.
         if is_entry {
             code.start_meter(max_work)?;
+            if let Some(frames) = recursion_frames {
+                code.start_call_depth(frames)?;
+            }
         }
         targets[id] = Some(code.data.len());
         append_function(&mut code, &bodies[id], &layouts[id], None)?;
@@ -981,8 +1020,8 @@ pub(super) fn emit_bounded_entry(
             failure_spans: code.failure_spans,
         },
         entry_layout,
-        max_active_frames: graph.entry_depth(),
-        peak_stack_bytes,
+        max_active_frames: stack.frames,
+        peak_stack_bytes: stack.bytes,
     })
 }
 

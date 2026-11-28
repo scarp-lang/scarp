@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add opt-in native self and mutual recursion for ELF64 integer entries,
+  with checked stack, frame-depth, and shared work limits.
+
 ## 0.0.7-alpha.3 — published GitHub prerelease, 2026-11-27
 
 Published from [`44a3bb0`](https://github.com/scarp-lang/scarp/commit/44a3bb0a91e67570e46ce058a3f6211f8e5db0f5).

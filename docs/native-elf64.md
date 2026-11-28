@@ -403,6 +403,30 @@ example. For native emission, use the [standalone call chain](../examples/native
 with the [bounded-entry object command](native-object-output.md).
 This experimental entry ABI is part of the v0.0.7-alpha.2 prerelease.
 
+## Bounded recursion in ELF64 entry objects
+
+Rust hosts can opt into direct self and mutual recursion with
+`emit_elf64_recursive_integer_entry(source, name, max_work, max_active_frames, max_stack_bytes)`.
+The exported symbol and integer ABI are the same as for bounded direct calls.
+Choose a frame allowance from 1 through 64, including the external entry.
+The compiler computes the largest stack footprint over call paths of at most
+that length, including each return address and frame's outgoing arguments.
+It rejects a footprint above the caller's budget or the compiler's 64 KiB
+ceiling. The bound is conservative because it includes both branches of
+conditional calls.
+
+Each external invocation initializes the shared work meter and frame allowance.
+Arguments evaluate in source order before the depth check. If a call would
+exceed the allowance, it returns `CHECKED_KERNEL_CALL_DEPTH` (7) with the
+call's source span before allocating another frame. Checked failures unwind
+through callers with the original status and span. Sequential and sibling
+calls reuse their parent's depth allowance. This API counts each native frame,
+including terminal self calls. Work and depth budgets are native limits.
+
+Run `scarp exec examples/native_recursive_entry.srp` to see the Euclidean
+algorithm used in the interpreter and native differential tests. Pass its
+function declarations to the Rust API to emit the recursive object.
+
 The [wide-call example](../examples/native_wide_calls.srp) exercises two
 stack-passed arguments to a private helper. The independent Linux x86-64 host
 tests cover every mixed register and stack arity from seven through
