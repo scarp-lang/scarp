@@ -1,3 +1,4 @@
+mod bigint_cli;
 mod object_cli;
 mod project;
 mod project_info;
@@ -36,6 +37,7 @@ Commands:
   launch <directory>               Execute a Scarp project entrypoint
   run [directory|file.srp]          Run a project or legacy source file
   test [--json|--json=v2] [--list] [--require-tests] [--filter SUBSTRING] [directory]  Project tests
+  bigint add|sub|mul|div|div-wide [options] <left> <right> <new-output>  Calculate with decimal files
   native-object [--json] <target> <mode> ... -o <file>  Emit an experimental relocatable object
   inspect ast <file.srp>           Show the parsed syntax tree (development)
   inspect modules [--json] <file.srp|directory>  Inspect statically checked modules
@@ -412,6 +414,9 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
     if args[0] == "native-object" {
         return object_cli::run(&args[1..], output, errors);
     }
+    if args[0] == "bigint" {
+        return bigint_cli::run(&args[1..], output, errors);
+    }
     // Canonical CLI routes reuse the existing Scarp library/lexer backends.
     // Existing entry points stay functional during an explicit migration window.
     match args.as_slice() {
@@ -444,6 +449,7 @@ fn dispatch(mut args: Vec<OsString>, output: &mut impl Write, errors: &mut impl 
         [command, target] if command == "guide" => {
             let page = match target.to_str() {
                 Some("exec") => Some(EXEC_HELP),
+                Some("bigint") => Some(bigint_cli::HELP),
                 Some("native-object") => Some(object_cli::HELP),
                 Some("inspect") => Some(INSPECT_HELP),
                 Some("verify") => Some(VERIFY_HELP),
