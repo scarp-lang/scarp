@@ -12,6 +12,7 @@ use super::{aggregates, invalid, ScalarExpressionIr};
 use crate::{
     ast::{BinaryOperator, OutputTarget},
     diagnostics::{Diagnostic, DiagnosticKind, Span},
+    native_platform::{NativeIntrinsic, NativeProfile, NativeStatement},
     resolver::{ResolvedArgument, ResolvedCall, ResolvedProgram, ResolvedStatement},
     types::TypeRegistry,
     value::ValueType,
@@ -42,11 +43,11 @@ fn uefi_literal(text: &str, span: Span) -> Result<(), Diagnostic> {
     Ok(())
 }
 
-fn is_x86_pause(expression: &crate::resolver::ResolvedExpression) -> bool {
-    matches!(
-        expression.calls.get(expression.syntax.root()),
-        Some(Some(ResolvedCall::X86Pause))
-    )
+fn native_call(expression: &crate::resolver::ResolvedExpression) -> Option<NativeIntrinsic> {
+    match expression.calls.get(expression.syntax.root())? {
+        Some(ResolvedCall::Native(intrinsic)) => Some(*intrinsic),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,7 +107,10 @@ pub(in crate::scalar_ir) enum ProgramOp {
     PrintLiteral {
         text: Vec<u8>,
     },
-    X86Pause,
+    NativeStatement(NativeStatement),
+    Evaluate {
+        value: ScalarExpressionIr,
+    },
 }
 
 impl ProgramOp {
@@ -130,7 +134,8 @@ impl ProgramOp {
             | Self::JumpIfFalse {
                 condition: value, ..
             }
-            | Self::PrintValue { value } => Some(value),
+            | Self::PrintValue { value }
+            | Self::Evaluate { value } => Some(value),
             _ => None,
         }
     }
@@ -144,7 +149,7 @@ pub(super) struct ScalarProgramIr {
     // None is a script; Some(0) is a genuine zero-argument function.
     function_parameters: Option<usize>,
     bounded: bool,
-    uefi: bool,
+    profile: NativeProfile,
 }
 
 impl ScalarProgramIr {
@@ -194,10 +199,13 @@ impl ScalarProgramIr {
     ) -> Result<Self, Diagnostic> {
         let signature = program.function_metadata(id);
         let function = &program.functions[id];
-        let uefi = call_targets.is_some_and(|targets| targets.uefi);
+        let profile = call_targets.map_or(NativeProfile::Scalar, |targets| targets.profile);
         let unsupported = |span| {
-            if uefi {
+            if profile == NativeProfile::Firmware {
                 invalid(span).with_help("UEFI supports bounded integer functions, static print literals and x86_pause()")
+            } else if profile == NativeProfile::Kernel {
+                invalid(span)
+                    .with_help("use bounded integer functions and supported kernel intrinsics")
             } else if call_targets.is_some() {
                 invalid(span).with_help("use pure integer functions with required integer parameters, bounded locals and integer returns")
             } else {
@@ -210,7 +218,7 @@ impl ScalarProgramIr {
                 unsupported(signature.span).with_help("run generic functions in the interpreter")
             );
         }
-        if (!uefi && !signature.pure)
+        if (profile == NativeProfile::Scalar && !signature.pure)
             || signature.result != ValueType::Integer
             || parameters > max_parameters
         {
@@ -242,8 +250,10 @@ impl ScalarProgramIr {
                     arguments,
                     target: OutputTarget::Stdout,
                     newline: true,
-                } if uefi && matches!(arguments.as_slice(), [ResolvedArgument::String(_)]) => {}
-                ResolvedStatement::Call { expression } if uefi && is_x86_pause(expression) => {}
+                } if profile == NativeProfile::Firmware
+                    && matches!(arguments.as_slice(), [ResolvedArgument::String(_)]) => {}
+                ResolvedStatement::Call { expression }
+                    if native_call(expression).is_some_and(|call| call.available(profile)) => {}
                 _ => return Err(unsupported(step.span)),
             }
         }
@@ -289,7 +299,7 @@ impl ScalarProgramIr {
         let mut steps = Vec::with_capacity(operations.len());
         let mut total_nodes = 0usize;
         let mut literal_bytes = 0usize;
-        let uefi = call_targets.is_some_and(|targets| targets.uefi);
+        let profile = call_targets.map_or(NativeProfile::Scalar, |targets| targets.profile);
         let lower_expression =
             |value| ScalarExpressionIr::lower(value, &slots, call_targets, frame);
         for statement in operations {
@@ -381,7 +391,7 @@ impl ScalarProgramIr {
                         value: lower_expression(value)?,
                     },
                     ResolvedArgument::String(text) => {
-                        if uefi {
+                        if profile == NativeProfile::Firmware {
                             uefi_literal(text, statement.span)?;
                         }
                         literal_bytes = literal_bytes
@@ -395,9 +405,13 @@ impl ScalarProgramIr {
                         }
                     }
                 },
-                ResolvedStatement::Call { expression } if uefi && is_x86_pause(expression) => {
-                    ProgramOp::X86Pause
-                }
+                ResolvedStatement::Call { expression } => match native_call(expression) {
+                    Some(NativeIntrinsic::Statement(op)) => ProgramOp::NativeStatement(op),
+                    Some(NativeIntrinsic::Value(_)) => ProgramOp::Evaluate {
+                        value: lower_expression(expression)?,
+                    },
+                    None => return Err(invalid(statement.span)),
+                },
                 _ => return Err(invalid(statement.span)),
             };
             let expression_nodes = kind.expression().map_or(0, |value| value.registers.len());
@@ -427,7 +441,7 @@ impl ScalarProgramIr {
             steps,
             function_parameters,
             bounded,
-            uefi,
+            profile,
         };
         ir.verify_with_calls(call_targets.map(|targets| targets.arities.as_slice()))?;
         Ok(ir)
@@ -579,7 +593,10 @@ impl ScalarProgramIr {
                         if self.bounded && *index_slot >= parameters => {}
                     ProgramOp::Retire { slots } if slots.iter().all(|s| *s >= parameters) => {}
                     ProgramOp::Return { .. } => {}
-                    ProgramOp::PrintLiteral { .. } | ProgramOp::X86Pause if self.uefi => {}
+                    ProgramOp::PrintLiteral { .. } if self.profile == NativeProfile::Firmware => {}
+                    ProgramOp::NativeStatement(op)
+                        if NativeIntrinsic::Statement(*op).available(self.profile) => {}
+                    ProgramOp::Evaluate { .. } if self.profile == NativeProfile::Kernel => {}
                     _ => return Err(invalid(span)),
                 }
             }
@@ -682,13 +699,19 @@ impl ScalarProgramIr {
                         return Err(invalid(span));
                     }
                     let text = std::str::from_utf8(text).map_err(|_| invalid(span))?;
-                    if self.uefi {
+                    if self.profile == NativeProfile::Firmware {
                         uefi_literal(text, span)?;
                     }
                     None
                 }
-                ProgramOp::X86Pause if self.uefi && function => None,
-                ProgramOp::X86Pause => return Err(invalid(span)),
+                ProgramOp::NativeStatement(_) if function => None,
+                ProgramOp::Evaluate { value } if function => {
+                    self.check_expression(value, Some(ValueType::Integer), span, call_arities)?;
+                    Some(value)
+                }
+                ProgramOp::NativeStatement(_) | ProgramOp::Evaluate { .. } => {
+                    return Err(invalid(span));
+                }
             };
             if let Some(value) = expression {
                 total_nodes = total_nodes

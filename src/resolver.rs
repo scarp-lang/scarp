@@ -28,6 +28,7 @@ use crate::{
         FunctionDeclaration, OutputTarget, PatternKind, PrintArgument, Program, Statement,
     },
     diagnostics::{Diagnostic, DiagnosticKind, Span},
+    native_platform::{NativeIntrinsic, NativeProfile},
     numeric::Builtin,
     parser::MAX_BLOCK_DEPTH,
     value::{type_mismatch, ValueType},
@@ -336,7 +337,7 @@ pub(crate) enum ResolvedCall {
     TensorGraph(std::sync::Arc<crate::numeric::tensor_graph::TensorGraph>),
     Map(MapIntrinsic),
     Io(crate::input::IoBuiltin),
-    X86Pause,
+    Native(NativeIntrinsic),
 }
 
 pub(crate) fn is_builtin_name(name: &str) -> bool {
@@ -503,17 +504,20 @@ pub fn resolve_with_type_limits(
     program: Program,
     limits: TypeLimits,
 ) -> Result<ResolvedProgram, Diagnostic> {
-    resolve_for_target(program, limits, false)
+    resolve_for_target(program, limits, NativeProfile::Scalar)
 }
 
-pub(crate) fn resolve_uefi(program: Program) -> Result<ResolvedProgram, Diagnostic> {
-    resolve_for_target(program, TypeLimits::default(), true)
+pub(crate) fn resolve_native(
+    program: Program,
+    profile: NativeProfile,
+) -> Result<ResolvedProgram, Diagnostic> {
+    resolve_for_target(program, TypeLimits::default(), profile)
 }
 
 fn resolve_for_target(
     program: Program,
     limits: TypeLimits,
-    uefi: bool,
+    profile: NativeProfile,
 ) -> Result<ResolvedProgram, Diagnostic> {
     let mut registry =
         TypeRegistryBuilder::new(limits).map_err(|e| type_info::failure(e, Span::default()))?;
@@ -623,7 +627,7 @@ fn resolve_for_target(
     for (id, (declaration, bindings)) in declarations.iter_mut().zip(&generic_bindings).enumerate()
     {
         let mut resolver = Resolver::new(&metadata, &names, &layouts, &mut registry);
-        resolver.uefi = uefi;
+        resolver.native_profile = profile;
         resolver.type_bindings = bindings;
         resolver.has_generics = has_generics;
         let function = if bindings.is_empty() {
@@ -636,7 +640,7 @@ fn resolve_for_target(
     }
     let (entry, slot_types) = {
         let mut resolver = Resolver::new(&metadata, &names, &layouts, &mut registry);
-        resolver.uefi = uefi;
+        resolver.native_profile = profile;
         resolver.instances = Some(&mut instances);
         resolver.has_generics = has_generics;
         resolver.statement_list(statements)?;
@@ -664,7 +668,7 @@ fn resolve_for_target(
             )?;
         }
         let mut resolver = Resolver::new(&metadata, &names, &layouts, &mut registry);
-        resolver.uefi = uefi;
+        resolver.native_profile = profile;
         resolver.type_bindings = &instance.bindings;
         resolver.has_generics = true;
         resolver.instances = Some(&mut instances);
@@ -717,7 +721,7 @@ struct Resolver<'a> {
     layouts: &'a nominal::Layouts,
     result: Option<(SourceType, Span)>,
     pure: bool,
-    uefi: bool,
+    native_profile: NativeProfile,
     has_generics: bool,
     type_bindings: &'a [SourceType],
     instances: Option<&'a mut generics::Instances>,
@@ -748,7 +752,7 @@ impl<'a> Resolver<'a> {
             layouts,
             result: None,
             pure: false,
-            uefi: false,
+            native_profile: NativeProfile::Scalar,
             has_generics: false,
             type_bindings: &[],
             instances: None,
@@ -2022,32 +2026,31 @@ fn resolve_expression(
                 let type_arguments = type_arguments
                     .as_ref()
                     .map_or(&[][..], |types| types.as_slice());
-                if name == "x86_pause" && !names.contains_key(name) {
-                    if !resolver.uefi {
-                        return Err(Diagnostic::new(
-                            DiagnosticKind::NativeUnsupported,
+                if !names.contains_key(name) {
+                    if let Some(intrinsic) = NativeIntrinsic::named(name) {
+                        check_native_intrinsic(
+                            intrinsic,
+                            resolver.native_profile,
+                            pure,
                             *function_span,
-                            "x86_pause requires the uefi-x86_64 native executable target",
-                        ));
+                            type_arguments.is_empty(),
+                            arguments,
+                        )?;
+                        for argument in arguments {
+                            require_type(
+                                &types[argument.expression],
+                                ValueType::Integer,
+                                syntax.nodes()[argument.expression].span,
+                            )?;
+                        }
+                        slots.push(None);
+                        calls.push(Some(ResolvedCall::Native(intrinsic)));
+                        types.push(match intrinsic {
+                            NativeIntrinsic::Statement(_) => ValueType::Unit.into(),
+                            NativeIntrinsic::Value(_) => ValueType::Integer.into(),
+                        });
+                        continue;
                     }
-                    if !arguments.is_empty() || !type_arguments.is_empty() {
-                        return Err(Diagnostic::new(
-                            DiagnosticKind::CallArguments,
-                            *function_span,
-                            "x86_pause takes no arguments or type arguments",
-                        ));
-                    }
-                    if pure {
-                        return Err(Diagnostic::new(
-                            DiagnosticKind::ImpureFunction,
-                            *function_span,
-                            "pure expressions cannot issue x86_pause",
-                        ));
-                    }
-                    slots.push(None);
-                    calls.push(Some(ResolvedCall::X86Pause));
-                    types.push(ValueType::Unit.into());
-                    continue;
                 }
                 if let Some(argument) = type_arguments
                     .first()
@@ -2792,6 +2795,46 @@ fn check_argument(
             format!("parameter {:?} is declared here", parameter.name),
         )
     })
+}
+
+#[inline(never)]
+fn check_native_intrinsic(
+    intrinsic: NativeIntrinsic,
+    profile: NativeProfile,
+    pure: bool,
+    span: Span,
+    has_no_type_arguments: bool,
+    arguments: &[crate::ast::CallArgument],
+) -> Result<(), Diagnostic> {
+    if !intrinsic.available(profile) {
+        return Err(Diagnostic::new(
+            DiagnosticKind::NativeUnsupported,
+            span,
+            "this intrinsic is unavailable in the selected execution environment",
+        )
+        .with_help("use a compatible x86-64 UEFI firmware or kernel target"));
+    }
+    if !has_no_type_arguments
+        || arguments.len() != intrinsic.arity()
+        || arguments.iter().any(|argument| argument.label.is_some())
+    {
+        return Err(Diagnostic::new(
+            DiagnosticKind::CallArguments,
+            span,
+            format!(
+                "expected {} positional arguments and no type arguments",
+                intrinsic.arity()
+            ),
+        ));
+    }
+    if pure {
+        return Err(Diagnostic::new(
+            DiagnosticKind::ImpureFunction,
+            span,
+            "pure functions cannot use native platform effects",
+        ));
+    }
+    Ok(())
 }
 
 fn fixed_type(kind: &SourceType) -> bool {

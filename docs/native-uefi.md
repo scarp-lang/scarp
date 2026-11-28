@@ -48,10 +48,9 @@ live in read-only `.rdata` and are referenced with RIP-relative addressing.
 The image includes an absolute-padding relocation block so the loader can
 move it. The output writer publishes only to a new path.
 
-The current target runs during UEFI boot services and returns to firmware.
-Leaving boot services, raw memory regions, allocators, interrupt handlers,
-kernel boot protocols, EFI signing, other architectures and general-purpose
-native Scarp programs need further implementation.
+This application target runs during UEFI boot services and returns to
+firmware. The [separate UEFI kernel target](native-uefi-kernel.md) defines
+its own post-firmware stack, memory capabilities and terminal exception ABI.
 
 ## Emulator verification
 

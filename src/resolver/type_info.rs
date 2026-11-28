@@ -93,7 +93,7 @@ impl TypedExpression<'_> {
                         | ResolvedCall::ScalarUnary(_)
                         | ResolvedCall::ScalarGraph(_)
                         | ResolvedCall::TensorGraph(_)
-                        | ResolvedCall::X86Pause,
+                        | ResolvedCall::Native(_),
                     ) => None,
                     None => None,
                 };

@@ -1,10 +1,11 @@
-//! Self-contained x86-64 SysV integer-kernel code and ELF64 ET_REL encoding.
+//! Self-contained x86-64 integer code with ELF64 and PE32+ image encoders.
 //! Production emission uses only safe Rust, no external compiler or linker.
 
 mod executable;
 mod layout;
 mod temporaries;
 mod uefi;
+mod uefi_kernel;
 
 use self::layout::{
     frame_bytes, slot_offset, stack_argument_offset, FileRegion, ObjectLayout, ELF_HEADER_BYTES,
@@ -21,10 +22,12 @@ use crate::{
     diagnostics::{Diagnostic, Span},
     native_object::{
         CheckedElf64Kernel, FreestandingCallLayout, FreestandingEntry, LinuxExecutable,
-        UefiApplication, CHECKED_KERNEL_ARRAY_INDEX, CHECKED_KERNEL_CALL_DEPTH,
-        CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_INTEGER_OVERFLOW,
-        CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_REPEAT_COUNT, CHECKED_KERNEL_WORK_LIMIT,
+        UefiApplication, UefiKernel, UefiKernelError, CHECKED_KERNEL_ARRAY_INDEX,
+        CHECKED_KERNEL_CALL_DEPTH, CHECKED_KERNEL_DIVISION_BY_ZERO,
+        CHECKED_KERNEL_INTEGER_OVERFLOW, CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_REPEAT_COUNT,
+        CHECKED_KERNEL_WORK_LIMIT,
     },
+    native_platform::{NativeIntrinsic, NativeProfile, NativeStatement},
 };
 use std::borrow::Cow;
 
@@ -47,6 +50,7 @@ struct Code {
     compact_function: bool,
     metered: bool,
     console: Option<uefi::ConsoleLiterals>,
+    profile: NativeProfile,
 }
 
 // Second opcode byte of a near conditional branch (0F 8x rel32).
@@ -80,6 +84,7 @@ impl Code {
             compact_function,
             metered: false,
             console: None,
+            profile: NativeProfile::Scalar,
         })
     }
 
@@ -644,6 +649,17 @@ fn expression(
                 code.call(callee)?;
                 code.store_rax(home(dst)?.stack_slot()?)?;
             }
+            Operation::Native {
+                dst,
+                op,
+                ref arguments,
+            } if code.profile == NativeProfile::Kernel => {
+                for (&argument, register) in arguments.iter().zip([1, 0, 8]) {
+                    code.load_temporary(home(argument)?, register)?;
+                }
+                code.kernel_value(op, step.span)?;
+                code.store_temporary(home(dst)?)?;
+            }
             _ => return Err(invalid(step.span)),
         }
     }
@@ -847,9 +863,16 @@ fn append_function(
             ProgramOp::PrintLiteral { text } if code.console.is_some() => {
                 code.firmware_print(text, step.span)?;
             }
-            ProgramOp::X86Pause if code.console.is_some() => {
-                code.push(&[0xf3, 0x90])?; // pause
+            ProgramOp::NativeStatement(op)
+                if NativeIntrinsic::Statement(*op).available(code.profile) =>
+            {
+                match op {
+                    NativeStatement::Pause => code.push(&[0xf3, 0x90])?,
+                    NativeStatement::Fence => code.push(&[0x0f, 0xae, 0xf0])?, // mfence
+                    NativeStatement::Breakpoint => code.push(&[0xcc])?,        // int3
+                }
             }
+            ProgramOp::Evaluate { .. } if code.profile == NativeProfile::Kernel => {}
             _ => return Err(invalid(step.span)),
         }
     }
@@ -985,7 +1008,7 @@ pub(super) fn emit_bounded_entry(
     max_work: u32,
     max_stack_bytes: u32,
 ) -> Result<FreestandingEntry, Diagnostic> {
-    let lowered = bounded_entry_text(graph, max_work, max_stack_bytes, false)?;
+    let lowered = bounded_entry_text(graph, max_work, max_stack_bytes, NativeProfile::Scalar, 0)?;
     let object = object_with_entry(
         &lowered.code.data,
         b"\0scarp_bounded_integer_entry\0",
@@ -1007,7 +1030,7 @@ pub(super) fn emit_linux_executable(
     max_work: u32,
     max_stack_bytes: u32,
 ) -> Result<LinuxExecutable, Diagnostic> {
-    let lowered = bounded_entry_text(graph, max_work, max_stack_bytes, false)?;
+    let lowered = bounded_entry_text(graph, max_work, max_stack_bytes, NativeProfile::Scalar, 0)?;
     if lowered.layout.integer_arguments != 0 {
         return Err(crate::diagnostics::Diagnostic::new(
             crate::diagnostics::DiagnosticKind::NativeUnsupported,
@@ -1027,11 +1050,55 @@ pub(super) fn emit_uefi_application(
     max_work: u32,
     max_stack_bytes: u32,
 ) -> Result<UefiApplication, Diagnostic> {
-    let lowered = bounded_entry_text(graph, max_work, max_stack_bytes, true)?;
+    let lowered = bounded_entry_text(
+        graph,
+        max_work,
+        max_stack_bytes,
+        NativeProfile::Firmware,
+        uefi::ENTRY_FRAME_BYTES,
+    )?;
     Ok(UefiApplication {
         image: uefi::image(lowered.code)?,
         max_active_frames: lowered.stack.frames,
         peak_stack_bytes: lowered.stack.bytes,
+    })
+}
+
+pub(super) fn emit_uefi_kernel(
+    loader: &ScalarCallGraph,
+    kernel: &ScalarCallGraph,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<UefiKernel, UefiKernelError> {
+    if max_stack_bytes < uefi_kernel::MIN_LOADER_STACK {
+        return Err(UefiKernelError::Loader(Diagnostic::new(
+            crate::diagnostics::DiagnosticKind::NativeUnsupported,
+            Span::default(),
+            format!(
+                "the firmware handoff requires {} generated stack bytes",
+                uefi_kernel::MIN_LOADER_STACK
+            ),
+        )));
+    }
+    let loader = bounded_entry_text(
+        loader,
+        max_work,
+        max_stack_bytes,
+        NativeProfile::Firmware,
+        uefi_kernel::LOADER_FRAME_BYTES,
+    )
+    .map_err(UefiKernelError::Loader)?;
+    let kernel = bounded_entry_text(kernel, max_work, max_stack_bytes, NativeProfile::Kernel, 0)
+        .map_err(UefiKernelError::Kernel)?;
+    let loader_stack_bytes = loader.stack.bytes.max(uefi_kernel::MIN_LOADER_STACK);
+    let kernel_stack_bytes = kernel.stack.bytes;
+    let (image, kernel_failure_spans) =
+        uefi_kernel::image(loader.code, kernel.code).map_err(UefiKernelError::Image)?;
+    Ok(UefiKernel {
+        image,
+        loader_stack_bytes,
+        kernel_stack_bytes,
+        kernel_failure_spans,
     })
 }
 
@@ -1046,7 +1113,8 @@ fn bounded_entry_text(
     graph: &ScalarCallGraph,
     max_work: u32,
     max_stack_bytes: u32,
-    uefi: bool,
+    profile: NativeProfile,
+    entry_frame_bytes: u32,
 ) -> Result<BoundedEntryText, Diagnostic> {
     let bodies = graph.bodies();
     let entry = graph.entry();
@@ -1054,24 +1122,30 @@ fn bounded_entry_text(
     let arities: Vec<_> = bodies.iter().map(ScalarProgramIr::parameters).collect();
     let layouts = bodies
         .iter()
-        .map(|body| plan_function(body, Some(&arities), recursion_frames.is_some(), uefi))
+        .map(|body| {
+            plan_function(
+                body,
+                Some(&arities),
+                recursion_frames.is_some(),
+                profile != NativeProfile::Scalar,
+            )
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let frame_sizes = layouts
         .iter()
         .map(|layout| layout.frame_bytes)
         .collect::<Vec<_>>();
     let order = graph.emission_order();
-    let mut entry_overhead = 0;
-    if uefi {
-        entry_overhead += uefi::ENTRY_FRAME_BYTES;
-        if order.iter().any(|&id| {
+    let mut entry_overhead = entry_frame_bytes;
+    if profile == NativeProfile::Firmware
+        && order.iter().any(|&id| {
             bodies[id]
                 .operations()
                 .iter()
                 .any(|step| matches!(step.kind, ProgramOp::PrintLiteral { .. }))
-        }) {
-            entry_overhead += uefi::CONSOLE_CALL_BYTES;
-        }
+        })
+    {
+        entry_overhead += uefi::CONSOLE_CALL_BYTES;
     }
     let stack = graph.verify_stack(&frame_sizes, max_stack_bytes, entry_overhead)?;
     let entry_layout = FreestandingCallLayout {
@@ -1084,7 +1158,8 @@ fn bounded_entry_text(
     })?;
     let mut code = Code::new(steps, true)?;
     code.metered = true;
-    code.console = uefi.then(uefi::ConsoleLiterals::default);
+    code.profile = profile;
+    code.console = (profile == NativeProfile::Firmware).then(uefi::ConsoleLiterals::default);
     let mut targets = vec![None; bodies.len()];
     let mut entry_bytes = 0;
     for id in order {

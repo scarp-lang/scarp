@@ -293,6 +293,8 @@ Development builds can emit bounded native executables with
 `scarp native-exe`. The [standalone Linux target](docs/native-linux-executable.md)
 emits ELF64. The [x86-64 UEFI target](docs/native-uefi.md) emits PE32+
 applications that run under firmware before an operating system starts.
+The [UEFI kernel target](docs/native-uefi-kernel.md) hands control from a Scarp
+loader to a separate Scarp kernel after firmware boot services exit.
 
 These routes preserve the current compiler's schema-version-1
 `--diagnostic-format=json` errors without executing unsupported features.

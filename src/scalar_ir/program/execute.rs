@@ -101,7 +101,9 @@ impl ScalarExpressionIr {
                     }
                 }
                 super::super::Operation::Jump { target } => pc = *target,
-                super::super::Operation::Call { .. } => return Err(invalid(span)),
+                super::super::Operation::Call { .. } | super::super::Operation::Native { .. } => {
+                    return Err(invalid(span));
+                }
             }
         }
         register(&values, self.root, Span::default())
@@ -138,7 +140,9 @@ impl ScalarProgramIr {
             }
             pc += 1;
             match &instruction.kind {
-                ProgramOp::Return { .. } | ProgramOp::X86Pause => return Err(invalid(span)),
+                ProgramOp::Return { .. }
+                | ProgramOp::NativeStatement(_)
+                | ProgramOp::Evaluate { .. } => return Err(invalid(span)),
                 ProgramOp::Store { slot, value } => {
                     storage[*slot] = value.execute(&storage, &mut budget)?;
                 }

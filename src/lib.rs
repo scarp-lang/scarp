@@ -28,6 +28,7 @@ pub mod limits;
 pub mod modules;
 /// Experimental Linux x86-64 ELF object generation for checked scalar computation.
 pub mod native_object;
+mod native_platform;
 mod native_preflight;
 pub mod numeric;
 mod output_stage;

@@ -1,13 +1,15 @@
 use scarp::{
     diagnostics::DiagnosticKind,
     native_object::{
-        emit_elf64_linux_executable, emit_pe32plus_uefi_application,
-        write_pe32plus_uefi_application_new,
+        emit_elf64_linux_executable, emit_pe32plus_uefi_application, emit_pe32plus_uefi_kernel,
+        write_pe32plus_uefi_application_new, UefiKernelError,
     },
 };
 use std::{fs, io, path::PathBuf, process::Command};
 
 const BOOT: &str = include_str!("../experiments/bare-metal/uefi.srp");
+const LOADER: &str = include_str!("../experiments/bare-metal/uefi-loader.srp");
+const KERNEL: &str = include_str!("../experiments/bare-metal/uefi-kernel.srp");
 
 fn word(image: &[u8], at: usize) -> u16 {
     u16::from_le_bytes(image[at..at + 2].try_into().unwrap())
@@ -15,6 +17,29 @@ fn word(image: &[u8], at: usize) -> u16 {
 
 fn dword(image: &[u8], at: usize) -> usize {
     u32::from_le_bytes(image[at..at + 4].try_into().unwrap()) as usize
+}
+
+fn section_table(image: &[u8]) -> (usize, usize) {
+    let pe = dword(image, 0x3c);
+    (
+        pe + 24 + word(image, pe + 20) as usize,
+        word(image, pe + 6) as usize,
+    )
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn flatten_image(image: &[u8]) -> Vec<u8> {
+    let (table, count) = section_table(image);
+    let optional = dword(image, 0x3c) + 24;
+    let mut mapped = vec![0; dword(image, optional + 56)];
+    for index in 0..count {
+        let at = table + 40 * index;
+        let rva = dword(image, at + 12);
+        let length = dword(image, at + 8).min(dword(image, at + 16));
+        let offset = dword(image, at + 20);
+        mapped[rva..rva + length].copy_from_slice(&image[offset..offset + length]);
+    }
+    mapped
 }
 
 struct TestDirectory(PathBuf);
@@ -272,17 +297,9 @@ fn relocated_entry_and_firmware_callback_preserve_their_abi() {
         .image;
     let pe = dword(&image, 0x3c);
     let opt = pe + 24;
-    let section_table = opt + word(&image, pe + 20) as usize;
-    let mut mapped = vec![0; dword(&image, opt + 56)];
-    for index in 0..word(&image, pe + 6) as usize {
-        let section = section_table + index * 40;
-        let size = dword(&image, section + 8);
-        let rva = dword(&image, section + 12);
-        let offset = dword(&image, section + 20);
-        mapped[rva..rva + size].copy_from_slice(&image[offset..offset + size]);
-    }
+    let (section_table, _) = section_table(&image);
     let flattened = work.0.join("image.bin");
-    fs::write(&flattened, mapped).unwrap();
+    fs::write(&flattened, flatten_image(&image)).unwrap();
     let probe = work.0.join("probe");
     let built = Command::new(cc)
         .args(["-std=gnu11", "-O2", "-Wall", "-Wextra", "-Werror"])
@@ -305,5 +322,123 @@ fn relocated_entry_and_firmware_callback_preserve_their_abi() {
             .output()
             .unwrap();
         assert!(result.status.success(), "mode {mode}: {result:?}");
+    }
+}
+
+#[test]
+fn kernel_layout_has_its_own_uninitialized_nonexecutable_storage() {
+    let build = |stack| emit_pe32plus_uefi_kernel(LOADER, "boot", KERNEL, "kernel", 10000, stack);
+    let kernel = build(1024).unwrap();
+    let exact = kernel.loader_stack_bytes.max(kernel.kernel_stack_bytes);
+    assert!(exact >= 112 && exact < 1024);
+    assert_eq!(kernel, build(exact).unwrap());
+    assert!(build(exact - 1).is_err());
+    assert!(kernel
+        .kernel_failure_spans
+        .iter()
+        .any(|span| { KERNEL.get(span.start..span.end) == Some("kernel_exchange64(0, 41)") }));
+    let (table, count) = section_table(&kernel.image);
+    assert_eq!(count, 4);
+    let bss = table + 80;
+    assert_eq!(&kernel.image[bss..bss + 8], b".bss\0\0\0\0");
+    assert_eq!(dword(&kernel.image, bss + 8), 0x33000);
+    assert_eq!(dword(&kernel.image, bss + 12) % 4096, 0);
+    assert_eq!(dword(&kernel.image, bss + 16), 0);
+    assert_eq!(dword(&kernel.image, bss + 20), 0);
+    assert_eq!(dword(&kernel.image, bss + 36), 0xc000_0080);
+}
+
+#[test]
+fn kernel_semantics_separate_firmware_and_privileged_code() {
+    for (body, kind) in [
+        (
+            "funcra kernel() -> integer { print(\"firmware\"); return 0; }",
+            DiagnosticKind::NativeUnsupported,
+        ),
+        (
+            "pure funcra kernel() -> integer { return kernel_load64(0); }",
+            DiagnosticKind::ImpureFunction,
+        ),
+        (
+            "funcra kernel() -> integer { return kernel_map_count(0); }",
+            DiagnosticKind::CallArguments,
+        ),
+        (
+            "funcra kernel() -> integer { return kernel_load64(true); }",
+            DiagnosticKind::TypeMismatch,
+        ),
+        (
+            "funcra kernel() -> integer { return boot(); }",
+            DiagnosticKind::UnknownFunction,
+        ),
+    ] {
+        let result = emit_pe32plus_uefi_kernel(LOADER, "boot", body, "kernel", 100, 4096);
+        assert!(
+            matches!(result, Err(UefiKernelError::Kernel(error)) if error.kind == kind),
+            "{body}"
+        );
+    }
+    let loader = "funcra boot() -> integer { return kernel_load64(0); }";
+    assert!(matches!(
+        emit_pe32plus_uefi_kernel(loader, "boot", KERNEL, "kernel", 100, 4096),
+        Err(UefiKernelError::Loader(error)) if error.kind == DiagnosticKind::NativeUnsupported
+    ));
+    assert_eq!(
+        scarp::compile("funcra boot() -> integer { return x86_read_cr3(); }")
+            .unwrap_err()
+            .kind,
+        DiagnosticKind::NativeUnsupported
+    );
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[test]
+fn firmware_retry_stops_at_the_correct_privilege_boundary() {
+    let cc = std::env::var_os("SCARP_CC").unwrap_or_else(|| "cc".into());
+    if Command::new(&cc).arg("--version").output().is_err() {
+        assert!(
+            std::env::var_os("SCARP_REQUIRE_C").is_none(),
+            "C compiler required"
+        );
+        return;
+    }
+    let work = TestDirectory::new("uefi-kernel-abi");
+    let loader = "pure funcra boot() -> integer { return 0; }";
+    let kernel = "pure funcra kernel() -> integer { return 0; }";
+    let image = emit_pe32plus_uefi_kernel(loader, "boot", kernel, "kernel", 100, 4096)
+        .unwrap()
+        .image;
+    let (table, count) = section_table(&image);
+    assert_eq!(count, 3);
+    let bss = table + 40;
+    let flattened = work.0.join("kernel.bin");
+    fs::write(&flattened, flatten_image(&image)).unwrap();
+    let probe = work.0.join("probe");
+    let built = Command::new(cc)
+        .args(["-std=gnu11", "-O2", "-Wall", "-Wextra", "-Werror"])
+        .arg(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/uefi_kernel_abi_probe.c"),
+        )
+        .arg("-o")
+        .arg(&probe)
+        .output()
+        .unwrap();
+    assert!(
+        built.status.success(),
+        "{:?}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    for case in 0..7 {
+        let result = Command::new(&probe)
+            .arg(&flattened)
+            .arg(dword(&image, table + 12).to_string())
+            .arg(dword(&image, table + 8).to_string())
+            .arg(dword(&image, bss + 12).to_string())
+            .arg(dword(&image, bss + 8).to_string())
+            .arg(case.to_string())
+            .output()
+            .unwrap();
+        assert!(result.status.success(), "mode {case}: {result:?}");
     }
 }

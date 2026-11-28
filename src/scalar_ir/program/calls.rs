@@ -4,6 +4,7 @@ use super::{ScalarProgramIr, Span};
 use crate::{
     diagnostics::{Diagnostic, DiagnosticKind},
     native_object::{BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES, RECURSIVE_INTEGER_ENTRY_MAX_FRAMES},
+    native_platform::NativeProfile,
     resolver::ResolvedProgram,
     scalar_ir::{CallTargets, Operation},
 };
@@ -43,15 +44,22 @@ impl ScalarCallGraph {
         max_parameters: usize,
         recursion_frames: Option<usize>,
     ) -> Result<Self, Diagnostic> {
-        Self::lower_for_target(resolved, entry, max_parameters, recursion_frames, false)
+        Self::lower_for_target(
+            resolved,
+            entry,
+            max_parameters,
+            recursion_frames,
+            NativeProfile::Scalar,
+        )
     }
 
-    pub(in crate::scalar_ir) fn lower_uefi(
+    pub(in crate::scalar_ir) fn lower_platform(
         resolved: &ResolvedProgram,
         entry: &str,
         max_parameters: usize,
+        profile: NativeProfile,
     ) -> Result<Self, Diagnostic> {
-        Self::lower_for_target(resolved, entry, max_parameters, None, true)
+        Self::lower_for_target(resolved, entry, max_parameters, None, profile)
     }
 
     fn lower_for_target(
@@ -59,7 +67,7 @@ impl ScalarCallGraph {
         entry: &str,
         max_parameters: usize,
         recursion_frames: Option<usize>,
-        uefi: bool,
+        profile: NativeProfile,
     ) -> Result<Self, Diagnostic> {
         let signatures = resolved.functions();
         if let Some(step) = resolved.statements.first() {
@@ -97,16 +105,16 @@ impl ScalarCallGraph {
                 "the native entry needs an ordinary pure integer wrapper for a generic function",
             ));
         }
-        if uefi && !signatures[entry].parameters.is_empty() {
+        if profile != NativeProfile::Scalar && !signatures[entry].parameters.is_empty() {
             return Err(unsupported(
                 signatures[entry].span,
-                "the UEFI application entry must have zero parameters",
+                "this native platform entry must have zero parameters",
             ));
         }
         let mut targets = CallTargets {
             indices: vec![None; resolved.functions.len()],
             arities: Vec::new(),
-            uefi,
+            profile,
         };
         let mut source_ids = Vec::new();
         let mut spans = Vec::new();

@@ -1,0 +1,4 @@
+funcra boot() -> integer {
+    print("Scarp loader: entering kernel");
+    return 0;
+}

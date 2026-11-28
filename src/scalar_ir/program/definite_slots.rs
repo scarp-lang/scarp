@@ -192,7 +192,8 @@ impl ScalarProgramIr {
                 ProgramOp::Return { value }
                 | ProgramOp::Store { value, .. }
                 | ProgramOp::RepeatInit { count: value, .. }
-                | ProgramOp::PrintValue { value } => needs_expression(known, value)?,
+                | ProgramOp::PrintValue { value }
+                | ProgramOp::Evaluate { value } => needs_expression(known, value)?,
                 ProgramOp::Update { slot, value, .. } => {
                     needs_slot(known, *slot, span)?;
                     needs_expression(known, value)?;
@@ -215,7 +216,7 @@ impl ScalarProgramIr {
                 | ProgramOp::LoopControl { .. }
                 | ProgramOp::Retire { .. }
                 | ProgramOp::PrintLiteral { .. }
-                | ProgramOp::X86Pause => {}
+                | ProgramOp::NativeStatement(_) => {}
             }
         }
         Ok(())

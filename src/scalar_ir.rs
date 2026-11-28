@@ -11,6 +11,7 @@ mod program;
 use crate::{
     ast::{BinaryOperator, ExpressionKind, LogicalOperator, Statement},
     diagnostics::{Diagnostic, DiagnosticKind, Span},
+    native_platform::{NativeIntrinsic, NativeProfile, NativeValueOp},
     resolver::{ResolvedCall, ResolvedExpression, ResolvedProgram},
     types::TypeRegistry,
     value::ValueType,
@@ -33,7 +34,7 @@ fn invalid(span: Span) -> Diagnostic {
 struct CallTargets {
     indices: Vec<Option<usize>>,
     arities: Vec<usize>,
-    uefi: bool,
+    profile: NativeProfile,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,6 +94,13 @@ enum Operation {
         callee: usize,
         arguments: Vec<usize>,
     },
+    /// An effectful, bounded platform primitive. Results stay unknown to
+    /// optimization even if every operand is a constant.
+    Native {
+        dst: usize,
+        op: NativeValueOp,
+        arguments: Vec<usize>,
+    },
     /// Both paths are conservatively considered possible by the verifier.
     /// The target must be forward and may point exactly past the last step.
     Branch {
@@ -126,6 +134,9 @@ impl Operation {
                 ref elements,
             } => (Some(dst), [Some(index), None], elements),
             Self::Call {
+                dst, ref arguments, ..
+            }
+            | Self::Native {
                 dst, ref arguments, ..
             } => (Some(dst), [None, None], arguments),
         }
@@ -404,17 +415,34 @@ impl ScalarExpressionIr {
                 }
                 Task::FinishCall(index) => {
                     let node = &nodes[index];
-                    let (
-                        ExpressionKind::UserCall { arguments, .. },
-                        Some(ResolvedCall::User {
-                            function,
-                            parameters,
-                        }),
-                    ) = (&node.kind, &expression.calls[index])
-                    else {
+                    let ExpressionKind::UserCall { arguments, .. } = &node.kind else {
                         return Err(invalid(node.span));
                     };
                     let targets = call_targets.ok_or_else(|| invalid(node.span))?;
+                    if let Some(ResolvedCall::Native(intrinsic @ NativeIntrinsic::Value(op))) =
+                        expression.calls[index]
+                    {
+                        if !intrinsic.available(targets.profile) || arguments.len() != op.arity() {
+                            return Err(invalid(node.span));
+                        }
+                        ir.emit(node.span, Operation::Work)?;
+                        ir.emit(
+                            node.span,
+                            Operation::Native {
+                                dst: index,
+                                op,
+                                arguments: arguments.iter().map(|arg| arg.expression).collect(),
+                            },
+                        )?;
+                        continue;
+                    }
+                    let Some(ResolvedCall::User {
+                        function,
+                        parameters,
+                    }) = &expression.calls[index]
+                    else {
+                        return Err(invalid(node.span));
+                    };
                     let callee = targets
                         .indices
                         .get(*function)
@@ -775,6 +803,16 @@ impl ScalarExpressionIr {
                     register_type(types, *dst, ValueType::Integer, span)?;
                     initialized[*dst] = true;
                 }
+                Operation::Native { dst, op, arguments } => {
+                    if arguments.len() != op.arity() {
+                        return Err(invalid(span));
+                    }
+                    for &argument in arguments {
+                        require_read(&initialized, types, argument, ValueType::Integer, span)?;
+                    }
+                    register_type(types, *dst, ValueType::Integer, span)?;
+                    initialized[*dst] = true;
+                }
             }
             let (next, alternative) = instruction.kind.successors(pc);
             let valid_target = |target| target > pc && target <= self.steps.len();
@@ -880,9 +918,38 @@ pub(crate) fn emit_uefi_application(
     max_work: u32,
     max_stack_bytes: u32,
 ) -> Result<crate::native_object::UefiApplication, Diagnostic> {
-    let resolved = crate::resolver::resolve_uefi(crate::parse(source)?)?;
-    let ir = program::ScalarCallGraph::lower_uefi(&resolved, entry, elf64::MAX_INTEGER_ARGUMENTS)?;
+    let ir = lower_platform(source, entry, NativeProfile::Firmware)?;
     elf64::emit_uefi_application(&ir, max_work, max_stack_bytes)
+}
+
+fn lower_platform(
+    source: &str,
+    entry: &str,
+    profile: NativeProfile,
+) -> Result<program::ScalarCallGraph, Diagnostic> {
+    let resolved = crate::resolver::resolve_native(crate::parse(source)?, profile)?;
+    program::ScalarCallGraph::lower_platform(
+        &resolved,
+        entry,
+        elf64::MAX_INTEGER_ARGUMENTS,
+        profile,
+    )
+}
+
+pub(crate) fn emit_uefi_kernel(
+    loader: &str,
+    loader_entry: &str,
+    kernel: &str,
+    kernel_entry: &str,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<crate::native_object::UefiKernel, crate::native_object::UefiKernelError> {
+    use crate::native_object::UefiKernelError;
+    let loader = lower_platform(loader, loader_entry, NativeProfile::Firmware)
+        .map_err(UefiKernelError::Loader)?;
+    let kernel = lower_platform(kernel, kernel_entry, NativeProfile::Kernel)
+        .map_err(UefiKernelError::Kernel)?;
+    elf64::emit_uefi_kernel(&loader, &kernel, max_work, max_stack_bytes)
 }
 
 fn lower_integer_kernel(source: &str) -> Result<program::ScalarProgramIr, Diagnostic> {

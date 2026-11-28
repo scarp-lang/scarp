@@ -209,3 +209,9 @@ Console literals live in a read-only image section for the application's
 lifetime. The stack planner includes the firmware entry bridge and outgoing
 console arguments in the generated frame bound. See [the UEFI target
 contract](native-uefi.md).
+
+After a successful UEFI kernel handoff, generated Scarp frames use a
+dedicated stack. The image retains a separate read-only view of the firmware
+memory map and an aligned writable page for checked atomics. Raw effects
+take offsets into that page, so the bounds and alignment checks protect the
+stack, map and exception table. See the [kernel contract](native-uefi-kernel.md).
