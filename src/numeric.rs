@@ -15,6 +15,7 @@ mod integer_scalar;
 mod integers;
 mod kernels;
 mod nucleus;
+pub mod optimizer;
 mod order_statistics;
 mod parse_format;
 mod samples;
