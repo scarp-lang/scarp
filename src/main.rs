@@ -38,7 +38,7 @@ Commands:
   run [directory|file.srp]          Run a project or legacy source file
   test [--json|--json=v2] [--list] [--require-tests] [--filter SUBSTRING] [directory]  Project tests
   bigint add|sub|mul|div|div-wide [options] <left> <right> <new-output>  Calculate with decimal files
-  native-exe linux-x86_64 ... -o <file>  Emit a bounded standalone Linux executable
+  native-exe <target> ... -o <file>  Emit a bounded Linux or UEFI x86-64 executable
   native-object [--json] <target> <mode> ... -o <file>  Emit an experimental relocatable object
   inspect ast <file.srp>           Show the parsed syntax tree (development)
   inspect modules [--json] <file.srp|directory>  Inspect statically checked modules
@@ -73,7 +73,7 @@ Examples:
 
 The original run, check, tokens and modules commands remain available during
 migration. The old check command evaluates selected paths; it is not static-only
-verification. Experimental native-exe targets Linux x86-64. Package management is unavailable.
+verification. Experimental native-exe targets Linux and UEFI x86-64. Package management is unavailable.
 ";
 
 const VERIFY_HELP: &str =

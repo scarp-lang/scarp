@@ -4,6 +4,7 @@
 mod executable;
 mod layout;
 mod temporaries;
+mod uefi;
 
 use self::layout::{
     frame_bytes, slot_offset, stack_argument_offset, FileRegion, ObjectLayout, ELF_HEADER_BYTES,
@@ -12,7 +13,7 @@ use self::layout::{
 use self::temporaries::{TemporaryHome, TemporaryLayout};
 use super::{
     invalid,
-    program::{ProgramOp, ScalarCallGraph, ScalarProgramIr},
+    program::{LocalStorage, ProgramOp, ScalarCallGraph, ScalarProgramIr},
     Operation, ScalarExpressionIr, Unary,
 };
 use crate::{
@@ -20,9 +21,9 @@ use crate::{
     diagnostics::{Diagnostic, Span},
     native_object::{
         CheckedElf64Kernel, FreestandingCallLayout, FreestandingEntry, LinuxExecutable,
-        CHECKED_KERNEL_ARRAY_INDEX, CHECKED_KERNEL_CALL_DEPTH, CHECKED_KERNEL_DIVISION_BY_ZERO,
-        CHECKED_KERNEL_INTEGER_OVERFLOW, CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_REPEAT_COUNT,
-        CHECKED_KERNEL_WORK_LIMIT,
+        UefiApplication, CHECKED_KERNEL_ARRAY_INDEX, CHECKED_KERNEL_CALL_DEPTH,
+        CHECKED_KERNEL_DIVISION_BY_ZERO, CHECKED_KERNEL_INTEGER_OVERFLOW,
+        CHECKED_KERNEL_INVALID_SHIFT, CHECKED_KERNEL_REPEAT_COUNT, CHECKED_KERNEL_WORK_LIMIT,
     },
 };
 use std::borrow::Cow;
@@ -45,6 +46,7 @@ struct Code {
     // Keep the two existing kernel encodings byte-for-byte compatible.
     compact_function: bool,
     metered: bool,
+    console: Option<uefi::ConsoleLiterals>,
 }
 
 // Second opcode byte of a near conditional branch (0F 8x rel32).
@@ -77,6 +79,7 @@ impl Code {
             call_fixups: Vec::new(),
             compact_function,
             metered: false,
+            console: None,
         })
     }
 
@@ -438,20 +441,24 @@ fn patch_relative_branch(
     put(code, displacement, &offset.to_le_bytes())
 }
 
-#[derive(Clone, Copy)]
 struct StackSlots {
     /// Slots below the locals are reserved for arguments passed to callees.
     local_base: usize,
     temporary_base: usize,
     call_depth: Option<usize>,
+    packed: Option<Vec<usize>>,
 }
 
 impl StackSlots {
-    fn local(self, index: usize) -> Result<usize, Diagnostic> {
+    fn local(&self, index: usize) -> Result<usize, Diagnostic> {
+        let index = match &self.packed {
+            Some(lanes) => *lanes.get(index).ok_or_else(failure)?,
+            None => index,
+        };
         self.local_base.checked_add(index).ok_or_else(failure)
     }
 
-    fn temporary(self, index: usize) -> Result<usize, Diagnostic> {
+    fn temporary(&self, index: usize) -> Result<usize, Diagnostic> {
         self.temporary_base.checked_add(index).ok_or_else(failure)
     }
 }
@@ -482,9 +489,10 @@ fn text(program: &ScalarProgramIr, checked_arithmetic: bool) -> Result<Code, Dia
         local_base: 0,
         temporary_base: slot_count,
         call_depth: None,
+        packed: None,
     };
     for (slot, expr) in program.integer_stores() {
-        expression(&mut code, expr, slots, checked_arithmetic, None, None)?;
+        expression(&mut code, expr, &slots, checked_arithmetic, None, None)?;
         code.store_rax(slot)?;
     }
 
@@ -498,7 +506,7 @@ fn text(program: &ScalarProgramIr, checked_arithmetic: bool) -> Result<Code, Dia
 fn expression(
     code: &mut Code,
     expr: &ScalarExpressionIr,
-    slots: StackSlots,
+    slots: &StackSlots,
     checked: bool,
     layout: Option<&TemporaryLayout>,
     destination: Option<usize>,
@@ -677,6 +685,7 @@ fn plan_function<'a>(
     program: &'a ScalarProgramIr,
     call_arities: Option<&[usize]>,
     recursive: bool,
+    pack_locals: bool,
 ) -> Result<FunctionLayout<'a>, Diagnostic> {
     if !program.is_function() || program.parameters() > MAX_INTEGER_ARGUMENTS {
         return Err(failure());
@@ -708,9 +717,11 @@ fn plan_function<'a>(
             .ok_or_else(failure)?;
         expressions.push(Some((value, layout)));
     }
-    let local_end = outgoing
-        .checked_add(program.integer_slot_count())
-        .ok_or_else(failure)?;
+    let storage = pack_locals.then(|| LocalStorage::plan(program));
+    let local_count = storage
+        .as_ref()
+        .map_or(program.integer_slot_count(), |layout| layout.lane_count);
+    let local_end = outgoing.checked_add(local_count).ok_or_else(failure)?;
     let call_depth = (recursive && calls).then_some(local_end);
     let temporary_base = local_end
         .checked_add(usize::from(call_depth.is_some()))
@@ -719,11 +730,12 @@ fn plan_function<'a>(
         local_base: outgoing,
         temporary_base,
         call_depth,
+        packed: storage.map(|layout| layout.physical_lanes),
     };
     Ok(FunctionLayout {
         expressions,
-        slots,
         frame_bytes: frame_bytes(slots.temporary_base, max_registers)?,
+        slots,
         estimated_steps,
     })
 }
@@ -741,7 +753,7 @@ fn append_function(
     let register_count = parameters.min(REGISTER_ARGUMENTS);
     let registers = &INTEGER_ARGUMENT_REGISTERS[..register_count];
     let stack_size = layout.frame_bytes;
-    let slots = layout.slots;
+    let slots = &layout.slots;
     code.allocate_stack(stack_size)?;
     if let Some(depth) = slots.call_depth {
         code.store_argument(depth, TEMPORARY_REGISTER)?;
@@ -832,6 +844,12 @@ fn append_function(
                 // Scalar slots own no heap payload. Definite initialization
                 // prevents any read following their lexical retirement.
             }
+            ProgramOp::PrintLiteral { text } if code.console.is_some() => {
+                code.firmware_print(text, step.span)?;
+            }
+            ProgramOp::X86Pause if code.console.is_some() => {
+                code.push(&[0xf3, 0x90])?; // pause
+            }
             _ => return Err(invalid(step.span)),
         }
     }
@@ -858,7 +876,7 @@ fn function_text(
     budget: Option<u32>,
 ) -> Result<(Code, FreestandingCallLayout), Diagnostic> {
     program.verify()?;
-    let layout = plan_function(program, None, false)?;
+    let layout = plan_function(program, None, false, false)?;
     let mut code = Code::new(layout.estimated_steps, true)?;
     code.metered = budget.is_some();
     append_function(&mut code, program, &layout, budget)?;
@@ -967,7 +985,7 @@ pub(super) fn emit_bounded_entry(
     max_work: u32,
     max_stack_bytes: u32,
 ) -> Result<FreestandingEntry, Diagnostic> {
-    let lowered = bounded_entry_text(graph, max_work, max_stack_bytes)?;
+    let lowered = bounded_entry_text(graph, max_work, max_stack_bytes, false)?;
     let object = object_with_entry(
         &lowered.code.data,
         b"\0scarp_bounded_integer_entry\0",
@@ -989,7 +1007,7 @@ pub(super) fn emit_linux_executable(
     max_work: u32,
     max_stack_bytes: u32,
 ) -> Result<LinuxExecutable, Diagnostic> {
-    let lowered = bounded_entry_text(graph, max_work, max_stack_bytes)?;
+    let lowered = bounded_entry_text(graph, max_work, max_stack_bytes, false)?;
     if lowered.layout.integer_arguments != 0 {
         return Err(crate::diagnostics::Diagnostic::new(
             crate::diagnostics::DiagnosticKind::NativeUnsupported,
@@ -999,6 +1017,19 @@ pub(super) fn emit_linux_executable(
     }
     Ok(LinuxExecutable {
         image: executable::image(&lowered.code.data)?,
+        max_active_frames: lowered.stack.frames,
+        peak_stack_bytes: lowered.stack.bytes,
+    })
+}
+
+pub(super) fn emit_uefi_application(
+    graph: &ScalarCallGraph,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<UefiApplication, Diagnostic> {
+    let lowered = bounded_entry_text(graph, max_work, max_stack_bytes, true)?;
+    Ok(UefiApplication {
+        image: uefi::image(lowered.code)?,
         max_active_frames: lowered.stack.frames,
         peak_stack_bytes: lowered.stack.bytes,
     })
@@ -1015,6 +1046,7 @@ fn bounded_entry_text(
     graph: &ScalarCallGraph,
     max_work: u32,
     max_stack_bytes: u32,
+    uefi: bool,
 ) -> Result<BoundedEntryText, Diagnostic> {
     let bodies = graph.bodies();
     let entry = graph.entry();
@@ -1022,24 +1054,37 @@ fn bounded_entry_text(
     let arities: Vec<_> = bodies.iter().map(ScalarProgramIr::parameters).collect();
     let layouts = bodies
         .iter()
-        .map(|body| plan_function(body, Some(&arities), recursion_frames.is_some()))
+        .map(|body| plan_function(body, Some(&arities), recursion_frames.is_some(), uefi))
         .collect::<Result<Vec<_>, _>>()?;
     let frame_sizes = layouts
         .iter()
         .map(|layout| layout.frame_bytes)
         .collect::<Vec<_>>();
-    let stack = graph.verify_stack(&frame_sizes, max_stack_bytes)?;
+    let order = graph.emission_order();
+    let mut entry_overhead = 0;
+    if uefi {
+        entry_overhead += uefi::ENTRY_FRAME_BYTES;
+        if order.iter().any(|&id| {
+            bodies[id]
+                .operations()
+                .iter()
+                .any(|step| matches!(step.kind, ProgramOp::PrintLiteral { .. }))
+        }) {
+            entry_overhead += uefi::CONSOLE_CALL_BYTES;
+        }
+    }
+    let stack = graph.verify_stack(&frame_sizes, max_stack_bytes, entry_overhead)?;
     let entry_layout = FreestandingCallLayout {
         frame_bytes: frame_sizes[entry],
         integer_arguments: bodies[entry].parameters(),
     };
-    let order = graph.emission_order();
     let steps = order.iter().try_fold(0usize, |sum, &id| {
         sum.checked_add(layouts[id].estimated_steps)
             .ok_or_else(failure)
     })?;
     let mut code = Code::new(steps, true)?;
     code.metered = true;
+    code.console = uefi.then(uefi::ConsoleLiterals::default);
     let mut targets = vec![None; bodies.len()];
     let mut entry_bytes = 0;
     for id in order {

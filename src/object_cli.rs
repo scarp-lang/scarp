@@ -1,10 +1,11 @@
-//! Explicit file-to-object frontend for freestanding integer functions.
+//! Explicit file-to-native-artifact frontend.
 use super::{read_frontend_source, report_diagnostic, write_output};
 use scarp::diagnostics::Diagnostic;
 use scarp::native_object::{
     emit_elf64_bounded_integer_entry_with_layout, emit_elf64_linux_executable,
-    emit_freestanding_function, write_elf64_linux_executable_new, write_elf64_object_new,
-    CheckedElf64Kernel, FreestandingCallLayout, FreestandingFunctionMode, FreestandingTarget,
+    emit_freestanding_function, emit_pe32plus_uefi_application, write_elf64_linux_executable_new,
+    write_elf64_object_new, write_pe32plus_uefi_application_new, CheckedElf64Kernel,
+    FreestandingCallLayout, FreestandingFunctionMode, FreestandingTarget,
 };
 use std::{
     ffi::{OsStr, OsString},
@@ -29,12 +30,16 @@ The -o destination must be new and its parent directory must exist.
 
 pub(super) const EXECUTABLE_HELP: &str = "Usage:
   scarp native-exe linux-x86_64 <max-work> <max-stack-bytes> <source.srp> -o <new-executable>
+  scarp native-exe uefi-x86_64 <entry> <max-work> <max-stack-bytes> <source.srp> -o <new-app.efi>
 
-Emit a standalone, statically linked Linux x86-64 ELF64 executable. The file
-must define a parameterless pure funcra main() -> integer. Bounded integer
-control flow and nonrecursive direct calls share one native work allowance.
-Results 0 through 125 become process exit statuses, other results yield 126
+The Linux ELF64 target uses a parameterless pure funcra main() -> integer.
+Results 0 through 125 become process exit statuses, other results yield 126,
 and checked runtime failures yield 128 plus their native status.
+
+The UEFI PE32+ target takes a named parameterless funcra returning integer.
+Zero maps to EFI_SUCCESS. Nonzero and checked failures map to EFI_ABORTED.
+UEFI supports literal print lines and x86_pause() in impure functions.
+Both targets support bounded control flow and nonrecursive direct calls.
 ";
 
 pub(super) fn run_executable(
@@ -45,14 +50,26 @@ pub(super) fn run_executable(
     if matches!(args, [flag] if flag == "--help" || flag == "-h") {
         return write_output(output.write_all(EXECUTABLE_HELP.as_bytes()), errors);
     }
-    let [target, work, stack, source, flag, destination] = args else {
-        let _ = write!(errors, "{EXECUTABLE_HELP}");
-        return 2;
+    let (entry, work, stack, source, destination) = match args {
+        [target, work, stack, source, flag, destination]
+            if target == "linux-x86_64" && flag == "-o" =>
+        {
+            (None, work, stack, source, destination)
+        }
+        [target, entry, work, stack, source, flag, destination]
+            if target == "uefi-x86_64" && flag == "-o" =>
+        {
+            let Some(entry) = entry.to_str().filter(|entry| !entry.is_empty()) else {
+                let _ = writeln!(errors, "error: entry function name must be nonempty UTF-8");
+                return 2;
+            };
+            (Some(entry), work, stack, source, destination)
+        }
+        _ => {
+            let _ = write!(errors, "{EXECUTABLE_HELP}");
+            return 2;
+        }
     };
-    if target != "linux-x86_64" || flag != "-o" {
-        let _ = write!(errors, "{EXECUTABLE_HELP}");
-        return 2;
-    }
     let Some(work) = parse_budget(work, "max-work", errors) else {
         return 2;
     };
@@ -71,12 +88,23 @@ pub(super) fn run_executable(
             return 1;
         }
     };
-    let executable = match emit_elf64_linux_executable(&text, work, stack) {
-        Ok(executable) => executable,
+    let image = match entry {
+        Some(entry) => {
+            emit_pe32plus_uefi_application(&text, entry, work, stack).map(|app| app.image)
+        }
+        None => emit_elf64_linux_executable(&text, work, stack).map(|exe| exe.image),
+    };
+    let image = match image {
+        Ok(image) => image,
         Err(error) => return report_diagnostic(&error, source, &text, errors, false),
     };
     let destination = Path::new(destination);
-    match write_elf64_linux_executable_new(destination, &executable.image) {
+    let written = if entry.is_some() {
+        write_pe32plus_uefi_application_new(destination, &image)
+    } else {
+        write_elf64_linux_executable_new(destination, &image)
+    };
+    match written {
         Ok(()) => 0,
         Err(error) => {
             let _ = writeln!(

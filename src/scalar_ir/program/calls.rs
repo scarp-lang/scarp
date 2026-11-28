@@ -43,6 +43,24 @@ impl ScalarCallGraph {
         max_parameters: usize,
         recursion_frames: Option<usize>,
     ) -> Result<Self, Diagnostic> {
+        Self::lower_for_target(resolved, entry, max_parameters, recursion_frames, false)
+    }
+
+    pub(in crate::scalar_ir) fn lower_uefi(
+        resolved: &ResolvedProgram,
+        entry: &str,
+        max_parameters: usize,
+    ) -> Result<Self, Diagnostic> {
+        Self::lower_for_target(resolved, entry, max_parameters, None, true)
+    }
+
+    fn lower_for_target(
+        resolved: &ResolvedProgram,
+        entry: &str,
+        max_parameters: usize,
+        recursion_frames: Option<usize>,
+        uefi: bool,
+    ) -> Result<Self, Diagnostic> {
         let signatures = resolved.functions();
         if let Some(step) = resolved.statements.first() {
             return Err(unsupported(
@@ -79,9 +97,16 @@ impl ScalarCallGraph {
                 "the native entry needs an ordinary pure integer wrapper for a generic function",
             ));
         }
+        if uefi && !signatures[entry].parameters.is_empty() {
+            return Err(unsupported(
+                signatures[entry].span,
+                "the UEFI application entry must have zero parameters",
+            ));
+        }
         let mut targets = CallTargets {
             indices: vec![None; resolved.functions.len()],
             arities: Vec::new(),
+            uefi,
         };
         let mut source_ids = Vec::new();
         let mut spans = Vec::new();
@@ -204,6 +229,7 @@ impl ScalarCallGraph {
         &self,
         frames: &[u32],
         max_stack_bytes: u32,
+        entry_overhead: u32,
     ) -> Result<StackBound, Diagnostic> {
         if frames.len() != self.bodies.len() {
             return Err(super::invalid(Span::default()));
@@ -217,7 +243,7 @@ impl ScalarCallGraph {
             }
             Ok(())
         };
-        let bound = match &self.mode {
+        let mut bound = match &self.mode {
             GraphMode::Acyclic { postorder, depth } => {
                 let mut peak = vec![0; frames.len()];
                 for &id in postorder {
@@ -237,6 +263,11 @@ impl ScalarCallGraph {
                 bound
             }
         };
+        bound.bytes = bound
+            .bytes
+            .checked_add(entry_overhead)
+            .ok_or_else(|| super::invalid(self.spans[self.entry]))?;
+        check_hard_limit(bound.bytes, self.entry)?;
         if bound.bytes > max_stack_bytes {
             return Err(unsupported(
                 self.spans[self.entry],
@@ -362,14 +393,14 @@ mod tests {
         let graph = ScalarCallGraph::lower(&resolved, "top", 6, None).unwrap();
         let limit = BOUNDED_INTEGER_ENTRY_MAX_STACK_BYTES;
         assert_eq!(
-            graph.verify_stack(&[32_760, 32_760], limit).unwrap(),
+            graph.verify_stack(&[32_760, 32_760], limit, 0).unwrap(),
             StackBound {
                 bytes: limit,
                 frames: 2
             },
         );
-        assert!(graph.verify_stack(&[32_776, 32_760], u32::MAX).is_err());
-        assert!(graph.verify_stack(&[32_760], limit).is_err());
+        assert!(graph.verify_stack(&[32_776, 32_760], u32::MAX, 0).is_err());
+        assert!(graph.verify_stack(&[32_760], limit, 0).is_err());
     }
 
     #[test]
@@ -388,15 +419,15 @@ mod tests {
             let graph = ScalarCallGraph::lower(&resolved, "top", 6, Some(cap)).unwrap();
             assert_eq!(graph.emission_order(), [0, 1, 2]);
             assert_eq!(
-                graph.verify_stack(&widths, limit).unwrap(),
+                graph.verify_stack(&widths, limit, 0).unwrap(),
                 StackBound { bytes, frames: cap },
             );
-            assert!(graph.verify_stack(&widths, bytes - 1).is_err());
+            assert!(graph.verify_stack(&widths, bytes - 1, 0).is_err());
         }
         let graph = ScalarCallGraph::lower(&resolved, "top", 6, Some(5)).unwrap();
         assert_eq!(
             graph
-                .verify_stack(&[16_376, 16_376, 0], limit)
+                .verify_stack(&[16_376, 16_376, 0], limit, 0)
                 .unwrap_err()
                 .kind,
             DiagnosticKind::NativeUnsupported

@@ -33,6 +33,7 @@ fn invalid(span: Span) -> Diagnostic {
 struct CallTargets {
     indices: Vec<Option<usize>>,
     arities: Vec<usize>,
+    uefi: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -871,6 +872,17 @@ pub(crate) fn emit_linux_executable(
     let ir =
         program::ScalarCallGraph::lower(&resolved, "main", elf64::MAX_INTEGER_ARGUMENTS, None)?;
     elf64::emit_linux_executable(&ir, max_work, max_stack_bytes)
+}
+
+pub(crate) fn emit_uefi_application(
+    source: &str,
+    entry: &str,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<crate::native_object::UefiApplication, Diagnostic> {
+    let resolved = crate::resolver::resolve_uefi(crate::parse(source)?)?;
+    let ir = program::ScalarCallGraph::lower_uefi(&resolved, entry, elf64::MAX_INTEGER_ARGUMENTS)?;
+    elf64::emit_uefi_application(&ir, max_work, max_stack_bytes)
 }
 
 fn lower_integer_kernel(source: &str) -> Result<program::ScalarProgramIr, Diagnostic> {

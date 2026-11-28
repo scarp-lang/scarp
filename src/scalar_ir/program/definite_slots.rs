@@ -15,20 +15,20 @@ use std::collections::VecDeque;
 /// At most 256 scalar slots are permitted by the independent shape gate.
 /// Four machine words bound memory and avoid source-controlled allocations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct SlotSet([u64; 4]);
+pub(super) struct SlotSet([u64; 4]);
 
 impl SlotSet {
-    fn empty() -> Self {
+    pub(super) fn empty() -> Self {
         Self([0; 4])
     }
 
-    fn contains(self, slot: usize) -> bool {
+    pub(super) fn contains(self, slot: usize) -> bool {
         self.0
             .get(slot / 64)
             .is_some_and(|word| word & (1_u64 << (slot % 64)) != 0)
     }
 
-    fn insert(&mut self, slot: usize) {
+    pub(super) fn insert(&mut self, slot: usize) {
         if let Some(word) = self.0.get_mut(slot / 64) {
             *word |= 1_u64 << (slot % 64);
         }
@@ -46,6 +46,36 @@ impl SlotSet {
             *word &= next;
         }
         result
+    }
+
+    pub(super) fn union(mut self, other: Self) -> Self {
+        for (word, next) in self.0.iter_mut().zip(other.0) {
+            *word |= next;
+        }
+        self
+    }
+
+    pub(super) fn without(mut self, other: Self) -> Self {
+        for (word, next) in self.0.iter_mut().zip(other.0) {
+            *word &= !next;
+        }
+        self
+    }
+
+    pub(super) fn members(self) -> impl Iterator<Item = usize> {
+        self.0
+            .into_iter()
+            .enumerate()
+            .flat_map(|(index, mut bits)| {
+                std::iter::from_fn(move || {
+                    if bits == 0 {
+                        return None;
+                    }
+                    let lowest = bits.trailing_zeros() as usize;
+                    bits &= bits - 1;
+                    Some(index * 64 + lowest)
+                })
+            })
     }
 }
 
@@ -113,17 +143,15 @@ impl ScalarProgramIr {
                 continue;
             }
             let mut next = states[pc].ok_or_else(|| invalid(self.steps[pc].span))?;
-            let branch = match &self.steps[pc].kind {
-                ProgramOp::Return { .. } => continue,
+            let step = &self.steps[pc].kind;
+            match step {
                 ProgramOp::Store { slot, value } => {
                     for local in *slot..*slot + value.result_width {
                         next.insert(local);
                     }
-                    None
                 }
                 ProgramOp::Update { slot, .. } => {
                     next.insert(*slot);
-                    None
                 }
                 ProgramOp::RepeatInit {
                     count_slot,
@@ -132,38 +160,20 @@ impl ScalarProgramIr {
                 } => {
                     next.insert(*count_slot);
                     next.insert(*index_slot);
-                    None
                 }
                 ProgramOp::RepeatNext { index_slot } => {
                     next.insert(*index_slot);
-                    None
                 }
-                ProgramOp::Retire { slots } => {
+                ProgramOp::Retire { slots } | ProgramOp::LoopControl { retire: slots, .. } => {
                     for slot in slots {
                         next.remove(*slot);
                     }
-                    None
                 }
-                ProgramOp::LoopControl { target, retire } => {
-                    for slot in retire {
-                        next.remove(*slot);
-                    }
-                    join(*target, next, &mut states, &mut queued, &mut pending);
-                    continue;
-                }
-                ProgramOp::Jump { target } => {
-                    join(*target, next, &mut states, &mut queued, &mut pending);
-                    continue;
-                }
-                ProgramOp::JumpIfFalse { target, .. } | ProgramOp::RepeatGuard { target, .. } => {
-                    Some(*target)
-                }
-                _ => None,
-            };
-            if let Some(target) = branch {
+                _ => {}
+            }
+            for target in step.successors(pc).into_iter().flatten() {
                 join(target, next, &mut states, &mut queued, &mut pending);
             }
-            join(pc + 1, next, &mut states, &mut queued, &mut pending);
         }
 
         if self.is_function() && states[len].is_some() {
@@ -204,7 +214,8 @@ impl ScalarProgramIr {
                 ProgramOp::Jump { .. }
                 | ProgramOp::LoopControl { .. }
                 | ProgramOp::Retire { .. }
-                | ProgramOp::PrintLiteral { .. } => {}
+                | ProgramOp::PrintLiteral { .. }
+                | ProgramOp::X86Pause => {}
             }
         }
         Ok(())

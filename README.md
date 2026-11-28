@@ -288,7 +288,11 @@ program statements. This was not available in alpha.4 packages.
 restricted checked integer/Boolean subset, including bounded counted-repeat
 loops. See [Proposal 0035](docs/proposals/0035-native-scalar-c11.md)
 for accepted syntax, validation, output contracts and deliberate exclusions.
-There is still **no** `scarp compile` command or native executable generation from arbitrary `.srp` sources.
+
+Development builds can emit bounded native executables with
+`scarp native-exe`. The [standalone Linux target](docs/native-linux-executable.md)
+emits ELF64. The [x86-64 UEFI target](docs/native-uefi.md) emits PE32+
+applications that run under firmware before an operating system starts.
 
 These routes preserve the current compiler's schema-version-1
 `--diagnostic-format=json` errors without executing unsupported features.
@@ -297,8 +301,7 @@ behavior and migration details. The old `run`, `check`, `tokens` and `modules`
 paths remain temporarily compatible; `check` evaluates selected program paths
 and should **not** be described as static-only verification. Static-only `verify` uses compiler parsing and resolution without executing runtime
 statements or contracts; it does not replace the old evaluating `check`.
-`compile` and native executable generation remain unsupported. `create` and
-`launch` are available in published alpha.4 packages, but not in
+`create` and `launch` are available in published alpha.4 packages, but not in
 alpha.3 packages. Alpha.1 and alpha.2 lack the Scarp-first command names.
 
 Use the [official learning path](https://scarp-lang.github.io/scarp-docs/guide/learning-path)

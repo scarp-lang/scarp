@@ -1,16 +1,19 @@
-//! Experimental compiler-owned ELF64 object emission.
+//! Experimental compiler-owned native object and executable emission.
 //!
 //! A bounded sequence of pure integer binding initializers is compiled into a
 //! freestanding, side-effect-free SysV AMD64 `scarp_scalar_kernel() -> i64`
 //! symbol. The API returns complete bytes; it never opens or overwrites files.
 //! The parameterized checked ABI also supports pure scalar functions from
-//! resolved Scarp source. All entry points return relocatable object bytes.
+//! resolved Scarp source. Executable targets add their own entry ABI and
+//! image format to the same bounded native body.
 
 use crate::diagnostics::{Diagnostic, Span};
 
 mod artifact;
 
-pub use artifact::{write_elf64_linux_executable_new, write_elf64_object_new};
+pub use artifact::{
+    write_elf64_linux_executable_new, write_elf64_object_new, write_pe32plus_uefi_application_new,
+};
 
 /// Experimental compiler-owned standalone Linux x86-64 image.
 #[derive(Debug, PartialEq, Eq)]
@@ -30,6 +33,33 @@ pub fn emit_elf64_linux_executable(
     max_stack_bytes: u32,
 ) -> Result<LinuxExecutable, Diagnostic> {
     crate::scalar_ir::emit_linux_executable(source, max_work, max_stack_bytes)
+}
+
+/// Experimental OS-free x86-64 UEFI application image.
+#[derive(Debug, PartialEq, Eq)]
+pub struct UefiApplication {
+    pub image: Vec<u8>,
+    /// Maximum simultaneously active Scarp functions.
+    pub max_active_frames: usize,
+    /// Generated stack usage below the incoming UEFI stack pointer. Includes
+    /// the ABI bridge and outgoing console call, excluding firmware frames.
+    pub peak_stack_bytes: u32,
+}
+
+/// Emit a UEFI application with a named, parameterless integer entry.
+///
+/// Bounded native functions may use static `print("…")` through the firmware
+/// console and the target-specific `x86_pause()` instruction in impure
+/// functions. The entry returns EFI_SUCCESS for zero and EFI_ABORTED for
+/// nonzero results or checked runtime failures. Firmware supplies the stack
+/// and system table. The compiler adds no interpreter, allocator or libc.
+pub fn emit_pe32plus_uefi_application(
+    source: &str,
+    entry: &str,
+    max_work: u32,
+    max_stack_bytes: u32,
+) -> Result<UefiApplication, Diagnostic> {
+    crate::scalar_ir::emit_uefi_application(source, entry, max_work, max_stack_bytes)
 }
 
 /// Emit a deterministic ELF64 relocatable object from integer bindings.

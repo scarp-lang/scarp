@@ -93,7 +93,7 @@ impl ObjectLayout {
     }
 }
 
-fn align_up(value: usize, alignment: usize) -> Result<usize, Diagnostic> {
+pub(super) fn align_up(value: usize, alignment: usize) -> Result<usize, Diagnostic> {
     if !alignment.is_power_of_two() {
         return Err(failure());
     }

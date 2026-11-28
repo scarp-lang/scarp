@@ -1,4 +1,4 @@
-//! Atomic, no-overwrite output for already compiled ELF64 objects.
+//! Atomic, no-overwrite output for already compiled native images and objects.
 
 use std::{
     fs::File,
@@ -54,6 +54,32 @@ pub fn write_elf64_linux_executable_new(
         }
         Ok(())
     })
+}
+
+/// Publish an emitted x86-64 PE32+ UEFI application at a new path.
+/// The header check recognizes the envelope. Structural validation is the
+/// responsibility of the compiler emitter.
+pub fn write_pe32plus_uefi_application_new(
+    destination: impl AsRef<Path>,
+    image: &[u8],
+) -> io::Result<()> {
+    let valid = image.starts_with(b"MZ")
+        && image
+            .get(0x3c..0x40)
+            .and_then(|field| u32::from_le_bytes(field.try_into().ok()?).try_into().ok())
+            .and_then(|offset: usize| image.get(offset..))
+            .is_some_and(|pe| {
+                pe.starts_with(b"PE\0\0\x64\x86")
+                    && pe.get(24..26) == Some(&[0x0b, 0x02])
+                    && pe.get(92..94) == Some(&[10, 0])
+            });
+    if !valid {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "expected an x86-64 PE32+ UEFI application",
+        ));
+    }
+    publish_object(destination.as_ref(), |file| file.write_all(image))
 }
 
 fn publish_object(
