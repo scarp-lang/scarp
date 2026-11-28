@@ -51,3 +51,22 @@ The operation scans each input cell once in deterministic row-major order
 within its output group and never allocates an intermediate index array
 proportional to the number of cells. These remain host-only experimental APIs,
 not source-language tensor syntax or automatic differentiation.
+
+## Development: explicit batched matrix gradients
+
+`matmul_backward(left, right, upstream, limits)` returns two tensors with
+exactly the original operand shapes. Upstream must have the exact forward
+output shape. The implementation directly accumulates the products for each
+operand cell, including across batch axes where an input was broadcast.
+It allocates no transposed operands or expanded gradients. Contributions are
+visited in increasing broadcast-batch and reduction-axis order, using finite
+compensated sums. Empty output produces zeros for any nonempty input gradient.
+An empty inner dimension gives two empty gradients.
+
+A single host-call budget covers both returned buffers. For input lengths
+A and B, ranks rA and rB, forward output length C, inner dimension K, and
+broadcast batch rank R, work is `A*(1+rA) + B*(1+rB) + 2*C*K*(4+4*R)`.
+Payload is `8*(A+B)` logical bytes. The forward output cell limit still
+applies even though no forward result is materialized. Both buffers are
+reserved before numerical loops; no partial result escapes on failure.
+This is a host-only VJP primitive, not an automatic differentiation engine.

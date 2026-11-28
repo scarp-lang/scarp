@@ -138,14 +138,11 @@ pub fn binary(
     finish(output, shape)
 }
 
-/// Rank-two or batched matrix multiplication, broadcasting leading axes.
-/// The final two axes are matrix rows and columns. Rank-one promotion is
-/// deliberately excluded. Zero inner dimensions produce explicit zeros.
-pub fn matmul(
+fn matmul_shape(
     left: &NumericTensor,
     right: &NumericTensor,
-    limits: TensorLimits,
-) -> Result<NumericTensor, Diagnostic> {
+    shape: &mut [usize; MAX_TENSOR_RANK],
+) -> Result<usize, Diagnostic> {
     if left.rank() < 2 || right.rank() < 2 {
         return Err(shape_error("tensor matmul requires rank at least two"));
     }
@@ -154,17 +151,34 @@ pub fn matmul(
     let batch_rank = lrank.max(rrank);
     let lshape = left.shape();
     let rshape = right.shape();
-    let rows = lshape[lrank];
-    let inner = lshape[lrank + 1];
-    if inner != rshape[rrank] {
+    if lshape[lrank + 1] != rshape[rrank] {
         return Err(shape_error("tensor matmul inner dimensions must match"));
     }
-    let columns = rshape[rrank + 1];
-    let mut shape = [0; MAX_TENSOR_RANK];
     broadcast(&lshape[..lrank], &rshape[..rrank], &mut shape[..batch_rank])?;
-    shape[batch_rank] = rows;
-    shape[batch_rank + 1] = columns;
-    let shape = &shape[..batch_rank + 2];
+    shape[batch_rank] = lshape[lrank];
+    shape[batch_rank + 1] = rshape[rrank + 1];
+    Ok(batch_rank + 2)
+}
+
+/// Rank-two or batched matrix multiplication, broadcasting leading axes.
+/// The final two axes are matrix rows and columns. Rank-one promotion is
+/// deliberately excluded. Zero inner dimensions produce explicit zeros.
+pub fn matmul(
+    left: &NumericTensor,
+    right: &NumericTensor,
+    limits: TensorLimits,
+) -> Result<NumericTensor, Diagnostic> {
+    let mut shape = [0; MAX_TENSOR_RANK];
+    let rank = matmul_shape(left, right, &mut shape)?;
+    let shape = &shape[..rank];
+    let lrank = left.rank() - 2;
+    let rrank = right.rank() - 2;
+    let batch_rank = rank - 2;
+    let lshape = left.shape();
+    let rshape = right.shape();
+    let rows = shape[batch_rank];
+    let inner = lshape[lrank + 1];
+    let columns = shape[batch_rank + 1];
     let count = count(shape)?;
     let span = Span::default();
     let mut budget = limits.budget();
@@ -302,4 +316,193 @@ pub fn sum_axis(
     result
         .reshape(&shape[..rank - 1])
         .ok_or_else(|| length_error(Span::default()))
+}
+
+/// Fixed-size plan for the batch coordinates that broadcast to one input
+/// batch. Non-singleton input axes are fixed; missing and singleton axes vary.
+struct BatchGradientPlan<'a> {
+    batch: &'a [usize],
+    own: &'a [usize],
+    varying_axes: [usize; MAX_TENSOR_RANK],
+    varying_shape: [usize; MAX_TENSOR_RANK],
+    varying_rank: usize,
+    repeats: usize,
+}
+
+impl<'a> BatchGradientPlan<'a> {
+    // Called only for nonempty forward output and nonempty input gradients.
+    fn new(batch: &'a [usize], own: &'a [usize]) -> Self {
+        let mut plan = Self {
+            batch,
+            own,
+            varying_axes: [0; MAX_TENSOR_RANK],
+            varying_shape: [0; MAX_TENSOR_RANK],
+            varying_rank: 0,
+            repeats: 1,
+        };
+        let leading = batch.len() - own.len();
+        for (axis, &extent) in batch.iter().enumerate() {
+            let own_extent = axis.checked_sub(leading).map_or(1, |i| own[i]);
+            if own_extent == 1 && extent != 1 {
+                plan.varying_axes[plan.varying_rank] = axis;
+                plan.varying_shape[plan.varying_rank] = extent;
+                plan.varying_rank += 1;
+                // Nonempty forward output bounds the whole batch product.
+                plan.repeats *= extent;
+            }
+        }
+        plan
+    }
+
+    fn fixed_coordinates(&self, flat: usize, coordinates: &mut [usize]) {
+        coordinates.fill(0);
+        let leading = self.batch.len() - self.own.len();
+        decode(flat, self.own, &mut coordinates[leading..]);
+    }
+
+    fn select_batch(&self, mut index: usize, coordinates: &mut [usize]) -> usize {
+        for i in (0..self.varying_rank).rev() {
+            let extent = self.varying_shape[i];
+            coordinates[self.varying_axes[i]] = index % extent;
+            index /= extent;
+        }
+        self.batch
+            .iter()
+            .zip(coordinates)
+            .fold(0, |flat, (&extent, &coordinate)| flat * extent + coordinate)
+    }
+}
+
+struct MatmulGradient<'a> {
+    left: &'a NumericTensor,
+    right: &'a NumericTensor,
+    upstream: &'a NumericTensor,
+    batch: &'a [usize],
+    rows: usize,
+    inner: usize,
+    columns: usize,
+}
+
+impl MatmulGradient<'_> {
+    fn accumulate(
+        &self,
+        for_left: bool,
+        output: &mut Vec<crate::value::FiniteFloat>,
+    ) -> Result<(), Diagnostic> {
+        let span = Span::default();
+        let own = if for_left { self.left } else { self.right };
+        if own.is_empty() {
+            return Ok(());
+        }
+        if self.upstream.is_empty() {
+            output.resize(own.len(), finite_number(0.0, span)?);
+            return Ok(());
+        }
+        let (other, own_matrix, other_matrix, reduction) = if for_left {
+            (
+                self.right,
+                self.rows * self.inner,
+                self.inner * self.columns,
+                self.columns,
+            )
+        } else {
+            (
+                self.left,
+                self.inner * self.columns,
+                self.rows * self.inner,
+                self.rows,
+            )
+        };
+
+        let own_batch = &own.shape()[..own.rank() - 2];
+        let other_batch = &other.shape()[..other.rank() - 2];
+        let plan = BatchGradientPlan::new(self.batch, own_batch);
+        let mut coordinates = [0; MAX_TENSOR_RANK];
+        let coordinates = &mut coordinates[..self.batch.len()];
+        let output_matrix = self.rows * self.columns;
+        for flat in 0..own.len() {
+            plan.fixed_coordinates(flat / own_matrix, coordinates);
+            let (row, k, column) = if for_left {
+                ((flat % own_matrix) / self.inner, flat % self.inner, 0)
+            } else {
+                (0, (flat % own_matrix) / self.columns, flat % self.columns)
+            };
+            // Enumerate only matching broadcast batches, and visit their
+            // reduction dimension in increasing order. No transpose or
+            // broadcast-sized temporary is materialized.
+            let terms = (0..plan.repeats * reduction).map(|term| {
+                let batch = plan.select_batch(term / reduction, coordinates);
+                let axis = term % reduction;
+                let other_base = projected_offset(other_batch, coordinates) * other_matrix;
+                let upstream_base = batch * output_matrix;
+                let (g, value) = if for_left {
+                    (
+                        self.upstream.cells()[upstream_base + row * self.columns + axis],
+                        other.cells()[other_base + k * self.columns + axis],
+                    )
+                } else {
+                    (
+                        self.upstream.cells()[upstream_base + axis * self.columns + column],
+                        other.cells()[other_base + axis * self.inner + k],
+                    )
+                };
+                finite_number(g.get() * value.get(), span).map(crate::value::FiniteFloat::get)
+            });
+            output.push(finite_number(compensated(terms, span)?, span)?);
+        }
+        Ok(())
+    }
+}
+
+/// Explicit vector-Jacobian product for batched matrix multiplication.
+///
+/// Returns gradients matching the original left and right shapes, summing
+/// repeated batch contributions directly into each input cell. The upstream
+/// shape must exactly match the forward output, not merely broadcast to it.
+/// Both returned buffers share one work/payload budget. No partial result
+/// escapes if either gradient fails.
+///
+/// Work is input cell count times (1 + input rank), for each input separately,
+/// plus two times the forward multiply-accumulate term count times
+/// (4 + 4 * broadcast batch rank). All charges precede computation.
+pub fn matmul_backward(
+    left: &NumericTensor,
+    right: &NumericTensor,
+    upstream: &NumericTensor,
+    limits: TensorLimits,
+) -> Result<(NumericTensor, NumericTensor), Diagnostic> {
+    let mut shape = [0; MAX_TENSOR_RANK];
+    let rank = matmul_shape(left, right, &mut shape)?;
+    let shape = &shape[..rank];
+    let forward_count = count(shape)?;
+    if upstream.shape() != shape {
+        return Err(shape_error(
+            "tensor matmul backward requires the exact forward output shape",
+        ));
+    }
+    let batch_rank = rank - 2;
+    let inner = left.shape()[left.rank() - 1];
+    let span = Span::default();
+    let mut budget = limits.budget();
+    charge(&mut budget, left.len(), (1 + left.rank()) as u64)?;
+    charge(&mut budget, right.len(), (1 + right.rank()) as u64)?;
+    let terms = forward_count as u64 * inner as u64;
+    budget.charge(2 * terms * (4 + 4 * batch_rank as u64), span)?;
+    let mut left_output = buffer(left.len(), &mut budget, span)?;
+    let mut right_output = buffer(right.len(), &mut budget, span)?;
+    let gradient = MatmulGradient {
+        left,
+        right,
+        upstream,
+        batch: &shape[..batch_rank],
+        rows: shape[batch_rank],
+        inner,
+        columns: shape[batch_rank + 1],
+    };
+    gradient.accumulate(true, &mut left_output)?;
+    gradient.accumulate(false, &mut right_output)?;
+    Ok((
+        finish(left_output, left.shape())?,
+        finish(right_output, right.shape())?,
+    ))
 }
