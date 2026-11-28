@@ -3,6 +3,7 @@
 
 mod calls;
 mod definite_slots;
+mod local_storage;
 
 #[cfg(test)]
 mod execute;
@@ -10,19 +11,43 @@ mod execute;
 use super::{aggregates, invalid, ScalarExpressionIr};
 use crate::{
     ast::{BinaryOperator, OutputTarget},
-    diagnostics::{Diagnostic, Span},
-    resolver::{ResolvedArgument, ResolvedProgram, ResolvedStatement},
+    diagnostics::{Diagnostic, DiagnosticKind, Span},
+    resolver::{ResolvedArgument, ResolvedCall, ResolvedProgram, ResolvedStatement},
     types::TypeRegistry,
     value::ValueType,
 };
 use std::ops::Range;
 
 pub(super) use self::calls::{ScalarCallGraph, StackBound};
+pub(super) use self::local_storage::LocalStorage;
 
 const MAX_PROGRAM_SLOTS: usize = 256;
 const MAX_PROGRAM_STEPS: usize = 4096;
 const MAX_LITERAL_BYTES: usize = 65536;
 const MAX_EXPRESSION_NODES: usize = 16384;
+const MAX_UEFI_LITERAL_CHARACTERS: usize = 1024;
+
+fn uefi_literal(text: &str, span: Span) -> Result<(), Diagnostic> {
+    if text.chars().take(MAX_UEFI_LITERAL_CHARACTERS + 1).count() > MAX_UEFI_LITERAL_CHARACTERS
+        || text.chars().any(|ch| {
+            ch > '\u{ffff}' || (ch.is_control() && !matches!(ch, '\r' | '\n' | '\t' | '\x08'))
+        })
+    {
+        return Err(Diagnostic::new(
+            DiagnosticKind::NativeUnsupported,
+            span,
+            "UEFI console output requires at most 1024 UCS-2 characters and no embedded NUL or unsupported control character",
+        ));
+    }
+    Ok(())
+}
+
+fn is_x86_pause(expression: &crate::resolver::ResolvedExpression) -> bool {
+    matches!(
+        expression.calls.get(expression.syntax.root()),
+        Some(Some(ResolvedCall::X86Pause))
+    )
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::scalar_ir) struct ProgramStep {
@@ -81,9 +106,21 @@ pub(in crate::scalar_ir) enum ProgramOp {
     PrintLiteral {
         text: Vec<u8>,
     },
+    X86Pause,
 }
 
 impl ProgramOp {
+    fn successors(&self, pc: usize) -> [Option<usize>; 2] {
+        match self {
+            Self::Return { .. } => [None, None],
+            Self::Jump { target } | Self::LoopControl { target, .. } => [Some(*target), None],
+            Self::JumpIfFalse { target, .. } | Self::RepeatGuard { target, .. } => {
+                [Some(pc + 1), Some(*target)]
+            }
+            _ => [Some(pc + 1), None],
+        }
+    }
+
     pub(super) fn expression(&self) -> Option<&ScalarExpressionIr> {
         match self {
             Self::Return { value }
@@ -107,6 +144,7 @@ pub(super) struct ScalarProgramIr {
     // None is a script; Some(0) is a genuine zero-argument function.
     function_parameters: Option<usize>,
     bounded: bool,
+    uefi: bool,
 }
 
 impl ScalarProgramIr {
@@ -156,8 +194,11 @@ impl ScalarProgramIr {
     ) -> Result<Self, Diagnostic> {
         let signature = program.function_metadata(id);
         let function = &program.functions[id];
+        let uefi = call_targets.is_some_and(|targets| targets.uefi);
         let unsupported = |span| {
-            if call_targets.is_some() {
+            if uefi {
+                invalid(span).with_help("UEFI supports bounded integer functions, static print literals and x86_pause()")
+            } else if call_targets.is_some() {
                 invalid(span).with_help("use pure integer functions with required integer parameters, bounded locals and integer returns")
             } else {
                 unsupported_function(span)
@@ -169,7 +210,9 @@ impl ScalarProgramIr {
                 unsupported(signature.span).with_help("run generic functions in the interpreter")
             );
         }
-        if !signature.pure || signature.result != ValueType::Integer || parameters > max_parameters
+        if (!uefi && !signature.pure)
+            || signature.result != ValueType::Integer
+            || parameters > max_parameters
         {
             return Err(unsupported(signature.span));
         }
@@ -195,6 +238,12 @@ impl ScalarProgramIr {
                 ResolvedStatement::RepeatInit { .. } | ResolvedStatement::RepeatNext { .. }
                     if bounded => {}
                 ResolvedStatement::RepeatGuard { target, .. } if bounded && *target <= len => {}
+                ResolvedStatement::Output {
+                    arguments,
+                    target: OutputTarget::Stdout,
+                    newline: true,
+                } if uefi && matches!(arguments.as_slice(), [ResolvedArgument::String(_)]) => {}
+                ResolvedStatement::Call { expression } if uefi && is_x86_pause(expression) => {}
                 _ => return Err(unsupported(step.span)),
             }
         }
@@ -240,6 +289,7 @@ impl ScalarProgramIr {
         let mut steps = Vec::with_capacity(operations.len());
         let mut total_nodes = 0usize;
         let mut literal_bytes = 0usize;
+        let uefi = call_targets.is_some_and(|targets| targets.uefi);
         let lower_expression =
             |value| ScalarExpressionIr::lower(value, &slots, call_targets, frame);
         for statement in operations {
@@ -331,6 +381,9 @@ impl ScalarProgramIr {
                         value: lower_expression(value)?,
                     },
                     ResolvedArgument::String(text) => {
+                        if uefi {
+                            uefi_literal(text, statement.span)?;
+                        }
                         literal_bytes = literal_bytes
                             .checked_add(text.len())
                             .ok_or_else(|| invalid(statement.span))?;
@@ -342,6 +395,9 @@ impl ScalarProgramIr {
                         }
                     }
                 },
+                ResolvedStatement::Call { expression } if uefi && is_x86_pause(expression) => {
+                    ProgramOp::X86Pause
+                }
                 _ => return Err(invalid(statement.span)),
             };
             let expression_nodes = kind.expression().map_or(0, |value| value.registers.len());
@@ -371,6 +427,7 @@ impl ScalarProgramIr {
             steps,
             function_parameters,
             bounded,
+            uefi,
         };
         ir.verify_with_calls(call_targets.map(|targets| targets.arities.as_slice()))?;
         Ok(ir)
@@ -522,6 +579,7 @@ impl ScalarProgramIr {
                         if self.bounded && *index_slot >= parameters => {}
                     ProgramOp::Retire { slots } if slots.iter().all(|s| *s >= parameters) => {}
                     ProgramOp::Return { .. } => {}
+                    ProgramOp::PrintLiteral { .. } | ProgramOp::X86Pause if self.uefi => {}
                     _ => return Err(invalid(span)),
                 }
             }
@@ -620,11 +678,17 @@ impl ScalarProgramIr {
                     literal_bytes = literal_bytes
                         .checked_add(text.len())
                         .ok_or_else(|| invalid(span))?;
-                    if literal_bytes > MAX_LITERAL_BYTES || std::str::from_utf8(text).is_err() {
+                    if literal_bytes > MAX_LITERAL_BYTES {
                         return Err(invalid(span));
+                    }
+                    let text = std::str::from_utf8(text).map_err(|_| invalid(span))?;
+                    if self.uefi {
+                        uefi_literal(text, span)?;
                     }
                     None
                 }
+                ProgramOp::X86Pause if self.uefi && function => None,
+                ProgramOp::X86Pause => return Err(invalid(span)),
             };
             if let Some(value) = expression {
                 total_nodes = total_nodes

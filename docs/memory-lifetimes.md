@@ -194,3 +194,18 @@ the integer-only call signature. Replacing a mutable binding copies the
 completed value into its own frame lanes, preserving earlier immutable
 aliases. Expression temporaries use the existing liveness-based stack and
 register planner. Scope retirement ends reads of the local's lanes.
+
+### UEFI stack storage
+
+The UEFI backend uses backward liveness over the verified control-flow graph
+to assign physical stack lanes. It uses the union of possible successor
+reads at branches and iterates across loop back edges to a fixed point.
+Writes interfere with any value that must survive them, including when the
+write's own result is unused. An array, tuple or record keeps contiguous
+lanes, and live snapshots keep independent storage. Once the last possible
+read of a value has passed, another logical local can reuse the lanes.
+
+Console literals live in a read-only image section for the application's
+lifetime. The stack planner includes the firmware entry bridge and outgoing
+console arguments in the generated frame bound. See [the UEFI target
+contract](native-uefi.md).

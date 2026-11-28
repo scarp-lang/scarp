@@ -1,5 +1,9 @@
 # Experimental Scarp bare-metal smoke harness
 
+The [x86-64 UEFI smoke test](../../docs/native-uefi.md) also boots a PE32+
+application compiled directly from [Scarp source](uefi.srp) through OVMF.
+The BIOS/GRUB smoke test below exercises native ELF64 object integration.
+
 This opt-in experiment exercises the compiler-owned ELF64 emitter without a
 host OS or libc **inside the guest**. It reuses the real Scarp
 [checked integer function](../../examples/checked_elf64_function.srp);

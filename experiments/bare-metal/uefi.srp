@@ -1,0 +1,21 @@
+pure funcra triangular(limit: integer) -> integer {
+    var total = 0;
+    repeat limit as index {
+        total += index + 1;
+    }
+    return total;
+}
+
+funcra boot() -> integer {
+    print("Scarp UEFI: entered");
+    var cells: array<integer, 3> = [array: 11, 19, 31];
+    bind snapshot = cells;
+    cells = [array: triangular(10), cells[1], cells[2]];
+    x86_pause();
+    if snapshot[0] != 11 or cells[0] != 55 or cells[1] != 19 or cells[2] != 31 {
+        print("Scarp UEFI: FAIL");
+        return 1;
+    }
+    print("Scarp UEFI: PASS");
+    return 0;
+}

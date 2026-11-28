@@ -234,6 +234,13 @@ impl Workspace {
                                 continue;
                             }
                             tasks.push(match &expression.calls[index] {
+                                Some(ResolvedCall::X86Pause) => {
+                                    return Err(Diagnostic::new(
+                                        DiagnosticKind::NativeUnsupported,
+                                        node.span,
+                                        "x86_pause cannot run in the interpreter",
+                                    ));
+                                }
                                 Some(ResolvedCall::Io(input)) => Task::Io(*input, node.span),
                                 Some(ResolvedCall::Builtin(builtin)) => {
                                     Task::Builtin(*builtin, index, node.span)
