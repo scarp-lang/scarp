@@ -1087,185 +1087,188 @@ impl<'a> Resolver<'a> {
             } => {
                 self.output(arguments, target, newline, span)?;
             }
-            Statement::Assign {
-                name,
-                name_span,
-                index,
-                operator,
-                operator_span,
-                value,
-                ..
-            } => {
-                if let AssignmentOperator::Compound(operator) = operator {
-                    if operator.is_comparison() {
-                        return Err(Diagnostic::new(
-                            DiagnosticKind::UnexpectedToken,
-                            operator_span,
-                            "compound assignment requires an arithmetic operator",
-                        ));
-                    }
-                }
-                check_name(&name, name_span)?;
-                let binding =
-                    lookup(&self.scopes, &name).ok_or_else(|| unknown_name(&name, name_span))?;
-                if !binding.mutable {
-                    return Err(Diagnostic::new(
-                            DiagnosticKind::ImmutableAssignment,
-                            name_span,
-                            format!("cannot assign to immutable binding {name:?}"),
-                        )
-                        .with_related(
-                            binding.declaration,
-                            "the immutable binding is declared here",
-                        )
-                        .with_help(if binding.repeat_index {
-                            "repeat indices are read-only; copy the index into a separate var variable to change a local value"
-                        } else if binding.parameter { "parameters are immutable; copy the parameter into a local var to change a local value" } else { "declare this binding with var to allow assignment" }));
-                }
-                let slot = binding.slot;
-                let expected_type = binding.kind.clone();
-                let declaration = binding.declaration;
-                if let Some(index_expression) = index {
-                    let index_span = index_expression.nodes()[index_expression.root()].span;
-                    let members = expected_type.tuple_elements().ok_or_else(|| {
-                        Diagnostic::new(
-                            DiagnosticKind::TypeMismatch,
-                            index_span,
-                            "indexed assignment currently supports tuple bindings only",
-                        )
-                        .with_help(
-                            "use var tuple = (...); or replace a non-tuple collection as a whole",
-                        )
-                    })?;
-                    let mut literal = index_expression.root();
-                    while let ExpressionKind::Group { expression } =
-                        index_expression.nodes()[literal].kind
-                    {
-                        literal = expression;
-                    }
-                    let element = match &index_expression.nodes()[literal].kind {
-                        ExpressionKind::Integer(n) if *n >= 0 => {
-                            usize::try_from(*n).ok().and_then(|n| members.get(n).map(|member| (n, member.clone())))
-                        }
-                        _ => None,
-                    }.ok_or_else(|| Diagnostic::new(
-                        DiagnosticKind::TupleIndex,
-                        index_span,
-                        "tuple assignment index must be a nonnegative integer literal within its arity",
-                    ).with_help("use tuple[0] = value; dynamic and computed indices are not supported"))?;
-                    let value = self.expression_with_expected(value, Some(&element.1))?;
-                    if value.kind != element.1 {
-                        let span = value.syntax.nodes()[value.syntax.root()].span;
-                        return Err(type_mismatch(span, element.1, value.kind)
-                            .with_related(declaration, "the tuple's type is established here"));
-                    }
-                    self.emit(
-                        ResolvedStatement::TupleSet {
-                            slot,
-                            index: element.0,
-                            value,
-                            index_span,
-                        },
-                        span,
-                    );
-                    return Ok(());
-                }
-                let fixed_shift = matches!(operator, AssignmentOperator::Compound(op)
-                    if fixed_type(&expected_type) && crate::value::fixed_integer::is_shift(op));
-                let rhs = if fixed_shift {
-                    ValueType::Integer.into()
-                } else {
-                    expected_type.clone()
-                };
-                let value = self.expression_with_expected(value, Some(&rhs))?;
-                match operator {
-                    AssignmentOperator::Compound(_) if fixed_shift => {
-                        require_type(&value.kind, ValueType::Integer, operator_span)?;
-                    }
-                    AssignmentOperator::Compound(op) if expected_type.as_tensor().is_some() => {
-                        use crate::numeric::source_tensor::{tensor_shape, TensorCall};
-                        let operation = TensorCall::operator(op).ok_or_else(|| {
-                            Diagnostic::new(
-                                DiagnosticKind::TypeMismatch,
-                                operator_span,
-                                "unsupported tensor compound operator",
-                            )
-                        })?;
-                        let left = tensor_shape(&expected_type, operator_span)?;
-                        let right = tensor_shape(
-                            &value.kind,
-                            value.syntax.nodes()[value.syntax.root()].span,
-                        )?;
-                        let result = operation.infer_binary(left, right, operator_span)?;
-                        require_type(&result, &expected_type, operator_span)?;
-                    }
-                    AssignmentOperator::Compound(operator)
-                        if expected_type == ValueType::String
-                            && matches!(
-                                operator,
-                                BinaryOperator::Add | BinaryOperator::Multiply
-                            ) =>
-                    {
-                        let right_type = if operator == BinaryOperator::Add {
-                            ValueType::String
-                        } else {
-                            ValueType::Integer
-                        };
-                        require_type(&value.kind, right_type, operator_span).map_err(|error| {
-                            error.with_related(declaration, "the target binding is declared here")
-                        })?;
-                    }
-                    AssignmentOperator::Compound(operator)
-                        if operator.is_integer_only()
-                            && !(operator == BinaryOperator::Remainder
-                                && expected_type == ValueType::BigInt)
-                            && expected_type != ValueType::Integer
-                            && !fixed_type(&expected_type) =>
-                    {
-                        return Err(type_mismatch(
-                            operator_span,
-                            ValueType::Integer,
-                            expected_type,
-                        )
-                        .with_related(declaration, "the target binding is declared here"));
-                    }
-                    AssignmentOperator::Set if value.kind != expected_type => {
-                        let span = value.syntax.nodes()[value.syntax.root()].span;
-                        return Err(type_mismatch(span, expected_type, value.kind)
-                            .with_related(declaration, "the binding's type is established here"));
-                    }
-                    AssignmentOperator::Compound(_)
-                        if !expected_type.is_numeric() || value.kind != expected_type =>
-                    {
-                        let (expected, found) = if expected_type.is_numeric() {
-                            (expected_type, value.kind)
-                        } else {
-                            (ValueType::Integer.into(), expected_type)
-                        };
-                        return Err(type_mismatch(operator_span, expected, found)
-                            .with_related(declaration, "the target binding is declared here"));
-                    }
-                    _ => {}
-                }
-                self.emit(
-                    match operator {
-                        AssignmentOperator::Set => ResolvedStatement::Store { slot, value },
-                        AssignmentOperator::Compound(operator) => ResolvedStatement::Update {
-                            slot,
-                            operator,
-                            value,
-                            operator_span,
-                        },
-                    },
-                    span,
-                );
-            }
+            assignment @ Statement::Assign { .. } => self.lower_assignment(assignment)?,
             Statement::Match(_)
             | Statement::Block { .. }
             | Statement::Repeat { .. }
             | Statement::While { .. }
             | Statement::If { .. } => unreachable!("container statement"),
         }
+        Ok(())
+    }
+
+    // Compound expression and assignment temporaries should not enlarge the
+    // frame held by every leaf of a maximally nested block.
+    #[inline(never)]
+    fn lower_assignment(&mut self, statement: Statement) -> Result<(), Diagnostic> {
+        let Statement::Assign {
+            name,
+            name_span,
+            index,
+            operator,
+            operator_span,
+            value,
+            span,
+        } = statement
+        else {
+            unreachable!("assignment lowering requires an assignment");
+        };
+        if let AssignmentOperator::Compound(operator) = operator {
+            if operator.is_comparison() {
+                return Err(Diagnostic::new(
+                    DiagnosticKind::UnexpectedToken,
+                    operator_span,
+                    "compound assignment requires an arithmetic operator",
+                ));
+            }
+        }
+        check_name(&name, name_span)?;
+        let binding = lookup(&self.scopes, &name).ok_or_else(|| unknown_name(&name, name_span))?;
+        if !binding.mutable {
+            return Err(Diagnostic::new(
+                    DiagnosticKind::ImmutableAssignment,
+                    name_span,
+                    format!("cannot assign to immutable binding {name:?}"),
+                )
+                .with_related(
+                    binding.declaration,
+                    "the immutable binding is declared here",
+                )
+                .with_help(if binding.repeat_index {
+                    "repeat indices are read-only; copy the index into a separate var variable to change a local value"
+                } else if binding.parameter { "parameters are immutable; copy the parameter into a local var to change a local value" } else { "declare this binding with var to allow assignment" }));
+        }
+        let slot = binding.slot;
+        let expected_type = binding.kind.clone();
+        let declaration = binding.declaration;
+        if let Some(index_expression) = index {
+            let index_span = index_expression.nodes()[index_expression.root()].span;
+            let members = expected_type.tuple_elements().ok_or_else(|| {
+                Diagnostic::new(
+                    DiagnosticKind::TypeMismatch,
+                    index_span,
+                    "indexed assignment currently supports tuple bindings only",
+                )
+                .with_help("use var tuple = (...); or replace a non-tuple collection as a whole")
+            })?;
+            let mut literal = index_expression.root();
+            while let ExpressionKind::Group { expression } = index_expression.nodes()[literal].kind
+            {
+                literal = expression;
+            }
+            let element = match &index_expression.nodes()[literal].kind {
+                ExpressionKind::Integer(n) if *n >= 0 => usize::try_from(*n)
+                    .ok()
+                    .and_then(|n| members.get(n).map(|member| (n, member.clone()))),
+                _ => None,
+            }
+            .ok_or_else(|| {
+                Diagnostic::new(
+                    DiagnosticKind::TupleIndex,
+                    index_span,
+                    "tuple assignment index must be a nonnegative integer literal within its arity",
+                )
+                .with_help("use tuple[0] = value; dynamic and computed indices are not supported")
+            })?;
+            let value = self.expression_with_expected(value, Some(&element.1))?;
+            if value.kind != element.1 {
+                let span = value.syntax.nodes()[value.syntax.root()].span;
+                return Err(type_mismatch(span, element.1, value.kind)
+                    .with_related(declaration, "the tuple's type is established here"));
+            }
+            self.emit(
+                ResolvedStatement::TupleSet {
+                    slot,
+                    index: element.0,
+                    value,
+                    index_span,
+                },
+                span,
+            );
+            return Ok(());
+        }
+        let fixed_shift = matches!(operator, AssignmentOperator::Compound(op)
+            if fixed_type(&expected_type) && crate::value::fixed_integer::is_shift(op));
+        let rhs = if fixed_shift {
+            ValueType::Integer.into()
+        } else {
+            expected_type.clone()
+        };
+        let value = self.expression_with_expected(value, Some(&rhs))?;
+        match operator {
+            AssignmentOperator::Compound(_) if fixed_shift => {
+                require_type(&value.kind, ValueType::Integer, operator_span)?;
+            }
+            AssignmentOperator::Compound(op) if expected_type.as_tensor().is_some() => {
+                use crate::numeric::source_tensor::{tensor_shape, TensorCall};
+                let operation = TensorCall::operator(op).ok_or_else(|| {
+                    Diagnostic::new(
+                        DiagnosticKind::TypeMismatch,
+                        operator_span,
+                        "unsupported tensor compound operator",
+                    )
+                })?;
+                let left = tensor_shape(&expected_type, operator_span)?;
+                let right =
+                    tensor_shape(&value.kind, value.syntax.nodes()[value.syntax.root()].span)?;
+                let result = operation.infer_binary(left, right, operator_span)?;
+                require_type(&result, &expected_type, operator_span)?;
+            }
+            AssignmentOperator::Compound(operator)
+                if expected_type == ValueType::String
+                    && matches!(operator, BinaryOperator::Add | BinaryOperator::Multiply) =>
+            {
+                let right_type = if operator == BinaryOperator::Add {
+                    ValueType::String
+                } else {
+                    ValueType::Integer
+                };
+                require_type(&value.kind, right_type, operator_span).map_err(|error| {
+                    error.with_related(declaration, "the target binding is declared here")
+                })?;
+            }
+            AssignmentOperator::Compound(operator)
+                if operator.is_integer_only()
+                    && !(operator == BinaryOperator::Remainder
+                        && expected_type == ValueType::BigInt)
+                    && expected_type != ValueType::Integer
+                    && !fixed_type(&expected_type) =>
+            {
+                return Err(
+                    type_mismatch(operator_span, ValueType::Integer, expected_type)
+                        .with_related(declaration, "the target binding is declared here"),
+                );
+            }
+            AssignmentOperator::Set if value.kind != expected_type => {
+                let span = value.syntax.nodes()[value.syntax.root()].span;
+                return Err(type_mismatch(span, expected_type, value.kind)
+                    .with_related(declaration, "the binding's type is established here"));
+            }
+            AssignmentOperator::Compound(_)
+                if !expected_type.is_numeric() || value.kind != expected_type =>
+            {
+                let (expected, found) = if expected_type.is_numeric() {
+                    (expected_type, value.kind)
+                } else {
+                    (ValueType::Integer.into(), expected_type)
+                };
+                return Err(type_mismatch(operator_span, expected, found)
+                    .with_related(declaration, "the target binding is declared here"));
+            }
+            _ => {}
+        }
+        self.emit(
+            match operator {
+                AssignmentOperator::Set => ResolvedStatement::Store { slot, value },
+                AssignmentOperator::Compound(operator) => ResolvedStatement::Update {
+                    slot,
+                    operator,
+                    value,
+                    operator_span,
+                },
+            },
+            span,
+        );
         Ok(())
     }
 
@@ -1529,6 +1532,109 @@ impl<'a> Resolver<'a> {
 
 fn lookup<'a>(scopes: &'a [Scope], name: &str) -> Option<&'a Binding> {
     scopes.iter().rev().find_map(|scope| scope.get(name))
+}
+
+// Keep graph construction and shape dispatch out of ordinary expression
+// resolution, which can run under the maximum allowed block nesting.
+#[inline(never)]
+fn resolve_numeric_call(
+    name: &str,
+    span: Span,
+    syntax: &Expression,
+    arguments: &[crate::ast::CallArgument],
+    types: &[SourceType],
+    slots: &[Option<usize>],
+    calls: &[Option<ResolvedCall>],
+) -> Result<Option<(SourceType, ResolvedCall)>, Diagnostic> {
+    use crate::numeric::{
+        source_autodiff::{self, ScalarGraph},
+        source_optimizer::TensorOptimizer,
+        source_tensor::TensorCall,
+        tensor_graph::{self, TensorGraph},
+    };
+    use crate::value::fixed_integer;
+
+    let target = fixed_integer::named_cast(name).or_else(|| {
+        (name == "to_integer"
+            && arguments
+                .first()
+                .is_some_and(|arg| fixed_type(&types[arg.expression])))
+        .then_some(ValueType::Integer)
+    });
+    if let Some(target) = target {
+        if arguments.len() != 1 || arguments[0].label.is_some() {
+            return Err(Diagnostic::new(
+                DiagnosticKind::CallArguments,
+                span,
+                "integer conversion requires one positional argument",
+            ));
+        }
+        let input = arguments[0].expression;
+        if !fixed_integer::can_cast(target, &types[input]) {
+            return Err(Diagnostic::new(
+                DiagnosticKind::TypeMismatch,
+                syntax.nodes()[input].span,
+                format!(
+                    "cannot convert {} to {target}; supply an integer, fixed-width value or bigint",
+                    types[input]
+                ),
+            ));
+        }
+        return Ok(Some((target.into(), ResolvedCall::FixedCast(target))));
+    }
+    if name == tensor_graph::VALUE_GRAD {
+        let (graph, kind) = TensorGraph::compile(syntax, arguments, types, slots, calls, span)?;
+        return Ok(Some((
+            kind,
+            ResolvedCall::TensorGraph(std::sync::Arc::new(graph)),
+        )));
+    }
+    let scalar = ValueType::Float;
+    if name == source_autodiff::VALUE_GRAD {
+        let graph = ScalarGraph::compile(syntax, arguments, types, slots, calls, span)?;
+        let pair = SourceType::tuple(vec![scalar.into(), scalar.into()]).expect("float pair type");
+        return Ok(Some((
+            pair,
+            ResolvedCall::ScalarGraph(std::sync::Arc::new(graph)),
+        )));
+    }
+    if let Some(operation) = source_autodiff::named_unary(name) {
+        match arguments {
+            [argument] if argument.label.is_none() => require_type(
+                &types[argument.expression],
+                scalar,
+                syntax.nodes()[argument.expression].span,
+            )?,
+            _ => {
+                return Err(Diagnostic::new(
+                    DiagnosticKind::CallArguments,
+                    span,
+                    "scalar activation requires one positional float argument",
+                ))
+            }
+        }
+        return Ok(Some((scalar.into(), ResolvedCall::ScalarUnary(operation))));
+    }
+    if let Some(optimizer) = TensorOptimizer::named(name) {
+        let kind = optimizer.infer(syntax, arguments, types, span)?;
+        return Ok(Some((kind, ResolvedCall::TensorOptimizer(optimizer))));
+    }
+    let operation = TensorCall::named(name).or_else(|| {
+        let uses_tensor = arguments
+            .iter()
+            .any(|arg| types[arg.expression].as_tensor().is_some());
+        if uses_tensor {
+            Builtin::from_name(name).and_then(TensorCall::overloaded)
+        } else {
+            None
+        }
+    });
+    operation
+        .map(|op| {
+            op.infer(syntax, arguments, types, span)
+                .map(|kind| (kind, ResolvedCall::Tensor(op)))
+        })
+        .transpose()
 }
 
 fn resolve_expression(
@@ -2179,113 +2285,17 @@ fn resolve_expression(
                     continue;
                 }
                 if !names.contains_key(name) {
-                    use crate::numeric::source_autodiff::{self, ScalarGraph};
-                    use crate::value::fixed_integer;
-                    let target = fixed_integer::named_cast(name).or_else(|| {
-                        (name == "to_integer"
-                            && arguments
-                                .first()
-                                .is_some_and(|arg| fixed_type(&types[arg.expression])))
-                        .then_some(ValueType::Integer)
-                    });
-                    if let Some(target) = target {
-                        if arguments.len() != 1 || arguments[0].label.is_some() {
-                            return Err(Diagnostic::new(
-                                DiagnosticKind::CallArguments,
-                                *function_span,
-                                "integer conversion requires one positional argument",
-                            ));
-                        }
-                        let input = arguments[0].expression;
-                        if !fixed_integer::can_cast(target, &types[input]) {
-                            return Err(Diagnostic::new(DiagnosticKind::TypeMismatch, syntax.nodes()[input].span,
-                                format!("cannot convert {} to {target}; supply an integer, fixed-width value or bigint", types[input])));
-                        }
+                    if let Some((kind, operation)) = resolve_numeric_call(
+                        name,
+                        *function_span,
+                        &syntax,
+                        arguments,
+                        &types,
+                        &slots,
+                        &calls,
+                    )? {
                         slots.push(None);
-                        calls.push(Some(ResolvedCall::FixedCast(target)));
-                        types.push(target.into());
-                        continue;
-                    }
-                    let scalar = ValueType::Float;
-                    if name == crate::numeric::tensor_graph::VALUE_GRAD {
-                        let (graph, kind) = crate::numeric::tensor_graph::TensorGraph::compile(
-                            &syntax,
-                            arguments,
-                            &types,
-                            &slots,
-                            &calls,
-                            *function_span,
-                        )?;
-                        slots.push(None);
-                        calls.push(Some(ResolvedCall::TensorGraph(std::sync::Arc::new(graph))));
-                        types.push(kind);
-                        continue;
-                    }
-                    if name == source_autodiff::VALUE_GRAD {
-                        let graph = ScalarGraph::compile(
-                            &syntax,
-                            arguments,
-                            &types,
-                            &slots,
-                            &calls,
-                            *function_span,
-                        )?;
-                        let pair = SourceType::tuple(vec![scalar.into(), scalar.into()])
-                            .expect("float pair type");
-                        slots.push(None);
-                        calls.push(Some(ResolvedCall::ScalarGraph(std::sync::Arc::new(graph))));
-                        types.push(pair);
-                        continue;
-                    }
-                    if let Some(operation) = source_autodiff::named_unary(name) {
-                        let [argument] = arguments.as_slice() else {
-                            return Err(Diagnostic::new(
-                                DiagnosticKind::CallArguments,
-                                *function_span,
-                                "scalar activation requires one positional float argument",
-                            ));
-                        };
-                        if argument.label.is_some() {
-                            return Err(Diagnostic::new(
-                                DiagnosticKind::CallArguments,
-                                *function_span,
-                                "scalar activation requires one positional float argument",
-                            ));
-                        }
-                        require_type(
-                            &types[argument.expression],
-                            scalar,
-                            syntax.nodes()[argument.expression].span,
-                        )?;
-                        slots.push(None);
-                        calls.push(Some(ResolvedCall::ScalarUnary(operation)));
-                        types.push(scalar.into());
-                        continue;
-                    }
-                    if let Some(optimizer) =
-                        crate::numeric::source_optimizer::TensorOptimizer::named(name)
-                    {
-                        let kind = optimizer.infer(&syntax, arguments, &types, *function_span)?;
-                        slots.push(None);
-                        calls.push(Some(ResolvedCall::TensorOptimizer(optimizer)));
-                        types.push(kind);
-                        continue;
-                    }
-                    use crate::numeric::source_tensor::TensorCall;
-                    let operation = TensorCall::named(name).or_else(|| {
-                        let uses_tensor = arguments
-                            .iter()
-                            .any(|arg| types[arg.expression].as_tensor().is_some());
-                        if uses_tensor {
-                            Builtin::from_name(name).and_then(TensorCall::overloaded)
-                        } else {
-                            None
-                        }
-                    });
-                    if let Some(operation) = operation {
-                        let kind = operation.infer(&syntax, arguments, &types, *function_span)?;
-                        slots.push(None);
-                        calls.push(Some(ResolvedCall::Tensor(operation)));
+                        calls.push(Some(operation));
                         types.push(kind);
                         continue;
                     }

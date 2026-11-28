@@ -916,32 +916,7 @@ impl Parser<'_> {
         self.punctuation(TokenKind::Equal, "'='").map_err(|error|
             error.with_help("declarations require an initializer: bind name = expression; or var name = expression;"))?;
         let mut nodes = Vec::new();
-        let bare_tensor = annotation.as_ref().filter(|type_| {
-            type_
-                .kind
-                .as_tensor()
-                .is_some_and(|tensor| !tensor.dimensions().is_empty())
-                && self.at(&TokenKind::LeftBracket)
-                && !self
-                    .tokens
-                    .get(self.cursor + 2)
-                    .is_some_and(|t| t.kind == TokenKind::Colon)
-        });
-        let initializer = if let Some(type_) = bare_tensor {
-            let opening = self.current().expect("opening tensor bracket").span;
-            let elements = self.tensor_payload(&mut nodes, 0, &type_.kind)?;
-            let end = self.tokens[self.cursor - 1].span.end;
-            Ok(push(
-                &mut nodes,
-                ExpressionKind::Tensor {
-                    kind: type_.kind.clone(),
-                    elements,
-                },
-                Span::new(opening.start, end),
-            ))
-        } else {
-            self.logical_or(&mut nodes, 0)
-        };
+        let initializer = self.binding_initializer(&mut nodes, annotation.as_ref());
         let root = initializer.map_err(|error: ParseError| {
             if error.0.kind == DiagnosticKind::UnexpectedToken {
                 error.with_help(format!(
@@ -978,6 +953,40 @@ impl Parser<'_> {
             propagate,
             span: Span::new(start, end),
         })
+    }
+
+    #[inline(never)]
+    fn binding_initializer(
+        &mut self,
+        nodes: &mut Vec<ExpressionNode>,
+        annotation: Option<&crate::ast::TypeAnnotation>,
+    ) -> Result<usize, ParseError> {
+        let bare_tensor = annotation.filter(|type_| {
+            type_
+                .kind
+                .as_tensor()
+                .is_some_and(|tensor| !tensor.dimensions().is_empty())
+                && self.at(&TokenKind::LeftBracket)
+                && !self
+                    .tokens
+                    .get(self.cursor + 2)
+                    .is_some_and(|t| t.kind == TokenKind::Colon)
+        });
+        if let Some(type_) = bare_tensor {
+            let opening = self.current().expect("opening tensor bracket").span;
+            let elements = self.tensor_payload(nodes, 0, &type_.kind)?;
+            let end = self.tokens[self.cursor - 1].span.end;
+            Ok(push(
+                nodes,
+                ExpressionKind::Tensor {
+                    kind: type_.kind.clone(),
+                    elements,
+                },
+                Span::new(opening.start, end),
+            ))
+        } else {
+            self.logical_or(nodes, 0)
+        }
     }
 
     fn assignment(&mut self) -> Result<Statement, ParseError> {
