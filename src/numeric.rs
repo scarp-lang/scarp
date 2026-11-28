@@ -23,6 +23,7 @@ mod temperature;
 mod text;
 mod tiles;
 mod topk;
+mod training;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Builtin {
@@ -37,6 +38,12 @@ pub enum Builtin {
     Softplus,
     Relu,
     Tanh,
+    ReluBackward,
+    SigmoidBackward,
+    TanhBackward,
+    SoftplusBackward,
+    SoftmaxBackward,
+    SgdStep,
     IntsLength,
     IntsSum,
     IntsWindow,
@@ -289,6 +296,12 @@ impl Builtin {
             "softplus" => Self::Softplus,
             "relu" => Self::Relu,
             "tanh" => Self::Tanh,
+            "relu_backward" => Self::ReluBackward,
+            "sigmoid_backward" => Self::SigmoidBackward,
+            "tanh_backward" => Self::TanhBackward,
+            "softplus_backward" => Self::SoftplusBackward,
+            "softmax_backward" => Self::SoftmaxBackward,
+            "sgd_step" => Self::SgdStep,
             "ints_len" => Self::IntsLength,
             "ints_sum" => Self::IntsSum,
             "ints_window" => Self::IntsWindow,
@@ -475,6 +488,12 @@ impl Builtin {
             | Self::Softplus
             | Self::Relu
             | Self::Tanh => &[Vector],
+            Self::ReluBackward
+            | Self::SigmoidBackward
+            | Self::TanhBackward
+            | Self::SoftplusBackward
+            | Self::SoftmaxBackward => &[Vector, Vector],
+            Self::SgdStep => &[Vector, Vector, Float],
             Self::Median => &[Vector],
             Self::Quantile => &[Vector, Float],
             Self::SampleArea | Self::SampleSlopes | Self::SampleCumulativeArea => &[Vector, Vector],
@@ -1142,6 +1161,17 @@ pub(crate) fn evaluate_with_spans(
     ) {
         return kernels::evaluate(function, args, budget, span, argument_span);
     }
+    if matches!(
+        function,
+        Builtin::ReluBackward
+            | Builtin::SigmoidBackward
+            | Builtin::TanhBackward
+            | Builtin::SoftplusBackward
+            | Builtin::SoftmaxBackward
+            | Builtin::SgdStep
+    ) {
+        return training::evaluate(function, args, budget, span, argument_span);
+    }
     if function == Builtin::CosineSimilarity {
         return similarity::evaluate(args, budget, span, argument_span);
     }
@@ -1548,6 +1578,12 @@ pub(crate) fn evaluate_with_spans(
         | Builtin::Softplus
         | Builtin::Relu
         | Builtin::Tanh
+        | Builtin::ReluBackward
+        | Builtin::SigmoidBackward
+        | Builtin::TanhBackward
+        | Builtin::SoftplusBackward
+        | Builtin::SoftmaxBackward
+        | Builtin::SgdStep
         | Builtin::IntsLength
         | Builtin::IntsSum
         | Builtin::IntsWindow
