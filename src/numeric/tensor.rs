@@ -368,7 +368,7 @@ impl<'a> BatchGradientPlan<'a> {
         }
         self.batch
             .iter()
-            .zip(coordinates)
+            .zip(coordinates.iter())
             .fold(0, |flat, (&extent, &coordinate)| flat * extent + coordinate)
     }
 }

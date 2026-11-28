@@ -106,17 +106,11 @@ fn zero_inner_dimension_and_huge_empty_metadata_are_safe() {
         max_steps: 0,
         max_vector_bytes: 0,
     };
-    assert_eq!(
-        matmul_backward(&a, &b, &g, zero).unwrap(),
-        (a, b)
-    );
+    assert_eq!(matmul_backward(&a, &b, &g, zero).unwrap(), (a, b));
     let a = t(&[], &[0, MAX_VECTOR_LENGTH, MAX_VECTOR_LENGTH]);
     let b = t(&[], &[0, MAX_VECTOR_LENGTH, MAX_VECTOR_LENGTH]);
     let g = t(&[], &[0, MAX_VECTOR_LENGTH, MAX_VECTOR_LENGTH]);
-    assert_eq!(
-        matmul_backward(&a, &b, &g, zero).unwrap(),
-        (a, b)
-    );
+    assert_eq!(matmul_backward(&a, &b, &g, zero).unwrap(), (a, b));
 }
 
 #[test]
